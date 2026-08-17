@@ -190,16 +190,16 @@ int main(int argc, char **argv) {
   int nHc = 0;
   int nDdc = 0;
   int nSix = 0;
-  for (int v : best.atomHc) {
+  for (int v : last.atomHc) {
     nHc += v;
   }
-  for (int v : best.atomDdc) {
+  for (int v : last.atomDdc) {
     nDdc += v;
   }
-  for (int v : best.nRings) {
+  for (int v : last.nRings) {
     nSix += v;
   }
   std::printf("ice_hc_atoms %d\nice_ddc_atoms %d\n", nHc, nDdc);
-  std::printf("six_rings %d\nrings_dropped %d\n", nSix, best.ringsDropped);
+  std::printf("six_rings %d\nrings_dropped %d\n", nSix, last.ringsDropped);
   return 0;
 }
