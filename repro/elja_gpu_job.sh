@@ -75,4 +75,29 @@ fi
 $NSYS stats --force-export=true --report cuda_gpu_kern_sum --report cuda_api_sum \
   --report cuda_gpu_mem_time_sum \
   "$OUT/tip-gpu-nsys.nsys-rep" | tee "$OUT/tip-gpu-nsys-stats.txt"
+
+# System-size and batch-width sweep. synth:N is the same jittered
+# mW-density lattice as the host scaling table. F-sweep repeats the
+# first cubic frame so occupancy is nF, not a new trajectory.
+: > "$OUT/tip-gpu-sweep.txt"
+{
+  echo "# nAtoms frames warm_compute_ms max_resident bytes_per_frame"
+  for n in 1000 2000 4000 8000 16000 32000; do
+    "$BUILD/tests/bench_gpu_batch" "synth:$n" 1 1 5 \
+      | awk -v n="$n" '
+          /^warm_compute_ms/ {c=$2}
+          /^max_resident_frames/ {m=$2}
+          /^bytes_per_frame/ {b=$2}
+          END {printf "synth %d 1 %s %s %s\n", n, c, m, b}'
+  done
+  for f in 1 2 4 8 11; do
+    "$BUILD/tests/bench_gpu_batch" traj/mW_cubic.lammpstrj "$f" 1 5 \
+      | awk -v f="$f" '
+          /^nAtoms/ {n=$2}
+          /^warm_compute_ms/ {c=$2}
+          /^max_resident_frames/ {m=$2}
+          /^bytes_per_frame/ {b=$2}
+          END {printf "cubic %d %d %s %s %s\n", n, f, c, m, b}'
+  done
+} | tee -a "$OUT/tip-gpu-sweep.txt"
 echo DONE

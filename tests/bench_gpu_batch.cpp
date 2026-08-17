@@ -2,17 +2,60 @@
 ** Probe whether N frames of the TUM ice-score working set fit on the
 ** GPU, then time a cold launch and the best of N warm repeats.
 **   bench_gpu_batch TRAJ [nFrames] [atomType] [repeats]
+**   bench_gpu_batch synth:NATOMS [nFrames] [atomType] [repeats]
+** synth: uses the same jittered mW-density lattice as bench_scaling.
 */
 
 #include <gpu_batch.hpp>
+#include <mol_sys.hpp>
 #include <seams_input.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
 #include <string>
 #include <vector>
+
+namespace {
+
+constexpr double kNumberDensity = 0.0332;
+
+molSys::PointCloud<molSys::Point<double>, double> makeCloud(int nAtoms,
+                                                            int typeI) {
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  const double boxLength = std::cbrt(nAtoms / kNumberDensity);
+  const int perSide = static_cast<int>(std::ceil(std::cbrt(nAtoms)));
+  const double spacing = boxLength / perSide;
+  cloud.nop = nAtoms;
+  cloud.currentFrame = 1;
+  cloud.box = {boxLength, boxLength, boxLength};
+  cloud.boxLow = {0.0, 0.0, 0.0};
+  cloud.pts.reserve(nAtoms);
+  unsigned long long state = 88172645463325252ULL;
+  auto jitter = [&state, spacing]() {
+    state ^= state << 13;
+    state ^= state >> 7;
+    state ^= state << 17;
+    const double unit = static_cast<double>(state >> 11) / 9007199254740992.0;
+    return (unit - 0.5) * 0.3 * spacing;
+  };
+  for (int i = 0; i < nAtoms; i++) {
+    molSys::Point<double> point;
+    point.type = typeI;
+    point.atomID = i + 1;
+    point.molID = i + 1;
+    point.x = ((i % perSide) + 0.5) * spacing + jitter();
+    point.y = (((i / perSide) % perSide) + 0.5) * spacing + jitter();
+    point.z = (((i / (perSide * perSide)) % perSide) + 0.5) * spacing + jitter();
+    cloud.pts.push_back(point);
+    cloud.idIndexMap[point.atomID] = i;
+  }
+  return cloud;
+}
+
+} // namespace
 
 int main(int argc, char **argv) {
   const std::string traj = argc > 1 ? argv[1] : "traj/mW_cubic.lammpstrj";
@@ -21,7 +64,17 @@ int main(int argc, char **argv) {
   const int repeats = argc > 4 ? std::max(1, std::atoi(argv[4])) : 5;
 
   molSys::PointCloud<molSys::Point<double>, double> cloud;
-  cloud = sinp::readLammpsTrjO(traj, 1, cloud, typeI);
+  const bool synth = traj.rfind("synth:", 0) == 0;
+  if (synth) {
+    const int nSynth = std::atoi(traj.c_str() + 6);
+    if (nSynth <= 0) {
+      std::fprintf(stderr, "synth: needs a positive atom count\n");
+      return 1;
+    }
+    cloud = makeCloud(nSynth, typeI);
+  } else {
+    cloud = sinp::readLammpsTrjO(traj, 1, cloud, typeI);
+  }
   if (cloud.nop == 0) {
     std::fprintf(stderr, "empty %s\n", traj.c_str());
     return 1;
@@ -42,9 +95,11 @@ int main(int argc, char **argv) {
   }
   int got = 0;
   for (int f = 1; f <= want; ++f) {
-    cloud = sinp::readLammpsTrjO(traj, f, cloud, typeI);
-    if (cloud.nop != nAtoms) {
-      break;
+    if (!synth) {
+      cloud = sinp::readLammpsTrjO(traj, f, cloud, typeI);
+      if (cloud.nop != nAtoms) {
+        break;
+      }
     }
     const auto base = static_cast<std::size_t>(got) *
                       static_cast<std::size_t>(nAtoms) * 3;
