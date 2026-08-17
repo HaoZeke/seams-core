@@ -1,6 +1,6 @@
 /*
 ** Probe whether N frames of the TUM ice-score working set fit on the
-** GPU, then time a cold launch and the best of N warm repeats.
+** GPU, then time a cold launch and every warm repeat (mean and std).
 **   bench_gpu_batch TRAJ [nFrames] [atomType] [repeats]
 **   bench_gpu_batch synth:NATOMS [nFrames] [atomType] [repeats]
 ** synth: uses the same jittered mW-density lattice as bench_scaling.
@@ -151,8 +151,11 @@ int main(int argc, char **argv) {
   }
   printRun("cold", cold);
 
-  gpu::BatchResult best = cold;
-  best.computeMs = std::numeric_limits<double>::max();
+  gpu::BatchResult last = cold;
+  double sum = 0.0;
+  double sumsq = 0.0;
+  double lo = std::numeric_limits<double>::max();
+  double hi = 0.0;
   for (int i = 0; i < repeats; ++i) {
     const auto r =
         tiltDump ? gpu::analyzeResident(xyz.data(), box.data(), nAtoms, got,
@@ -162,11 +165,28 @@ int main(int argc, char **argv) {
       std::printf("error %s\n", r.error.c_str());
       return 1;
     }
-    if (r.computeMs < best.computeMs) {
-      best = r;
+    last = r;
+    const double t = r.computeMs;
+    std::printf("warm_rep %d %.3f\n", i, t);
+    sum += t;
+    sumsq += t * t;
+    if (t < lo) {
+      lo = t;
+    }
+    if (t > hi) {
+      hi = t;
     }
   }
-  printRun("warm", best);
+  const double mean = sum / static_cast<double>(repeats);
+  const double var = (repeats > 1)
+                         ? (sumsq - sum * sum / static_cast<double>(repeats)) /
+                               static_cast<double>(repeats - 1)
+                         : 0.0;
+  const double stdev = std::sqrt(var < 0.0 ? 0.0 : var);
+  std::printf("warm_n %d\nwarm_mean_ms %.3f\nwarm_std_ms %.3f\n"
+              "warm_min_ms %.3f\nwarm_max_ms %.3f\n",
+              repeats, mean, stdev, lo, hi);
+  printRun("warm", last);
   int nHc = 0;
   int nDdc = 0;
   int nSix = 0;

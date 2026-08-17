@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:2
-#SBATCH --time=01:00:00
+#SBATCH --time=02:00:00
 #SBATCH --output=repro/results/elja-gpu-%j.out
 # Device-resident N-frame batch on Elja. Not Terra.
 # gpu-2xA100 advertises GRES; gpu-1xA100 does not. Slurm copies the
@@ -76,28 +76,23 @@ $NSYS stats --force-export=true --report cuda_gpu_kern_sum --report cuda_api_sum
   --report cuda_gpu_mem_time_sum \
   "$OUT/tip-gpu-nsys.nsys-rep" | tee "$OUT/tip-gpu-nsys-stats.txt"
 
-# System-size and batch-width sweep. synth:N is the same jittered
-# mW-density lattice as the host scaling table. F-sweep repeats the
-# first cubic frame so occupancy is nF, not a new trajectory.
-: > "$OUT/tip-gpu-sweep.txt"
-{
-  echo "# nAtoms frames warm_compute_ms max_resident bytes_per_frame"
+# Size and batch sweep with every warm repeat written out. Five
+# independent processes per point, 21 warm repeats each, no nsys on
+# these calls. synth:N is the jittered mW-density lattice.
+: > "$OUT/tip-gpu-reps.txt"
+echo "# kind nAtoms frames pass rep compute_ms" | tee -a "$OUT/tip-gpu-reps.txt"
+run_point() {
+  local kind=$1 spec=$2 n=$3 f=$4 pass=$5
+  "$BUILD/tests/bench_gpu_batch" "$spec" "$f" 1 21 \
+    | awk -v kind="$kind" -v n="$n" -v f="$f" -v pass="$pass" '
+        /^warm_rep/ {printf "%s %s %s %s %s %s\n", kind, n, f, pass, $2, $3}'
+}
+for pass in 1 2 3 4 5; do
   for n in 1000 2000 4000 8000 16000 32000; do
-    "$BUILD/tests/bench_gpu_batch" "synth:$n" 1 1 5 \
-      | awk -v n="$n" '
-          /^warm_compute_ms/ {c=$2}
-          /^max_resident_frames/ {m=$2}
-          /^bytes_per_frame/ {b=$2}
-          END {printf "synth %d 1 %s %s %s\n", n, c, m, b}'
+    run_point synth "synth:$n" "$n" 1 "$pass"
   done
   for f in 1 2 4 8 11; do
-    "$BUILD/tests/bench_gpu_batch" traj/mW_cubic.lammpstrj "$f" 1 5 \
-      | awk -v f="$f" '
-          /^nAtoms/ {n=$2}
-          /^warm_compute_ms/ {c=$2}
-          /^max_resident_frames/ {m=$2}
-          /^bytes_per_frame/ {b=$2}
-          END {printf "cubic %d %d %s %s %s\n", n, f, c, m, b}'
+    run_point cubic traj/mW_cubic.lammpstrj 4096 "$f" "$pass"
   done
-} | tee -a "$OUT/tip-gpu-sweep.txt"
+done | tee -a "$OUT/tip-gpu-reps.txt"
 echo DONE
