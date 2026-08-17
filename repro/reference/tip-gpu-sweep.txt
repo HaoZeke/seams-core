@@ -1,0 +1,15 @@
+# Exclusive A100-PCIE-40GB. TUM ice-score warm compute.
+# synth: jittered mW-density lattice, F=1 (same generator as host scaling).
+# cubic: stored mW cubic dump, n=4096, F frames of the first snapshot.
+# nAtoms frames warm_compute_ms max_resident bytes_per_frame
+synth 1000 1 5.084 47753 701184
+synth 2000 1 7.008 23894 1401344
+synth 4000 1 7.109 11954 2800896
+synth 8000 1 8.888 5978 5600512
+synth 16000 1 17.133 2989 11200512
+synth 32000 1 25.242 1494 22400512
+cubic 4096 1 8.392 11676 2867712
+cubic 4096 2 9.280 11676 2867712
+cubic 4096 4 14.152 11676 2867712
+cubic 4096 8 22.222 11676 2867712
+cubic 4096 11 27.782 11676 2867712
