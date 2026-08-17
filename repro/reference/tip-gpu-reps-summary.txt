@@ -1,0 +1,13 @@
+# Mean and std of five independent processes (21 warm repeats each).
+# kind nAtoms frames mean_ms std_of_process_means
+synth 1000 1 4.578 0.002
+synth 2000 1 6.693 0.203
+synth 4000 1 6.832 0.190
+synth 8000 1 8.310 0.471
+synth 16000 1 14.362 0.476
+synth 32000 1 22.852 0.480
+cubic 4096 1 8.212 0.356
+cubic 4096 2 8.548 0.553
+cubic 4096 4 12.071 0.987
+cubic 4096 8 16.780 0.564
+cubic 4096 11 19.506 0.687
