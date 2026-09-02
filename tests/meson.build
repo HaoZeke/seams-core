@@ -1,5 +1,6 @@
 # d-SEAMS tests (Catch2 v3)
 
+fs = import('fs')
 catch2_dep = dependency('catch2-with-main', required: true)
 
 test_sources = {
@@ -90,6 +91,15 @@ test('simd',
   env: _test_env)
 
 # Performance benchmark binaries (not in regular test suite)
+if fs.exists(meson.current_source_dir() / 'walk_compare.cpp')
+  executable('walk_compare', 'walk_compare.cpp',
+    dependencies: [yds_dep],
+    cpp_args: _args,
+    link_args: _test_link_args,
+    include_directories: _incdirs,
+    build_rpath: '$ORIGIN/../src')
+endif
+
 executable('bench_algorithms', 'bench_algorithms.cpp',
   dependencies: [yds_dep, catch2_dep],
   cpp_args: _args,
