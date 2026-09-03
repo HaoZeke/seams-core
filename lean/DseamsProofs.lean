@@ -1,1 +1,2 @@
 import DseamsProofs.Completion
+import DseamsProofs.Occupancy
