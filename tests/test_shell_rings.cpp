@@ -67,4 +67,8 @@ TEST_CASE("the rings through an ion's shell are the squares that survive it", "[
   REQUIRE(site::shellRingCensus(rings, all, 4)[4] == static_cast<int>(rings.size()));
   // a cap below the ring size counts nothing
   REQUIRE(site::shellRingCensus(rings, env.members[0], 3) == std::vector<int>{0, 0, 0, 0});
+  const auto report = site::shellRings(rings, rows, ion, env.members[0], 4);
+  REQUIRE(report.census == census);
+  REQUIRE(report.capped == 0);
+  REQUIRE(report.broken == 12);
 }

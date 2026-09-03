@@ -747,6 +747,14 @@ int cmdIons(std::ostream &os, Cloud &cloud, double cutoff, int typeI, int k,
     }
   }
   const auto env = site::ionEnvironment(cloud, ice, ions, typ, ionCutoff);
+  const auto waterRings = primitive::ringNetwork(idxU, 6);
+  int nCapped = 0;
+  int nBroken = 0;
+  for (std::size_t i = 0; i < env.ion.size(); ++i) {
+    const auto sh = site::shellRings(waterRings, idxU, env.ion[i], env.members[i], 6);
+    nCapped += sh.capped;
+    nBroken += sh.broken;
+  }
   if (!perAtomPath.empty()) {
     // water: 0 liquid, 1 ice; ions: 2 liquid, 3 front, 4 ice
     std::vector<int> values(static_cast<std::size_t>(cloud.nop), 0);
@@ -775,7 +783,9 @@ int cmdIons(std::ostream &os, Cloud &cloud, double cutoff, int typeI, int k,
      << colorizer.longOption("front") << " " << env.nFront << " "
      << colorizer.longOption("liquid") << " " << env.nLiquid << " "
      << colorizer.longOption("shell") << " " << meanShell << " "
-     << colorizer.longOption("shell-ice") << " " << meanFraction << "\n";
+     << colorizer.longOption("shell-ice") << " " << meanFraction << " "
+     << colorizer.longOption("capped") << " " << nCapped << " "
+     << colorizer.longOption("broken") << " " << nBroken << "\n";
   return 0;
 }
 
@@ -888,13 +898,27 @@ int cmdCages(std::ostream &os, Cloud &cloud, double cutoff, int typeI, int k,
           }
         }
         std::vector<std::vector<int>> cages;
+        std::vector<std::vector<std::vector<int>>> faces;
         cages.reserve(found.size());
+        faces.reserve(found.size());
         for (const auto &c : found) {
           cages.push_back(c.vertices);
+          std::vector<std::vector<int>> cageFaces;
+          cageFaces.reserve(c.faces.size());
+          for (int fi : c.faces) {
+            if (fi >= 0 && static_cast<std::size_t>(fi) < rings.size()) {
+              cageFaces.push_back(rings[static_cast<std::size_t>(fi)]);
+            }
+          }
+          faces.push_back(std::move(cageFaces));
         }
-        const auto occ = site::guestOccupancy(cloud, cages, guests, guestRadius);
-        os << " " << colorizer.longOption("guests") << " " << guests.size() << " occupied "
-           << occ.occupied << " multiple " << occ.multiply << " free " << occ.free;
+        const auto occ =
+            site::guestOccupancyBoth(cloud, cages, faces, guests, guestRadius);
+        os << " " << colorizer.longOption("guests") << " " << guests.size()
+           << " occupied " << occ.radius.occupied << " multiple "
+           << occ.radius.multiply << " free " << occ.radius.free
+           << " occupied-inside " << occ.inside.occupied << " multiple-inside "
+           << occ.inside.multiply << " free-inside " << occ.inside.free;
       }
       os << "\n";
       return 0;

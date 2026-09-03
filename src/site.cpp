@@ -5,6 +5,7 @@
 
 #include <site.hpp>
 
+#include <franzblau.hpp>
 #include <generic.hpp>
 #include <mol_sys.hpp>
 
@@ -363,6 +364,73 @@ std::vector<int> shellRingCensus(const std::vector<std::vector<int>> &rings,
   return census;
 }
 
+ShellRings shellRings(const std::vector<std::vector<int>> &waterRings,
+                      const std::vector<std::vector<int>> &nList, int ion,
+                      const std::vector<int> &shell, int maxRingSize) {
+  ShellRings out;
+  out.census = shellRingCensus(waterRings, shell, maxRingSize);
+  std::unordered_set<int> inShell(shell.begin(), shell.end());
+  for (const auto &ring : waterRings) {
+    if (ring.empty() || static_cast<int>(ring.size()) > maxRingSize) {
+      continue;
+    }
+    bool allIn = true;
+    for (int a : ring) {
+      if (!inShell.count(a)) {
+        allIn = false;
+        break;
+      }
+    }
+    if (allIn) {
+      ++out.capped;
+    }
+  }
+  if (ion < 0 || maxRingSize < 3 || shell.empty()) {
+    return out;
+  }
+  int nVert = static_cast<int>(nList.size());
+  for (int s : shell) {
+    nVert = std::max(nVert, s + 1);
+  }
+  nVert = std::max(nVert, ion + 1);
+  std::vector<std::vector<int>> aug(static_cast<std::size_t>(nVert));
+  for (int i = 0; i < nVert; ++i) {
+    aug[static_cast<std::size_t>(i)].push_back(i);
+  }
+  auto addEdge = [&](int a, int b) {
+    if (a < 0 || b < 0 || a >= nVert || b >= nVert || a == b) {
+      return;
+    }
+    auto &row = aug[static_cast<std::size_t>(a)];
+    if (std::find(row.begin(), row.end(), b) == row.end()) {
+      row.push_back(b);
+    }
+  };
+  for (const auto &row : nList) {
+    if (row.size() < 2) {
+      continue;
+    }
+    const int i = row[0];
+    for (std::size_t k = 1; k < row.size(); ++k) {
+      addEdge(i, row[k]);
+      addEdge(row[k], i);
+    }
+  }
+  for (int s : shell) {
+    addEdge(ion, s);
+    addEdge(s, ion);
+  }
+  const auto plus = primitive::ringNetwork(aug, maxRingSize);
+  for (const auto &ring : plus) {
+    if (ring.empty() || static_cast<int>(ring.size()) > maxRingSize) {
+      continue;
+    }
+    if (std::find(ring.begin(), ring.end(), ion) != ring.end()) {
+      ++out.broken;
+    }
+  }
+  return out;
+}
 
 namespace {
 // minimum-image displacement r - p for a point r and a reference p
@@ -448,6 +516,249 @@ guestOccupancy(const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
       ++out.multiply;
     }
   }
+  return out;
+}
+
+namespace {
+
+using Vec3 = std::array<double, 3>;
+
+Vec3 vadd(const Vec3 &a, const Vec3 &b) {
+  return {a[0] + b[0], a[1] + b[1], a[2] + b[2]};
+}
+Vec3 vsub(const Vec3 &a, const Vec3 &b) {
+  return {a[0] - b[0], a[1] - b[1], a[2] - b[2]};
+}
+Vec3 vscale(const Vec3 &a, double s) {
+  return {a[0] * s, a[1] * s, a[2] * s};
+}
+double vdot(const Vec3 &a, const Vec3 &b) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+Vec3 vcross(const Vec3 &a, const Vec3 &b) {
+  return {a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2],
+          a[0] * b[1] - a[1] * b[0]};
+}
+double vnorm(const Vec3 &a) { return std::sqrt(vdot(a, a)); }
+
+Vec3 unwrapAbout(const Cloud &yCloud, double x, double y, double z,
+                 const Vec3 &c) {
+  const auto dr = minImage(yCloud, x, y, z, c[0], c[1], c[2]);
+  return vadd(c, dr);
+}
+
+struct Triangle {
+  Vec3 a, b, c;
+};
+
+std::vector<Triangle> fanFace(const std::vector<Vec3> &verts) {
+  std::vector<Triangle> out;
+  if (verts.size() < 3) {
+    return out;
+  }
+  Vec3 f = {0.0, 0.0, 0.0};
+  for (const auto &v : verts) {
+    f = vadd(f, v);
+  }
+  f = vscale(f, 1.0 / static_cast<double>(verts.size()));
+  for (std::size_t i = 0; i < verts.size(); ++i) {
+    out.push_back({f, verts[i], verts[(i + 1) % verts.size()]});
+  }
+  return out;
+}
+
+bool pointInTriangle(const Vec3 &p, const Triangle &t, double eps) {
+  const Vec3 u = vsub(t.b, t.a);
+  const Vec3 v = vsub(t.c, t.a);
+  const Vec3 n = vcross(u, v);
+  const double n2 = vdot(n, n);
+  if (n2 < eps * eps) {
+    return false;
+  }
+  if (std::fabs(vdot(vsub(p, t.a), n)) > eps * std::sqrt(n2)) {
+    return false;
+  }
+  const Vec3 w = vsub(p, t.a);
+  const double uu = vdot(u, u);
+  const double uv = vdot(u, v);
+  const double vv = vdot(v, v);
+  const double wu = vdot(w, u);
+  const double wv = vdot(w, v);
+  const double det = uu * vv - uv * uv;
+  if (std::fabs(det) < eps * eps) {
+    return false;
+  }
+  const double s = (vv * wu - uv * wv) / det;
+  const double r = (uu * wv - uv * wu) / det;
+  return s >= -eps && r >= -eps && s + r <= 1.0 + eps;
+}
+
+enum class Hit { miss, edge, interior };
+
+Hit rayTriangle(const Vec3 &orig, const Vec3 &dir, const Triangle &t,
+                double eps) {
+  const Vec3 e1 = vsub(t.b, t.a);
+  const Vec3 e2 = vsub(t.c, t.a);
+  const Vec3 pvec = vcross(dir, e2);
+  const double det = vdot(e1, pvec);
+  if (std::fabs(det) < eps) {
+    return Hit::miss;
+  }
+  const double inv = 1.0 / det;
+  const Vec3 tvec = vsub(orig, t.a);
+  const double u = vdot(tvec, pvec) * inv;
+  const Vec3 qvec = vcross(tvec, e1);
+  const double v = vdot(dir, qvec) * inv;
+  const double tt = vdot(e2, qvec) * inv;
+  if (tt <= eps) {
+    return Hit::miss;
+  }
+  if (u < -eps || v < -eps || u + v > 1.0 + eps) {
+    return Hit::miss;
+  }
+  const bool onEdge = u <= eps || v <= eps || u + v >= 1.0 - eps;
+  return onEdge ? Hit::edge : Hit::interior;
+}
+
+bool insideTriangles(const Vec3 &p, const std::vector<Triangle> &tris) {
+  constexpr double eps = 1e-9;
+  for (const auto &t : tris) {
+    if (pointInTriangle(p, t, 1e-8)) {
+      return true;
+    }
+  }
+  for (int attempt = 0; attempt < 8; ++attempt) {
+    Vec3 dir = {1.0, 1.0e-4 * static_cast<double>(attempt + 1),
+                2.0e-4 * static_cast<double>(attempt + 1)};
+    const double n = vnorm(dir);
+    dir = vscale(dir, 1.0 / n);
+    int hits = 0;
+    bool grazed = false;
+    for (const auto &t : tris) {
+      const Hit h = rayTriangle(p, dir, t, eps);
+      if (h == Hit::edge) {
+        grazed = true;
+        break;
+      }
+      if (h == Hit::interior) {
+        ++hits;
+      }
+    }
+    if (grazed) {
+      continue;
+    }
+    return (hits % 2) == 1;
+  }
+  return false;
+}
+
+std::vector<Triangle>
+cageTriangles(const Cloud &yCloud, const std::vector<int> &vertices,
+              const std::vector<std::vector<int>> &faces, const Vec3 &centre) {
+  std::vector<Triangle> tris;
+  auto unwrapAtom = [&](int a) {
+    const auto &p = yCloud.pts[static_cast<std::size_t>(a)];
+    return unwrapAbout(yCloud, p.x, p.y, p.z, centre);
+  };
+  if (!faces.empty()) {
+    for (const auto &face : faces) {
+      std::vector<Vec3> verts;
+      verts.reserve(face.size());
+      for (int a : face) {
+        if (a >= 0 && a < yCloud.nop) {
+          verts.push_back(unwrapAtom(a));
+        }
+      }
+      auto fan = fanFace(verts);
+      tris.insert(tris.end(), fan.begin(), fan.end());
+    }
+    return tris;
+  }
+  // no faces: nothing to test
+  (void)vertices;
+  return tris;
+}
+
+void tallyOccupancy(GuestOccupancy &out) {
+  out.occupied = 0;
+  out.multiply = 0;
+  out.free = 0;
+  for (int n : out.guestsPerCage) {
+    if (n > 0) {
+      ++out.occupied;
+    }
+    if (n > 1) {
+      ++out.multiply;
+    }
+  }
+  for (int c : out.cageOfGuest) {
+    if (c < 0) {
+      ++out.free;
+    }
+  }
+}
+
+} // namespace
+
+GuestOccupancy
+guestOccupancyInside(const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
+                     const std::vector<std::vector<int>> &cages,
+                     const std::vector<std::vector<std::vector<int>>> &faces,
+                     const std::vector<int> &guestIndices) {
+  GuestOccupancy out;
+  out.guestsPerCage.assign(cages.size(), 0);
+  std::vector<Vec3> centres;
+  std::vector<std::vector<Triangle>> meshes;
+  centres.reserve(cages.size());
+  meshes.reserve(cages.size());
+  for (std::size_t c = 0; c < cages.size(); ++c) {
+    centres.push_back(periodicCentroid(yCloud, cages[c]));
+    const std::vector<std::vector<int>> empty;
+    const auto &fc = c < faces.size() ? faces[c] : empty;
+    meshes.push_back(cageTriangles(yCloud, cages[c], fc, centres.back()));
+  }
+  for (int g : guestIndices) {
+    if (g < 0 || g >= yCloud.nop) {
+      continue;
+    }
+    const auto &p = yCloud.pts[static_cast<std::size_t>(g)];
+    int best = -1;
+    double bestSq = 0.0;
+    for (std::size_t c = 0; c < cages.size(); ++c) {
+      if (meshes[c].empty()) {
+        continue;
+      }
+      const Vec3 q = unwrapAbout(yCloud, p.x, p.y, p.z, centres[c]);
+      if (!insideTriangles(q, meshes[c])) {
+        continue;
+      }
+      const auto dr =
+          minImage(yCloud, p.x, p.y, p.z, centres[c][0], centres[c][1],
+                   centres[c][2]);
+      const double d2 = dr[0] * dr[0] + dr[1] * dr[1] + dr[2] * dr[2];
+      if (best < 0 || d2 < bestSq) {
+        best = static_cast<int>(c);
+        bestSq = d2;
+      }
+    }
+    out.cageOfGuest.push_back(best);
+    out.centreDistance.push_back(best < 0 ? -1.0 : std::sqrt(bestSq));
+    if (best >= 0) {
+      ++out.guestsPerCage[static_cast<std::size_t>(best)];
+    }
+  }
+  tallyOccupancy(out);
+  return out;
+}
+
+DualOccupancy
+guestOccupancyBoth(const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
+                   const std::vector<std::vector<int>> &cages,
+                   const std::vector<std::vector<std::vector<int>>> &faces,
+                   const std::vector<int> &guestIndices, double radius) {
+  DualOccupancy out;
+  out.radius = guestOccupancy(yCloud, cages, guestIndices, radius);
+  out.inside = guestOccupancyInside(yCloud, cages, faces, guestIndices);
   return out;
 }
 

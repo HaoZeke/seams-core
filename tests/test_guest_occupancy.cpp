@@ -84,6 +84,49 @@ TEST_CASE("guests are assigned to the cage whose centre they are nearest", "[gue
   REQUIRE(occ.centreDistance[2] == -1.0);
 }
 
+std::vector<std::vector<int>> cubeFaces(int base) {
+  return {
+      {base + 0, base + 1, base + 3, base + 2},
+      {base + 4, base + 5, base + 7, base + 6},
+      {base + 0, base + 1, base + 5, base + 4},
+      {base + 2, base + 3, base + 7, base + 6},
+      {base + 0, base + 2, base + 6, base + 4},
+      {base + 1, base + 3, base + 7, base + 5},
+  };
+}
+
+TEST_CASE("ray parity puts a guest inside, on a face, or outside", "[guests]") {
+  const auto cloud = twoCubes({{2.0, 2.0, 2.0}, {2.0, 2.0, 4.0}, {2.0, 2.0, 4.5},
+                               {19.5, 2.0, 2.2}, {10.0, 10.0, 10.0}});
+  const std::vector<std::vector<int>> cages = {range(0, 8), range(8, 16)};
+  const std::vector<std::vector<std::vector<int>>> faces = {cubeFaces(0),
+                                                            cubeFaces(8)};
+  const auto inside =
+      site::guestOccupancyInside(cloud, cages, faces, {16, 17, 18, 19, 20});
+  REQUIRE(inside.cageOfGuest == std::vector<int>{0, 0, -1, 1, -1});
+  REQUIRE(inside.guestsPerCage == std::vector<int>{2, 1});
+  REQUIRE(inside.occupied == 2);
+  REQUIRE(inside.multiply == 1);
+  REQUIRE(inside.free == 2);
+}
+
+TEST_CASE("both predicates agree on centred guests and differ on a near miss",
+          "[guests]") {
+  // (2,2,4.5) is outside the cube of half-width 2 but within r=3 of the centre
+  const auto cloud = twoCubes({{2.0, 2.0, 2.0}, {2.0, 2.0, 4.5}});
+  const std::vector<std::vector<int>> cages = {range(0, 8), range(8, 16)};
+  const std::vector<std::vector<std::vector<int>>> faces = {cubeFaces(0),
+                                                            cubeFaces(8)};
+  const auto both =
+      site::guestOccupancyBoth(cloud, cages, faces, {16, 17}, 3.0);
+  REQUIRE(both.radius.cageOfGuest == std::vector<int>{0, 0});
+  REQUIRE(both.inside.cageOfGuest == std::vector<int>{0, -1});
+  REQUIRE(both.radius.occupied == 1);
+  REQUIRE(both.inside.occupied == 1);
+  REQUIRE(both.radius.free == 0);
+  REQUIRE(both.inside.free == 1);
+}
+
 TEST_CASE("two guests in one cage count as multiple occupancy", "[guests]") {
   const auto cloud = twoCubes({{1.5, 2.0, 2.0}, {2.5, 2.0, 2.0}});
   const std::vector<std::vector<int>> cages = {range(0, 8), range(8, 16)};

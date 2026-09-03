@@ -111,6 +111,19 @@ ionEnvironment(const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
 std::vector<int> shellRingCensus(const std::vector<std::vector<int>> &rings,
                                  const std::vector<int> &shell, int maxRingSize);
 
+/// Water-only rings wholly in the shell (capped) and rings of the water
+/// graph plus a virtual ion bonded to every shell water that contain the
+/// ion (broken). Census is shellRingCensus. `nList` is by index with the
+/// leading self entry, as neighbourListByIndex.
+struct ShellRings {
+  std::vector<int> census;
+  int capped = 0;
+  int broken = 0;
+};
+ShellRings shellRings(const std::vector<std::vector<int>> &waterRings,
+                      const std::vector<std::vector<int>> &nList, int ion,
+                      const std::vector<int> &shell, int maxRingSize);
+
 /// Guests read against enumerated cages. A cage is a set of vertex atoms;
 /// its centre is the periodic centroid of the vertices. A guest (methane,
 /// THF, an ion, any atom outside the network) sits in the cage whose
@@ -132,6 +145,30 @@ GuestOccupancy
 guestOccupancy(const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
                const std::vector<std::vector<int>> &cages,
                const std::vector<int> &guestIndices, double radius);
+
+/// Ray-parity inside test. `faces[c]` is the rings of cage `c` as atom
+/// index lists. Vertices and the guest are unwrapped about the periodic
+/// centroid. Each face is fan-triangulated from its centroid. A guest on
+/// a triangle is inside. Odd intersections of a ray with the triangles
+/// means inside; a hit on a shared edge retries a perturbed direction.
+/// A guest inside two cages goes to the nearer centroid. `radius` is not
+/// used.
+GuestOccupancy
+guestOccupancyInside(const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
+                     const std::vector<std::vector<int>> &cages,
+                     const std::vector<std::vector<std::vector<int>>> &faces,
+                     const std::vector<int> &guestIndices);
+
+/// Radius occupancy and inside occupancy on the same cages and guests.
+struct DualOccupancy {
+  GuestOccupancy radius;
+  GuestOccupancy inside;
+};
+DualOccupancy
+guestOccupancyBoth(const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
+                   const std::vector<std::vector<int>> &cages,
+                   const std::vector<std::vector<std::vector<int>>> &faces,
+                   const std::vector<int> &guestIndices, double radius);
 
 /// Periodic centroid of a set of atoms: every atom is unwrapped to its
 /// minimum image about the first, and the mean is taken there.
