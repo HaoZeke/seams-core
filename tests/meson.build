@@ -77,6 +77,8 @@ foreach name, src : test_sources
     _timeout = 300
   elif name == 'bop' and offload_enabled
     _timeout = 600
+  elif name == 'cage_affiliation' and offload_enabled
+    _timeout = 600
   endif
   test(name,
     executable('test_' + name, src,

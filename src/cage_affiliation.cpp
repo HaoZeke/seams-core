@@ -10,6 +10,7 @@
 
 #include <ring.hpp>
 #include <topo_bulk.hpp>
+#include <tum_offload.hpp>
 
 #include <algorithm>
 #include <map>
@@ -264,6 +265,9 @@ ring::cageAffiliation(const std::vector<std::vector<int>> &rings,
   result.hc.assign(nRings, false);
   result.ddc.assign(nRings, false);
   if (nRings == 0) {
+    return result;
+  }
+  if (ring::cageAffiliationOffload(rings, nList, result)) {
     return result;
   }
   FrameContext ctx(rings, nList);

@@ -8,8 +8,10 @@
 #include <ring.hpp>
 #include <seams_input.hpp>
 #include <topo_bulk.hpp>
+#include <tum_offload.hpp>
 
 #include <algorithm>
+#include <cstdlib>
 #include <map>
 #include <string>
 #include <vector>
@@ -508,3 +510,71 @@ TEST_CASE("ring-adjacent completion: identity on a crystal, empty on nothing",
   REQUIRE(std::count(still.hc.begin(), still.hc.end(), true) == 0);
   REQUIRE(std::count(still.ddc.begin(), still.ddc.end(), true) == 0);
 }
+
+TEST_CASE("sixRingNetwork matches Franzblau six-rings on mW cubic",
+          "[cage_affiliation]") {
+  molSys::PointCloud<molSys::Point<double>, double> yCloud;
+  yCloud = sinp::readLammpsTrjO("traj/mW_cubic.lammpstrj", 1, yCloud, 1);
+  REQUIRE(yCloud.nop > 0);
+  auto nList = nneigh::neighListO(3.5, yCloud, 1);
+  auto idx = nneigh::neighbourListByIndex(yCloud, nList);
+  setenv("SEAMS_OFFLOAD", "0", 1);
+  const auto six = primitive::sixRingNetwork(idx);
+  const auto ref = sixMembered(primitive::ringNetwork(idx, 6));
+  REQUIRE(six.size() == ref.size());
+  REQUIRE(six.size() == 8192);
+}
+
+#ifdef SEAMS_HAS_OFFLOAD
+#include <cstdlib>
+#include <omp.h>
+
+namespace {
+
+int countTrue(const std::vector<bool> &v) {
+  return static_cast<int>(std::count(v.begin(), v.end(), true));
+}
+
+int countOnes(const std::vector<int> &v) {
+  int n = 0;
+  for (int x : v) {
+    n += x ? 1 : 0;
+  }
+  return n;
+}
+
+} // namespace
+
+TEST_CASE("TUM offload cage counts match host on mW cubic",
+          "[cage_affiliation][offload]") {
+  REQUIRE(omp_get_num_devices() > 0);
+
+  molSys::PointCloud<molSys::Point<double>, double> yCloud;
+  yCloud = sinp::readLammpsTrjO("traj/mW_cubic.lammpstrj", 1, yCloud, 1);
+  REQUIRE(yCloud.nop > 0);
+  auto nList = nneigh::neighListO(3.5, yCloud, 1);
+  auto idx = nneigh::neighbourListByIndex(yCloud, nList);
+
+  setenv("SEAMS_OFFLOAD", "0", 1);
+  const auto host = ring::tumIceScore(idx);
+  REQUIRE_FALSE(host.usedDevice);
+
+  setenv("SEAMS_OFFLOAD", "1", 1);
+  const auto dev = ring::tumIceScore(idx);
+  REQUIRE(dev.usedDevice);
+
+  REQUIRE(host.rings.size() == dev.rings.size());
+  REQUIRE(host.rings.size() > 0);
+  REQUIRE(countTrue(host.affiliation.hc) == countTrue(dev.affiliation.hc));
+  REQUIRE(countTrue(host.affiliation.ddc) == countTrue(dev.affiliation.ddc));
+  REQUIRE(countOnes(host.atomHc) == countOnes(dev.atomHc));
+  REQUIRE(countOnes(host.atomDdc) == countOnes(dev.atomDdc));
+  REQUIRE(host.atomHc.size() == static_cast<std::size_t>(yCloud.nop));
+  REQUIRE(dev.atomHc.size() == static_cast<std::size_t>(yCloud.nop));
+  // Cubic ice: every six-ring is DDC, none HC; every oxygen is DDC.
+  REQUIRE(countTrue(host.affiliation.hc) == 0);
+  REQUIRE(countTrue(host.affiliation.ddc) ==
+          static_cast<int>(host.rings.size()));
+  REQUIRE(countOnes(host.atomDdc) == yCloud.nop);
+}
+#endif

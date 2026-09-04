@@ -20,6 +20,7 @@
 #include <seams_input.hpp>
 #include <site.hpp>
 #include <topo_fingerprint.hpp>
+#include <tum_offload.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -356,6 +357,11 @@ void printFeatures(std::ostream &os) {
   line("nauty", true);
 #else
   line("nauty", false);
+#endif
+#ifdef SEAMS_HAS_OFFLOAD
+  line("OpenMP target offload (Steinhardt + TUM rings/cages)", true);
+#else
+  line("OpenMP target offload (Steinhardt + TUM rings/cages)", false);
 #endif
 }
 
@@ -773,17 +779,8 @@ int cmdIons(std::ostream &os, Cloud &cloud, double cutoff, int typeI, int k,
           : nneigh::kNearestNeighbourPair(cloud, k, cand, waterTypes);
   auto idxS = nneigh::neighbourListByIndex(cloud, graphs.first);
   auto idxU = nneigh::neighbourListByIndex(cloud, graphs.second);
-  auto sixOf = [](const std::vector<std::vector<int>> &rings) {
-    std::vector<std::vector<int>> six;
-    for (const auto &r : rings) {
-      if (r.size() == 6) {
-        six.push_back(r);
-      }
-    }
-    return six;
-  };
-  const auto sixS = sixOf(primitive::ringNetwork(idxS, 6));
-  const auto sixU = sixOf(primitive::ringNetwork(idxU, 6));
+  const auto sixS = primitive::sixRingNetwork(idxS);
+  const auto sixU = primitive::sixRingNetwork(idxU);
   const auto aff = ring::seededCageAffiliation(sixS, idxS, sixU, idxU, complete);
   std::vector<bool> ice(static_cast<std::size_t>(cloud.nop), false);
   int nIce = 0;
@@ -1094,16 +1091,6 @@ int cmdCages(std::ostream &os, Cloud &cloud, double cutoff, int typeI, int k,
     return emit(idx);
   }
 
-  auto sixOf = [](const std::vector<std::vector<int>> &rings) {
-    std::vector<std::vector<int>> six;
-    for (const auto &r : rings) {
-      if (r.size() == 6) {
-        six.push_back(r);
-      }
-    }
-    return six;
-  };
-
   int ih = 0;
   int ic = 0;
   int water = 0;
@@ -1142,8 +1129,8 @@ int cmdCages(std::ostream &os, Cloud &cloud, double cutoff, int typeI, int k,
     const auto &uni = graphs.second;
     auto idxS = nneigh::neighbourListByIndex(cloud, mutual);
     auto idxU = nneigh::neighbourListByIndex(cloud, uni);
-    auto sixS = sixOf(primitive::ringNetwork(idxS, 6));
-    auto sixU = sixOf(primitive::ringNetwork(idxU, 6));
+    auto sixS = primitive::sixRingNetwork(idxS);
+    auto sixU = primitive::sixRingNetwork(idxU);
     const auto aff = ring::seededCageAffiliation(sixS, idxS, sixU, idxU, complete);
     tallyAtoms(aff.hc, aff.ddc);
   } else {
@@ -1157,7 +1144,7 @@ int cmdCages(std::ostream &os, Cloud &cloud, double cutoff, int typeI, int k,
       nList = knnOf(mutual);
     }
     auto idx = nneigh::neighbourListByIndex(cloud, nList);
-    auto six = sixOf(primitive::ringNetwork(idx, 6));
+    auto six = primitive::sixRingNetwork(idx);
     const auto aff = ring::cageAffiliation(six, idx);
     // cageAffiliation is per-ring; map to atoms
     std::vector<bool> hc(static_cast<std::size_t>(cloud.nop), false);

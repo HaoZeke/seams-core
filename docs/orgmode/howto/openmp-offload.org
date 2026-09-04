@@ -1,8 +1,10 @@
 #+TITLE: OpenMP target offload
 #+OPTIONS: toc:nil num:nil
 
-Build the Steinhardt kernel for an NVIDIA GPU. This is not the
-gpulite TUM path and it is not the host-only pixi environment.
+Build the Steinhardt kernel and the TUM ice score (hop-bound
+six-rings and HC/DDC affiliation) for an NVIDIA GPU. This is not
+the gpulite CUDA batch and it is not the host-only pixi
+environment. Device CHILL+ is not in this path.
 
 The Meson option is ~-Dwith_openmp_offload=enabled~. Configure
 probes a real ~target teams distribute parallel for~ and records
@@ -93,6 +95,13 @@ bit for bit~ compiles only when the probe succeeded. It compares
 the device path to one-thread and four-thread host paths on the
 FCC lattice and on ~input/traj/mW_cubic.lammpstrj~, and it checks
 the FCC ~q4~ / ~q6~ reference values.
+
+The case ~TUM offload cage counts match host on mW cubic~ compares
+~ring::tumIceScore~ under ~SEAMS_OFFLOAD=0~ and ~SEAMS_OFFLOAD=1~
+on the same mW cubic frame: six-ring count, HC/DDC ring counts,
+and per-atom cage labels. ~seams cages~ uses
+~primitive::sixRingNetwork~ so ~SEAMS_OFFLOAD=1~ takes the device
+TUM path. CHILL+ stays on the host.
 
 * Profile
 

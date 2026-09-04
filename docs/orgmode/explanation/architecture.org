@@ -83,9 +83,10 @@ Optional CUDA via gpulite (~-Dwith_gpulite~) runs the TUM ice score
 only: linkcell k-NN, mutual four-nearest graph, primitive six-rings,
 HC/DDC. CHILL and \(q_{lm}\) stay on the host.
 
-OpenMP target offload is a second GPU path, Steinhardt-only, meson
-off by default (~-Dwith_openmp_offload~, ~SEAMS_OFFLOAD~). It is
-not gpulite.
+OpenMP target offload is a second GPU path, meson off by default
+(~-Dwith_openmp_offload~, ~SEAMS_OFFLOAD~). It runs Steinhardt and
+the TUM ice score (hop-bound six-rings and HC/DDC affiliation).
+CHILL+ stays on the host. It is not gpulite.
 
 * Runtime knobs
 

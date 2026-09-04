@@ -38,6 +38,7 @@ ydslib_sources = files(
   'structure_desc.cpp',
   'topo_one_dim.cpp',
   'topo_two_dim.cpp',
+  'tum_offload.cpp',
 )
 
 _lib_link_args = _link_args

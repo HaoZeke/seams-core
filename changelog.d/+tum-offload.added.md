@@ -1,0 +1,1 @@
+OpenMP target offload of the TUM ice score: hop-bound primitive six-rings and claim-free HC/DDC affiliation. `SEAMS_OFFLOAD=1` cage counts match the host path on mW cubic. Steinhardt offload is unchanged. Device CHILL+ is not in this path.

@@ -35,8 +35,11 @@ This is topological unit matching (TUM). The methods paper is the
 
 The GPU path (~gpu::analyzeResident~) is that TUM ice score only:
 ~linkcell::gpu~ k-nearest, the mutual four-nearest graph, primitive
-six-rings, and HC/DDC affiliation. CHILL, CHILL+, and \(q_{lm}\)
-stay on the host. Only cage labels come back.
+six-rings, and HC/DDC affiliation. OpenMP target offload
+(~SEAMS_OFFLOAD~) is the same TUM ice score on the hop-bound
+six-ring and affiliation predicates, plus Steinhardt. CHILL,
+CHILL+, and \(q_{lm}\) stay on the host. Only cage labels come
+back from the TUM device walk.
 
 * Why they disagree
 
