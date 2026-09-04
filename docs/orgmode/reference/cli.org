@@ -61,8 +61,10 @@ listed in that help string).
 ~k = 4~ (mutual). ~--cutoff~ is only the cell-size hint
 (~cutoff + 1.5~); vesin cutoff pairs stay on ~neighListO~. Then
 ~chill::getCorrel~ / ~chill::getIceTypeNoPrint~ or
-~chill::getCorrelPlus~ / ~chill::getIceTypePlusNoPrint~. Ice names
-are the ~molSys::atom_state_type~ enumerators: ~cubic~, ~hexagonal~,
+~chill::getCorrelPlus~ / ~chill::getIceTypePlusNoPrint~.
+~--water-types T,U~ is the neighbour mask (OW only); ~--type~ is the
+load filter and is not that mask. Ice names are the
+~molSys::atom_state_type~ enumerators: ~cubic~, ~hexagonal~,
 ~water~, ~interfacial~, ~clathrate~, ~interClathrate~, ~reCubic~,
 ~reHex~, ~unclassified~.
 
@@ -130,6 +132,7 @@ initializers (Argum does not write defaults into the help).
 | ~--format KIND~ | ~text~ | ~Output format: ~text~ (default) or ~json~ (JSONL)~ |
 | ~--strict-input~ | off | ~Fail when a requested frame produces no atoms~ |
 | ~-t~, ~--type I~ | ~0~ | ~Atom type (0 guesses oxygen then type 1; density-z: 0 is every atom)~ |
+| ~--water-types T,U~ | omitted | ~Neighbour graph on these LAMMPS types only (OW). Substrate and ions never enter the 4-NN list. Distinct from --type (the load filter)~ |
 | ~--types I,J~ | ~I = J = --type~ | ~Pair types for site-site rdf/cn (default I=J=--type)~ |
 | ~--family NAME~ | ~waterIce~ | Material family. Ice scores refuse every value except ~waterIce~ |
 | ~--site SPEC~ | | Type-to-kind map for ~ionCloud~ (~1=cationHead,2=anion~) |
@@ -186,6 +189,23 @@ the read (type 0 then becomes 1).
 A mixed-type dump that is not the water guess needs ~--type I~.
 ~density-z~ treats ~0~ as every atom, not the oxygen guess.
 See [[file:../howto/ionic-liquid.org][Ionic-liquid dumps]].
+
+* ~--water-types~
+
+~--type~ is the load filter: it drops every other LAMMPS type before
+the neighbour graph is built. That is not a water mask. ~--water-types
+T,U~ keeps the mixed dump (~loadType = -1~) and builds
+~kNearestNeighbourList(cloud, k, cut, types)~ on those types only, so
+Ag, I, protein and ions never sit in the 4-NN of OW. ~chill~,
+~chill-plus~, ~cages~ (including ~--graph seeded~) and ~ions~ honour
+it. Ice scores then count only those types; substrate stays
+~unclassified~.
+
+#+begin_src bash
+seams chill-plus FILE --water-types 1
+seams cages FILE --water-types 1 --graph seeded
+seams ions FILE --water-types 1 --ion-types 2,3
+#+end_src
 
 * ~--types~
 

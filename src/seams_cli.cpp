@@ -259,12 +259,24 @@ std::string iceColor(std::string_view name) {
   return colorizer.error(name);
 }
 
-void printCounts(std::ostream &os, const Cloud &cloud) {
+bool isWaterType(int type, const std::vector<int> &waterTypes) {
+  return std::find(waterTypes.begin(), waterTypes.end(), type) !=
+         waterTypes.end();
+}
+
+void printCounts(std::ostream &os, const Cloud &cloud,
+                 const std::vector<int> &waterTypes = {}) {
   std::map<std::string, int> hist;
+  int nScore = 0;
   for (const auto &pt : cloud.pts) {
+    if (!waterTypes.empty() && !isWaterType(pt.type, waterTypes)) {
+      continue;
+    }
     hist[iceName(pt.iceType)]++;
+    ++nScore;
   }
-  os << colorizer.heading("nop") << " " << cloud.nop;
+  os << colorizer.heading("nop") << " "
+     << (waterTypes.empty() ? cloud.nop : nScore);
   for (const auto &[name, n] : hist) {
     if (n > 0) {
       os << " " << iceColor(name) << " " << n;
@@ -722,7 +734,8 @@ int cmdFingerprint(std::ostream &os, Cloud &cloud, double cutoff, int typeI, int
 // in ice, at the front, or in liquid by their first water shell.
 int cmdIons(std::ostream &os, Cloud &cloud, double cutoff, int typeI, int k,
             bool complete, const std::vector<int> &ionTypes, double ionCutoff,
-            const std::string &perAtomPath = {}) {
+            const std::string &perAtomPath = {},
+            const std::vector<int> &waterTypes = {}) {
   if (cloud.nop == 0) {
     os << colorizer.heading("nop") << " 0\n";
     return 0;
@@ -739,7 +752,9 @@ int cmdIons(std::ostream &os, Cloud &cloud, double cutoff, int typeI, int k,
     }
   }
   const double cand = cutoff + 1.5;
-  auto graphs = nneigh::kNearestNeighbourPair(cloud, k, cand, typ);
+  auto graphs = waterTypes.empty()
+                    ? nneigh::kNearestNeighbourPair(cloud, k, cand, typ)
+                    : nneigh::kNearestNeighbourPair(cloud, k, cand, waterTypes);
   auto idxS = nneigh::neighbourListByIndex(cloud, graphs.first);
   auto idxU = nneigh::neighbourListByIndex(cloud, graphs.second);
   auto sixOf = [](const std::vector<std::vector<int>> &rings) {
@@ -767,7 +782,8 @@ int cmdIons(std::ostream &os, Cloud &cloud, double cutoff, int typeI, int k,
       ions.push_back(i);
     }
   }
-  const auto env = site::ionEnvironment(cloud, ice, ions, typ, ionCutoff);
+  const int waterTyp = waterTypes.empty() ? typ : waterTypes.front();
+  const auto env = site::ionEnvironment(cloud, ice, ions, waterTyp, ionCutoff);
   if (!perAtomPath.empty()) {
     // water: 0 liquid, 1 ice; ions: 2 liquid, 3 front, 4 ice
     std::vector<int> values(static_cast<std::size_t>(cloud.nop), 0);
@@ -854,7 +870,10 @@ int cmdChillPlus(std::ostream &os, Cloud &cloud, double cutoff, int typeI,
   auto nList = waterGraph(cloud, cutoff, typ, waterTypes);
   chill::getCorrelPlus(cloud, nList, false);
   chill::getIceTypePlusNoPrint(cloud, nList, false);
-  printCounts(os, cloud);
+  if (!waterTypes.empty()) {
+    chill::clearIceTypesExcept(cloud, waterTypes);
+  }
+  printCounts(os, cloud, waterTypes);
   if (layers) {
     const auto st = topoparam::layerCubicity(cloud, axis, layerWidth);
     os << colorizer.longOption("phi-c") << " " << st.phiC << " "
@@ -888,7 +907,10 @@ int cmdChill(std::ostream &os, Cloud &cloud, double cutoff, int typeI,
   auto nList = waterGraph(cloud, cutoff, typ, waterTypes);
   chill::getCorrel(cloud, nList, false);
   chill::getIceTypeNoPrint(cloud, nList, false);
-  printCounts(os, cloud);
+  if (!waterTypes.empty()) {
+    chill::clearIceTypesExcept(cloud, waterTypes);
+  }
+  printCounts(os, cloud, waterTypes);
   return 0;
 }
 
@@ -1075,6 +1097,11 @@ int cmdCages(std::ostream &os, Cloud &cloud, double cutoff, int typeI, int k,
     ih = ic = water = 0;
     const int n = static_cast<int>(hc.size());
     for (int i = 0; i < n; ++i) {
+      if (!waterTypes.empty() && i < cloud.nop &&
+          !isWaterType(cloud.pts[static_cast<std::size_t>(i)].type,
+                       waterTypes)) {
+        continue;
+      }
       if (hc[static_cast<std::size_t>(i)]) {
         ++ih;
       } else if (ddc[static_cast<std::size_t>(i)]) {
@@ -1133,7 +1160,16 @@ int cmdCages(std::ostream &os, Cloud &cloud, double cutoff, int typeI, int k,
     }
     tallyAtoms(hc, ddc);
   }
-  os << colorizer.heading("nop") << " " << cloud.nop << " "
+  int nScore = cloud.nop;
+  if (!waterTypes.empty()) {
+    nScore = 0;
+    for (const auto &pt : cloud.pts) {
+      if (isWaterType(pt.type, waterTypes)) {
+        ++nScore;
+      }
+    }
+  }
+  os << colorizer.heading("nop") << " " << nScore << " "
      << colorizer.longOption("graph") << " " << graphName << " "
      << iceColor("hexagonal") << " " << ih << " " << iceColor("cubic") << " "
      << ic << " " << iceColor("water") << " " << water << "\n";
@@ -1744,7 +1780,8 @@ int main(int argc, char *argv[]) {
         }
       }
       return cmdIons(os, cloud, cutoff, typeI, k, completeFlag, ionTypes,
-                     ionCutoff > 0.0 ? ionCutoff : cutoff, perAtomPath);
+                     ionCutoff > 0.0 ? ionCutoff : cutoff, perAtomPath,
+                     waterTypes);
     }
     if (cmd == "f4") {
       return cmdF4(os, cloud, cutoff, typeI, htype);
@@ -1783,7 +1820,8 @@ int main(int argc, char *argv[]) {
       cmd == "pairs" || cmd == "ions" || cmd == "f4" ||
       (cmd == "cn" && ionsFlag) ||
       ((cmd == "rdf" || cmd == "cn") && typesSet && rdfTypeI != rdfTypeJ) ||
-      (cmd == "density-z" && typeI <= 0) || cmd == "domains";
+      (cmd == "density-z" && typeI <= 0) || cmd == "domains" ||
+      !waterTypes.empty();
   const int loadType = loadAll ? -1 : typeI;
 
   if (last <= 0 || last == frame) {

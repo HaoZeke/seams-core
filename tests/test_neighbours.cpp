@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include <bop.hpp>
 #include <generic.hpp>
 #include <mol_sys.hpp>
 #include <neighbours.hpp>
@@ -858,4 +859,36 @@ TEST_CASE("water-type mask keeps Ag out of the 4-NN list", "[neighbours]") {
   }
   // Ag has no water-graph row bonds
   REQUIRE(nList[5].size() <= 1);
+  const auto both =
+      nneigh::kNearestNeighbourPair(cloud, 4, 6.0, std::vector<int>{1});
+  REQUIRE(both.first[5].size() <= 1);
+  REQUIRE(both.second[5].size() <= 1);
+  for (const auto &row : both.first) {
+    for (std::size_t m = 1; m < row.size(); m++) {
+      const auto it = cloud.idIndexMap.find(row[m]);
+      REQUIRE(it != cloud.idIndexMap.end());
+      REQUIRE(cloud.pts[static_cast<std::size_t>(it->second)].type == 1);
+    }
+  }
+
+  chill::getCorrelPlus(cloud, nList, false);
+  chill::getIceTypePlusNoPrint(cloud, nList, false);
+  REQUIRE(cloud.pts[5].iceType == molSys::atom_state_type::water);
+  chill::clearIceTypesExcept(cloud, std::vector<int>{1});
+  REQUIRE(cloud.pts[5].iceType == molSys::atom_state_type::unclassified);
+  int nWater = 0;
+  int nUnclass = 0;
+  for (const auto &pt : cloud.pts) {
+    if (pt.type != 1) {
+      REQUIRE(pt.iceType == molSys::atom_state_type::unclassified);
+      continue;
+    }
+    if (pt.iceType == molSys::atom_state_type::water) {
+      ++nWater;
+    }
+    if (pt.iceType == molSys::atom_state_type::unclassified) {
+      ++nUnclass;
+    }
+  }
+  REQUIRE(nWater + nUnclass <= 5);
 }
