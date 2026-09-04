@@ -5,6 +5,7 @@
 #include <mol_sys.hpp>
 #include <neighbours.hpp>
 #include <seams_input.hpp>
+#include <site.hpp>
 #include <topo_bulk.hpp>
 
 #include <algorithm>
@@ -319,4 +320,80 @@ TEST_CASE("512 signature finds 20-vertex cages on GenIce sII", "[cage_enum]") {
     REQUIRE(c.faces.size() == 12);
     REQUIRE(cage::isClosedPolyhedron(run.rings, c.faces));
   }
+}
+
+TEST_CASE("51264 signature finds 28-vertex cages on GenIce sII",
+          "[cage_enum]") {
+  const auto run = cagesOnDump("traj/genice_sII.lammpstrj", "51264");
+  REQUIRE_FALSE(run.found.empty());
+  for (const auto &c : run.found) {
+    REQUIRE(c.vertices.size() == 28);
+    REQUIRE(c.faces.size() == 16);
+    REQUIRE(cage::isClosedPolyhedron(run.rings, c.faces));
+  }
+}
+
+TEST_CASE("sH and 51268 signatures find cages on GenIce sH", "[cage_enum]") {
+  const auto mid = cagesOnDump("traj/genice_sH.lammpstrj", "sH");
+  REQUIRE_FALSE(mid.found.empty());
+  for (const auto &c : mid.found) {
+    REQUIRE(c.vertices.size() == 20);
+    REQUIRE(c.faces.size() == 12);
+    REQUIRE(cage::isClosedPolyhedron(mid.rings, c.faces));
+  }
+  const auto large = cagesOnDump("traj/genice_sH.lammpstrj", "51268");
+  REQUIRE_FALSE(large.found.empty());
+  for (const auto &c : large.found) {
+    REQUIRE(c.vertices.size() == 36);
+    REQUIRE(c.faces.size() == 20);
+    REQUIRE(cage::isClosedPolyhedron(large.rings, c.faces));
+  }
+}
+
+TEST_CASE("multi-H2 in a 51264 cage reports an integer occupancy",
+          "[cage_enum][guests]") {
+  molSys::PointCloud<molSys::Point<double>, double> yCloud;
+  yCloud = sinp::readLammpsTrjO("traj/genice_sII.lammpstrj", 1, yCloud, 1);
+  REQUIRE(yCloud.nop > 0);
+  auto nList = nneigh::neighListO(3.5, yCloud, 1);
+  nList = nneigh::neighbourListByIndex(yCloud, nList);
+  const auto sig = cage::Signature::parse("51264");
+  const auto rings =
+      primitive::ringNetwork(nList, std::max(sig.maxRingSize(), 6));
+  const auto found = cage::findBySignature(rings, nList, sig);
+  REQUIRE_FALSE(found.empty());
+
+  const auto centre = site::periodicCentroid(yCloud, found[0].vertices);
+  auto addGuest = [&](double x, double y, double z) {
+    molSys::Point<double> p;
+    p.x = x;
+    p.y = y;
+    p.z = z;
+    p.type = 2;
+    p.atomID = yCloud.nop + 1;
+    p.molID = yCloud.nop + 1;
+    yCloud.pts.push_back(p);
+    yCloud.idIndexMap[p.atomID] = yCloud.nop;
+    ++yCloud.nop;
+  };
+  addGuest(centre[0] - 0.3, centre[1], centre[2]);
+  addGuest(centre[0] + 0.3, centre[1], centre[2]);
+
+  std::vector<std::vector<int>> cages;
+  cages.reserve(found.size());
+  for (const auto &c : found) {
+    cages.push_back(c.vertices);
+  }
+  const auto occ = site::guestOccupancy(yCloud, cages, {yCloud.nop - 2, yCloud.nop - 1}, 4.0);
+  REQUIRE(occ.guestsPerCage[0] == 2);
+  REQUIRE(occ.occupied == 1);
+  REQUIRE(occ.multiply == 1);
+  REQUIRE(occ.free == 0);
+  REQUIRE(occ.occupancyHistogram.size() >= 3);
+  REQUIRE(occ.occupancyHistogram[2] == 1);
+  int histSum = 0;
+  for (int n : occ.occupancyHistogram) {
+    histSum += n;
+  }
+  REQUIRE(histSum == static_cast<int>(found.size()));
 }

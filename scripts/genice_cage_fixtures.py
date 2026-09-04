@@ -7,17 +7,23 @@ import argparse
 import subprocess
 from pathlib import Path
 
-# name -> (genice type, reps)
+# name -> (genice type, reps, optional reshape)
+# sH is hexagonal; reshape 1,0,0,1,2,0,0,0,1 makes an orthogonal 4-cell.
 FRAMEWORKS = {
-    "sod": ("SOD", (3, 3, 3)),
-    "fau": ("FAU", (1, 1, 1)),
-    "sI": ("CS1", (1, 1, 1)),
-    "sII": ("CS2", (1, 1, 1)),
+    "sod": ("SOD", (3, 3, 3), None),
+    "fau": ("FAU", (1, 1, 1), None),
+    "sI": ("CS1", (1, 1, 1), None),
+    "sII": ("CS2", (1, 1, 1), None),
+    "sH": ("sH", (1, 1, 1), "1,0,0,1,2,0,0,0,1"),
 }
 
 
-def genice(exe: str, kind: str, rep) -> tuple[list[tuple[float, float, float]], list[float]]:
+def genice(
+    exe: str, kind: str, rep, reshape: str | None
+) -> tuple[list[tuple[float, float, float]], list[float]]:
     cmd = [exe, kind, "--rep", *map(str, rep), "--format", "gromacs", "--seed", "1"]
+    if reshape:
+        cmd.extend(["--reshape", reshape])
     out = subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
     lines = out.splitlines()
     n = int(lines[1])
@@ -26,7 +32,12 @@ def genice(exe: str, kind: str, rep) -> tuple[list[tuple[float, float, float]], 
         if line[10:15].strip().startswith("O"):
             pos.append((float(line[20:28]), float(line[28:36]), float(line[36:44])))
     cell = [float(x) for x in lines[2 + n].split()]
-    if len(cell) != 3:
+    if len(cell) == 9:
+        off = cell[3:]
+        if any(abs(v) > 1e-6 for v in off):
+            raise SystemExit(f"{kind}: non-orthogonal cell {cell}")
+        cell = cell[:3]
+    elif len(cell) != 3:
         raise SystemExit(f"{kind}: non-orthogonal cell {cell}")
     box = [c * 10.0 for c in cell]
     atoms = [(p[0] * 10.0 % box[0], p[1] * 10.0 % box[1], p[2] * 10.0 % box[2]) for p in pos]
@@ -51,8 +62,8 @@ def main() -> None:
     ap.add_argument("--genice", default="genice2")
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
-    for name, (kind, rep) in FRAMEWORKS.items():
-        atoms, box = genice(args.genice, kind, rep)
+    for name, (kind, rep, reshape) in FRAMEWORKS.items():
+        atoms, box = genice(args.genice, kind, rep, reshape)
         dest = args.out / f"genice_{name}.lammpstrj"
         write_lammps(dest, atoms, box)
         print(f"{name} n={len(atoms)} box={box} -> {dest}")
