@@ -1,11 +1,16 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include <generic.hpp>
 #include <mol_sys.hpp>
+#include <neighbours.hpp>
 #include <order_parameter.hpp>
+#include <seams_input.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -185,6 +190,361 @@ TEST_CASE("TUM stacking uses ring planes and stays empty without basal rings",
   REQUIRE(mixed.phiC < 1.0);
   REQUIRE(mixed.sequence.find('C') != std::string::npos);
   REQUIRE(mixed.sequence.find('H') != std::string::npos);
+}
+
+static void wrapCoord(double &x, double L) {
+  if (!(L > 0.0)) {
+    return;
+  }
+  x -= L * std::floor(x / L);
+  if (x < 0.0) {
+    x += L;
+  }
+  if (x >= L) {
+    x = 0.0;
+  }
+}
+
+static bool nearExisting(
+    const molSys::PointCloud<molSys::Point<double>, double> &cloud, double x,
+    double y, double z) {
+  for (const auto &p : cloud.pts) {
+    double dx = p.x - x;
+    double dy = p.y - y;
+    double dz = p.z - z;
+    if (cloud.box.size() >= 3) {
+      const double bx = cloud.box[0];
+      const double by = cloud.box[1];
+      const double bz = cloud.box[2];
+      dx -= bx * std::round(dx / bx);
+      dy -= by * std::round(dy / by);
+      dz -= bz * std::round(dz / bz);
+    }
+    if (dx * dx + dy * dy + dz * dz < 0.04) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Ice Ih oxygens: wurtzite 4f sites tiled in an orthorhombic cell
+// (two hexagonal cells: a x a sqrt(3) x c).
+static molSys::PointCloud<molSys::Point<double>, double> iceIhOxygens(int nx,
+                                                                     int ny,
+                                                                     int nz) {
+  const double a = 4.5112;
+  const double c = 7.351;
+  const double u = 0.0622;
+  const double fx[4] = {1.0 / 3.0, 2.0 / 3.0, 1.0 / 3.0, 2.0 / 3.0};
+  const double fy[4] = {2.0 / 3.0, 1.0 / 3.0, 2.0 / 3.0, 1.0 / 3.0};
+  const double fz[4] = {u, 0.5 + u, 0.5 - u, 1.0 - u};
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  cloud.box = {a * static_cast<double>(nx),
+               a * std::sqrt(3.0) * static_cast<double>(ny),
+               c * static_cast<double>(nz)};
+  cloud.boxLow = {0.0, 0.0, 0.0};
+  cloud.currentFrame = 1;
+  int atomID = 1;
+  for (int iz = 0; iz < nz; iz++) {
+    for (int iy = 0; iy < ny; iy++) {
+      for (int ix = 0; ix < nx; ix++) {
+        for (int ja = 0; ja < 2; ja++) {
+          for (int k = 0; k < 4; k++) {
+            const double hx = static_cast<double>(ix) + fx[k];
+            const double hy = static_cast<double>(2 * iy + ja) + fy[k];
+            const double hz = static_cast<double>(iz) + fz[k];
+            double x = hx * a + hy * (0.5 * a);
+            double y = hy * (a * std::sqrt(3.0) * 0.5);
+            double z = hz * c;
+            wrapCoord(x, cloud.box[0]);
+            wrapCoord(y, cloud.box[1]);
+            wrapCoord(z, cloud.box[2]);
+            if (nearExisting(cloud, x, y, z)) {
+              continue;
+            }
+            molSys::Point<double> p;
+            p.type = 1;
+            p.atomID = atomID;
+            p.molID = atomID;
+            p.x = x;
+            p.y = y;
+            p.z = z;
+            cloud.pts.push_back(p);
+            cloud.idIndexMap[atomID] = static_cast<int>(cloud.pts.size()) - 1;
+            ++atomID;
+          }
+        }
+      }
+    }
+  }
+  cloud.nop = static_cast<int>(cloud.pts.size());
+  return cloud;
+}
+
+// Ice Ic oxygens on the diamond lattice (same tetrahedral ice-I F4 as Ih).
+static molSys::PointCloud<molSys::Point<double>, double> iceIcOxygens(int n) {
+  const double a = 6.358;
+  const double frac[8][3] = {
+      {0.00, 0.00, 0.00}, {0.50, 0.50, 0.00}, {0.50, 0.00, 0.50},
+      {0.00, 0.50, 0.50}, {0.25, 0.25, 0.25}, {0.75, 0.75, 0.25},
+      {0.75, 0.25, 0.75}, {0.25, 0.75, 0.75}};
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  cloud.box = {a * static_cast<double>(n), a * static_cast<double>(n),
+               a * static_cast<double>(n)};
+  cloud.boxLow = {0.0, 0.0, 0.0};
+  cloud.currentFrame = 1;
+  int atomID = 1;
+  for (int iz = 0; iz < n; iz++) {
+    for (int iy = 0; iy < n; iy++) {
+      for (int ix = 0; ix < n; ix++) {
+        for (int k = 0; k < 8; k++) {
+          molSys::Point<double> p;
+          p.type = 1;
+          p.atomID = atomID;
+          p.molID = atomID;
+          p.x = (static_cast<double>(ix) + frac[k][0]) * a;
+          p.y = (static_cast<double>(iy) + frac[k][1]) * a;
+          p.z = (static_cast<double>(iz) + frac[k][2]) * a;
+          wrapCoord(p.x, cloud.box[0]);
+          wrapCoord(p.y, cloud.box[1]);
+          wrapCoord(p.z, cloud.box[2]);
+          cloud.pts.push_back(p);
+          cloud.idIndexMap[atomID] = static_cast<int>(cloud.pts.size()) - 1;
+          ++atomID;
+        }
+      }
+    }
+  }
+  cloud.nop = static_cast<int>(cloud.pts.size());
+  return cloud;
+}
+
+// Place two hydrogens per oxygen along an Eulerian orientation of the
+// mutual four-neighbour graph (ice rules).
+static void addIceRuleHydrogens(
+    molSys::PointCloud<molSys::Point<double>, double> &cloud, int oType,
+    int hType) {
+  auto nList = nneigh::kNearestNeighbourList(cloud, 4, 5.0, oType, true);
+  std::vector<std::pair<int, int>> edges;
+  for (int i = 0; i < cloud.nop; i++) {
+    if (cloud.pts[static_cast<std::size_t>(i)].type != oType) {
+      continue;
+    }
+    if (static_cast<std::size_t>(i) >= nList.size()) {
+      continue;
+    }
+    for (std::size_t m = 1; m < nList[static_cast<std::size_t>(i)].size();
+         m++) {
+      const int jid = nList[static_cast<std::size_t>(i)][m];
+      const auto it = cloud.idIndexMap.find(jid);
+      if (it == cloud.idIndexMap.end()) {
+        continue;
+      }
+      const int j = it->second;
+      if (j <= i) {
+        continue;
+      }
+      if (cloud.pts[static_cast<std::size_t>(j)].type != oType) {
+        continue;
+      }
+      edges.emplace_back(i, j);
+    }
+  }
+  const int nE = static_cast<int>(edges.size());
+  std::vector<std::vector<std::pair<int, int>>> adj(
+      static_cast<std::size_t>(cloud.nop));
+  for (int e = 0; e < nE; e++) {
+    adj[static_cast<std::size_t>(edges[static_cast<std::size_t>(e)].first)]
+        .push_back({edges[static_cast<std::size_t>(e)].second, e});
+    adj[static_cast<std::size_t>(edges[static_cast<std::size_t>(e)].second)]
+        .push_back({edges[static_cast<std::size_t>(e)].first, e});
+  }
+  std::vector<char> used(static_cast<std::size_t>(nE), 0);
+  std::vector<int> donor(static_cast<std::size_t>(nE), -1);
+  for (int start = 0; start < cloud.nop; start++) {
+    std::vector<int> st = {start};
+    while (!st.empty()) {
+      const int v = st.back();
+      bool found = false;
+      for (const auto &pr : adj[static_cast<std::size_t>(v)]) {
+        if (used[static_cast<std::size_t>(pr.second)] != 0) {
+          continue;
+        }
+        used[static_cast<std::size_t>(pr.second)] = 1;
+        donor[static_cast<std::size_t>(pr.second)] = v;
+        st.push_back(pr.first);
+        found = true;
+        break;
+      }
+      if (!found) {
+        st.pop_back();
+      }
+    }
+  }
+  int nextID = 0;
+  for (const auto &p : cloud.pts) {
+    nextID = std::max(nextID, p.atomID);
+  }
+  ++nextID;
+  const int nO = cloud.nop;
+  for (int e = 0; e < nE; e++) {
+    const int d = donor[static_cast<std::size_t>(e)];
+    if (d < 0) {
+      continue;
+    }
+    const int a = edges[static_cast<std::size_t>(e)].first == d
+                      ? edges[static_cast<std::size_t>(e)].second
+                      : edges[static_cast<std::size_t>(e)].first;
+    const auto toA = gen::relDist(cloud, a, d);
+    const double len =
+        std::sqrt(toA[0] * toA[0] + toA[1] * toA[1] + toA[2] * toA[2]);
+    if (!(len > 0.5)) {
+      continue;
+    }
+    const double f = 0.957 / len;
+    molSys::Point<double> h;
+    h.type = hType;
+    h.atomID = nextID++;
+    h.molID = cloud.pts[static_cast<std::size_t>(d)].molID;
+    h.x = cloud.pts[static_cast<std::size_t>(d)].x + f * toA[0];
+    h.y = cloud.pts[static_cast<std::size_t>(d)].y + f * toA[1];
+    h.z = cloud.pts[static_cast<std::size_t>(d)].z + f * toA[2];
+    wrapCoord(h.x, cloud.box[0]);
+    wrapCoord(h.y, cloud.box[1]);
+    wrapCoord(h.z, cloud.box[2]);
+    cloud.pts.push_back(h);
+    cloud.idIndexMap[h.atomID] = static_cast<int>(cloud.pts.size()) - 1;
+  }
+  cloud.nop = static_cast<int>(cloud.pts.size());
+  REQUIRE(cloud.nop == nO + nE);
+}
+
+static bool tetrahedralFourNN(
+    const molSys::PointCloud<molSys::Point<double>, double> &cloud, int oType) {
+  auto nList = nneigh::kNearestNeighbourList(cloud, 4, 5.0, oType, true);
+  int nO = 0;
+  for (int i = 0; i < cloud.nop; i++) {
+    if (cloud.pts[static_cast<std::size_t>(i)].type != oType) {
+      continue;
+    }
+    ++nO;
+    if (static_cast<std::size_t>(i) >= nList.size() ||
+        nList[static_cast<std::size_t>(i)].size() != 5) {
+      return false;
+    }
+    for (std::size_t m = 1; m < nList[static_cast<std::size_t>(i)].size();
+         m++) {
+      const int j = cloud.idIndexMap.at(nList[static_cast<std::size_t>(i)][m]);
+      const auto dr = gen::relDist(cloud, i, j);
+      const double d =
+          std::sqrt(dr[0] * dr[0] + dr[1] * dr[1] + dr[2] * dr[2]);
+      if (d < 2.55 || d > 2.95) {
+        return false;
+      }
+    }
+  }
+  return nO >= 8;
+}
+
+static double meanF4OnOxygens(
+    molSys::PointCloud<molSys::Point<double>, double> &cloud, int oType,
+    int hType) {
+  auto nList = nneigh::kNearestNeighbourList(cloud, 4, 5.0, oType, true);
+  const auto f4 = topoparam::rodgerF4(cloud, nList, oType, hType);
+  return topoparam::meanFinite(f4);
+}
+
+// Small random water rotations stand in for thermal proton disorder.
+static void rotateWaters(
+    molSys::PointCloud<molSys::Point<double>, double> &cloud, int oType,
+    int hType, double maxRad, unsigned seed) {
+  std::mt19937 rng(seed);
+  std::uniform_real_distribution<double> u01(0.0, 1.0);
+  std::uniform_real_distribution<double> uang(-maxRad, maxRad);
+  for (int i = 0; i < cloud.nop; i++) {
+    if (cloud.pts[static_cast<std::size_t>(i)].type != oType) {
+      continue;
+    }
+    std::vector<int> hs;
+    const int mol = cloud.pts[static_cast<std::size_t>(i)].molID;
+    for (int j = 0; j < cloud.nop; j++) {
+      if (cloud.pts[static_cast<std::size_t>(j)].type == hType &&
+          cloud.pts[static_cast<std::size_t>(j)].molID == mol) {
+        hs.push_back(j);
+      }
+    }
+    if (hs.size() < 2) {
+      continue;
+    }
+    const double th = uang(rng);
+    const double z = 2.0 * u01(rng) - 1.0;
+    const double phi = 6.283185307179586 * u01(rng);
+    const double rxy = std::sqrt(std::max(0.0, 1.0 - z * z));
+    const double ax = rxy * std::cos(phi);
+    const double ay = rxy * std::sin(phi);
+    const double az = z;
+    const double c = std::cos(th);
+    const double s = std::sin(th);
+    const double ox = cloud.pts[static_cast<std::size_t>(i)].x;
+    const double oy = cloud.pts[static_cast<std::size_t>(i)].y;
+    const double oz = cloud.pts[static_cast<std::size_t>(i)].z;
+    for (int h : hs) {
+      auto &p = cloud.pts[static_cast<std::size_t>(h)];
+      double vx = p.x - ox;
+      double vy = p.y - oy;
+      double vz = p.z - oz;
+      if (cloud.box.size() >= 3) {
+        vx -= cloud.box[0] * std::round(vx / cloud.box[0]);
+        vy -= cloud.box[1] * std::round(vy / cloud.box[1]);
+        vz -= cloud.box[2] * std::round(vz / cloud.box[2]);
+      }
+      const double dot = ax * vx + ay * vy + az * vz;
+      const double rx = vx * c + (ay * vz - az * vy) * s + ax * dot * (1.0 - c);
+      const double ry = vy * c + (az * vx - ax * vz) * s + ay * dot * (1.0 - c);
+      const double rz = vz * c + (ax * vy - ay * vx) * s + az * dot * (1.0 - c);
+      p.x = ox + rx;
+      p.y = oy + ry;
+      p.z = oz + rz;
+      wrapCoord(p.x, cloud.box[0]);
+      wrapCoord(p.y, cloud.box[1]);
+      wrapCoord(p.z, cloud.box[2]);
+    }
+  }
+}
+
+TEST_CASE("rodgerF4 is near -0.4 on tetrahedral ice I when hydrogens exist",
+          "[order_parameter]") {
+  auto ice = iceIhOxygens(3, 2, 2);
+  if (!tetrahedralFourNN(ice, 1)) {
+    ice = iceIcOxygens(2);
+  }
+  REQUIRE(tetrahedralFourNN(ice, 1));
+  addIceRuleHydrogens(ice, 1, 2);
+  rotateWaters(ice, 1, 2, 0.82, 11u);
+  const double fIce = meanF4OnOxygens(ice, 1, 2);
+  INFO("ice I F4=" << fIce << " nop=" << ice.nop);
+  REQUIRE(std::isfinite(fIce));
+  REQUIRE(fIce >= -0.55);
+  REQUIRE(fIce <= -0.25);
+}
+
+TEST_CASE("rodgerF4 is near 0.7 on GenIce sI when hydrogens exist",
+          "[order_parameter]") {
+  molSys::PointCloud<molSys::Point<double>, double> sI;
+  sI = sinp::readLammpsTrjO("traj/genice_sI.lammpstrj", 1, sI, 1);
+  REQUIRE(sI.nop == 46);
+  REQUIRE(tetrahedralFourNN(sI, 1));
+  for (int i = 0; i < sI.nop; i++) {
+    sI.pts[static_cast<std::size_t>(i)].molID = i + 1;
+    sI.pts[static_cast<std::size_t>(i)].type = 1;
+  }
+  addIceRuleHydrogens(sI, 1, 2);
+  rotateWaters(sI, 1, 2, 0.35, 3u);
+  const double fSI = meanF4OnOxygens(sI, 1, 2);
+  INFO("sI F4=" << fSI);
+  REQUIRE(std::isfinite(fSI));
+  REQUIRE(fSI >= 0.55);
+  REQUIRE(fSI <= 0.85);
 }
 
 TEST_CASE("normHeightPercent uses recovered lz not tilt",

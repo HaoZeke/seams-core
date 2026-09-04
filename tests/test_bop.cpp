@@ -16,7 +16,9 @@
 #include <cstring>
 #include <filesystem>
 #include <iomanip>
+#include <limits>
 #include <numeric>
+#include <random>
 #include <sstream>
 
 #ifdef SEAMS_HAS_OPENMP
@@ -1082,6 +1084,104 @@ TEST_CASE("steinhardtQl l=12 is finite on FCC and differs from q3", "[bop]") {
   }
 #endif
 }
+
+#ifdef SEAMS_HAS_SPHERICART
+TEST_CASE("Zeron q3/q12 pair separates sI hydrate from liquid on a mixed frame",
+          "[bop]") {
+  molSys::PointCloud<molSys::Point<double>, double> sI;
+  sI = sinp::readLammpsTrjO("traj/genice_sI.lammpstrj", 1, sI, 1);
+  REQUIRE(sI.nop == 46);
+  REQUIRE(sI.box.size() >= 3);
+  const double lx = sI.box[0];
+  const double ly = sI.box[1];
+  const double lz = sI.box[2];
+  molSys::PointCloud<molSys::Point<double>, double> mixed;
+  const double gap = 10.0;
+  mixed.box = {2.0 * lx + gap, ly, lz};
+  mixed.boxLow = {0.0, 0.0, 0.0};
+  mixed.currentFrame = 1;
+  int atomID = 1;
+  for (int i = 0; i < sI.nop; i++) {
+    molSys::Point<double> p = sI.pts[static_cast<std::size_t>(i)];
+    p.type = 1;
+    p.atomID = atomID++;
+    p.molID = p.atomID;
+    mixed.pts.push_back(p);
+    mixed.idIndexMap[p.atomID] = static_cast<int>(mixed.pts.size()) - 1;
+  }
+  mixed.nop = static_cast<int>(mixed.pts.size());
+  const int nHyd = mixed.nop;
+  std::mt19937 rng(7);
+  std::uniform_real_distribution<double> jitter(-2.4, 2.4);
+  const double x0 = lx + gap;
+  for (int i = 0; i < nHyd; i++) {
+    molSys::Point<double> p = sI.pts[static_cast<std::size_t>(i)];
+    p.type = 1;
+    p.atomID = atomID++;
+    p.molID = p.atomID;
+    p.x = sI.pts[static_cast<std::size_t>(i)].x + x0 + jitter(rng);
+    p.y = sI.pts[static_cast<std::size_t>(i)].y + jitter(rng);
+    p.z = sI.pts[static_cast<std::size_t>(i)].z + jitter(rng);
+    if (p.x < x0) {
+      p.x = x0 + 0.2;
+    }
+    if (p.x >= x0 + lx) {
+      p.x = x0 + lx - 0.2;
+    }
+    if (p.y < 0.0) {
+      p.y += ly;
+    }
+    if (p.y >= ly) {
+      p.y -= ly;
+    }
+    if (p.z < 0.0) {
+      p.z += lz;
+    }
+    if (p.z >= lz) {
+      p.z -= lz;
+    }
+    mixed.pts.push_back(p);
+    mixed.idIndexMap[p.atomID] = static_cast<int>(mixed.pts.size()) - 1;
+  }
+  mixed.nop = static_cast<int>(mixed.pts.size());
+  REQUIRE(mixed.nop == 2 * nHyd);
+  auto nList = nneigh::kNearestNeighbourList(mixed, 4, 5.0, 1, true);
+  const auto q3 = chill::steinhardtQl(mixed, nList, 3);
+  const auto q12 = chill::steinhardtQl(mixed, nList, 12);
+  auto meanRange = [](const std::vector<double> &v, int lo, int hi) {
+    double acc = 0.0;
+    int n = 0;
+    for (int i = lo; i < hi; i++) {
+      if (std::isfinite(v[static_cast<std::size_t>(i)])) {
+        acc += v[static_cast<std::size_t>(i)];
+        ++n;
+      }
+    }
+    return n > 0 ? acc / static_cast<double>(n)
+                 : std::numeric_limits<double>::quiet_NaN();
+  };
+  const double hydQ12 = meanRange(q12.ql, 0, nHyd);
+  const double liqQ12 = meanRange(q12.ql, nHyd, mixed.nop);
+  const double hydQ3 = meanRange(q3.ql, 0, nHyd);
+  const double liqQ3 = meanRange(q3.ql, nHyd, mixed.nop);
+  const double hydQ12Bar = meanRange(q12.qlBar, 0, nHyd);
+  const double liqQ12Bar = meanRange(q12.qlBar, nHyd, mixed.nop);
+  INFO("hyd q3=" << hydQ3 << " q12=" << hydQ12 << " q12bar=" << hydQ12Bar
+                 << " liq q3=" << liqQ3 << " q12=" << liqQ12
+                 << " q12bar=" << liqQ12Bar);
+  REQUIRE(std::isfinite(hydQ12));
+  REQUIRE(std::isfinite(liqQ12));
+  REQUIRE(std::isfinite(hydQ3));
+  REQUIRE(std::isfinite(liqQ3));
+  REQUIRE(std::isfinite(hydQ12Bar));
+  REQUIRE(std::isfinite(liqQ12Bar));
+  REQUIRE(hydQ3 > liqQ3);
+  const double dq3 = hydQ3 - liqQ3;
+  const double dq12 = hydQ12 - liqQ12;
+  REQUIRE(dq3 * dq3 + dq12 * dq12 > 0.02);
+}
+
+#endif
 
 TEST_CASE("steinhardtQl accepts l=8 and averages correctly on FCC", "[bop]") {
   // FCC reference value q8 = 0.40391 for twelve nearest neighbours

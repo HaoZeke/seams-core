@@ -14,6 +14,7 @@
 #include <steinhardt_device.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <vector>
@@ -217,6 +218,62 @@ void runPass2(const NeighbourCSR &g, int orderL, int begin, int end,
   for (int i = begin; i < end; i++) {
     seams::steinhardt::qlOneAtom(i, orderL, qlm.data(), g.offsets.data(),
                                  g.cols.data(), ql.data(), qlBar.data());
+  }
+}
+
+// l=12 has nComp=25. Device qlOneAtom keeps barRe[17] for l<=8.
+void runPass2Host(const NeighbourCSR &g, int orderL, int begin, int end,
+                  const std::vector<double> &qlm, std::vector<double> &ql,
+                  std::vector<double> &qlBar) {
+  constexpr double pi = 3.14159265358979323846;
+  const int nComp = 2 * orderL + 1;
+  const double prefactor = 4.0 * pi / static_cast<double>(nComp);
+#ifdef SEAMS_HAS_OPENMP
+  const bool useThreads = g.nop >= kParallelThreshold;
+#pragma omp parallel for schedule(static) if (useThreads)
+#endif
+  for (int i = begin; i < end; i++) {
+    const int row = i * nComp;
+    double sumLocal = 0.0;
+    for (int m = 0; m < nComp; m++) {
+      const double re = qlm[static_cast<size_t>(2 * (row + m))];
+      const double im = qlm[static_cast<size_t>(2 * (row + m) + 1)];
+      sumLocal += re * re + im * im;
+    }
+    ql[static_cast<size_t>(i)] = std::sqrt(prefactor * sumLocal);
+
+    const int j0 = g.offsets[static_cast<size_t>(i)];
+    const int j1 = g.offsets[static_cast<size_t>(i) + 1];
+    if (j0 == j1) {
+      qlBar[static_cast<size_t>(i)] = ql[static_cast<size_t>(i)];
+      continue;
+    }
+    std::vector<double> barRe(static_cast<size_t>(nComp), 0.0);
+    std::vector<double> barIm(static_cast<size_t>(nComp), 0.0);
+    for (int m = 0; m < nComp; m++) {
+      barRe[static_cast<size_t>(m)] = qlm[static_cast<size_t>(2 * (row + m))];
+      barIm[static_cast<size_t>(m)] = qlm[static_cast<size_t>(2 * (row + m) + 1)];
+    }
+    int nContrib = 1;
+    for (int p = j0; p < j1; p++) {
+      const int jatom = g.cols[static_cast<size_t>(p)];
+      const int jRow = jatom * nComp;
+      for (int m = 0; m < nComp; m++) {
+        barRe[static_cast<size_t>(m)] +=
+            qlm[static_cast<size_t>(2 * (jRow + m))];
+        barIm[static_cast<size_t>(m)] +=
+            qlm[static_cast<size_t>(2 * (jRow + m) + 1)];
+      }
+      nContrib++;
+    }
+    const double inv = 1.0 / static_cast<double>(nContrib);
+    double sumBar = 0.0;
+    for (int m = 0; m < nComp; m++) {
+      const double re = barRe[static_cast<size_t>(m)] * inv;
+      const double im = barIm[static_cast<size_t>(m)] * inv;
+      sumBar += re * re + im * im;
+    }
+    qlBar[static_cast<size_t>(i)] = std::sqrt(prefactor * sumBar);
   }
 }
 
@@ -440,7 +497,11 @@ SteinhardtQl steinhardtQl(const molSys::PointCloud<molSys::Point<double>, double
     allgathervDoubles(qlm, graph.nop, 2 * nComp, rank, nranks);
   }
 #endif
-  runPass2(graph, orderL, begin, end, qlm, result.ql, result.qlBar);
+  if (orderL == 12) {
+    runPass2Host(graph, orderL, begin, end, qlm, result.ql, result.qlBar);
+  } else {
+    runPass2(graph, orderL, begin, end, qlm, result.ql, result.qlBar);
+  }
 #ifdef SEAMS_HAS_MPI
   if (initialized && nranks > 1) {
     allgathervDoubles(result.ql, graph.nop, 1, rank, nranks);

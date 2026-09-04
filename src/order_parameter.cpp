@@ -354,7 +354,7 @@ topoparam::layerCubicity(
     if (u >= L) {
       u = 0.0;
     }
-    int layer = static_cast<int>(std::floor(u / w));
+    int layer = static_cast<int>(std::floor(u / w + 1e-12));
     if (layer < 0) {
       layer = 0;
     }
@@ -447,7 +447,7 @@ topoparam::tumLayerStack(
     if (u >= L) {
       u = 0.0;
     }
-    int layer = static_cast<int>(std::floor(u / w));
+    int layer = static_cast<int>(std::floor(u / w + 1e-12));
     if (layer < 0) {
       layer = 0;
     }
