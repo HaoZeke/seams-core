@@ -19,6 +19,40 @@
 
 namespace {
 
+std::vector<std::vector<int>>
+sixOf(const std::vector<std::vector<int>> &rings) {
+  std::vector<std::vector<int>> six;
+  for (const auto &r : rings) {
+    if (r.size() == 6) {
+      six.push_back(r);
+    }
+  }
+  return six;
+}
+
+void mapAtoms(const std::vector<std::vector<int>> &rings,
+              const ring::CageAffiliation &aff, int nAtoms,
+              std::vector<int> &atomHc, std::vector<int> &atomDdc) {
+  atomHc.assign(static_cast<std::size_t>(nAtoms), 0);
+  atomDdc.assign(static_cast<std::size_t>(nAtoms), 0);
+  for (std::size_t r = 0; r < rings.size(); ++r) {
+    const bool hc = r < aff.hc.size() && aff.hc[r];
+    const bool ddc = r < aff.ddc.size() && aff.ddc[r];
+    for (const int a : rings[r]) {
+      if (a < 0 || a >= nAtoms) {
+        continue;
+      }
+      if (hc) {
+        atomHc[static_cast<std::size_t>(a)] = 1;
+      }
+      if (ddc) {
+        atomDdc[static_cast<std::size_t>(a)] = 1;
+      }
+    }
+  }
+}
+
+#ifdef SEAMS_HAS_OFFLOAD
 constexpr int kMaxPer = 16;
 
 struct FlatGraph {
@@ -65,40 +99,6 @@ bool flattenIndexList(const std::vector<std::vector<int>> &nList,
   return true;
 }
 
-std::vector<std::vector<int>>
-sixOf(const std::vector<std::vector<int>> &rings) {
-  std::vector<std::vector<int>> six;
-  for (const auto &r : rings) {
-    if (r.size() == 6) {
-      six.push_back(r);
-    }
-  }
-  return six;
-}
-
-void mapAtoms(const std::vector<std::vector<int>> &rings,
-              const ring::CageAffiliation &aff, int nAtoms,
-              std::vector<int> &atomHc, std::vector<int> &atomDdc) {
-  atomHc.assign(static_cast<std::size_t>(nAtoms), 0);
-  atomDdc.assign(static_cast<std::size_t>(nAtoms), 0);
-  for (std::size_t r = 0; r < rings.size(); ++r) {
-    const bool hc = r < aff.hc.size() && aff.hc[r];
-    const bool ddc = r < aff.ddc.size() && aff.ddc[r];
-    for (const int a : rings[r]) {
-      if (a < 0 || a >= nAtoms) {
-        continue;
-      }
-      if (hc) {
-        atomHc[static_cast<std::size_t>(a)] = 1;
-      }
-      if (ddc) {
-        atomDdc[static_cast<std::size_t>(a)] = 1;
-      }
-    }
-  }
-}
-
-#ifdef SEAMS_HAS_OFFLOAD
 bool wantOffload() {
   const char *env = std::getenv("SEAMS_OFFLOAD");
   if (env != nullptr && env[0] == '0') {
