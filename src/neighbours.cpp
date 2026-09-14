@@ -371,6 +371,7 @@ bool nneigh::cellListRowsThreaded(
     const int cy = (cid / ncell[2]) % ncell[1];
     const int cx = cid / (ncell[1] * ncell[2]);
     auto &row = rows[k];
+    row.reserve(16);
     for (int dx = -1; dx <= 1; dx++) {
       const int nx = (cx + dx + ncell[0]) % ncell[0];
       for (int dy = -1; dy <= 1; dy++) {
@@ -1287,12 +1288,18 @@ std::pair<double, double> nneigh::shellSeparation(
       }
       dists.push_back(gen::periodicDistSq(yCloud, i, j));
     }
-    if (static_cast<int>(dists.size()) < k + 1) {
+    const int nOther = static_cast<int>(dists.size());
+    if (nOther < k) {
+      return {std::numeric_limits<double>::infinity(), 0.0};
+    }
+    if (nOther < k + 1) {
+      std::partial_sort(dists.begin(), dists.begin() + k, dists.end());
+      maxKth = std::max(maxKth, std::sqrt(dists[static_cast<std::size_t>(k - 1)]));
       continue;
     }
     std::partial_sort(dists.begin(), dists.begin() + k + 1, dists.end());
-    maxKth = std::max(maxKth, std::sqrt(dists[k - 1]));
-    const double next = std::sqrt(dists[k]);
+    maxKth = std::max(maxKth, std::sqrt(dists[static_cast<std::size_t>(k - 1)]));
+    const double next = std::sqrt(dists[static_cast<std::size_t>(k)]);
     minNext = haveNext ? std::min(minNext, next) : next;
     haveNext = true;
   }
