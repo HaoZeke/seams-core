@@ -120,12 +120,12 @@ struct Search {
   const std::vector<std::vector<int>> &rings;
   const cage::Signature &sig;
   std::vector<int> cand;
-  std::vector<std::vector<Edge>> edges;
-  std::unordered_map<Edge, std::vector<int>> ringsOf;
+  std::vector<std::vector<int>> ringEdgeIds;
+  std::vector<std::vector<int>> ringsOnEdge;
   std::vector<char> used;
   std::vector<int> chosen;
   std::map<int, int> have;
-  std::unordered_map<Edge, int> edgeUse;
+  std::vector<int> edgeUse;
   std::set<std::vector<int>> seenVerts;
   std::vector<cage::FoundCage> found;
   int seed = 0;
@@ -137,25 +137,51 @@ struct Search {
       : rings(allRings), sig(signature) {
     const int nRings = static_cast<int>(rings.size());
     used.assign(static_cast<size_t>(nRings), 0);
-    edges.resize(static_cast<size_t>(nRings));
+    ringEdgeIds.resize(static_cast<size_t>(nRings));
+    std::unordered_map<Edge, std::vector<int>> tmpRingsOf;
+    std::vector<std::vector<Edge>> packed(static_cast<size_t>(nRings));
     for (int i = 0; i < nRings; ++i) {
       const int sz = static_cast<int>(rings[static_cast<size_t>(i)].size());
       if (!sig.containsSize(sz)) {
         continue;
       }
       cand.push_back(i);
-      edges[static_cast<size_t>(i)] = edgesOfRing(rings[static_cast<size_t>(i)]);
-      for (const Edge e : edges[static_cast<size_t>(i)]) {
-        ringsOf[e].push_back(i);
+      packed[static_cast<size_t>(i)] = edgesOfRing(rings[static_cast<size_t>(i)]);
+      for (const Edge e : packed[static_cast<size_t>(i)]) {
+        tmpRingsOf[e].push_back(i);
       }
     }
+    std::vector<Edge> uniq;
+    uniq.reserve(tmpRingsOf.size());
+    for (const auto &kv : tmpRingsOf) {
+      uniq.push_back(kv.first);
+    }
+    std::sort(uniq.begin(), uniq.end());
+    std::unordered_map<Edge, int> idOf;
+    idOf.reserve(uniq.size());
+    ringsOnEdge.resize(uniq.size());
+    for (int eid = 0; eid < static_cast<int>(uniq.size()); ++eid) {
+      idOf[uniq[static_cast<size_t>(eid)]] = eid;
+      ringsOnEdge[static_cast<size_t>(eid)] =
+          std::move(tmpRingsOf[uniq[static_cast<size_t>(eid)]]);
+      std::sort(ringsOnEdge[static_cast<size_t>(eid)].begin(),
+                ringsOnEdge[static_cast<size_t>(eid)].end());
+    }
+    for (const int i : cand) {
+      auto &ids = ringEdgeIds[static_cast<size_t>(i)];
+      ids.reserve(packed[static_cast<size_t>(i)].size());
+      for (const Edge e : packed[static_cast<size_t>(i)]) {
+        ids.push_back(idOf[e]);
+      }
+      std::sort(ids.begin(), ids.end());
+    }
+    edgeUse.assign(uniq.size(), 0);
+    chosen.reserve(static_cast<size_t>(std::max(1, sig.faceCount())));
   }
 
   bool edgeWouldOverflow(int ring) const {
-    for (const Edge e : edges[static_cast<size_t>(ring)]) {
-      const auto it = edgeUse.find(e);
-      const int n = it == edgeUse.end() ? 0 : it->second;
-      if (n >= 2) {
+    for (const int eid : ringEdgeIds[static_cast<size_t>(ring)]) {
+      if (edgeUse[static_cast<size_t>(eid)] >= 2) {
         return true;
       }
     }
@@ -167,8 +193,8 @@ struct Search {
     chosen.push_back(ring);
     const int sz = static_cast<int>(rings[static_cast<size_t>(ring)].size());
     have[sz] += 1;
-    for (const Edge e : edges[static_cast<size_t>(ring)]) {
-      edgeUse[e] += 1;
+    for (const int eid : ringEdgeIds[static_cast<size_t>(ring)]) {
+      edgeUse[static_cast<size_t>(eid)] += 1;
     }
   }
 
@@ -184,14 +210,10 @@ struct Search {
         have.erase(hit);
       }
     }
-    for (const Edge e : edges[static_cast<size_t>(ring)]) {
-      auto eit = edgeUse.find(e);
-      if (eit == edgeUse.end()) {
-        continue;
-      }
-      eit->second -= 1;
-      if (eit->second <= 0) {
-        edgeUse.erase(eit);
+    for (const int eid : ringEdgeIds[static_cast<size_t>(ring)]) {
+      int &n = edgeUse[static_cast<size_t>(eid)];
+      if (n > 0) {
+        --n;
       }
     }
   }
@@ -210,12 +232,11 @@ struct Search {
   // Returns 0 on a dead branch, 1 when a forced ring was added, 2 when
   // every unsaturated edge still has a choice.
   int addForced() {
-    for (const auto &kv : edgeUse) {
-      if (kv.second != 1) {
+    for (int eid = 0; eid < static_cast<int>(edgeUse.size()); ++eid) {
+      if (edgeUse[static_cast<size_t>(eid)] != 1) {
         continue;
       }
-      const auto rit = ringsOf.find(kv.first);
-      if (rit == ringsOf.end()) {
+      if (ringsOnEdge[static_cast<size_t>(eid)].empty()) {
         if (allowIncomplete) {
           continue;
         }
@@ -223,7 +244,7 @@ struct Search {
       }
       int only = -1;
       int nOpt = 0;
-      for (const int r : rit->second) {
+      for (const int r : ringsOnEdge[static_cast<size_t>(eid)]) {
         if (!canAdd(r)) {
           continue;
         }
@@ -260,15 +281,17 @@ struct Search {
   }
 
   bool allEdgesPaired() const {
-    if (edgeUse.empty()) {
-      return false;
-    }
-    for (const auto &kv : edgeUse) {
-      if (kv.second != 2) {
+    bool any = false;
+    for (const int n : edgeUse) {
+      if (n == 0) {
+        continue;
+      }
+      any = true;
+      if (n != 2) {
         return false;
       }
     }
-    return true;
+    return any;
   }
 
   void accept(bool closed) {
@@ -279,8 +302,8 @@ struct Search {
       return;
     }
     int dangling = 0;
-    for (const auto &kv : edgeUse) {
-      if (kv.second == 1) {
+    for (const int n : edgeUse) {
+      if (n == 1) {
         ++dangling;
       }
     }
@@ -302,26 +325,22 @@ struct Search {
     found.push_back(std::move(cage));
   }
 
-  std::pair<Edge, std::vector<int>> branchEdge() const {
-    Edge best = 0;
+  std::pair<int, std::vector<int>> branchEdge() const {
+    int best = -1;
     std::vector<int> opts;
     bool haveBest = false;
-    for (const auto &kv : edgeUse) {
-      if (kv.second != 1) {
-        continue;
-      }
-      const auto rit = ringsOf.find(kv.first);
-      if (rit == ringsOf.end()) {
+    for (int eid = 0; eid < static_cast<int>(edgeUse.size()); ++eid) {
+      if (edgeUse[static_cast<size_t>(eid)] != 1) {
         continue;
       }
       std::vector<int> cur;
-      for (const int r : rit->second) {
+      for (const int r : ringsOnEdge[static_cast<size_t>(eid)]) {
         if (canAdd(r)) {
           cur.push_back(r);
         }
       }
       if (!haveBest || cur.size() < opts.size()) {
-        best = kv.first;
+        best = eid;
         opts = std::move(cur);
         haveBest = true;
         if (opts.size() <= 1) {
@@ -383,9 +402,8 @@ struct Search {
       seed = r;
       if (!allowIncomplete) {
         bool seedOk = true;
-        for (const Edge e : edges[static_cast<size_t>(r)]) {
-          const auto it = ringsOf.find(e);
-          if (it == ringsOf.end() || it->second.size() < 2) {
+        for (const int eid : ringEdgeIds[static_cast<size_t>(r)]) {
+          if (ringsOnEdge[static_cast<size_t>(eid)].size() < 2) {
             seedOk = false;
             break;
           }
