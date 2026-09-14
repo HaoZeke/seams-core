@@ -120,7 +120,9 @@ void gen::atomsInSingleSlice(
     pointInSlice = sinp::atomInSlice(yCloud.pts[iatom].x, yCloud.pts[iatom].y, yCloud.pts[iatom].z,
                                                coordLow, coordHigh);
 
-    yCloud.pts[iatom].inSlice = pointInSlice; // iatom is inside the slice
+    if (pointInSlice) {
+      yCloud.pts[iatom].inSlice = true;
+    }
     //
   }
 
@@ -193,7 +195,14 @@ void gen::moleculesInSingleSlice(
         // it->second gives the value (in this case, the atom ID)
         jatomID = it->second; // Atom ID with molecule ID equal to iatomMolID
         auto gotJ = yCloud.idIndexMap.find(jatomID);
+        if (gotJ == yCloud.idIndexMap.end()) {
+          continue;
+        }
         jatomIndex = gotJ->second;
+        if (jatomIndex < 0 ||
+            static_cast<std::size_t>(jatomIndex) >= yCloud.pts.size()) {
+          continue;
+        }
         // Set the jatom inSlice bool to true
         yCloud.pts[jatomIndex].inSlice = true; // jatomIndex is inside the slice 
       }
@@ -236,7 +245,14 @@ void gen::setAtomsWithSameMolID(
     // it->second gives the value (in this case, the atom ID)
     jatomID = it->second; // Atom ID with molecule ID equal to iatomMolID
     auto gotJ = yCloud.idIndexMap.find(jatomID);
+    if (gotJ == yCloud.idIndexMap.end()) {
+      continue;
+    }
     jatomIndex = gotJ->second;
+    if (jatomIndex < 0 ||
+        static_cast<std::size_t>(jatomIndex) >= yCloud.pts.size()) {
+      continue;
+    }
     // Set the jatom inSlice bool to true
     yCloud.pts[jatomIndex].inSlice = inSliceValue; // jatomIndex is assigned inSliceValue
   } // end of loop through all atoms with molID
@@ -326,8 +342,14 @@ void ring::getEdgeMoleculesInRings(
           {
             // Find the index corresponding to the same atom in yCloud 
             auto gotJ = yCloud.idIndexMap.find(jatomID);
+            if (gotJ == yCloud.idIndexMap.end()) {
+              continue;
+            }
             jatomIndex1 = gotJ->second;
-            // throw if not found ?
+            if (jatomIndex1 < 0 ||
+                static_cast<std::size_t>(jatomIndex1) >= yCloud.pts.size()) {
+              continue;
+            }
             // Set the jatom inSlice bool to true
             yCloud.pts[jatomIndex1].inSlice = true; // jatomIndex is inside the slice 
             // set the inSlice value of all atoms in yCloud with the current molecule ID 

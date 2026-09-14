@@ -225,7 +225,7 @@ int typeOf(const Cloud &cloud, int requested) {
   if (requested > 0) {
     return requested;
   }
-  if (cloud.nop == 0) {
+  if (cloud.nop == 0 || cloud.pts.empty()) {
     return 1;
   }
   return cloud.pts[0].type;

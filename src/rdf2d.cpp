@@ -309,6 +309,10 @@ std::vector<double> rdf2::getSystemLengths(
   std::vector<double> r_iatom; // Current point coordinates
   int dim = 3;
 
+  if (yCloud.pts.empty() || yCloud.nop <= 0) {
+    return {0.0, 0.0, 0.0};
+  }
+
   // Init
   r_iatom.push_back(yCloud.pts[0].x);
   r_iatom.push_back(yCloud.pts[0].y);

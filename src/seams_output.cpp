@@ -674,7 +674,7 @@ int sout::writeBasalRingsHex(const std::vector<int> &currentCage, int cageNum,
         iatom = startNeedle + i;
         jatom = startHayStack - i;
         // Make sure the indices are not larger than 6
-        if (iatom > ringSize) {
+        if (iatom >= ringSize) {
           iatom -= ringSize;
         }
         if (jatom < 0) {
@@ -992,6 +992,10 @@ int sout::writeMoleculeIDsInSlice(std::string path,
   // In LAMMPS, groups can be assigned by ID using the following command 
   // group groupName molecule 100:10000 
   // ----------------
+  if (idVec.empty()) {
+    outputFile.close();
+    return 1;
+  }
   // First element 
   outputFile << idVec[0];
   prevElem = idVec[0];
@@ -1076,6 +1080,10 @@ int sout::writeMoleculeIDsExpressionSelectOVITO(std::string path,
   outputFile << "# Molecule IDs in slice\n";
   outputFile << "# OVITO Expression select command \n";
   // ----------------
+  if (idVec.empty()) {
+    outputFile.close();
+    return 1;
+  }
 
   // Print other molecule IDs to the file
   for (int i=0; i<idVec.size()-1; i++)

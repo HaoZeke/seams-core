@@ -798,6 +798,9 @@ int ring::rmAxialTranslations(
   if (axialDim < 0 || axialDim > 2) {
     axialDim = 2;
   }
+  if (yCloud.pts.empty() || yCloud.nop == 0) {
+    return 1;
+  }
   if (currentFrame == firstFrame) {
     atomID = yCloud.pts[0].atomID;
     atomIndex = 0;

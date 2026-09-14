@@ -611,8 +611,9 @@ int pntToPnt::relOrderHC(
   int l1 = basal1[0];           // First element of basal1
   int l2 = basal1[1];           // Second element of basal1
   int ringSize = basal1.size(); // Number of nodes in the basal rings
-  bool neighOne, neighTwo;      // Basal2 element is the neighbour of l1 or l2
-  bool neighbourFound;          // neighbour found
+  bool neighOne = false;   // Basal2 element is the neighbour of l1
+  bool neighTwo = false;   // Basal2 element is the neighbour of l2
+  bool neighbourFound = false; // neighbour found
   int m_k;               // Element of basal2 which is a neighbour of l1 or l2
   int m_kIndex;          // Index of basal2 which is a neighbour of l1 or l2
   int iatom;             // Current element of basal2 being searched for
