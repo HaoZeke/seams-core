@@ -15,7 +15,6 @@
 #include <cmath>
 #include <limits>
 
-#include <ira_sofi.hpp>
 #include <shapeMatch.hpp>
 
 /**
@@ -277,14 +276,8 @@ bool match::matchPrismBlock(
       pntToPnt::createPrismBlock(yCloud, refPoints, ringSize, basal1, basal2);
   // ----------------------------------------------------
 
-  targetPrismBlock =
-      pntToPnt::fillPointSetPrismBlock(yCloud, basal1, basal2, 0);
-  if (ira::orient(refPrismBlock, targetPrismBlock, quat, rmsd) && rmsd >= 0.0) {
-    beginIndex = 0;
-    return rmsd <= 6.0;
-  }
-
-  // Loop through possible point-to-point correspondences
+  // relOrderPrismBlock already fixed basal correspondence; skip IRA's
+  // permutation search and Horn-match the cyclic starting-index orbit.
   if (ringSize % 2 == 0 || ringSize == 3) {
     startingIndex = 0;
     // Fill up the point set for the target prism block

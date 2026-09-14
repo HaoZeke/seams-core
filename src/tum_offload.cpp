@@ -112,11 +112,12 @@ tum::CageCounts runSpecialized(FlatGraph g, bool onDevice) {
 #ifdef SEAMS_HAS_OFFLOAD
   if (onDevice) {
 #pragma omp target data map(to : deg[0 : degN], cols[0 : colN], nAtoms, kMax,  \
-                                maxRings, maxPer, maxPairs)                    \
-    map(tofrom : nRingsP[0 : 1], droppedP[0 : 1], nPairsP[0 : 1],              \
-            ringAtomsP[0 : ringN], throughCountP[0 : nAtoms],                  \
-            throughP[0 : thruN], hcP[0 : maxRings], ddcP[0 : maxRings],        \
-            pairsP[0 : pairN], atomHcP[0 : nAtoms], atomDdcP[0 : nAtoms])
+                                maxRings, maxPer, maxPairs,                    \
+                                ringAtomsP[0 : ringN],                         \
+                                throughCountP[0 : nAtoms], throughP[0 : thruN],\
+                                pairsP[0 : pairN], nPairsP[0 : 1])             \
+    map(tofrom : nRingsP[0 : 1], droppedP[0 : 1], hcP[0 : maxRings],           \
+            ddcP[0 : maxRings], atomHcP[0 : nAtoms], atomDdcP[0 : nAtoms])
     {
 #pragma omp target teams distribute parallel for
       for (int i = 0; i < nAtoms; ++i) {
