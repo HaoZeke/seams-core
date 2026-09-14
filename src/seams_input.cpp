@@ -454,10 +454,8 @@ molSys::PointCloud<molSys::Point<double>, double> sinp::readXYZ(std::string file
   xyzFile = std::make_unique<std::ifstream>(filename);
   molSys::PointCloud<molSys::Point<double>, double>
       yCloud;
-  std::string line;                // Current line being read in
-  std::vector<std::string> tokens; // Vector containing word tokens
-  std::vector<double> numbers;     // Vector containing type double numbers
-  int nop = -1;                    // Number of atoms in targetFrame
+  std::string line;
+  int nop = -1;
   int iatom = 0;
   molSys::Point<double> iPoint; // Current point being read in from the file
   double xLo = 0.0, xHi = 0.0, yLo = 0.0, yHi = 0.0, zLo = 0.0, zHi = 0.0;
@@ -496,26 +494,15 @@ molSys::PointCloud<molSys::Point<double>, double> sinp::readXYZ(std::string file
     // Run this until EOF or you reach the next timestep
     while (std::getline((*xyzFile), line)) {
 
-      // Read in lines and tokenize them into std::string words and <double>
-      // numbers
-      tokens = gen::tokenizer(line);
-      numbers = gen::tokenizerDouble(line);
-
-      // Skip whitespace
-      if (tokens.size() == 0) {
+      double fields[8];
+      const int n = parseDumpFields(line, fields, 8);
+      if (n < 3) {
         continue;
       }
-
-      const std::size_t coordinateOffset = tokens.size() >= 4 ? 1 : 0;
-      if (tokens.size() < coordinateOffset + 3) {
-        continue;
-      }
-
-      // Put logic for checking atom type here later
-      iPoint.type = 1; // Oxygen type; hard-coded!
-      iPoint.x = std::stod(tokens[coordinateOffset]);
-      iPoint.y = std::stod(tokens[coordinateOffset + 1]);
-      iPoint.z = std::stod(tokens[coordinateOffset + 2]);
+      iPoint.type = 1;
+      iPoint.x = fields[n - 3];
+      iPoint.y = fields[n - 2];
+      iPoint.z = fields[n - 1];
       if (yCloud.pts.empty()) {
         xLo = xHi = iPoint.x;
         yLo = yHi = iPoint.y;

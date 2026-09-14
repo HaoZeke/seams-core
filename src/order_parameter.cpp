@@ -82,23 +82,16 @@ std::vector<double> topoparam::calcCoverageArea(
     const std::vector<std::vector<int>> &rings, double sheetArea) {
   //
   double areaXY, areaXZ, areaYZ;   // Total coverage area
-  std::vector<double> singleAreas; // Area of single rings
-
-  // ---------------------------------------
-  // Initialization
   areaXY = 0.0;
   areaXZ = 0.0;
   areaYZ = 0.0;
-  // ---------------------------------------
-  // Loop through all the rings
-  for (int iring = 0; iring < rings.size(); iring++) {
-    // Get the coverage area for the current ring
-    singleAreas = topoparam::projAreaSingleRing(yCloud, rings[iring]);
-    // Add these to the total coverage area
+  for (int iring = 0; iring < static_cast<int>(rings.size()); iring++) {
+    const auto singleAreas =
+        topoparam::projAreaSingleRing(yCloud, rings[static_cast<std::size_t>(iring)]);
     areaXY += singleAreas[0];
     areaXZ += singleAreas[1];
     areaYZ += singleAreas[2];
-  } // end of loop through all the rings
+  }
   // ---------------------------------------
   // Normalize the coverage area by the sheet area
   areaXY = areaXY / sheetArea * 100.0;
@@ -112,7 +105,7 @@ std::vector<double> topoparam::calcCoverageArea(
  * @details Calculates the coverage area/ projected area of a single ring
  *  given the ring and the PointCloud.
  */
-std::vector<double> topoparam::projAreaSingleRing(
+std::array<double, 3> topoparam::projAreaSingleRing(
     const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
     const std::vector<int> &ring) {
   int ringSize = ring.size();

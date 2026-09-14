@@ -10,7 +10,6 @@
 #include <limits>
 #include <numeric>
 #include <unordered_map>
-#include <unordered_set>
 
 namespace {
 
@@ -36,9 +35,15 @@ bool prismStacked(const std::vector<int> &a, const std::vector<int> &b,
   if (a.size() != 6 || b.size() != 6) {
     return false;
   }
-  std::unordered_set<int> vb(b.begin(), b.end());
   for (int v : a) {
-    if (vb.count(v) != 0) {
+    bool hit = false;
+    for (int w : b) {
+      if (w == v) {
+        hit = true;
+        break;
+      }
+    }
+    if (hit) {
       return false;
     }
   }

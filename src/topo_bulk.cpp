@@ -1023,8 +1023,10 @@ bool ring::basalConditions(const std::vector<std::vector<int>> &nList,
   int kIndex;            // Index of m_k in basal2, corresponding to m_k
   int currentKindex;     // Current k index when finding alternating elements of
                          // basal2
-  std::vector<int> evenTriplet; // contains m_k, m_{k+2}, m_{k+4}
-  std::vector<int> oddTriplet;  // contains m_{k+1}, m_{k+3}, m_{k+5}
+  std::array<int, 3> evenTriplet{};
+  std::array<int, 3> oddTriplet{};
+  int evenN = 0;
+  int oddN = 0;
   int compare1, compare2;       // l3 and l5 OR l4 and l6
   int index;
   bool l1_neighbour, l2_neighbour; // m_k is a neighbour of l1(true) or not
@@ -1085,12 +1087,12 @@ bool ring::basalConditions(const std::vector<std::vector<int>> &nList,
     //
     // Update 'evenTriplet'
     if (k % 2 == 0) {
-      evenTriplet.push_back(basal2[currentKindex]);
-    } // end of update of evenTriplet
-    // Update 'oddTriplet'
-    else {
-      oddTriplet.push_back(basal2[currentKindex]);
-    } // end of update of oddTriplet
+      if (evenN < 3) {
+        evenTriplet[static_cast<std::size_t>(evenN++)] = basal2[currentKindex];
+      }
+    } else if (oddN < 3) {
+      oddTriplet[static_cast<std::size_t>(oddN++)] = basal2[currentKindex];
+    }
   }   // End of getting alternating triplets
 
   // ---------------------------------------------
@@ -1137,7 +1139,7 @@ bool ring::basalConditions(const std::vector<std::vector<int>> &nList,
  * @return A bool; true if the condition is met and false otherwise.
  */
 bool ring::basalNeighbours(const std::vector<std::vector<int>> &nList,
-                           std::vector<int> &triplet, int atomOne,
+                           const std::array<int, 3> &triplet, int atomOne,
                            int atomTwo) {
   // Search for needles in a haystack :)
   int needle1 = triplet[1];
@@ -1210,7 +1212,7 @@ bool ring::basalNeighbours(const std::vector<std::vector<int>> &nList,
  * @return A bool; true if the condition is met and false otherwise.
  */
 bool ring::notNeighboursOfRing(const std::vector<std::vector<int>> &nList,
-                               std::vector<int> &triplet,
+                               const std::array<int, 3> &triplet,
                                const std::vector<int> &ring) {
   int iatom; // AtomID of the atom to be searched for inside the neighbour
              // lists

@@ -257,6 +257,7 @@ void runPass1Sphericart(const NeighbourCSR &g, int orderL, int begin, int end,
   std::vector<double> cart(static_cast<size_t>(std::max(nBonds, 0)) * 3, 0.0);
   std::vector<int> owner;
   owner.reserve(static_cast<size_t>(std::max(nBonds, 0)));
+  std::vector<int> nUsed(static_cast<size_t>(std::max(end - begin, 0)), 0);
   int b = 0;
   for (int i = begin; i < end; i++) {
     for (int p = g.offsets[static_cast<size_t>(i)];
@@ -273,6 +274,7 @@ void runPass1Sphericart(const NeighbourCSR &g, int orderL, int begin, int end,
       cart[static_cast<size_t>(3 * b + 1)] = dy * inv;
       cart[static_cast<size_t>(3 * b + 2)] = dz * inv;
       owner.push_back(i);
+      ++nUsed[static_cast<size_t>(i - begin)];
       b++;
     }
   }
@@ -299,16 +301,11 @@ void runPass1Sphericart(const NeighbourCSR &g, int orderL, int begin, int end,
     }
   }
   for (int i = begin; i < end; i++) {
-    int nUsed = 0;
-    for (int k = 0; k < b; k++) {
-      if (owner[static_cast<size_t>(k)] == i) {
-        nUsed++;
-      }
-    }
-    if (nUsed == 0) {
+    const int used = nUsed[static_cast<size_t>(i - begin)];
+    if (used == 0) {
       continue;
     }
-    const double inv = 1.0 / static_cast<double>(nUsed);
+    const double inv = 1.0 / static_cast<double>(used);
     const size_t row = static_cast<size_t>(i) * nComp;
     for (int m = 0; m < nComp; m++) {
       qlm[2 * (row + static_cast<size_t>(m))] *= inv;

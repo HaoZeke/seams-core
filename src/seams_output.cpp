@@ -1747,28 +1747,8 @@ int sout::writeLAMMPSdataPrisms(
   // Loop through all bonds
   for (int ibond = 0; ibond < bonds.size(); ibond++) {
     // Init
-    isPrismBond = false;
-    atomOne = false;
-    atomTwo = false;
-    // --------
-    // Check if the bond is in the prism or not
-    auto it = std::find(atoms.begin() + 1, atoms.end(), bonds[ibond][0]);
-    if (it != atoms.end()) {
-      atomOne = true;
-    } else if (bonds[ibond][0] == atoms[0]) {
-      atomOne = true;
-    } else if (bonds[ibond][0] == atoms[atoms.size() - 1]) {
-      atomOne = true;
-    }
-
-    auto it1 = std::find(atoms.begin() + 1, atoms.end(), bonds[ibond][1]);
-    if (it1 != atoms.end()) {
-      atomTwo = true;
-    } else if (bonds[ibond][1] == atoms[0]) {
-      atomTwo = true;
-    } else if (bonds[ibond][1] == atoms[atoms.size() - 1]) {
-      atomTwo = true;
-    }
+    atomOne = std::binary_search(atoms.begin(), atoms.end(), bonds[ibond][0]);
+    atomTwo = std::binary_search(atoms.begin(), atoms.end(), bonds[ibond][1]);
 
     if (atomOne == false || atomTwo == false) {
       isPrismBond = false;

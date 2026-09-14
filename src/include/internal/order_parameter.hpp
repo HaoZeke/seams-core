@@ -48,7 +48,7 @@ calcCoverageArea(const molSys::PointCloud<molSys::Point<double>, double> &yCloud
                  const std::vector<std::vector<int>> &rings, double sheetArea);
 
 //! Calculates the projected area on the XY, YZ and XZ planes
-std::vector<double>
+std::array<double, 3>
 projAreaSingleRing(const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
                    const std::vector<int> &ring);
 

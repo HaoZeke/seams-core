@@ -16,6 +16,7 @@
 #include <bond.hpp>
 #include <generic.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <unordered_map>
 
@@ -46,7 +47,7 @@ bool bond::donatedHydrogenBond(
     return false;
   }
   const auto oo = gen::relDist(yCloud, acceptorIndex, donorIndex);
-  const std::vector<double> ooVec{oo[0], oo[1], oo[2]};
+  const double ooN2 = oo[0] * oo[0] + oo[1] * oo[1] + oo[2] * oo[2];
   const double dist2 = distCutoff * distCutoff;
   for (int hAtomIndex : donorHs) {
     if (hAtomIndex < 0 || hAtomIndex >= hCloud.nop) {
@@ -56,11 +57,14 @@ bool bond::donatedHydrogenBond(
         yCloud, acceptorIndex, hCloud.pts[hAtomIndex].x,
         hCloud.pts[hAtomIndex].y, hCloud.pts[hAtomIndex].z);
     const double oh2 = oh[0] * oh[0] + oh[1] * oh[1] + oh[2] * oh[2];
-    if (oh2 >= dist2) {
+    if (oh2 >= dist2 || ooN2 == 0.0 || oh2 == 0.0) {
       continue;
     }
-    const std::vector<double> ohVec{oh[0], oh[1], oh[2]};
-    if (gen::radDeg(gen::eigenVecAngle(ooVec, ohVec)) <= angleCutoff) {
+    const double cosA =
+        std::clamp((oo[0] * oh[0] + oo[1] * oh[1] + oo[2] * oh[2]) /
+                       std::sqrt(ooN2 * oh2),
+                   -1.0, 1.0);
+    if (gen::radDeg(std::acos(cosA)) <= angleCutoff) {
       return true;
     }
   }

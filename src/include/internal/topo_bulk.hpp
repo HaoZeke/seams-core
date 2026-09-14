@@ -149,12 +149,13 @@ bool basalConditions(const std::vector<std::vector<int>> &nList,
 //! Tests whether the last two elements of a triplet are neighbours of two atom
 //! IDs passed in
 bool basalNeighbours(const std::vector<std::vector<int>> &nList,
-                     std::vector<int> &triplet, int atomOne, int atomTwo);
+                     const std::array<int, 3> &triplet, int atomOne,
+                     int atomTwo);
 
 //! Tests to check that elements of a triplet are not neighbours of a ring
 //! (vector) passed
 bool notNeighboursOfRing(const std::vector<std::vector<int>> &nList,
-                         std::vector<int> &triplet,
+                         const std::array<int, 3> &triplet,
                          const std::vector<int> &ring);
 
 //! Finds the prismatic rings from basal rings iring and jring
