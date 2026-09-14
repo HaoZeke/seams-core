@@ -93,6 +93,31 @@ TEST_CASE("getPointSetRefRing with different axial dimensions",
 
 // -- getRadiusFromRings tests --
 
+TEST_CASE("fillPointSetPrismRing unwraps a ring that straddles PBC",
+          "[pntCorrespondence]") {
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  cloud.box = {10.0, 10.0, 10.0};
+  cloud.boxLow = {0.0, 0.0, 0.0};
+  molSys::Point<double> pt;
+  pt.type = 1;
+  const double coords[4][3] = {{9, 0, 0}, {1, 0, 0}, {1, 2, 0}, {9, 2, 0}};
+  for (int i = 0; i < 4; ++i) {
+    pt.atomID = i;
+    pt.x = coords[i][0];
+    pt.y = coords[i][1];
+    pt.z = coords[i][2];
+    cloud.pts.push_back(pt);
+    cloud.idIndexMap[i] = i;
+  }
+  cloud.nop = 4;
+  auto pts = pntToPnt::fillPointSetPrismRing(cloud, {0, 1, 2, 3}, 0);
+  REQUIRE(pts.rows() == 4);
+  REQUIRE_THAT(pts(0, 0), Catch::Matchers::WithinAbs(9.0, 1e-8));
+  REQUIRE_THAT(pts(1, 0), Catch::Matchers::WithinAbs(11.0, 1e-8));
+  REQUIRE_THAT(pts(2, 0), Catch::Matchers::WithinAbs(11.0, 1e-8));
+  REQUIRE_THAT(pts(3, 0), Catch::Matchers::WithinAbs(9.0, 1e-8));
+}
+
 TEST_CASE("getRadiusFromRings computes radius for tetragonal prism",
           "[pntCorrespondence]") {
   auto cloud = makePrismCloud();

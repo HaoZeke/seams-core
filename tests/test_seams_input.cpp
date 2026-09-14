@@ -202,6 +202,30 @@ std::string writeEmptyMiddleDump() {
 }
 } // namespace
 
+TEST_CASE("readLammpsTrj keeps a leading mol column even when mol is 0",
+          "[seams_input]") {
+  auto path =
+      fs::temp_directory_path() / "dseams_test_lammps_mol0.lammpstrj";
+  {
+    std::ofstream f(path);
+    f << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n2\n";
+    f << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n";
+    f << "ITEM: ATOMS mol id type x y z\n";
+    f << "0 7 1 1.0 2.0 3.0\n";
+    f << "3 8 1 4.0 5.0 6.0\n";
+  }
+  sinp::dropLammpsDumpIndex(path.string());
+  molSys::PointCloud<molSys::Point<double>, double> yCloud;
+  yCloud = sinp::readLammpsTrj(path.string(), 1, yCloud);
+  REQUIRE(yCloud.nop == 2);
+  REQUIRE(yCloud.pts[0].molID == 0);
+  REQUIRE(yCloud.pts[0].atomID == 7);
+  REQUIRE(yCloud.pts[1].molID == 3);
+  REQUIRE(yCloud.pts[1].atomID == 8);
+  fs::remove(path);
+  sinp::dropLammpsDumpIndex(path.string());
+}
+
 TEST_CASE("nLammpsFrames counts ITEM: TIMESTEP markers", "[seams_input]") {
   REQUIRE(sinp::nLammpsFrames("/tmp/nonexistent.lammpstrj") == 0);
   REQUIRE(sinp::nLammpsFrames("traj/mW_cubic.lammpstrj") == 11);

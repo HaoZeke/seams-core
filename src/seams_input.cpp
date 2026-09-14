@@ -367,9 +367,14 @@ void sinp::forEachLammpsFrame(
   int resolved = typeFilter;
   if (resolved <= 0) {
     molSys::PointCloud<molSys::Point<double>, double> probe;
-    probe = readLammpsTrj(filename, first, probe);
-    if (!probe.pts.empty()) {
-      resolved = probe.pts[0].type;
+    probe = readLammpsTrjO(filename, first, probe, 2);
+    if (probe.nop > 0) {
+      resolved = 2;
+    } else {
+      probe = readLammpsTrjO(filename, first, probe, 1);
+      if (probe.nop > 0) {
+        resolved = 1;
+      }
     }
   }
 
@@ -575,7 +580,7 @@ void parseLammpsFrameBody(
   int yIndex = -1;
   int zIndex = -1;
   int typeIndex = -1;
-  int molIndex = 0;
+  int molIndex = -1;
   int atomIndex = 0;
   bool isTriclinic = false;
   int nKept = 0;
@@ -668,7 +673,7 @@ void parseLammpsFrameBody(
       } else if (tokens[1] == "ATOMS") {
         readAtoms = true;
         xIndex = yIndex = zIndex = typeIndex = -1;
-        molIndex = 0;
+        molIndex = -1;
         atomIndex = 0;
         for (int i = 2; i < static_cast<int>(tokens.size()); i++) {
           if (tokens[i] == "type") {
@@ -681,7 +686,7 @@ void parseLammpsFrameBody(
             noteCoordColumn(i - 2, tokens[i], xIndex, yIndex, zIndex);
           }
         }
-        if (molIndex == 0) {
+        if (molIndex < 0) {
           molIndex = atomIndex;
         }
       }

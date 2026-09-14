@@ -307,12 +307,14 @@ bool nneigh::cellListRowsThreaded(
   const double cxa = norm3(0.0, xz * 0.0 + lz * lx, -yz * lx);
   const double axb = norm3(0.0, 0.0, lx * ly);
   const double width[3] = {volume / bxc, volume / cxa, volume / axb};
-  int ncell[3];
+  std::int64_t ncell[3];
   for (int k = 0; k < 3; k++) {
-    ncell[k] = static_cast<int>(std::floor(width[k] / rcutoff));
-    if (ncell[k] < 3) {
+    const double f = std::floor(width[k] / rcutoff);
+    if (!std::isfinite(f) || f < 3.0 ||
+        f > static_cast<double>(std::numeric_limits<int>::max())) {
       return false;
     }
+    ncell[k] = static_cast<std::int64_t>(f);
   }
   // fractional coordinates of the subset, wrapped into [0, 1)
   std::vector<int> cellOf(n);
@@ -331,11 +333,16 @@ bool nneigh::cellListRowsThreaded(
     const double f[3] = {wrap(fa), wrap(fb), wrap(fc)};
     int c[3];
     for (int d = 0; d < 3; d++) {
-      c[d] = std::min(ncell[d] - 1, static_cast<int>(f[d] * ncell[d]));
+      c[d] = std::min(static_cast<int>(ncell[d] - 1),
+                      static_cast<int>(f[d] * static_cast<double>(ncell[d])));
     }
-    cellOf[k] = (c[0] * ncell[1] + c[1]) * ncell[2] + c[2];
+    cellOf[k] = static_cast<int>((c[0] * ncell[1] + c[1]) * ncell[2] + c[2]);
   }
-  const int nCells = ncell[0] * ncell[1] * ncell[2];
+  const std::int64_t nCells64 = ncell[0] * ncell[1] * ncell[2];
+  if (nCells64 <= 0 || nCells64 > std::numeric_limits<int>::max()) {
+    return false;
+  }
+  const int nCells = static_cast<int>(nCells64);
   std::vector<int> cellStart(static_cast<std::size_t>(nCells) + 1, 0);
   for (std::size_t k = 0; k < n; k++) {
     ++cellStart[static_cast<std::size_t>(cellOf[k]) + 1];

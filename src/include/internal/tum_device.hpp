@@ -428,6 +428,11 @@ inline void emitBasalFrom(int i, const int *nRings, const int *ringAtoms,
   }
 }
 
+inline void setOne(int *flags, int i) {
+#pragma omp atomic write
+  flags[i] = 1;
+}
+
 inline void applyHcPair(int p, const int *nPairs, const int *pairs,
                         const int *ringAtoms, const int *throughCount,
                         const int *through, int nAtoms, int maxPer, int *hc) {
@@ -436,8 +441,8 @@ inline void applyHcPair(int p, const int *nPairs, const int *pairs,
   }
   const int i = pairs[p * 2];
   const int j = pairs[p * 2 + 1];
-  hc[i] = 1;
-  hc[j] = 1;
+  setOne(hc, i);
+  setOne(hc, j);
   const int *bi = ringAtoms + i * 6;
   const int *bj = ringAtoms + j * 6;
   for (int q = 0; q < 6; ++q) {
@@ -464,7 +469,7 @@ inline void applyHcPair(int p, const int *nPairs, const int *pairs,
         }
       }
       if (nrst == 3 && commonCount(rest, bj) == 3) {
-        hc[kr] = 1;
+        setOne(hc, kr);
       }
     }
   }
@@ -539,9 +544,9 @@ inline void ddcFrom(int i, const int *nRings, const int *ringAtoms,
       return;
     }
   }
-  ddc[i] = 1;
+  setOne(ddc, i);
   for (int t = 0; t < 6; ++t) {
-    ddc[newP[t]] = 1;
+    setOne(ddc, newP[t]);
   }
 }
 
@@ -560,10 +565,10 @@ inline void atomIceFrom(int r, const int *nRings, const int *ringAtoms,
       continue;
     }
     if (isHc) {
-      atomHc[a] = 1;
+      setOne(atomHc, a);
     }
     if (isDdc) {
-      atomDdc[a] = 1;
+      setOne(atomDdc, a);
     }
   }
 }

@@ -13,7 +13,41 @@
 //-----------------------------------------------------------------------------------
 
 #include <topo_one_dim.hpp>
+#include <generic.hpp>
 #include <neighbours.hpp>
+
+#include <array>
+#include <cmath>
+
+namespace {
+void projectedAreas(
+    const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
+    const std::vector<int> &ring, double &areaXY, double &areaXZ,
+    double &areaYZ) {
+  areaXY = 0.0;
+  areaXZ = 0.0;
+  areaYZ = 0.0;
+  if (ring.empty()) {
+    return;
+  }
+  const int origin = ring[0];
+  auto prev = gen::unwrappedXYZ(yCloud, origin, origin);
+  for (std::size_t k = 1; k < ring.size(); ++k) {
+    const auto cur = gen::unwrappedXYZ(yCloud, origin, ring[k]);
+    areaXY += (prev[0] + cur[0]) * (prev[1] - cur[1]);
+    areaXZ += (prev[0] + cur[0]) * (prev[2] - cur[2]);
+    areaYZ += (prev[1] + cur[1]) * (prev[2] - cur[2]);
+    prev = cur;
+  }
+  const auto first = gen::unwrappedXYZ(yCloud, origin, origin);
+  areaXY += (prev[0] + first[0]) * (prev[1] - first[1]);
+  areaXZ += (prev[0] + first[0]) * (prev[2] - first[2]);
+  areaYZ += (prev[1] + first[1]) * (prev[2] - first[2]);
+  areaXY = std::abs(areaXY * 0.5);
+  areaXZ = std::abs(areaXZ * 0.5);
+  areaYZ = std::abs(areaYZ * 0.5);
+}
+} // namespace
 
 // -----------------------------------------------------------------------------------------------------
 // PRISM ALGORITHMS
@@ -487,13 +521,7 @@ bool ring::relaxedPrismConditions(const std::vector<std::vector<int>> &nList,
 bool ring::discardExtraTetragonBlocks(
     std::vector<int> &basal1, std::vector<int> &basal2,
     molSys::PointCloud<molSys::Point<double>, double> &yCloud) {
-  int ringSize =
-      basal1.size(); // Size of the ring; each ring contains n elements
-  int iatomIndex,
-      jatomIndex;  // Indices of the elements in basal1 and basal2 respectively
-  double r_i, r_j; // Coordinates in the axial dimension of iatom and jatom of
-                   // basal1 and basal2 respectively
-  int axialDim;    // 0 for x, 1 for y and 2 for z dimensions respectively
+  int axialDim;
   // Variables for getting the projected area
   bool axialBasal1, axialBasal2; // bools for checking if basal1 and basal2 are
                                  // axial (true) respectively
@@ -512,57 +540,7 @@ bool ring::discardExtraTetragonBlocks(
   axialBasal1 = false; // Init to false
   axialBasal2 = false; // Init
 
-  // Init the projected area
-  areaXY = 0.0;
-  areaXZ = 0.0;
-  areaYZ = 0.0;
-
-  jatomIndex = basal1[0];
-
-  // All points except the first pair
-  for (int k = 1; k < ringSize; k++) {
-    iatomIndex = basal1[k]; // Current vertex
-
-    // Add to the polygon area
-    // ------
-    // XY plane
-    areaXY += (yCloud.pts[jatomIndex].x + yCloud.pts[iatomIndex].x) *
-              (yCloud.pts[jatomIndex].y - yCloud.pts[iatomIndex].y);
-    // ------
-    // XZ plane
-    areaXZ += (yCloud.pts[jatomIndex].x + yCloud.pts[iatomIndex].x) *
-              (yCloud.pts[jatomIndex].z - yCloud.pts[iatomIndex].z);
-    // ------
-    // YZ plane
-    areaYZ += (yCloud.pts[jatomIndex].y + yCloud.pts[iatomIndex].y) *
-              (yCloud.pts[jatomIndex].z - yCloud.pts[iatomIndex].z);
-    // ------
-    jatomIndex = iatomIndex;
-  }
-
-  // Closure point
-  iatomIndex = basal1[0];
-  // ------
-  // XY plane
-  areaXY += (yCloud.pts[jatomIndex].x + yCloud.pts[iatomIndex].x) *
-            (yCloud.pts[jatomIndex].y - yCloud.pts[iatomIndex].y);
-  // ------
-  // XZ plane
-  areaXZ += (yCloud.pts[jatomIndex].x + yCloud.pts[iatomIndex].x) *
-            (yCloud.pts[jatomIndex].z - yCloud.pts[iatomIndex].z);
-  // ------
-  // YZ plane
-  areaYZ += (yCloud.pts[jatomIndex].y + yCloud.pts[iatomIndex].y) *
-            (yCloud.pts[jatomIndex].z - yCloud.pts[iatomIndex].z);
-  // ------
-  // The actual projected area is half of this
-  areaXY *= 0.5;
-  areaXZ *= 0.5;
-  areaYZ *= 0.5;
-  // Get the absolute value
-  areaXY = std::abs(areaXY);
-  areaXZ = std::abs(areaXZ);
-  areaYZ = std::abs(areaYZ);
+  projectedAreas(yCloud, basal1, areaXY, areaXZ, areaYZ);
 
   // If the axial dimension is x, y, or z:
   // then the maximum basal area should be in the YZ, XZ and XY dimensions
@@ -592,57 +570,7 @@ bool ring::discardExtraTetragonBlocks(
   // ----------------------------------------
   // Calculate projected area onto the XY, YZ and XZ planes for basal2
 
-  // Init the projected area
-  areaXY = 0.0;
-  areaXZ = 0.0;
-  areaYZ = 0.0;
-
-  jatomIndex = basal2[0];
-
-  // All points except the first pair
-  for (int k = 1; k < ringSize; k++) {
-    iatomIndex = basal2[k]; // Current vertex
-
-    // Add to the polygon area
-    // ------
-    // XY plane
-    areaXY += (yCloud.pts[jatomIndex].x + yCloud.pts[iatomIndex].x) *
-              (yCloud.pts[jatomIndex].y - yCloud.pts[iatomIndex].y);
-    // ------
-    // XZ plane
-    areaXZ += (yCloud.pts[jatomIndex].x + yCloud.pts[iatomIndex].x) *
-              (yCloud.pts[jatomIndex].z - yCloud.pts[iatomIndex].z);
-    // ------
-    // YZ plane
-    areaYZ += (yCloud.pts[jatomIndex].y + yCloud.pts[iatomIndex].y) *
-              (yCloud.pts[jatomIndex].z - yCloud.pts[iatomIndex].z);
-    // ------
-    jatomIndex = iatomIndex;
-  }
-
-  // Closure point
-  iatomIndex = basal2[0];
-  // ------
-  // XY plane
-  areaXY += (yCloud.pts[jatomIndex].x + yCloud.pts[iatomIndex].x) *
-            (yCloud.pts[jatomIndex].y - yCloud.pts[iatomIndex].y);
-  // ------
-  // XZ plane
-  areaXZ += (yCloud.pts[jatomIndex].x + yCloud.pts[iatomIndex].x) *
-            (yCloud.pts[jatomIndex].z - yCloud.pts[iatomIndex].z);
-  // ------
-  // YZ plane
-  areaYZ += (yCloud.pts[jatomIndex].y + yCloud.pts[iatomIndex].y) *
-            (yCloud.pts[jatomIndex].z - yCloud.pts[iatomIndex].z);
-  // ------
-  // The actual projected area is half of this
-  areaXY *= 0.5;
-  areaXZ *= 0.5;
-  areaYZ *= 0.5;
-  // Get the absolute value
-  areaXY = std::abs(areaXY);
-  areaXZ = std::abs(areaXZ);
-  areaYZ = std::abs(areaYZ);
+  projectedAreas(yCloud, basal2, areaXY, areaXZ, areaYZ);
 
   // Check if xy projected area is the greatest
   // If the axial dimension is x, y, or z:

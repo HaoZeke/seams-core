@@ -231,9 +231,8 @@ void runPass1Host12(const NeighbourCSR &g, int begin, int end,
     const int j1 = g.offsets[static_cast<size_t>(i) + 1];
     int nUsed = 0;
     for (int p = j0; p < j1; p++) {
-      qlmAddBond12(g.dr[static_cast<size_t>(3 * p)],
-                   g.dr[static_cast<size_t>(3 * p + 1)],
-                   g.dr[static_cast<size_t>(3 * p + 2)], qlm.data(), row,
+      const std::size_t p3 = 3 * static_cast<std::size_t>(p);
+      qlmAddBond12(g.dr[p3], g.dr[p3 + 1], g.dr[p3 + 2], qlm.data(), row,
                    nUsed);
     }
     if (nUsed == 0) {
@@ -501,14 +500,14 @@ DeviceScratch gOffloadScratch;
 void runOffloadMapped(const NeighbourCSR &g, int orderL, std::vector<double> &qlm,
                       std::vector<double> &ql, std::vector<double> &qlBar) {
   const int n = g.nop;
-  const int nnz = static_cast<int>(g.cols.size());
+  const std::size_t nnz = g.cols.size();
   const double *dr = g.dr.data();
   const int *offsets = g.offsets.data();
   const int *cols = g.cols.data();
   double *qlmP = qlm.data();
-  const int drN = 3 * nnz;
+  const std::size_t drN = 3 * nnz;
   const int offN = n + 1;
-  const int qlmN = static_cast<int>(qlm.size());
+  const std::size_t qlmN = qlm.size();
 #pragma omp target data map(to : dr[0 : drN], offsets[0 : offN],                      \
                                 cols[0 : nnz], orderL)                                \
     map(from : qlmP[0 : qlmN])

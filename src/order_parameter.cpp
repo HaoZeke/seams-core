@@ -115,60 +115,24 @@ std::vector<double> topoparam::calcCoverageArea(
 std::vector<double> topoparam::projAreaSingleRing(
     const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
     const std::vector<int> &ring) {
-  //
-  int iatomIndex, jatomIndex; // Atom indices of the i^th and j^th atoms
-  int ringSize = ring.size(); // Number of nodes in the ring
-  double areaXY, areaXZ, areaYZ;
-  double x_iatom, y_iatom, z_iatom; // Coordinates of iatom
-  double x_jatom, y_jatom, z_jatom; // Coordinates of jatom
-  // ----------------------------------------
-  // Calculate projected area onto the XY, YZ and XZ planes for basal1
+  int ringSize = ring.size();
+  double areaXY = 0.0;
+  double areaXZ = 0.0;
+  double areaYZ = 0.0;
 
-  // Init the projected area
-  areaXY = 0.0;
-  areaXZ = 0.0;
-  areaYZ = 0.0;
-
-  jatomIndex = ring[0];
-
-  // All points except the first pair
+  const int origin = ring[0];
+  auto prev = gen::unwrappedXYZ(yCloud, origin, origin);
   for (int k = 1; k < ringSize; k++) {
-    iatomIndex = ring[k]; // Current vertex
-
-    // --------------------------------------------------------------------
-    // SHIFT PARTICLES TEMPORARILY (IN CASE OF UNWRAPPED COORDINATES)
-    gen::unwrappedCoordShift(yCloud, iatomIndex, jatomIndex, &x_iatom, &y_iatom,
-                             &z_iatom, &x_jatom, &y_jatom, &z_jatom);
-    // --------------------------------------------------------------------
-
-    // Add to the polygon area
-    // ------
-    // XY plane
-    areaXY += (x_jatom + x_iatom) * (y_jatom - y_iatom);
-    // ------
-    // XZ plane
-    areaXZ += (x_jatom + x_iatom) * (z_jatom - z_iatom);
-    // ------
-    // YZ plane
-    areaYZ += (y_jatom + y_iatom) * (z_jatom - z_iatom);
-    // ------
-    jatomIndex = iatomIndex;
+    const auto cur = gen::unwrappedXYZ(yCloud, origin, ring[k]);
+    areaXY += (prev[0] + cur[0]) * (prev[1] - cur[1]);
+    areaXZ += (prev[0] + cur[0]) * (prev[2] - cur[2]);
+    areaYZ += (prev[1] + cur[1]) * (prev[2] - cur[2]);
+    prev = cur;
   }
-
-  // Closure point
-  iatomIndex = ring[0];
-  // Unwrapped coordinates needed
-  gen::unwrappedCoordShift(yCloud, iatomIndex, jatomIndex, &x_iatom, &y_iatom,
-                           &z_iatom, &x_jatom, &y_jatom, &z_jatom);
-  // ------
-  // XY plane
-  areaXY += (x_jatom + x_iatom) * (y_jatom - y_iatom);
-  // ------
-  // XZ plane
-  areaXZ += (x_jatom + x_iatom) * (z_jatom - z_iatom);
-  // ------
-  // YZ plane
-  areaYZ += (y_jatom + y_iatom) * (z_jatom - z_iatom);
+  const auto first = gen::unwrappedXYZ(yCloud, origin, origin);
+  areaXY += (prev[0] + first[0]) * (prev[1] - first[1]);
+  areaXZ += (prev[0] + first[0]) * (prev[2] - first[2]);
+  areaYZ += (prev[1] + first[1]) * (prev[2] - first[2]);
   // ------
   // The actual projected area is half of this
   areaXY *= 0.5;

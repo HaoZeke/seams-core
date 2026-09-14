@@ -10,6 +10,7 @@
 //  114707 (2008)).
 
 #include <cmath>
+#include <cstddef>
 
 #ifdef SEAMS_HAS_OFFLOAD
 #pragma omp declare target
@@ -334,8 +335,9 @@ inline void qlmOneAtomDr(int iatom, int orderL, const double *dr,
   const int j1 = offsets[iatom + 1];
   int nUsed = 0;
   for (int p = j0; p < j1; p++) {
-    qlmAddBond(orderL, dr[3 * p], dr[3 * p + 1], dr[3 * p + 2],
-               qlmInterleaved, row, nComp, nUsed);
+    const std::size_t p3 = 3 * static_cast<std::size_t>(p);
+    qlmAddBond(orderL, dr[p3], dr[p3 + 1], dr[p3 + 2], qlmInterleaved, row,
+               nComp, nUsed);
   }
   if (nUsed == 0) {
     return;

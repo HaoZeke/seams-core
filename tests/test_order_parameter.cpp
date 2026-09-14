@@ -80,6 +80,15 @@ TEST_CASE("projAreaSingleRing XY plane rectangle", "[order_parameter]") {
   REQUIRE_THAT(areas[2], Catch::Matchers::WithinAbs(0.0, 1e-10));
 }
 
+TEST_CASE("projAreaSingleRing unwraps a ring that straddles PBC",
+          "[order_parameter]") {
+  // 2x2 square: (9,0,0), (11,0,0), (11,2,0), (9,2,0) in a box of 10.
+  // Dump wrap puts the second and third vertices at x=1.
+  auto cloud = makeCloud({{9, 0, 0}, {1, 0, 0}, {1, 2, 0}, {9, 2, 0}}, 10.0);
+  auto areas = topoparam::projAreaSingleRing(cloud, {0, 1, 2, 3});
+  REQUIRE_THAT(areas[0], Catch::Matchers::WithinAbs(4.0, 1e-8));
+}
+
 TEST_CASE("rodgerF4 is cos 3 phi on a known H-O-O-H dihedral",
           "[order_parameter]") {
   // Two waters. Outer hydrogens give a 90 degree H-O-O-H dihedral

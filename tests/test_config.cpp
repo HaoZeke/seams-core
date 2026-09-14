@@ -86,6 +86,16 @@ TEST_CASE("environment fills the runtime table") {
   REQUIRE(cfg.offload);
 }
 
+TEST_CASE("envInt overflow and junk fall back") {
+  EnvGuard g;
+  setenv("SEAMS_K", "9999999999999999999", 1);
+  REQUIRE(seams::cfg::load().k == 4);
+  setenv("SEAMS_K", "12x", 1);
+  REQUIRE(seams::cfg::load().k == 4);
+  setenv("SEAMS_K", "8", 1);
+  REQUIRE(seams::cfg::load().k == 8);
+}
+
 TEST_CASE("file sets only unset keys") {
   EnvGuard g;
   const auto path = tmpEnv("SEAMS_K=8\nSEAMS_GRAPH=knn\n# comment\n");

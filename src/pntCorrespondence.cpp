@@ -13,6 +13,7 @@
 //-----------------------------------------------------------------------------------
 
 #include <pntCorrespondence.hpp>
+#include <generic.hpp>
 #include <neighbours.hpp>
 
 /**
@@ -488,9 +489,11 @@ Eigen::MatrixXd pntToPnt::fillPointSetPrismRing(
     // -------------------
     // Basal ring points
     index = basalRing[currentPosition];    // Index of the current point
-    pointSet(i, 0) = yCloud.pts[index].x; // x coord
-    pointSet(i, 1) = yCloud.pts[index].y; // y coord
-    pointSet(i, 2) = yCloud.pts[index].z; // z coord
+    const auto xyz =
+        gen::unwrappedXYZ(yCloud, basalRing[startingIndex], index);
+    pointSet(i, 0) = xyz[0];
+    pointSet(i, 1) = xyz[1];
+    pointSet(i, 2) = xyz[2];
   } // end of point filling from the relative ordering vector of vectors
 
   // Return the set of points
@@ -538,17 +541,21 @@ Eigen::MatrixXd pntToPnt::fillPointSetPrismBlock(
     iatomIndex =
         basal1[currentPosition]; // Index of the current point in basal1
     iatom = i;                   // index in the point set being filled
-    pointSet(iatom, 0) = yCloud.pts[iatomIndex].x; // x coord
-    pointSet(iatom, 1) = yCloud.pts[iatomIndex].y; // y coord
-    pointSet(iatom, 2) = yCloud.pts[iatomIndex].z; // z coord
+    const auto xyz1 =
+        gen::unwrappedXYZ(yCloud, basal1[startingIndex], iatomIndex);
+    pointSet(iatom, 0) = xyz1[0];
+    pointSet(iatom, 1) = xyz1[1];
+    pointSet(iatom, 2) = xyz1[2];
     // -------------------
     // Basal2 ring points
     jatomIndex =
         basal2[currentPosition]; // Index of the current point in basal2
     jatom = i + ringSize;        // index in the point set being filled
-    pointSet(jatom, 0) = yCloud.pts[jatomIndex].x; // x coord
-    pointSet(jatom, 1) = yCloud.pts[jatomIndex].y; // y coord
-    pointSet(jatom, 2) = yCloud.pts[jatomIndex].z; // z coord
+    const auto xyz2 =
+        gen::unwrappedXYZ(yCloud, basal1[startingIndex], jatomIndex);
+    pointSet(jatom, 0) = xyz2[0];
+    pointSet(jatom, 1) = xyz2[1];
+    pointSet(jatom, 2) = xyz2[2];
   } // end of point filling from the relative ordering vector of vectors
 
   // Return the set of points
@@ -743,8 +750,7 @@ Eigen::MatrixXd pntToPnt::changeHexCageOrder(
   int iPnt;                   // Current index in the Eigen matrix pointSet
   int cageSize = 12;          // Number of points in the cage
   std::vector<int> newBasal1, newBasal2;
-  std::array<double, 3> dr; // Components of the distance
-  int iatomOne;             // Index of the first atom
+  int iatomOne;
 
   // Checks and balances
   //
@@ -775,37 +781,23 @@ Eigen::MatrixXd pntToPnt::changeHexCageOrder(
   pointSet(0, 0) = yCloud.pts[iatomOne].x;
   pointSet(0, 1) = yCloud.pts[iatomOne].y;
   pointSet(0, 2) = yCloud.pts[iatomOne].z;
-  // basal2
   jatomIndex = newBasal2[0];
-  // Get the distance from basal1
-  dr = gen::relDist(yCloud, iatomOne, jatomIndex);
-
-  // basal2
-  pointSet(6, 0) = yCloud.pts[iatomOne].x + dr[0];
-  pointSet(6, 1) = yCloud.pts[iatomOne].y + dr[1];
-  pointSet(6, 2) = yCloud.pts[iatomOne].z + dr[2];
-  //
-  // Loop through the rest of the points
+  const auto xyzB0 = gen::unwrappedXYZ(yCloud, iatomOne, jatomIndex);
+  pointSet(6, 0) = xyzB0[0];
+  pointSet(6, 1) = xyzB0[1];
+  pointSet(6, 2) = xyzB0[2];
   for (int i = 1; i < 6; i++) {
-    // basal1
-    iatomIndex = newBasal1[i]; // Atom index to be filled for basal1
-    jatomIndex = newBasal2[i]; // Atom index to be filled for basal2
-    //
-    // Get the distance from the first atom
-    dr = gen::relDist(yCloud, iatomOne, iatomIndex);
-    //
-    pointSet(i, 0) = yCloud.pts[iatomOne].x + dr[0];
-    pointSet(i, 1) = yCloud.pts[iatomOne].y + dr[1];
-    pointSet(i, 2) = yCloud.pts[iatomOne].z + dr[2];
-    //
-    // Get the distance from the first atom
-    dr = gen::relDist(yCloud, iatomOne, jatomIndex);
-    // basal2
-    pointSet(i + 6, 0) = yCloud.pts[iatomOne].x + dr[0];
-    pointSet(i + 6, 1) = yCloud.pts[iatomOne].y + dr[1];
-    pointSet(i + 6, 2) = yCloud.pts[iatomOne].z + dr[2];
-    //
-  } // end of loop
+    iatomIndex = newBasal1[i];
+    jatomIndex = newBasal2[i];
+    const auto xyz1 = gen::unwrappedXYZ(yCloud, iatomOne, iatomIndex);
+    pointSet(i, 0) = xyz1[0];
+    pointSet(i, 1) = xyz1[1];
+    pointSet(i, 2) = xyz1[2];
+    const auto xyz2 = gen::unwrappedXYZ(yCloud, iatomOne, jatomIndex);
+    pointSet(i + 6, 0) = xyz2[0];
+    pointSet(i + 6, 1) = xyz2[1];
+    pointSet(i + 6, 2) = xyz2[2];
+  }
 
   return pointSet;
 }

@@ -1,8 +1,10 @@
 #include <seams_config.hpp>
 
 #include <cctype>
+#include <cerrno>
 #include <cstdlib>
 #include <fstream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -58,8 +60,13 @@ int envInt(const char *key, int fallback) {
     return fallback;
   }
   char *end = nullptr;
+  errno = 0;
   const long n = std::strtol(v, &end, 10);
-  if (end == v || *end != '\0') {
+  if (errno == ERANGE || end == v || *end != '\0') {
+    return fallback;
+  }
+  if (n < static_cast<long>(std::numeric_limits<int>::min()) ||
+      n > static_cast<long>(std::numeric_limits<int>::max())) {
     return fallback;
   }
   return static_cast<int>(n);

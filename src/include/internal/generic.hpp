@@ -389,6 +389,16 @@ relDist(const molSys::PointCloud<molSys::Point<double>, double> &yCloud, int iat
                           yCloud.pts[jatom].y, yCloud.pts[jatom].z);
 }
 
+// Unwrap atom into the image nearest origin. relDist(i, j) is wrap(i - j),
+// so the nearest image of atom is origin - relDist(origin, atom).
+inline std::array<double, 3> unwrappedXYZ(
+    const molSys::PointCloud<molSys::Point<double>, double> &yCloud, int origin,
+    int atom) {
+  const auto dr = relDist(yCloud, origin, atom);
+  return {yCloud.pts[origin].x - dr[0], yCloud.pts[origin].y - dr[1],
+          yCloud.pts[origin].z - dr[2]};
+}
+
 // Function for sorting according to atom ID
 // Comparator for std::sort
 /**
