@@ -41,11 +41,11 @@ int ylmCartesian(int orderL, const double *xyz, int nVec, double *ylmOut) {
   for (int i = 0; i < nVec * 3; i++) {
     cart[static_cast<size_t>(i)] = xyz[i];
   }
-  static sphericart::SphericalHarmonics<double> calc3(3);
-  static sphericart::SphericalHarmonics<double> calc4(4);
-  static sphericart::SphericalHarmonics<double> calc6(6);
-  static sphericart::SphericalHarmonics<double> calc8(8);
-  static sphericart::SphericalHarmonics<double> calc12(12);
+  thread_local static sphericart::SphericalHarmonics<double> calc3(3);
+  thread_local static sphericart::SphericalHarmonics<double> calc4(4);
+  thread_local static sphericart::SphericalHarmonics<double> calc6(6);
+  thread_local static sphericart::SphericalHarmonics<double> calc8(8);
+  thread_local static sphericart::SphericalHarmonics<double> calc12(12);
   sphericart::SphericalHarmonics<double> *calc = &calc6;
   if (orderL == 3) {
     calc = &calc3;

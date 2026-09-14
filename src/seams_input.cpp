@@ -364,6 +364,15 @@ void sinp::forEachLammpsFrame(
     return;
   }
 
+  int resolved = typeFilter;
+  if (resolved <= 0) {
+    molSys::PointCloud<molSys::Point<double>, double> probe;
+    probe = readLammpsTrj(filename, first, probe);
+    if (!probe.pts.empty()) {
+      resolved = probe.pts[0].type;
+    }
+  }
+
 #ifdef SEAMS_HAS_OPENMP
   const int threads = nThreads > 0 ? nThreads : omp_get_max_threads();
 #pragma omp parallel for schedule(dynamic, 1) num_threads(threads)             \
@@ -371,8 +380,8 @@ void sinp::forEachLammpsFrame(
 #endif
   for (int frame = first; frame <= last; ++frame) {
     molSys::PointCloud<molSys::Point<double>, double> cloud;
-    if (typeFilter > 0) {
-      cloud = readLammpsTrjO(filename, frame, cloud, typeFilter);
+    if (resolved > 0) {
+      cloud = readLammpsTrjO(filename, frame, cloud, resolved);
     } else {
       cloud = readLammpsTrj(filename, frame, cloud);
     }

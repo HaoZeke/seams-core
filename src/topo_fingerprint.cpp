@@ -307,8 +307,10 @@ FrameFingerprint incrementalFingerprint(const FrameFingerprint &prev,
                                         int hops, int maxRingSize,
                                         const std::vector<int> &colours) {
   const int n = static_cast<int>(rows.size());
+  const bool coloured = colours.size() == rows.size() && !rows.empty();
   if (n == 0 || static_cast<int>(prev.atomKeys.size()) != n ||
-      prev.hops != hops || prev.wlAtom.size() != rows.size()) {
+      prev.hops != hops || prev.wlAtom.size() != rows.size() ||
+      prev.coloured != coloured) {
     return fingerprint(rows, hops, maxRingSize, colours);
   }
   std::unordered_set<int> dirty;

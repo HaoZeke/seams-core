@@ -54,10 +54,15 @@ const char *env(const char *key) {
 
 int envInt(const char *key, int fallback) {
   const char *v = env(key);
-  if (v == nullptr) {
+  if (v == nullptr || *v == '\0') {
     return fallback;
   }
-  return std::atoi(v);
+  char *end = nullptr;
+  const long n = std::strtol(v, &end, 10);
+  if (end == v || *end != '\0') {
+    return fallback;
+  }
+  return static_cast<int>(n);
 }
 
 double envDouble(const char *key, double fallback) {

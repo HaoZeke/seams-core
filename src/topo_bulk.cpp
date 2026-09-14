@@ -309,8 +309,8 @@ int ring::topoBulkAnalysis(
     } // skip for no rings of ringSize
     //
     // Init the ringType vector
-    ringType.resize(
-        ringsOneType.size()); // Has a value for each ring. init to zero.
+    ringType.assign(ringsOneType.size(),
+                    static_cast<ring::strucType>(0));
     // ----------------------------------------------
     if (ringSize == 6) {
       // Get the cages

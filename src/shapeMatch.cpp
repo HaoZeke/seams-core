@@ -12,6 +12,9 @@
 // If not, see <https://opensource.org/licenses/MIT>.
 //-----------------------------------------------------------------------------------
 
+#include <cmath>
+#include <limits>
+
 #include <ira_sofi.hpp>
 #include <shapeMatch.hpp>
 
@@ -276,7 +279,7 @@ bool match::matchPrismBlock(
 
   targetPrismBlock =
       pntToPnt::fillPointSetPrismBlock(yCloud, basal1, basal2, 0);
-  if (ira::orient(refPrismBlock, targetPrismBlock, quat, rmsd)) {
+  if (ira::orient(refPrismBlock, targetPrismBlock, quat, rmsd) && rmsd >= 0.0) {
     beginIndex = 0;
     return rmsd <= 6.0;
   }
@@ -288,9 +291,12 @@ bool match::matchPrismBlock(
     targetPrismBlock =
         pntToPnt::fillPointSetPrismBlock(yCloud, basal1, basal2, 0);
     // Shape-matching
-    absor::hornAbsOrientation(refPrismBlock, targetPrismBlock, quat, rmsd,
-                              rmsdList,
-                              scale); // basal2
+    if (absor::hornAbsOrientation(refPrismBlock, targetPrismBlock, quat, rmsd,
+                                  rmsdList, scale) != 0 ||
+        rmsd < 0.0) {
+      beginIndex = 0;
+      return false;
+    }
   }                                    // even or if there are 3 nodes
   else {
     // Define the vector, RMSD etc:
@@ -299,6 +305,9 @@ bool match::matchPrismBlock(
     std::vector<double>
         currentRmsdList; // List of RMSD per atom in the order fed in
     double currentScale;
+    bool haveRmsd = false;
+    rmsd = std::numeric_limits<double>::infinity();
+    startingIndex = 0;
     // Loop through all possible startingIndex
     for (int i = 0; i < ringSize; i++) {
       //
@@ -315,25 +324,14 @@ bool match::matchPrismBlock(
         continue;
       }
       // Comparison to get the least RMSD for the correct mapping
-      if (i == 0) {
-        // Init
+      if (!haveRmsd || currentRmsd < rmsd) {
         quat = currentQuat;
         rmsd = currentRmsd;
         rmsdList = currentRmsdList;
         scale = currentScale;
         startingIndex = i;
-      } // init
-      else {
-        // Check to see if the calculated RMSD is less than the RMSD already
-        // saved
-        if (currentRmsd < rmsd) {
-          quat = currentQuat;
-          rmsd = currentRmsd;
-          rmsdList = currentRmsdList;
-          scale = currentScale;
-          startingIndex = i;
-        } // end of check to see if the current RMSD is smaller
-      }   // end of comparison and filling
+        haveRmsd = true;
+      }
     }     // end of loop through startingIndex
   }       // ringSize is odd, so every point must be tried
 
@@ -355,6 +353,12 @@ bool match::matchPrismBlock(
   //   rmsdFile.close();
   // }
   // // END OF BLOCK TO BE DELETED
+
+  if (ringSize % 2 != 0 && ringSize != 3 &&
+      !std::isfinite(rmsd)) {
+    beginIndex = 0;
+    return false;
+  }
 
   // Condition for shape-matching
   if (rmsd <= 6) {

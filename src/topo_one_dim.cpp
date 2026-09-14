@@ -111,8 +111,8 @@ int ring::prismAnalysis(
     ringType.resize(0);
     nPerfectPrisms = 0;
     nImperfectPrisms = 0;
-    ringType.resize(
-        ringsOneType.size()); // Has a value for each ring. init to zero.
+    ringType.assign(ringsOneType.size(),
+                    static_cast<ring::strucType>(0));
     // -------------
     // Now that you have rings of a certain size:
     // Find prisms, saving the ring indices to listPrism
