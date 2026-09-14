@@ -7,6 +7,7 @@
 
 #include <generic.hpp>
 #include <mol_sys.hpp>
+#include <neighbours.hpp>
 
 #include <algorithm>
 #include <array>
@@ -304,27 +305,64 @@ ionEnvironment(const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
     }
   }
   const double cut2 = cutoff * cutoff;
-  for (int i : ionIndices) {
+  std::vector<int> waters;
+  waters.reserve(static_cast<std::size_t>(n));
+  for (int j = 0; j < n; ++j) {
+    if (isIon[static_cast<std::size_t>(j)]) {
+      continue;
+    }
+    if (waterType != 0 &&
+        yCloud.pts[static_cast<std::size_t>(j)].type != waterType) {
+      continue;
+    }
+    waters.push_back(j);
+  }
+  std::vector<int> subset;
+  subset.reserve(ionIndices.size() + waters.size());
+  std::vector<int> ionRow(ionIndices.size(), -1);
+  for (std::size_t k = 0; k < ionIndices.size(); ++k) {
+    const int i = ionIndices[k];
+    if (i < 0 || i >= n) {
+      continue;
+    }
+    ionRow[k] = static_cast<int>(subset.size());
+    subset.push_back(i);
+  }
+  subset.insert(subset.end(), waters.begin(), waters.end());
+  std::vector<std::vector<int>> rows;
+  const bool haveCells =
+      !subset.empty() &&
+      nneigh::cellListRowsThreaded(yCloud, subset, cutoff, rows);
+
+  for (std::size_t k = 0; k < ionIndices.size(); ++k) {
+    const int i = ionIndices[k];
     if (i < 0 || i >= n) {
       continue;
     }
     int shell = 0;
     int labelled = 0;
     std::vector<int> members;
-    for (int j = 0; j < n; j++) {
+    const auto countWater = [&](int j) {
       if (j == i || isIon[static_cast<std::size_t>(j)]) {
-        continue;
-      }
-      if (waterType != 0 && yCloud.pts[static_cast<std::size_t>(j)].type != waterType) {
-        continue;
-      }
-      if (gen::periodicDistSq(yCloud, i, j) >= cut2) {
-        continue;
+        return;
       }
       ++shell;
       members.push_back(j);
-      if (static_cast<std::size_t>(j) < iceFlag.size() && iceFlag[static_cast<std::size_t>(j)]) {
+      if (static_cast<std::size_t>(j) < iceFlag.size() &&
+          iceFlag[static_cast<std::size_t>(j)]) {
         ++labelled;
+      }
+    };
+    if (haveCells && ionRow[k] >= 0) {
+      for (int j : rows[static_cast<std::size_t>(ionRow[k])]) {
+        countWater(j);
+      }
+    } else {
+      for (int j : waters) {
+        if (gen::periodicDistSq(yCloud, i, j) >= cut2) {
+          continue;
+        }
+        countWater(j);
       }
     }
     IonState state = IonState::liquid;
@@ -669,6 +707,13 @@ iceClusterIonCensus(const molSys::PointCloud<molSys::Point<double>, double> &yCl
   }
   out.ionsInCluster.assign(static_cast<std::size_t>(out.nClusters), 0);
   const double r2max = cutoff * cutoff;
+  std::vector<int> iceAtoms;
+  iceAtoms.reserve(static_cast<std::size_t>(n));
+  for (int a = 0; a < n; ++a) {
+    if (out.clusterOf[static_cast<std::size_t>(a)] >= 0) {
+      iceAtoms.push_back(a);
+    }
+  }
   for (std::size_t k = 0; k < ionIndices.size(); k++) {
     const int g = ionIndices[k];
     if (g < 0 || g >= n) {
@@ -676,10 +721,7 @@ iceClusterIonCensus(const molSys::PointCloud<molSys::Point<double>, double> &yCl
     }
     int best = -1;
     double bestSq = r2max;
-    for (int a = 0; a < n; a++) {
-      if (out.clusterOf[static_cast<std::size_t>(a)] < 0) {
-        continue;
-      }
+    for (int a : iceAtoms) {
       const auto dr = gen::relDist(yCloud, g, a);
       const double d2 = dr[0] * dr[0] + dr[1] * dr[1] + dr[2] * dr[2];
       if (d2 <= bestSq) {
