@@ -132,19 +132,24 @@ bool forEachInputFrame(const std::string &path, int first, int last,
     return true;
   }
 
-  if (ext == "con" || ext == "pdb" || ext == "gro" || ext == "dcd") {
-    const int stop = last <= 0 ? first : last;
-    for (int frame = std::max(1, first); frame <= stop; ++frame) {
-      Cloud cloud = load(path, frame, typeFilter);
-      if (cloud.nop == 0 && frame != std::max(1, first)) {
-        break;
-      }
-      fn(frame, cloud);
-      if (cloud.nop == 0) {
-        break;
-      }
-    }
+  if (ext == "con") {
+#ifdef SEAMS_HAS_READCON
+    sinp::forEachConFrame(path, first, last, std::forward<Fn>(fn));
     return true;
+#else
+    throw std::runtime_error("readcon-core is not in this build; CON input needs it");
+#endif
+  }
+  if (ext == "pdb" || ext == "gro" || ext == "dcd") {
+#ifdef SEAMS_HAS_CHEMFILES
+    const int filter = typeFilter > 0 ? typeFilter : -1;
+    sinp::forEachChemfilesFrame(path, first, last, filter,
+                                std::forward<Fn>(fn));
+    return true;
+#else
+    throw std::runtime_error("chemfiles is not in this build; " + ext +
+                             " input needs it");
+#endif
   }
 
   sinp::forEachLammpsFrame(path, first, last, typeFilter,

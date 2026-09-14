@@ -486,6 +486,20 @@ TEST_CASE("readChemfiles matches the hand-rolled LAMMPS reader", "[seams_input]"
   }
 }
 
+TEST_CASE("forEachChemfilesFrame matches sequential reads", "[seams_input]") {
+  int n = 0;
+  sinp::forEachChemfilesFrame(
+      "traj/mW_cubic.lammpstrj", 1, 2, 1,
+      [&](int frame, molSys::PointCloud<molSys::Point<double>, double> &cloud) {
+        molSys::PointCloud<molSys::Point<double>, double> one;
+        one = sinp::readChemfiles("traj/mW_cubic.lammpstrj", frame, one, 1);
+        REQUIRE(cloud.nop == one.nop);
+        REQUIRE(cloud.nop > 0);
+        ++n;
+      });
+  REQUIRE(n == 2);
+}
+
 TEST_CASE("readChemfiles reports unreadable files without terminating",
           "[seams_input]") {
   molSys::PointCloud<molSys::Point<double>, double> cloud;

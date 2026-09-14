@@ -115,6 +115,12 @@ molSys::PointCloud<molSys::Point<double>, double>
 readChemfiles(std::string filename, int targetFrame,
               molSys::PointCloud<molSys::Point<double>, double> &yCloud,
               int typeFilter = -1);
+
+//! One live chemfiles Trajectory over [first, last] (1-based, inclusive).
+void forEachChemfilesFrame(
+    const std::string &filename, int first, int last, int typeFilter,
+    const std::function<void(
+        int, molSys::PointCloud<molSys::Point<double>, double> &)> &fn);
 #endif
 
 #ifdef SEAMS_HAS_READCON
@@ -122,6 +128,12 @@ readChemfiles(std::string filename, int targetFrame,
 molSys::PointCloud<molSys::Point<double>, double>
 readCon(std::string filename, int targetFrame,
         molSys::PointCloud<molSys::Point<double>, double> &yCloud);
+
+//! One live readcon iterator over [first, last] (1-based, inclusive).
+void forEachConFrame(
+    const std::string &filename, int first, int last,
+    const std::function<void(
+        int, molSys::PointCloud<molSys::Point<double>, double> &)> &fn);
 #endif
 
 //! True when each component lies in [lo, hi], or that axis has lo == hi
