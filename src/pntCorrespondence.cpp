@@ -745,50 +745,26 @@ Eigen::MatrixXd pntToPnt::changeHexCageOrder(
     const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
     const std::vector<int> &basal1, const std::vector<int> &basal2, int startingIndex) {
   Eigen::MatrixXd pointSet(12, 3);
-  int iatomIndex, jatomIndex; // Current atom index in yCloud, according to
-                              // basal1 and basal2 respectively
-  int iPnt;                   // Current index in the Eigen matrix pointSet
-  int cageSize = 12;          // Number of points in the cage
-  std::vector<int> newBasal1, newBasal2;
+  int iatomIndex, jatomIndex;
   int iatomOne;
 
-  // Checks and balances
-  //
   if (startingIndex > 5 || startingIndex < 0) {
     startingIndex = 0;
-  } // no invalid starting index
+  }
+  auto wrap = [startingIndex](int k) { return (k + startingIndex) % 6; };
 
-  // Change the order
-  if (startingIndex > 0) {
-    for (int k = 0; k < 6; k++) {
-      iPnt = k + startingIndex;
-      if (iPnt >= 6) {
-        iPnt -= 6;
-      } // wrap-around
-      newBasal1.push_back(basal1[iPnt]);
-      newBasal2.push_back(basal2[iPnt]);
-    } // change the order
-  }   // end of filling for startingIndex>0
-  else {
-    newBasal1 = basal1;
-    newBasal2 = basal2;
-  } // end of filling up the reordered basal rings
-
-  //
-  // FIRST POINT
-  // basal1
-  iatomOne = newBasal1[0];
+  iatomOne = basal1[wrap(0)];
   pointSet(0, 0) = yCloud.pts[iatomOne].x;
   pointSet(0, 1) = yCloud.pts[iatomOne].y;
   pointSet(0, 2) = yCloud.pts[iatomOne].z;
-  jatomIndex = newBasal2[0];
+  jatomIndex = basal2[wrap(0)];
   const auto xyzB0 = gen::unwrappedXYZ(yCloud, iatomOne, jatomIndex);
   pointSet(6, 0) = xyzB0[0];
   pointSet(6, 1) = xyzB0[1];
   pointSet(6, 2) = xyzB0[2];
   for (int i = 1; i < 6; i++) {
-    iatomIndex = newBasal1[i];
-    jatomIndex = newBasal2[i];
+    iatomIndex = basal1[wrap(i)];
+    jatomIndex = basal2[wrap(i)];
     const auto xyz1 = gen::unwrappedXYZ(yCloud, iatomOne, iatomIndex);
     pointSet(i, 0) = xyz1[0];
     pointSet(i, 1) = xyz1[1];
