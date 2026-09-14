@@ -35,8 +35,8 @@
  * @param[in] firstFrame The first frame to be analyzed
  */
 int ring::polygonRingAnalysis(
-    std::string path, std::vector<std::vector<int>> rings,
-    std::vector<std::vector<int>> nList,
+    const std::string &path, const std::vector<std::vector<int>> &rings,
+    const std::vector<std::vector<int>> &nList,
     molSys::PointCloud<molSys::Point<double>, double> &yCloud, int maxDepth,
     double sheetArea, int firstFrame) {
   //

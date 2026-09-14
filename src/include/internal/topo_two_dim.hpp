@@ -47,8 +47,8 @@ namespace ring {
 //! Find out which rings are prisms, looping through all ring sizes upto the
 //! maxDepth The input ringsAllSizes array has rings of every size.
 [[nodiscard]] int polygonRingAnalysis(
-    std::string path, std::vector<std::vector<int>> rings,
-    std::vector<std::vector<int>> nList,
+    const std::string &path, const std::vector<std::vector<int>> &rings,
+    const std::vector<std::vector<int>> &nList,
     molSys::PointCloud<molSys::Point<double>, double> &yCloud, int maxDepth,
     double sheetArea, int firstFrame);
 

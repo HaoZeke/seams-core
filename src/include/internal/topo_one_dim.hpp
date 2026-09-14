@@ -57,12 +57,14 @@ std::vector<int> findPrisms(
 //! Tests whether two rings are basal rings (true) or not (false) for a prism
 //! (strict criterion)
 bool basalPrismConditions(const std::vector<std::vector<int>> &nList,
-                          std::vector<int> &basal1, std::vector<int> &basal2);
+                          const std::vector<int> &basal1,
+                          const std::vector<int> &basal2);
 
 //! Reduced criterion: Two candidate basal rings of a prism block should have at
 //! least one bond between them
 bool relaxedPrismConditions(const std::vector<std::vector<int>> &nList,
-                            std::vector<int> &basal1, std::vector<int> &basal2);
+                            const std::vector<int> &basal1,
+                            const std::vector<int> &basal2);
 
 //! Checks whether two 4-membered rings are parallel in one dimension or not to
 //! prevent overcounting

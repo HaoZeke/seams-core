@@ -45,6 +45,8 @@ gen::getPointCloudOneAtomType(
   // Before filling up the PointCloud, if the vectors are filled
   // empty them
   outCloud = molSys::clearPointCloud(outCloud);
+  outCloud.pts.reserve(static_cast<std::size_t>(std::max(yCloud.nop, 0)));
+  outCloud.idIndexMap.reserve(static_cast<std::size_t>(std::max(yCloud.nop, 0)));
   // --------
 
   // Loop through every iatom and check the type
@@ -282,9 +284,8 @@ void ring::getEdgeMoleculesInRings(
     std::array<double, 3> coordLow, std::array<double, 3> coordHigh, bool identicalCloud) {
   //
   // A vector of bool values, such that every ring has a value of true (in the slice) or false (not in the slice) 
-  std::vector<bool> ringInSlice(rings.size(), false); // all set to false initially.
-  int jatomIndex, jatomID; // Index and ID in oCloud 
-  int jatomIndex1; // Index in yCloud  
+  int jatomID;
+  int jatomIndex1;
   std::unordered_multimap<int, int>
       molIDAtomIDmap; // Unordered multimap with molecule IDs of the atoms as the keys and the
                   // atom IDs as the values. More than one atom can have the same molecule ID
@@ -299,70 +300,42 @@ void ring::getEdgeMoleculesInRings(
   molIDAtomIDmap = molSys::createMolIDAtomIDMultiMap(yCloud);
   // --------------------
 
-  // Loop through every iatom present in the slice in oCloud
-  // Check to see if iatom is in any ring. If it is present in a ring, set that ring to true 
-  // Change the inSlice bool of every iatom in the ring to true if false. Set also the inSlice bool
-  // of the output cloud if it is not identical. 
-
-  // Loop through every iatom present in the slice in oCloud to determine which rings are in the slice
-  // The indices of oCloud and rings should match (or this will produce unexpected results)
-  for (int iatom = 0; iatom < oCloud.nop; iatom++) {
-    // Skip if iatom is not in the slice
-    if (!oCloud.pts[iatom].inSlice)
-    {
+  // A ring is in the slice if any of its atoms already is. Walk each ring
+  // once instead of testing every in-slice atom against every ring.
+  for (int iring = 0; iring < static_cast<int>(rings.size()); iring++) {
+    bool hit = false;
+    for (int a : rings[static_cast<std::size_t>(iring)]) {
+      if (a >= 0 && a < oCloud.nop && oCloud.pts[static_cast<std::size_t>(a)].inSlice) {
+        hit = true;
+        break;
+      }
+    }
+    if (!hit) {
       continue;
-    } // skip for iatom not in slice
-    //
-    // For iatom in the slice, 
-    // loop through all rings to find all the rings it is a part of 
-    for (int iring = 0; iring < rings.size(); iring++)
-    {
-      // Skip if iring is in the slice already
-      if (ringInSlice[iring])
-      {
+    }
+    for (int jatomIndex : rings[static_cast<std::size_t>(iring)]) {
+      if (jatomIndex < 0 || jatomIndex >= oCloud.nop) {
         continue;
-      } // skip for iring in slice 
-      // Check and see if iatom is in iring 
-      if(std::find(rings[iring].begin(), rings[iring].end(), iatom)!=rings[iring].end()){
-        // Found iatom; ring is part of the slice 
-        ringInSlice[iring] = true; // update the vector of bool values
-        // --------------------------
-        // Change the inSlice bool of every iatom in oCloud 
-        // (and optionally, yCloud) in the ring to true
-        // Loop through the elements of the ring 
-        for (int j = 0; j < rings[iring].size(); j++)
-        {
-          jatomIndex = rings[iring][j]; // Index of the atom in oCloud 
-          // Set this to true in oCloud 
-          oCloud.pts[jatomIndex].inSlice = true; // part of slice 
-          jatomID = oCloud.pts[jatomIndex].atomID; // Atom ID 
-          // Now if oCloud and yCloud are not the same, use the
-          // atom ID to set the inSlice bool value in yCloud 
-          if (!identicalCloud)
-          {
-            // Find the index corresponding to the same atom in yCloud 
-            auto gotJ = yCloud.idIndexMap.find(jatomID);
-            if (gotJ == yCloud.idIndexMap.end()) {
-              continue;
-            }
-            jatomIndex1 = gotJ->second;
-            if (jatomIndex1 < 0 ||
-                static_cast<std::size_t>(jatomIndex1) >= yCloud.pts.size()) {
-              continue;
-            }
-            // Set the jatom inSlice bool to true
-            yCloud.pts[jatomIndex1].inSlice = true; // jatomIndex is inside the slice 
-            // set the inSlice value of all atoms in yCloud with the current molecule ID 
-            gen::setAtomsWithSameMolID(yCloud, molIDAtomIDmap, 
-              yCloud.pts[jatomIndex1].molID, true);
-          } // end of setting values in yCloud 
-        } // end of loop through the elements of the current ring 
-        // --------------------------
-      } // found iatom in the ring
-      //
-    } // end of loop through all rings searching for iatom 
-    //
-  } // end of loop through atoms in oCloud in the slice 
+      }
+      oCloud.pts[static_cast<std::size_t>(jatomIndex)].inSlice = true;
+      jatomID = oCloud.pts[static_cast<std::size_t>(jatomIndex)].atomID;
+      if (!identicalCloud) {
+        auto gotJ = yCloud.idIndexMap.find(jatomID);
+        if (gotJ == yCloud.idIndexMap.end()) {
+          continue;
+        }
+        jatomIndex1 = gotJ->second;
+        if (jatomIndex1 < 0 ||
+            static_cast<std::size_t>(jatomIndex1) >= yCloud.pts.size()) {
+          continue;
+        }
+        yCloud.pts[static_cast<std::size_t>(jatomIndex1)].inSlice = true;
+        gen::setAtomsWithSameMolID(yCloud, molIDAtomIDmap,
+                                   yCloud.pts[static_cast<std::size_t>(jatomIndex1)].molID,
+                                   true);
+      }
+    }
+  } 
 
 
   // Optionally add support for molecule slice update if yCloud and oCloud are not identical?

@@ -12,8 +12,10 @@
 // If not, see <https://opensource.org/licenses/MIT>.
 //-----------------------------------------------------------------------------------
 
+#include <algorithm>
 #include <iostream>
 #include <memory>
+#include <unordered_map>
 #include <mol_sys.hpp>
 
 /**
@@ -97,28 +99,29 @@ std::vector<std::vector<int>> molSys::hAtomMolList(
   int iMolID;   // Current molecular ID
   int nHatoms;  // No. of h atoms found for a particular molID.
 
+  std::unordered_map<int, std::vector<int>> hByMol;
+  hByMol.reserve(static_cast<std::size_t>(std::max(hCloud.nop, 0)));
+  for (int jatom = 0; jatom < hCloud.nop; jatom++) {
+    hByMol[hCloud.pts[jatom].molID].push_back(jatom);
+  }
+
   for (int iatom = 0; iatom < oCloud.nop; iatom++) {
-    // Get the molID
     iMolID = oCloud.pts[iatom].molID;
-
-    hMolList.push_back(std::vector<int>()); // Empty vector for the index iatom
-    // Fill the first element with the molecular ID
+    hMolList.push_back(std::vector<int>());
     hMolList[iatom].push_back(iMolID);
-
-    nHatoms = 0; // init (no. of h atoms for the particular molID)
-
-    // Now search through the hydrogen atom pointCloud for this particular molID
-    for (int jatom = 0; jatom < hCloud.nop; jatom++) {
-      if (hCloud.pts[jatom].molID == iMolID) {
-        hMolList[iatom].push_back(jatom); // fill the hatom index
-        nHatoms++;
-        // If the two hydrogens have been found, break out of the loop
-        if (nHatoms == 2) {
-          break;
-        } // end of break
-      }   // end of check to see if jatom is part of iMolID
-    }     // end of loop through the hydrogen atom pointCloud
-  }       // end of looping through every oxygen atom
+    nHatoms = 0;
+    const auto found = hByMol.find(iMolID);
+    if (found == hByMol.end()) {
+      continue;
+    }
+    for (int jatom : found->second) {
+      hMolList[iatom].push_back(jatom);
+      nHatoms++;
+      if (nHatoms == 2) {
+        break;
+      }
+    }
+  }
 
   return hMolList;
 } // end of function

@@ -1354,35 +1354,38 @@ std::vector<int> ring::findMixedRings(const std::vector<std::vector<int>> &rings
                                       std::vector<int> &listDDC,
                                       std::vector<int> &listHC) {
   std::vector<int> listMixed;
-  int dummyValue = -10;
+  constexpr int dummyValue = -10;
+  const int nRings = static_cast<int>(ringType.size());
+  std::vector<int> ddcPos(static_cast<std::size_t>(nRings), -1);
+  std::vector<int> hcPos(static_cast<std::size_t>(nRings), -1);
+  for (int i = 0; i < static_cast<int>(listDDC.size()); ++i) {
+    const int r = listDDC[static_cast<std::size_t>(i)];
+    if (r >= 0 && r < nRings) {
+      ddcPos[static_cast<std::size_t>(r)] = i;
+    }
+  }
+  for (int i = 0; i < static_cast<int>(listHC.size()); ++i) {
+    const int r = listHC[static_cast<std::size_t>(i)];
+    if (r >= 0 && r < nRings) {
+      hcPos[static_cast<std::size_t>(r)] = i;
+    }
+  }
 
-  // Loop through all rings in the ringType and
-  // adds the ring Indices of all rings which are both DDCs and HCs
-  for (int iring = 0; iring < ringType.size(); iring++) {
-    // If iring is of mixed type, add it to the listMixed vector
-    if (ringType[iring] == ring::strucType::bothBasal ||
-        ringType[iring] == ring::strucType::bothPrismatic) {
+  for (int iring = 0; iring < nRings; iring++) {
+    if (ringType[static_cast<std::size_t>(iring)] == ring::strucType::bothBasal ||
+        ringType[static_cast<std::size_t>(iring)] ==
+            ring::strucType::bothPrismatic) {
       listMixed.push_back(iring);
-
-      //-----------------
-      // Search for iring in listDDC
-      std::sort(listDDC.begin(), listDDC.end());
-      auto iter = std::find(listDDC.begin(), listDDC.end(), iring);
-      if (iter != listDDC.end()) {
-        *iter = dummyValue; // Assign dummy value to the mixed ring
-      }                     // found in listDDC
-      //-----------------
-      //-----------------
-      // Search for iring in listHC
-      std::sort(listHC.begin(), listHC.end());
-      auto itr = std::find(listHC.begin(), listHC.end(), iring);
-      if (itr != listHC.end()) {
-        *itr = dummyValue; // Assign dummy value to the mixed ring
-      }                    // found in listHC
-      //-----------------
-
-    } // end of check for type
-  }   // end of loop through all every ring
+      if (ddcPos[static_cast<std::size_t>(iring)] >= 0) {
+        listDDC[static_cast<std::size_t>(ddcPos[static_cast<std::size_t>(iring)])] =
+            dummyValue;
+      }
+      if (hcPos[static_cast<std::size_t>(iring)] >= 0) {
+        listHC[static_cast<std::size_t>(hcPos[static_cast<std::size_t>(iring)])] =
+            dummyValue;
+      }
+    }
+  }
 
   return listMixed;
 }

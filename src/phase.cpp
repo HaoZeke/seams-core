@@ -239,6 +239,14 @@ std::vector<double> phase::localDensity(
   std::vector<double> rho(static_cast<std::size_t>(yCloud.nop), 0.0);
   const double r2 = rcut * rcut;
   const double vol = (4.0 / 3.0) * 3.14159265358979323846 * rcut * rcut * rcut;
+  const auto nList = nneigh::getNewNeighbourListByIndex(yCloud, rcut);
+  if (static_cast<int>(nList.size()) == yCloud.nop) {
+    for (int i = 0; i < yCloud.nop; i++) {
+      const int n = static_cast<int>(nList[static_cast<std::size_t>(i)].size()) - 1;
+      rho[static_cast<std::size_t>(i)] = static_cast<double>(std::max(n, 0)) / vol;
+    }
+    return rho;
+  }
   for (int i = 0; i < yCloud.nop; i++) {
     int n = 0;
     for (int j = 0; j < yCloud.nop; j++) {

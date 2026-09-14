@@ -9,6 +9,7 @@
 #include <voronoi_qlm.hpp>
 
 #include <generic.hpp>
+#include <neighbours.hpp>
 
 #include <algorithm>
 #include <array>
@@ -132,6 +133,12 @@ std::vector<chill::VoronoiWeights> chill::voronoiFacetWeights(
   // Growth schedule for cells failing the exactness certificate; 1.5^6 gives
   // an order of magnitude before the honest certified=false verdict
   constexpr int kMaxEnlarge = 6;
+  double maxCutoff = candidateCutoff;
+  for (int k = 0; k < kMaxEnlarge; ++k) {
+    maxCutoff *= 1.5;
+  }
+  const auto nList = nneigh::getNewNeighbourListByIndex(yCloud, maxCutoff);
+  const bool haveList = static_cast<int>(nList.size()) == yCloud.nop;
 
   for (int i = 0; i < yCloud.nop; i++) {
     double cutoff = candidateCutoff;
@@ -139,15 +146,28 @@ std::vector<chill::VoronoiWeights> chill::voronoiFacetWeights(
       const double cutoffSq = cutoff * cutoff;
       std::vector<Vec3> disp;
       std::vector<int> who;
-      for (int j = 0; j < yCloud.nop; j++) {
-        if (j == i) {
-          continue;
+      if (haveList) {
+        const auto &row = nList[static_cast<std::size_t>(i)];
+        for (std::size_t k = 1; k < row.size(); ++k) {
+          const int j = row[k];
+          const auto d = gen::relDist(yCloud, i, j);
+          const double r2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+          if (r2 > 0.0 && r2 <= cutoffSq) {
+            disp.push_back({d[0], d[1], d[2]});
+            who.push_back(j);
+          }
         }
-        const auto d = gen::relDist(yCloud, i, j);
-        const double r2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
-        if (r2 > 0.0 && r2 <= cutoffSq) {
-          disp.push_back({d[0], d[1], d[2]});
-          who.push_back(j);
+      } else {
+        for (int j = 0; j < yCloud.nop; j++) {
+          if (j == i) {
+            continue;
+          }
+          const auto d = gen::relDist(yCloud, i, j);
+          const double r2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+          if (r2 > 0.0 && r2 <= cutoffSq) {
+            disp.push_back({d[0], d[1], d[2]});
+            who.push_back(j);
+          }
         }
       }
 

@@ -18,6 +18,7 @@
 
 #include <array>
 #include <cmath>
+#include <unordered_set>
 
 namespace {
 void projectedAreas(
@@ -46,6 +47,25 @@ void projectedAreas(
   areaXY = std::abs(areaXY * 0.5);
   areaXZ = std::abs(areaXZ * 0.5);
   areaYZ = std::abs(areaYZ * 0.5);
+}
+
+bool ringIsAxial(
+    const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
+    const std::vector<int> &ring, int axialDim) {
+  double areaXY = 0.0;
+  double areaXZ = 0.0;
+  double areaYZ = 0.0;
+  projectedAreas(yCloud, ring, areaXY, areaXZ, areaYZ);
+  if (axialDim == 0) {
+    return areaYZ > areaXY && areaYZ > areaXZ;
+  }
+  if (axialDim == 1) {
+    return areaXZ > areaXY && areaXZ > areaYZ;
+  }
+  if (axialDim == 2) {
+    return areaXY > areaXZ && areaXY > areaYZ;
+  }
+  return false;
 }
 } // namespace
 
@@ -231,47 +251,64 @@ ring::findPrisms(const std::vector<std::vector<int>> &rings,
                  molSys::PointCloud<molSys::Point<double>, double> &yCloud,
                  std::vector<double> &rmsdPerAtom, bool doShapeMatching) {
   std::vector<int> listPrism;
-  int totalRingNum = rings.size(); // Total number of rings
-  std::vector<int> basal1;         // First basal ring
-  std::vector<int> basal2;         // Second basal ring
-  bool cond1, cond2; // Conditions for rings to be basal (true) or not (false)
-  bool relaxedCond;  // Condition so that at least one bond exists between the
-                     // two basal rings
-  bool isAxialPair;  // Basal rings should be parallel in one dimension to
-                     // prevent overcounting
-  int ringSize = rings[0].size(); // Number of nodes in each ring
-  nImperfectPrisms = 0;          // Number of undeformed prisms
-  nPerfectPrisms = 0;            // Number of undeformed prisms
-  // Matrix for the reference ring for a given ringSize.
+  int totalRingNum = static_cast<int>(rings.size());
+  bool cond1, cond2;
+  bool relaxedCond;
+  int ringSize = rings[0].size();
+  nImperfectPrisms = 0;
+  nPerfectPrisms = 0;
   Eigen::MatrixXd refPointSet(ringSize, 3);
 
-  // Get the reference ring point set for a given ring size.
-  // Get the axial dimension
   int axialDim = nneigh::dumpAxialDim(yCloud);
   refPointSet = pntToPnt::getPointSetRefRing(ringSize, axialDim);
-  //
 
-  // Two loops through all the rings are required to find pairs of basal rings
+  const bool needAxial = doShapeMatching || ringSize == 4;
+  std::vector<char> axial(static_cast<std::size_t>(totalRingNum), 1);
+  if (needAxial) {
+    for (int r = 0; r < totalRingNum; ++r) {
+      axial[static_cast<std::size_t>(r)] =
+          ringIsAxial(yCloud, rings[static_cast<std::size_t>(r)], axialDim) ? 1
+                                                                           : 0;
+    }
+  }
+
+  std::vector<std::vector<int>> atomRings(
+      static_cast<std::size_t>(std::max(yCloud.nop, 0)));
+  for (int r = 0; r < totalRingNum; ++r) {
+    for (int a : rings[static_cast<std::size_t>(r)]) {
+      if (a >= 0 && a < yCloud.nop) {
+        atomRings[static_cast<std::size_t>(a)].push_back(r);
+      }
+    }
+  }
+
   for (int iring = 0; iring < totalRingNum - 1; iring++) {
-    cond1 = false;
-    cond2 = false;
-    basal1 = rings[iring]; // Assign iring to basal1
-    // Loop through the other rings to get a pair
-    for (int jring = iring + 1; jring < totalRingNum; jring++) {
-      basal2 = rings[jring]; // Assign jring to basal2
-      // ------------
-      // Put extra check for axial basal rings if shapeMatching is being done
-      if (doShapeMatching || ringSize == 4) {
-        isAxialPair = false; // init
-        isAxialPair =
-            ring::discardExtraTetragonBlocks(basal1, basal2, yCloud);
-        if (!isAxialPair) {
+    if (needAxial && !axial[static_cast<std::size_t>(iring)]) {
+      continue;
+    }
+    const auto &basal1 = rings[static_cast<std::size_t>(iring)];
+    std::unordered_set<int> seen;
+    for (int a : basal1) {
+      if (a < 0 || static_cast<std::size_t>(a) >= nList.size()) {
+        continue;
+      }
+      const auto &row = nList[static_cast<std::size_t>(a)];
+      for (std::size_t k = 1; k < row.size(); ++k) {
+        const int b = row[k];
+        if (b < 0 || static_cast<std::size_t>(b) >= atomRings.size()) {
           continue;
         }
-      } // end of check for tetragonal prism blocks
-      // ------------
-      // Step one: Check to see if basal1 and basal2 have common
-      // elements or not. If they don't, then they cannot be basal rings
+        for (int jring : atomRings[static_cast<std::size_t>(b)]) {
+          if (jring <= iring) {
+            continue;
+          }
+          if (needAxial && !axial[static_cast<std::size_t>(jring)]) {
+            continue;
+          }
+          if (!seen.insert(jring).second) {
+            continue;
+          }
+          const auto &basal2 = rings[static_cast<std::size_t>(jring)];
       cond1 = ring::hasCommonElements(basal1, basal2);
       if (cond1) {
         continue;
@@ -296,9 +333,10 @@ ring::findPrisms(const std::vector<std::vector<int>> &rings,
           continue;
         } // end of skipping if the prisms do not fulfil relaxed criteria
 
-        // Do shape matching here
+        auto b1 = basal1;
+        auto b2 = basal2;
         bool isDeformedPrism = match::matchPrism(
-            yCloud, nList, refPointSet, basal1, basal2, rmsdPerAtom, false);
+            yCloud, nList, refPointSet, b1, b2, rmsdPerAtom, false);
 
         // Success! The rings are basal rings of a deformed prism!
         if (isDeformedPrism) {
@@ -347,20 +385,16 @@ ring::findPrisms(const std::vector<std::vector<int>> &rings,
         //
         // Shape-matching to get the RMSD (if shape-matching is desired)
         if (doShapeMatching) {
-          bool isKnownPrism = match::matchPrism(
-              yCloud, nList, refPointSet, basal1, basal2, rmsdPerAtom, true);
-        } // end of shape-matching to get rmsd
-        //
-        // // Now write out axial basal rings for convex hull calculations
-        // sout::writePrisms(basal1, basal2, *nPrisms, yCloud);
-        // // Write out prisms for shape-matching
-        // sout::writeBasalRingsPrism(basal1, basal2, *nPrisms, nList, yCloud,
-        //                            false);
-        // -----------
-      } // end of strict criteria
-
-    } // end of loop through rest of the rings to get the second basal ring
-  }   // end of loop through all rings for first basal ring
+          auto b1 = basal1;
+          auto b2 = basal2;
+          (void)match::matchPrism(yCloud, nList, refPointSet, b1, b2,
+                                  rmsdPerAtom, true);
+        }
+      }
+        }
+      }
+    }
+  }
 
   sort(listPrism.begin(), listPrism.end());
   auto ip = std::unique(listPrism.begin(), listPrism.end());
@@ -383,8 +417,8 @@ ring::findPrisms(const std::vector<std::vector<int>> &rings,
  *  and false if they do not make up a prism block.
  */
 bool ring::basalPrismConditions(const std::vector<std::vector<int>> &nList,
-                                std::vector<int> &basal1,
-                                std::vector<int> &basal2) {
+                                const std::vector<int> &basal1,
+                                const std::vector<int> &basal2) {
   int l1 = basal1[0]; // first element of basal1 ring
   int ringSize =
       basal1.size(); // Size of the ring; each ring contains n elements
@@ -393,7 +427,10 @@ bool ring::basalPrismConditions(const std::vector<std::vector<int>> &nList,
 
   // isNeighbour is initialized to false for all basal2 elements; indication if
   // basal2 elements are neighbours of basal1
-  std::vector<bool> isNeighbour(ringSize, false);
+  std::array<char, 16> isNeighbour{};
+  if (ringSize > 16) {
+    return false;
+  }
   int kIndex;  // m_k index
   int lAtomID; // atomID of the current element of basal1
   int kAtomID; // atomID of the current element of basal2
@@ -468,8 +505,8 @@ bool ring::basalPrismConditions(const std::vector<std::vector<int>> &nList,
  * exist between the basal rings.
  */
 bool ring::relaxedPrismConditions(const std::vector<std::vector<int>> &nList,
-                                  std::vector<int> &basal1,
-                                  std::vector<int> &basal2) {
+                                  const std::vector<int> &basal1,
+                                  const std::vector<int> &basal2) {
   int ringSize =
       basal1.size();     // Size of the ring; each ring contains n elements
   int m_k;                  // Atom ID of element in basal2
@@ -521,91 +558,9 @@ bool ring::relaxedPrismConditions(const std::vector<std::vector<int>> &nList,
 bool ring::discardExtraTetragonBlocks(
     std::vector<int> &basal1, std::vector<int> &basal2,
     molSys::PointCloud<molSys::Point<double>, double> &yCloud) {
-  int axialDim;
-  // Variables for getting the projected area
-  bool axialBasal1, axialBasal2; // bools for checking if basal1 and basal2 are
-                                 // axial (true) respectively
-  double areaXY, areaXZ,
-      areaYZ; // Projected area on the XY, XZ and YZ planes respectively
-  // ----------------------------------------
-  // Find the axial dimension for a quasi-one-dimensional ice nanotube
-  // The axial dimension will have the largest box length
-  // Index -> axial dimension
-  // 0 -> x dim
-  // 1 -> y dim
-  // 2 -> z dim
-  axialDim = nneigh::dumpAxialDim(yCloud);
-  // ----------------------------------------
-  // Calculate projected area onto the XY, YZ and XZ planes for basal1
-  axialBasal1 = false; // Init to false
-  axialBasal2 = false; // Init
-
-  projectedAreas(yCloud, basal1, areaXY, areaXZ, areaYZ);
-
-  // If the axial dimension is x, y, or z:
-  // then the maximum basal area should be in the YZ, XZ and XY dimensions
-  // respectively
-  // x dim
-  if (axialDim == 0) {
-    if (areaYZ > areaXY && areaYZ > areaXZ) {
-      axialBasal1 = true;
-    } // end of check for axial ring for basal1
-  }   // x dim
-  // y dim
-  else if (axialDim == 1) {
-    if (areaXZ > areaXY && areaXZ > areaYZ) {
-      axialBasal1 = true;
-    } // end of check for axial ring for basal1
-  }   // x dim
-  // z dim
-  else if (axialDim == 2) {
-    if (areaXY > areaXZ && areaXY > areaYZ) {
-      axialBasal1 = true;
-    } // end of check for axial ring for basal1
-  }   // x dim
-  else {
-    std::cerr << "Could not find the axial dimension.\n";
-    return false;
-  }
-  // ----------------------------------------
-  // Calculate projected area onto the XY, YZ and XZ planes for basal2
-
-  projectedAreas(yCloud, basal2, areaXY, areaXZ, areaYZ);
-
-  // Check if xy projected area is the greatest
-  // If the axial dimension is x, y, or z:
-  // then the maximum basal area should be in the YZ, XZ and XY dimensions
-  // respectively
-  // x dim
-  if (axialDim == 0) {
-    if (areaYZ > areaXY && areaYZ > areaXZ) {
-      axialBasal2 = true;
-    } // end of check for axial ring for basal1
-  }   // x dim
-  // y dim
-  else if (axialDim == 1) {
-    if (areaXZ > areaXY && areaXZ > areaYZ) {
-      axialBasal2 = true;
-    } // end of check for axial ring for basal1
-  }   // x dim
-  // z dim
-  else if (axialDim == 2) {
-    if (areaXY > areaXZ && areaXY > areaYZ) {
-      axialBasal2 = true;
-    } // end of check for axial ring for basal1
-  }   // x dim
-  else {
-    std::cerr << "Could not find the axial dimension.\n";
-    return false;
-  }
-  // ----------------------------------------
-
-  // Now check if basal1 and basal2 are axial or not
-  if (axialBasal1 && axialBasal2) {
-    return true;
-  } else {
-    return false;
-  } // Check for basal1 and basal2
+  const int axialDim = nneigh::dumpAxialDim(yCloud);
+  return ringIsAxial(yCloud, basal1, axialDim) &&
+         ringIsAxial(yCloud, basal2, axialDim);
 }
 
 /**
