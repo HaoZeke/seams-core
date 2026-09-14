@@ -547,22 +547,11 @@ bool rayHitsTriangle(const std::array<double, 3> &orig,
 bool pointInFaces(const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
                   const std::vector<std::vector<int>> &rings,
                   const std::vector<int> &faces,
-                  const std::array<double, 3> &guest) {
+                  const std::array<double, 3> &guest,
+                  const std::array<double, 3> &centre) {
   if (faces.empty()) {
     return false;
   }
-  std::vector<int> verts;
-  for (int f : faces) {
-    if (f < 0 || static_cast<std::size_t>(f) >= rings.size()) {
-      continue;
-    }
-    verts.insert(verts.end(), rings[static_cast<std::size_t>(f)].begin(),
-                 rings[static_cast<std::size_t>(f)].end());
-  }
-  if (verts.empty()) {
-    return false;
-  }
-  const auto centre = periodicCentroid(yCloud, verts);
   auto unwrap = [&](int atom) {
     const auto &p = yCloud.pts[static_cast<std::size_t>(atom)];
     const auto dr = minImage(yCloud, p.x, p.y, p.z, centre[0], centre[1], centre[2]);
@@ -628,7 +617,7 @@ guestOccupancyInside(const molSys::PointCloud<molSys::Point<double>, double> &yC
     int best = -1;
     double bestSq = std::numeric_limits<double>::infinity();
     for (std::size_t c = 0; c < cageFaces.size(); c++) {
-      if (!pointInFaces(yCloud, rings, cageFaces[c], gp)) {
+      if (!pointInFaces(yCloud, rings, cageFaces[c], gp, centres[c])) {
         continue;
       }
       const auto dr = minImage(yCloud, p.x, p.y, p.z, centres[c][0],
