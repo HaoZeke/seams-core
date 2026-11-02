@@ -8,10 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Unreleased notes live in [`changelog.d/`](changelog.d/) and are assembled
 by [towncrier](https://towncrier.readthedocs.io/) with
 `towncrier build --version "$(cat VERSION)" --date "$(cat RELEASE_DATE)"`.
-A draft that is not a release is
-`towncrier build --version Unreleased --date YYYY-MM-DD`.
-That heading is not the package version.
-The `## [2.12.0] - 2026-11-01` section stays the release named by VERSION.
 
 <!-- towncrier release notes start -->
 

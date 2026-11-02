@@ -1702,56 +1702,58 @@ The cubic and hexagonal centroids are the means of ideal Ic and ideal Ih.
 The water centroid is the mean of the calibration liquid defined below.
 The \((\bar q_3,\bar q_{12})\) row is the same rule in the plane of the averaged \(q_3\) and \(q_{12}\) that \citet{zeron2024hydrate} use for hydrates, computed with freud on the same four nearest neighbours, and its water centroid is that same liquid.
 A molecule is ice under the \(q_6\) row when \(q_6>\tau\), and that row cannot separate Ic from Ih.
-The ice error at a candidate \(\tau\) is the fraction of the thermal-Ic molecule-frames with \(q_6\le\tau\).
-The liquid error is the fraction of the calibration-liquid molecule-frames with \(q_6>\tau\).
+The ice error at a candidate \(\tau\) is the fraction of the coexistence-crystal molecule-frames with \(q_6\le\tau\).
+The liquid error is the fraction of the coexistence-liquid molecule-frames with \(q_6>\tau\).
 The candidates are the sorted unique values in the two samples, which are the values at which either error changes.
 \(\tau\) is the candidate with the smallest absolute difference of the two errors, then the smaller of the two errors, then the smaller candidate.
-On the thermal Ic sample and the \(298\,\mathrm{K}\) liquid the two errors are equal: both are \(3678/20480 = 0.17958984375\).
-That threshold is \(\tau=0.5626372694969177\).
-The mean \(q_6\) of the thermal Ic is \(0.5857276916503906\) and the mean \(q_6\) of the calibration liquid is \(0.48724669218063354\).
-The same rule on the thermal Ih sample gives \(\tau_{\mathrm{Ih}}=0.5627983808517456\), with ice error \(3610/20160\) and liquid error \(3667/20480\).
-The mean \(q_6\) of that Ih sample is \(0.5860733389854431\).
+Both samples are the five production frames at one state point, \(20160\) crystal molecule-frames and \(20480\) liquid molecule-frames.
+The ice error is \(4044/20160 = 0.2005952380952381\) and the liquid error is \(4108/20480 = 0.2005859375\).
+That threshold is \(\tau=0.5579227209091187\).
+The mean \(q_6\) of the hexagonal crystal is \(0.5803724527359009\) and the mean \(q_6\) of the liquid is \(0.4868989884853363\).
+The same rule at the cubic melting point gives \(\tau_{\mathrm{Ic}}=0.5592451095581055\), and both errors are \(4019/20480 = 0.196240234375\).
+The means there are \(0.5819523930549622\) and \(0.4874526560306549\).
 The cross-check threshold is the equal-error point of the two normal distributions \citet{lechner2008accurate} publish for unaveraged \(q_6\) in Tables 1 and 2.
 Those tables are the Lennard-Jones FCC crystal, mean \(0.507298\) and standard deviation \(0.043301\), and the undercooled liquid, mean \(0.360012\) and standard deviation \(0.066518\), at \(k_{\mathrm{B}}T=0.92\varepsilon\) and \(P=5.68\,\varepsilon\sigma^{-3}\), with every neighbour inside \(1.4\sigma\).
 That paper states no cutoff.
 With ice on the high side the equal-error point of the two normals is \(\tau_{\mathrm{LD}}=(\mu_{\mathrm{liq}}\sigma_{\mathrm{FCC}}+\mu_{\mathrm{FCC}}\sigma_{\mathrm{liq}})/(\sigma_{\mathrm{FCC}}+\sigma_{\mathrm{liq}})=0.4492239774173867909924512152\).
 The neighbour shell in that paper is not the four nearest neighbours used here, and the substance is a Lennard-Jones fluid.
 Table~\ref{tab:sota} and Table~\ref{tab:md} give the \(q_6\) cells at \(\tau\) and, in the following row, at \(\tau_{\mathrm{LD}}\).
-The calibration liquid is an mW trajectory of 4096 molecules at the ambient state of \citet{molinero2009mw}: the target is \(298\,\mathrm{K}\) and \(1\,\mathrm{atm}\), the state at which that paper scaled \(\sigma\) and for which its Table 1 lists a liquid density of \(0.978\,\mathrm{g\,cm^{-3}}\).
-The packing seed is 1298 and the velocity seed is 72981.
-Neither seed and neither temperature is one of the scored liquids at \(215\), \(250\) or \(300\,\mathrm{K}\) or of the jitter seeds 5 to 9.
-The run uses the deposited \texttt{mW.sw}, \texttt{in.liquid.lammps} and \texttt{in.heldout.lammps}: \(100\,\mathrm{ps}\) at \(350\,\mathrm{K}\), \(300\,\mathrm{ps}\) of NPT at the target, \(50\,\mathrm{ps}\) of settling and five frames \(20\,\mathrm{ps}\) apart.
-Every molecule of those five frames enters the empirical distribution, 20480 molecule-frames from one trajectory.
-The 31 equilibration thermo rows from step 21000 average \(297.467\,\mathrm{K}\) and \(-38.818\,\mathrm{atm}\).
-The ten production thermo rows average \(297.244\,\mathrm{K}\), \(-67.232\,\mathrm{atm}\) and \(0.996901\,\mathrm{g\,cm^{-3}}\).
-The ice sample in that rule is mW ice Ic, 4096 molecules, with mW ice Ih, 4032 molecules, as the polymorph cross-check, each in NPT at \(250\,\mathrm{K}\) and \(1\,\mathrm{atm}\).
-\citet{molinero2009mw} place the melting point of hexagonal ice at \(274.6\,\mathrm{K}\) and of cubic ice at \(271.5\,\mathrm{K}\), and the temperature of maximum density at \(250\,\mathrm{K}\).
-\(250\,\mathrm{K}\) is below both melting points, and it is the temperature of the scored crystal trajectories.
-The thermostat and the isotropic barostat are those of the liquid, Tdamp \(1000\,\mathrm{fs}\) and Pdamp \(10000\,\mathrm{fs}\).
-Each crystal is equilibrated for \(300\,\mathrm{ps}\) and then sampled as the liquid is: \(50\,\mathrm{ps}\) of settling and five frames over \(100\,\mathrm{ps}\).
-The velocity seeds are 94250 for Ic and 95250 for Ih, not the scored seeds 91250, 92250 and 93250.
-The thirty equilibration thermo rows of Ic average \(250.481\,\mathrm{K}\), \(8.545\,\mathrm{atm}\) and \(0.980416\,\mathrm{g\,cm^{-3}}\).
-Its ten production rows average \(249.406\,\mathrm{K}\), \(-8.231\,\mathrm{atm}\) and \(0.980269\,\mathrm{g\,cm^{-3}}\).
-The Ih production rows average \(249.558\,\mathrm{K}\), \(-0.330\,\mathrm{atm}\) and \(0.980558\,\mathrm{g\,cm^{-3}}\).
-\texttt{sota\_compare.py -{}-write-calibration} writes the centroids and the three thresholds, with the SHA-256 of each trajectory, to the deposited \texttt{calibration.txt} (sha256 \texttt{15b37ae1}).
+The primary state is the ice--liquid coexistence point of hexagonal ice.
+\citet{molinero2009mw} write that hexagonal ice (\(T_{\mathrm{m}}=274.6\pm 1\,\mathrm{K}\)) is more stable than cubic ice (\(T_{\mathrm{m}}=271.5\pm 1\,\mathrm{K}\)).
+Table 1 of that paper lists the mW liquid density at \(298\,\mathrm{K}\) as \(0.997\,\mathrm{g\,cm^{-3}}\), the ice density at melting as \(0.978\,\mathrm{g\,cm^{-3}}\) and the liquid density at melting as \(1.001\,\mathrm{g\,cm^{-3}}\).
+The crystal and the liquid of \(\tau\) are both at \(274.6\,\mathrm{K}\) and \(1\,\mathrm{atm}\).
+The crystal is ice Ih, 4032 molecules, velocity seed 97461.
+The liquid is 4096 molecules, packing seed 1746 and velocity seed 77461, melted for \(100\,\mathrm{ps}\) at \(350\,\mathrm{K}\) and then held at the target.
+The cross-check is the cubic coexistence point, \(271.5\,\mathrm{K}\) and \(1\,\mathrm{atm}\): ice Ic, 4096 molecules, velocity seed 97151, and a liquid with packing seed 1715 and velocity seed 77151.
+The scored temperatures are \(200\), \(215\), \(250\) and \(300\,\mathrm{K}\).
+The thermostat and the isotropic barostat are Tdamp \(1000\,\mathrm{fs}\) and Pdamp \(10000\,\mathrm{fs}\).
+Each crystal is equilibrated for \(300\,\mathrm{ps}\) of NPT.
+Each liquid is equilibrated for \(300\,\mathrm{ps}\) of NPT after the melt.
+Every trajectory is then settled for \(50\,\mathrm{ps}\) and saved as five frames over \(100\,\mathrm{ps}\).
+The thirty Ih equilibration rows average \(273.769\,\mathrm{K}\), \(4.314\,\mathrm{atm}\) and \(0.978608\,\mathrm{g\,cm^{-3}}\).
+Its ten production rows average \(275.004\,\mathrm{K}\), \(-17.828\,\mathrm{atm}\) and \(0.978418\,\mathrm{g\,cm^{-3}}\), with a centre-of-mass mean-squared displacement of \(0.336\,\mathring{\mathrm{A}}^2\) at \(100\,\mathrm{ps}\).
+The thirty-one liquid equilibration rows from step 21000 at \(274.6\,\mathrm{K}\) average \(274.594\,\mathrm{K}\) and \(-13.109\,\mathrm{atm}\).
+Its ten production rows average \(274.610\,\mathrm{K}\), \(93.596\,\mathrm{atm}\) and \(1.001839\,\mathrm{g\,cm^{-3}}\).
+The Ic production rows average \(270.312\,\mathrm{K}\) and \(0.978800\,\mathrm{g\,cm^{-3}}\), and the \(271.5\,\mathrm{K}\) liquid production rows average \(271.060\,\mathrm{K}\) and \(1.002387\,\mathrm{g\,cm^{-3}}\).
+\texttt{sota\_compare.py -{}-write-calibration} writes the centroids and the thresholds to the deposited \texttt{calibration.txt}.
 Table~\ref{tab:sota} and Table~\ref{tab:md} are scored from that file.
 At \(\tau\) the ideal lattices, with no displacement, are labelled ice in full: \(1.000\) of the 512 Ic sites and \(1.000\) of the 360 Ih sites.
-The jittered columns keep \(0.686\) and \(0.689\) at \(0.2\,\mathring{\mathrm{A}}\) and \(0.215\) and \(0.215\) at \(0.4\,\mathring{\mathrm{A}}\).
-The held-out crystals keep \(0.908\) and \(0.905\) at \(200\,\mathrm{K}\) and \(0.822\) and \(0.821\) at \(250\,\mathrm{K}\).
-The \(215\,\mathrm{K}\) liquid contributes 123 of 512 molecules.
+The jittered columns keep \(0.720\) and \(0.726\) at \(0.2\,\mathring{\mathrm{A}}\) and \(0.237\) and \(0.238\) at \(0.4\,\mathring{\mathrm{A}}\).
+The held-out crystals keep \(0.925\) and \(0.924\) at \(200\,\mathrm{K}\) and \(0.848\) and \(0.848\) at \(250\,\mathrm{K}\).
+The \(215\,\mathrm{K}\) liquid contributes 135 of 512 molecules.
 At \(\tau_{\mathrm{LD}}\) the jittered columns stay above \(0.72\) and the held-out crystals stay above \(0.997\), and that liquid contributes 388 of 512.
 The primary row is \(\tau\).
-\(\tau_{\mathrm{Ih}}\) is the ice-polymorph cross-check and \(\tau_{\mathrm{LD}}\) is the published-normal cross-check.
-They part on the liquid: \(\tau\) marks \(0.240\) of it and \(\tau_{\mathrm{LD}}\) marks \(0.758\).
+\(\tau_{\mathrm{Ic}}\) is the cubic-coexistence cross-check and \(\tau_{\mathrm{LD}}\) is the published-normal cross-check.
+They part on the liquid: \(\tau\) marks \(0.264\) of it and \(\tau_{\mathrm{LD}}\) marks \(0.758\).
 
 At \(\sigma=0.2\,\mathring{\mathrm{A}}\) the cutoff, mutual and seeded cage labels keep every cubic site, and all but the cutoff graph (\(0.999\)) keep every hexagonal one. PTM keeps \(0.991\) of the cubic sites and \(0.991\) of the hexagonal sites. CHILL+ keeps \(0.971\) and \(0.950\).
 The Lechner--Dellago rule keeps \(0.563\) of the cubic sites at \(0.2\,\mathring{\mathrm{A}}\) and labels \(0.435\) of them hexagonal.
-The \((\bar q_3,\bar q_{12})\) rule keeps \(0.240\) of the cubic and \(0.880\) of the hexagonal sites at \(0.2\,\mathring{\mathrm{A}}\), and \(0.000\) and \(0.105\) at \(0.4\,\mathring{\mathrm{A}}\).
+The \((\bar q_3,\bar q_{12})\) rule keeps \(0.240\) of the cubic and \(0.864\) of the hexagonal sites at \(0.2\,\mathring{\mathrm{A}}\), and \(0.000\) and \(0.098\) at \(0.4\,\mathring{\mathrm{A}}\).
 At \(0.3\,\mathring{\mathrm{A}}\) the cutoff graph loses edges as neighbours cross \(3.5\,\mathring{\mathrm{A}}\) and keeps \(0.936\) and \(0.899\); the mutual graph keeps \(0.990\) and \(0.940\), the seeded rule \(0.999\) and \(0.994\), PTM \(0.089\) and \(0.099\) and CHILL+ \(0.564\) and \(0.567\).
 At \(0.4\,\mathring{\mathrm{A}}\) the seeded rule keeps \(0.698\) of Ic (realizations \(0.594\) to \(0.824\)) and \(0.589\) of Ih (\(0.511\) to \(0.678\)).
 At the same displacement the cutoff graph keeps \(0.346\) and \(0.233\), PTM \(0.000\) and \(0.000\) and CHILL+ \(0.100\) and \(0.099\).
 Ring completion raises the seeded values to \(0.942\) (\(0.883\) to \(0.994\)) and \(0.728\) (\(0.597\) to \(0.844\)) at \(0.4\,\mathring{\mathrm{A}}\).
-On the liquid the cutoff graph labels \(0.047\) of the molecules Ic or Ih, the mutual and seeded rules \(0.023\), CHILL+ \(0.008\), the Lechner--Dellago rule \(0.002\) (1 of 512), the \((\bar q_3,\bar q_{12})\) rule \(0.049\) (25 of 512) and the \(q_6\) rule at \(\tau\) labels \(0.240\) (123 of 512).
+On the liquid the cutoff graph labels \(0.047\) of the molecules Ic or Ih, the mutual and seeded rules \(0.023\), CHILL+ \(0.008\), the Lechner--Dellago rule \(0.002\) (1 of 512), the \((\bar q_3,\bar q_{12})\) rule \(0.049\) (25 of 512) and the \(q_6\) rule at \(\tau\) labels \(0.264\) (135 of 512).
 The \(q_6\) cross-check at \(\tau_{\mathrm{LD}}\) labels \(0.758\) (388 of 512).
 PTM labels none of them.
 DeepIce and IceCoder are not rows of that table, because their published scopes are ice versus liquid and agreement with CHILL+, respectively.
@@ -1787,7 +1789,7 @@ The PTM row is the mean over seeds 5 to 9 at \texttt{rmsd\_cutoff=0.1}, from \te
 Its liquid cell is the false-crystal fraction from \texttt{scripts/sota\_compare.py -{}-liquid-data} on \texttt{data/mW\_liquid\_T215\_512.data} of the reproducibility package, and that fraction is \(0.000\).
 Section~\ref{sec:cagestar} defines the rules.
 The Lechner--Dellago and \((\bar q_3,\bar q_{12})\) centroids use the ideal lattices and the calibration liquid.
-The \(q_6\) threshold uses thermal ice Ic and that liquid.
+The \(q_6\) threshold uses ice Ih and the liquid at \(274.6\,\mathrm{K}\) and \(1\,\mathrm{atm}\).
 The \(q_6\) rows are ice versus not and give the fraction labelled ice.
 The first of them uses \(\tau\) and the second uses \(\tau_{\mathrm{LD}}\).
 With every seeded site already correct at \(0.2\,\mathring{\mathrm{A}}\), completion has nothing to add there.
@@ -1804,16 +1806,16 @@ cages, seeded (Eq.~\ref{eq:seeded}) & 1.000 & 0.999 & 0.951 & 0.698 & 1.000 & 0.
 cages, seeded + ring completion (Eq.~\ref{eq:completion}) & 1.000 & 1.000 & 1.000 & 0.942 & 1.000 & 1.000 & 0.997 & 0.728 & 0.023\\
 CHILL+\((r_c)\) & 0.971 & 0.564 & 0.244 & 0.100 & 0.950 & 0.567 & 0.276 & 0.099 & 0.008\\
 PTM (OVITO) & 0.991 & 0.089 & 0.003 & 0.000 & 0.991 & 0.099 & 0.003 & 0.000 & 0.000\\
-\((\bar q_4,\bar q_6)\) & 0.563 & 0.020 & 0.003 & 0.000 & 0.968 & 0.344 & 0.096 & 0.031 & 0.002\\
-\((\bar q_3,\bar q_{12})\) & 0.240 & 0.009 & 0.002 & 0.000 & 0.880 & 0.393 & 0.224 & 0.105 & 0.049\\
-\(q_6\) at \(\tau\) & 0.686 & 0.356 & 0.277 & 0.215 & 0.689 & 0.359 & 0.248 & 0.215 & 0.240\\
+\((\bar q_4,\bar q_6)\) & 0.563 & 0.020 & 0.003 & 0.000 & 0.970 & 0.349 & 0.097 & 0.032 & 0.002\\
+\((\bar q_3,\bar q_{12})\) & 0.240 & 0.009 & 0.002 & 0.000 & 0.864 & 0.383 & 0.216 & 0.098 & 0.049\\
+\(q_6\) at \(\tau\) & 0.720 & 0.393 & 0.303 & 0.237 & 0.726 & 0.392 & 0.278 & 0.238 & 0.264\\
 \(q_6\) at \(\tau_{\mathrm{LD}}\) & 0.983 & 0.867 & 0.788 & 0.745 & 0.986 & 0.859 & 0.790 & 0.727 & 0.758\\
 \end{tabular}
 }
 \end{table}
 
 On the 512-molecule liquid, deposited with the reproducibility package, the seeded rule labels \(12\) molecules and the completed rule \(12\).
-The cutoff graph labels \(24\), CHILL+\((r_c)\) \(4\) as Ic or Ih, template matching \(0\), the Lechner--Dellago rule \(1\) and the \(q_6\) rule at \(\tau\) labels \(123\).
+The cutoff graph labels \(24\), CHILL+\((r_c)\) \(4\) as Ic or Ih, template matching \(0\), the Lechner--Dellago rule \(1\) and the \(q_6\) rule at \(\tau\) labels \(135\).
 The cross-check at \(\tau_{\mathrm{LD}}\) labels \(388\).
 The table uses the frozen file \texttt{calibration.txt}.
 A liquid deep in the supercooled regime contains transient cages \citep{moore2011structural}.
@@ -1843,16 +1845,16 @@ PTM keeps at least \(4093\) of \(4096\) Ic molecules and \(4031\) of \(4032\) Ih
 At \(250\,\mathrm{K}\) it misses up to \(65\) Ic molecules of a frame and \(73\) Ih molecules of a frame.
 Those counts are \texttt{ok\_min} in the output of \texttt{scripts/md\_heldout\_score.py}.
 The Lechner--Dellago rule keeps \(0.922\) of Ic at \(200\,\mathrm{K}\) and \(0.740\) at \(250\,\mathrm{K}\), and \(0.999\) and \(0.990\) of Ih.
-The \(q_6\) rule at \(\tau\) calls \(0.821\) to \(0.908\) of the crystal ice.
+The \(q_6\) rule at \(\tau\) calls \(0.848\) to \(0.925\) of the crystal ice.
 The cross-check at \(\tau_{\mathrm{LD}}\) calls \(0.997\) to \(1.000\).
 On the liquid frames the cutoff graph labels \(0.011\) to \(0.029\) of the molecules Ic or Ih.
 The mutual, seeded and completed rules label \(0.010\) to \(0.012\) at \(215\,\mathrm{K}\) and at most \(0.001\) at \(250\) and \(300\,\mathrm{K}\).
 CHILL+ and the Lechner--Dellago rule label at most \(0.005\).
-The \(q_6\) rule at \(\tau\) calls \(0.180\) to \(0.248\) of the liquid ice, and the cross-check calls \(0.683\) to \(0.752\).
+The \(q_6\) rule at \(\tau\) calls \(0.198\) to \(0.273\) of the liquid ice, and the cross-check calls \(0.683\) to \(0.752\).
 PTM labels no molecule on those frames.
 On these crystals the cage-rule and CHILL+ means stay at least \(0.998\).
 The Lechner--Dellago rule loses \(0.260\) of the Ic molecules at \(250\,\mathrm{K}\).
-The primary \(q_6\) rule keeps at least \(0.821\) of either held-out crystal.
+The primary \(q_6\) rule keeps at least \(0.848\) of either held-out crystal.
 Table~\ref{tab:sota} is where \(\tau\) and \(\tau_{\mathrm{LD}}\) part on the liquid.
 The \(21\) dumps, \(105\) frames, are not in this source tree.
 The supplementary data hold them, with their SHA-256, so the labels can be recomputed without LAMMPS.
@@ -1887,7 +1889,7 @@ cages, seeded + ring completion (Eq.~\ref{eq:completion}) & 1.000 & 1.000 & 1.00
 CHILL+\((r_c)\) & 1.000 & 0.999 & 1.000 & 0.998 & 0.005 & 0.001 & 0.001\\
 PTM (OVITO) & 1.000 & 0.990 & 1.000 & 0.989 & 0.000 & 0.000 & 0.000\\
 \((\bar q_4,\bar q_6)\) & 0.922 & 0.740 & 0.999 & 0.990 & 0.004 & 0.001 & 0.001\\
-\(q_6\) at \(\tau\) & 0.908 & 0.822 & 0.905 & 0.821 & 0.248 & 0.193 & 0.180\\
+\(q_6\) at \(\tau\) & 0.925 & 0.848 & 0.924 & 0.848 & 0.273 & 0.213 & 0.198\\
 \(q_6\) at \(\tau_{\mathrm{LD}}\) & 1.000 & 0.997 & 1.000 & 0.997 & 0.752 & 0.697 & 0.683\\
 \end{tabular}
 }
@@ -3221,7 +3223,7 @@ deposit & trajectory & atoms & frame & result\\
 \label{sec:s-repro}
 The reproducibility package \citep{dseams2repro} is \url{https://github.com/d-SEAMS/dseams2_repro} at commit \texttt{\reprobase} (tag v2.7.0).
 The records dated 31 October 2026 ran on that commit with the first revision of the package patch (sha256 \texttt{0e53bc8e}, tree \texttt{5dde84a5}).
-The revision cited here (sha256 \texttt{d16cdc13}, tree \texttt{b88a14a2}) adds the PTM cutoff \(0.1\) and \texttt{scripts/ptm\_cutoff\_sweep.py}, fits \(q_6\) on thermal ice against the calibration liquid, and reads the dump column header.
+The revision cited here (sha256 \texttt{786c0382}, tree \texttt{b40046fc}) adds the PTM cutoff \(0.1\) and \texttt{scripts/ptm\_cutoff\_sweep.py}, fits \(q_6\) at the mW coexistence point, and reads the dump column header.
 The 0.1 PTM rows ran on it.
 The patch adds the program-files archive, those records and the scripts that write the tables and figures from them.
 The supplementary data hold the patch in \texttt{patches/} and the records in \texttt{repro-records/}.
