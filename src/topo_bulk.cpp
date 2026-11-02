@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <limits>
+#include <numeric>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -2609,30 +2610,45 @@ std::vector<int> ring::findHC(const std::vector<std::vector<int>> &rings,
  */
 void ring::NeighBond::build(const std::vector<std::vector<int>> &nList) {
   n_ = static_cast<int>(nList.size());
-  words_ = (n_ + 63) >> 6;
-  bits_.assign(static_cast<size_t>(n_) * static_cast<size_t>(words_), 0);
+  offsets_.assign(static_cast<std::size_t>(n_) + 1, 0);
   for (int i = 0; i < n_; i++) {
-    std::uint64_t *row =
-        bits_.data() + static_cast<size_t>(i) * static_cast<size_t>(words_);
     const auto &nbrs = nList[static_cast<size_t>(i)];
     for (size_t k = 1; k < nbrs.size(); k++) {
       const int j = nbrs[k];
       if (j >= 0 && j < n_) {
-        row[static_cast<size_t>(j >> 6)] |=
-            std::uint64_t{1} << (j & 63);
+        offsets_[static_cast<std::size_t>(i) + 1]++;
       }
     }
+  }
+  std::partial_sum(offsets_.begin(), offsets_.end(), offsets_.begin());
+  neighbours_.assign(offsets_.back(), 0);
+  for (int i = 0; i < n_; i++) {
+    std::size_t out = offsets_[static_cast<std::size_t>(i)];
+    const auto &nbrs = nList[static_cast<std::size_t>(i)];
+    for (std::size_t k = 1; k < nbrs.size(); k++) {
+      const int j = nbrs[k];
+      if (j >= 0 && j < n_) {
+        neighbours_[out++] = j;
+      }
+    }
+    std::sort(neighbours_.begin() +
+                  static_cast<std::ptrdiff_t>(
+                      offsets_[static_cast<std::size_t>(i)]),
+              neighbours_.begin() + static_cast<std::ptrdiff_t>(out));
   }
 }
 
 bool ring::NeighBond::operator()(int i, int j) const {
-  if (i < 0 || j < 0 || i >= n_ || j >= n_ || words_ == 0) {
+  if (i < 0 || j < 0 || i >= n_ || j >= n_ || offsets_.empty()) {
     return false;
   }
-  const std::uint64_t word =
-      bits_[static_cast<size_t>(i) * static_cast<size_t>(words_) +
-            static_cast<size_t>(j >> 6)];
-  return (word >> (j & 63)) & 1u;
+  const auto first =
+      neighbours_.begin() + static_cast<std::ptrdiff_t>(
+                                offsets_[static_cast<std::size_t>(i)]);
+  const auto last =
+      neighbours_.begin() + static_cast<std::ptrdiff_t>(
+                                offsets_[static_cast<std::size_t>(i) + 1]);
+  return std::binary_search(first, last, j);
 }
 
 bool ring::basalConditions(const std::vector<std::vector<int>> &nList,
