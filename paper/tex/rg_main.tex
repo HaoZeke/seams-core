@@ -695,8 +695,9 @@ The reproducibility package is
 \url{https://github.com/d-SEAMS/dseams2_repro} \citep{dseams2repro},
 at commit \texttt{\reprobase} (tag v2.7.0).
 The records dated 31 October 2026 ran on that commit with the first revision of the package patch (sha256 \texttt{0e53bc8e}, tree \texttt{5dde84a5}).
-The revision cited here (sha256 \texttt{276ec3f2}, tree \texttt{4a2f6b0e}) adds the PTM cutoff 0.1 and \texttt{scripts/ptm\_cutoff\_sweep.py}, fits \(q_6\) at the mW coexistence point, reads the dump column header, and writes the freud means with \texttt{scripts/sota\_freud.py}.
+The revision cited here (sha256 \texttt{f1721ac7}, tree \texttt{5722048b}) adds the PTM cutoff 0.1 and \texttt{scripts/ptm\_cutoff\_sweep.py}, fits \(q_6\) at the mW coexistence point, reads the dump column header, and writes the freud means with \texttt{scripts/sota\_freud.py}.
 It rewrites the Lechner--Dellago curves of Figure~\ref{fig:sota} with \texttt{scripts/regen\_ld\_figure.py}.
+That script takes its sigmas and seeds from the command line.
 The 0.1 PTM rows ran on it.
 The patch adds the program-files archive, those records and the scripts that write the tables and figures from them, and the supplementary data hold it in \texttt{patches/} and the records in \texttt{repro-records/}.
 With the patch, the source lock of the package builds the engine as the program files do, from commit \texttt{305fb3c6} and the ten release patches.

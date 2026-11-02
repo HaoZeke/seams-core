@@ -4,7 +4,7 @@ name = "seams-core"
 # import pathlib
 # cog.outl('version = "%s"' % pathlib.Path("VERSION").read_text().strip())
 # ]]]
-version = "2.13.0"
+version = "2.12.0"
 # [[[end]]]
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-64", "osx-arm64"]
