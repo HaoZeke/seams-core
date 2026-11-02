@@ -695,7 +695,7 @@ The reproducibility package is
 \url{https://github.com/d-SEAMS/dseams2_repro} \citep{dseams2repro},
 at commit \texttt{\reprobase} (tag v2.7.0).
 The records dated 31 October 2026 ran on that commit with the first revision of the package patch (sha256 \texttt{0e53bc8e}, tree \texttt{5dde84a5}).
-The revision cited here (sha256 \texttt{2f3b1c04}, tree \texttt{6c60bd26}) adds the PTM cutoff 0.1 and \texttt{scripts/ptm\_cutoff\_sweep.py}, fits \(q_6\) on the calibration liquid, and reads the dump column header.
+The revision cited here (sha256 \texttt{d16cdc13}, tree \texttt{b88a14a2}) adds the PTM cutoff 0.1 and \texttt{scripts/ptm\_cutoff\_sweep.py}, fits \(q_6\) on thermal ice against the calibration liquid, and reads the dump column header.
 The 0.1 PTM rows ran on it.
 The patch adds the program-files archive, those records and the scripts that write the tables and figures from them, and the supplementary data hold it in \texttt{patches/} and the records in \texttt{repro-records/}.
 With the patch, the source lock of the package builds the engine as the program files do, from commit \texttt{305fb3c6} and the ten release patches.
