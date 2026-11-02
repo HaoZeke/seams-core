@@ -55,9 +55,9 @@ with a ~walk_compare~ table.
 
 * Rerun the records
 
-The reproducibility package pins OVITO, freud, GenIce2 and cycless in
-its pixi lock next to the engine. genice2-cage is installed with pip.
-R.I.N.G.S. is built from the SourceForge archive of rings-code 1.3.5.
+The reproducibility package pins the Open Visualization Tool (OVITO), freud, GenIce2 and cycless in its pixi lock next to the engine.
+genice2-cage is installed with pip.
+RINGS is built from the SourceForge archive of rings-code 1.3.5.
 
 #+begin_src bash
 pip install genice2-cage==2.5.2
@@ -92,12 +92,26 @@ The carry record takes the session count as a fifth argument, five by
 default, and with ~BEFORE=1~ it also times the build without the
 back-off by reversing its =backoff.patch=.
 
-The head-to-head =run.sh= reads ~ARCHIVE~, ~H2H_SEAMS~ (the ~seams~
-binary of that archive) and ~PYDSEAMS~ (a PydSEAMSlib built on the same
-archive). It and =rings_mw.sh=, which runs the mW R.I.N.G.S. row,
-call =h2h.py=, and =compare_table.py= prints the rows of the table.
-Each record writes =raw/= and a =provenance.txt= with the archive
-checksum and the machine.
+The head-to-head =run.sh= reads ~ARCHIVE~, ~H2H_SEAMS~ (the ~seams~ binary of that archive) and ~PYDSEAMS~ (a PydSEAMSlib built on the same archive).
+It and =rings_mw.sh=, which runs the mW RINGS row, call =h2h.py=, and =compare_table.py= prints the rows of the table.
+Each record writes =raw/= and a =provenance.txt= with the archive checksum and the machine.
+
+=scripts/h2h_campaign.py= drives the repeated scaling record directly.
+Its =prepare= command writes the checksums and the molecule counts of the frames to =manifest.json=.
+Run each =case= on an otherwise idle machine, then summarize the kept samples.
+
+#+begin_src bash
+python scripts/h2h_campaign.py prepare \
+  --data campaign-data --liquid LIQUID_DUMP --confined CONFINED_DUMP
+python scripts/h2h_campaign.py case ic 1e3 \
+  --data campaign-data --output campaign-results \
+  --bench BUILD/tests/bench_paper --palmer LIB_CHILL
+python scripts/h2h_campaign.py summarize --output campaign-results
+#+end_src
+
+Repeat =case= for every system and scale in the manifest.
+The separate =rings= command gives d-SEAMS and RINGS a fresh process each and the same limit of six members on the primitive rings.
+Cases that end without a timing stay in =errors.jsonl= and are not extrapolated.
 
 * Check the carried walk
 
