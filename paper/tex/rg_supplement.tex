@@ -417,7 +417,7 @@ We therefore evaluate the same cage criteria on the mutual and union \(k\)-neare
 Whenever the \(k\)-th neighbour of every molecule lies inside the cutoff and the \((k+1)\)-th lies outside it, the cutoff graph and both \(k\)-nearest graphs coincide edge for edge.
 On a crystal the first shell is mutual, so \(G_{\mathrm{mut}}=G_{\cup}\) on an undistorted lattice.
 A union graph admits one-sided edges, which close rings that neither partner's own first shell supports.
-A mutual graph removes those edges; on the null of Table~\ref{tab:sota} it affiliates nothing and on the liquid it labels \(0.023\) of the molecules.
+A mutual graph removes those edges, and on the liquid of Table~\ref{tab:sota} it labels \(0.023\) of the molecules.
 
 The residual loss on a jittered crystal is a boundary effect.
 A mutual bond drops when one partner's nomination fails, and a single missing edge dissolves every cage through it.
@@ -440,7 +440,7 @@ A molecule of \(A^X\) is accepted only when its component in \(G_{\cup}[A^X]\) c
 where \(C^X(v)\) is the connected component of \(G_{\cup}[A^X]\) that contains \(v\in A^X\).
 A molecule with \(\alpha^X_{\mathrm{mut}}\) and not \(\alpha^X_{\cup}\) is its own seed and is accepted; an edge of \(G_{\cup}\) absent from \(G_{\mathrm{mut}}\) can make a mutual-graph six-ring non-primitive, so \(\alpha^X_{\mathrm{mut}}\) does not imply \(\alpha^X_{\cup}\).
 If the mutual pass affiliates no molecule, nothing is accepted, whatever rings \(G_{\cup}\) builds (Theorem~S17).
-On the null of Table~\ref{tab:sota} the mutual pass affiliates nothing; on the liquid it affiliates \(0.023\) of the molecules, and those components are what the seeded rule labels.
+On the liquid of Table~\ref{tab:sota} the mutual pass affiliates \(0.023\) of the molecules, and those components are what the seeded rule labels.
 One linked-cell walk writes both graphs.
 
 The hysteresis leaves unlabelled a molecule whose own cage lost one edge while the cages around it did not.
@@ -1692,28 +1692,54 @@ The lattices are cubic diamond (\(4\times4\times4\) conventional cells, 512 site
 We run five realizations at each \(\sigma\), with generator seeds 5 to 9 of \texttt{scripts/sota\_compare.py} (\texttt{-{}-seed-offset 5}).
 The earlier campaign records hold seeds 0 to 4, and no record before this sweep contains seeds 5 to 9.
 We count a site as correct when its label is the construction polymorph, and a site labelled both Ic and Ih as wrong.
-Two inputs without ice follow, and their columns give the fraction of molecules labelled Ic or Ih.
-The null is one random packing of 360 points in the cubic box with no pair closer than \(2.3\,\mathring{\mathrm{A}}\), \(0.022\,\mathring{\mathrm{A}}^{-3}\).
+One input without ice follows, and its column gives the fraction of molecules labelled Ic or Ih.
 The liquid is a 512-molecule mW configuration equilibrated at \(215\,\mathrm{K}\), the liquid stage of the seeding workflow.
 CHILL+ is CHILL+\((r_c)\).
 For PTM we run OVITO's \texttt{PolyhedralTemplateMatchingModifier} with \texttt{rmsd\_cutoff=0.1}, the value its manual gives as a reasonable cutoff (\url{https://www.ovito.org/docs/current/reference/pipelines/modifiers/polyhedral_template_matching.html}), and the cubic- and hexagonal-diamond templates enabled next to its default templates, on the periodic orthorhombic cell.
 A molecule matched to cubic diamond is Ic, one matched to hexagonal diamond is Ih, and any other result, no match included, is unlabelled.
-The Lechner--Dellago row is a nearest-centroid rule in the \((\bar q_4,\bar q_6)\) plane on four nearest neighbours, with centroids from the ideal Ic, the ideal Ih and a calibration packing.
-The \((\bar q_3,\bar q_{12})\) row is the same rule in the plane of the averaged \(q_3\) and \(q_{12}\) that \citet{zeron2024hydrate} use for hydrates, computed with freud on the same four nearest neighbours.
-The \(q_6\) row labels a molecule ice when \(q_6\) exceeds the midpoint of the mean \(q_6\) of ideal Ic and of the calibration packing, and it cannot separate Ic from Ih.
-We build the calibration packing like the null from its own generator seed, so neither fitted rule sees the null, the liquid or a jittered frame.
-\texttt{sota\_compare.py -{}-write-calibration} writes the fitted centroids and threshold, with the checksum of every frame they are fitted on, to \texttt{calibration.txt} in record \texttt{sota-heldout-2026-10-31}; Table~\ref{tab:sota} and Table~\ref{tab:md} are scored from that file.
-Record \texttt{sota-zeron-2026-10-31} adds the \((\bar q_3,\bar q_{12})\) centroids to a copy of that file, and every other line of the copy and every other label of both sweeps is unchanged.
+The Lechner--Dellago row is a nearest-centroid rule in the \((\bar q_4,\bar q_6)\) plane on four nearest neighbours.
+The cubic and hexagonal centroids are the means of ideal Ic and ideal Ih.
+The water centroid is the mean of the calibration liquid defined below.
+The \((\bar q_3,\bar q_{12})\) row is the same rule in the plane of the averaged \(q_3\) and \(q_{12}\) that \citet{zeron2024hydrate} use for hydrates, computed with freud on the same four nearest neighbours, and its water centroid is that same liquid.
+A molecule is ice under the \(q_6\) row when \(q_6>\tau\), and that row cannot separate Ic from Ih.
+The ice error at a candidate \(\tau\) is the fraction of the 512 ideal-Ic molecules with \(q_6\le\tau\).
+The liquid error is the fraction of the calibration molecule-frames with \(q_6>\tau\).
+The candidates are the sorted unique values in the two samples, which are the values at which either error changes.
+\(\tau\) is the candidate with the smallest absolute difference of the two errors, then the smaller of the two errors, then the smaller candidate.
+The ideal-Ic sample takes two values, \(0.6285392642021179\) and \(0.6285393834114075\), so its error is \(0\) or \(1\).
+The minimum absolute difference is \(0.021484375\), at ice error \(0\) and liquid error \(440/20480\).
+That threshold is \(\tau=0.6285372972488403\).
+The mean \(q_6\) of ideal Ic is \(0.6285392045974731\) and the mean \(q_6\) of the calibration liquid is \(0.48724669218063354\).
+The cross-check threshold is the equal-error point of the two normal distributions \citet{lechner2008accurate} publish for unaveraged \(q_6\) in Tables 1 and 2.
+Those tables are the Lennard-Jones FCC crystal, mean \(0.507298\) and standard deviation \(0.043301\), and the undercooled liquid, mean \(0.360012\) and standard deviation \(0.066518\), at \(k_{\mathrm{B}}T=0.92\varepsilon\) and \(P=5.68\,\varepsilon\sigma^{-3}\), with every neighbour inside \(1.4\sigma\).
+That paper states no cutoff.
+With ice on the high side the equal-error point of the two normals is \(\tau_{\mathrm{LD}}=(\mu_{\mathrm{liq}}\sigma_{\mathrm{FCC}}+\mu_{\mathrm{FCC}}\sigma_{\mathrm{liq}})/(\sigma_{\mathrm{FCC}}+\sigma_{\mathrm{liq}})=0.4492239774173867909924512152\).
+The neighbour shell in that paper is not the four nearest neighbours used here, and the substance is a Lennard-Jones fluid.
+Table~\ref{tab:sota} and Table~\ref{tab:md} give the \(q_6\) cells at \(\tau\) and, in the following row, at \(\tau_{\mathrm{LD}}\).
+The calibration liquid is an mW trajectory of 4096 molecules at the ambient state of \citet{molinero2009mw}: the target is \(298\,\mathrm{K}\) and \(1\,\mathrm{atm}\), the state at which that paper scaled \(\sigma\) and for which its Table 1 lists a liquid density of \(0.978\,\mathrm{g\,cm^{-3}}\).
+The packing seed is 1298 and the velocity seed is 72981.
+Neither seed and neither temperature is one of the scored liquids at \(215\), \(250\) or \(300\,\mathrm{K}\) or of the jitter seeds 5 to 9.
+The run uses the deposited \texttt{mW.sw}, \texttt{in.liquid.lammps} and \texttt{in.heldout.lammps}: \(100\,\mathrm{ps}\) at \(350\,\mathrm{K}\), \(300\,\mathrm{ps}\) of NPT at the target, \(50\,\mathrm{ps}\) of settling and five frames \(20\,\mathrm{ps}\) apart.
+Every molecule of those five frames enters the empirical distribution, 20480 molecule-frames from one trajectory.
+The 31 equilibration thermo rows from step 21000 average \(297.467\,\mathrm{K}\) and \(-38.818\,\mathrm{atm}\).
+The ten production thermo rows average \(297.244\,\mathrm{K}\), \(-67.232\,\mathrm{atm}\) and \(0.996901\,\mathrm{g\,cm^{-3}}\).
+\texttt{sota\_compare.py -{}-write-calibration} writes the centroids and both thresholds, with the SHA-256 of the trajectory, to the deposited \texttt{calibration.txt} (sha256 \texttt{98e4dab5}).
+Table~\ref{tab:sota} and Table~\ref{tab:md} are scored from that file.
+The two thresholds do not support the same conclusion.
+At \(\tau\) the displaced lattices and the held-out crystals fall below the ideal-Ic spike, so that row labels at most \(0.016\) of a jittered column and at most \(0.001\) of a held-out crystal, and it labels 8 of the 512 molecules of the \(215\,\mathrm{K}\) liquid.
+At \(\tau_{\mathrm{LD}}\) the same jittered columns stay above \(0.72\) and the held-out crystals stay above \(0.997\), and the same liquid contributes 388 of 512 molecules.
+The primary row is \(\tau\).
+The cross-check is \(\tau_{\mathrm{LD}}\).
 
 At \(\sigma=0.2\,\mathring{\mathrm{A}}\) the cutoff, mutual and seeded cage labels keep every cubic site, and all but the cutoff graph (\(0.999\)) keep every hexagonal one. PTM keeps \(0.991\) of the cubic sites and \(0.991\) of the hexagonal sites. CHILL+ keeps \(0.971\) and \(0.950\).
-The Lechner--Dellago rule keeps \(0.563\) of the cubic sites at \(0.2\,\mathring{\mathrm{A}}\) and labels \(0.436\) of them hexagonal.
-The \((\bar q_3,\bar q_{12})\) rule keeps \(0.240\) of the cubic and \(0.994\) of the hexagonal sites at \(0.2\,\mathring{\mathrm{A}}\), and \(0.000\) and \(0.243\) at \(0.4\,\mathring{\mathrm{A}}\).
+The Lechner--Dellago rule keeps \(0.563\) of the cubic sites at \(0.2\,\mathring{\mathrm{A}}\) and labels \(0.435\) of them hexagonal.
+The \((\bar q_3,\bar q_{12})\) rule keeps \(0.240\) of the cubic and \(0.880\) of the hexagonal sites at \(0.2\,\mathring{\mathrm{A}}\), and \(0.000\) and \(0.105\) at \(0.4\,\mathring{\mathrm{A}}\).
 At \(0.3\,\mathring{\mathrm{A}}\) the cutoff graph loses edges as neighbours cross \(3.5\,\mathring{\mathrm{A}}\) and keeps \(0.936\) and \(0.899\); the mutual graph keeps \(0.990\) and \(0.940\), the seeded rule \(0.999\) and \(0.994\), PTM \(0.089\) and \(0.099\) and CHILL+ \(0.564\) and \(0.567\).
 At \(0.4\,\mathring{\mathrm{A}}\) the seeded rule keeps \(0.698\) of Ic (realizations \(0.594\) to \(0.824\)) and \(0.589\) of Ih (\(0.511\) to \(0.678\)).
 At the same displacement the cutoff graph keeps \(0.346\) and \(0.233\), PTM \(0.000\) and \(0.000\) and CHILL+ \(0.100\) and \(0.099\).
 Ring completion raises the seeded values to \(0.942\) (\(0.883\) to \(0.994\)) and \(0.728\) (\(0.597\) to \(0.844\)) at \(0.4\,\mathring{\mathrm{A}}\).
-On the null no cage row and no PTM row labels any molecule; CHILL+ labels none Ic or Ih and \(0.103\) (37 of 360) clathrate (file \texttt{chillplus\_breakdown.txt}).
-On the liquid the cutoff graph labels \(0.047\) of the molecules Ic or Ih, the mutual and seeded rules \(0.023\), CHILL+ \(0.008\), the Lechner--Dellago rule \(0.004\), the \((\bar q_3,\bar q_{12})\) rule \(0.135\) and the \(q_6\) rule \(0.217\).
+On the liquid the cutoff graph labels \(0.047\) of the molecules Ic or Ih, the mutual and seeded rules \(0.023\), CHILL+ \(0.008\), the Lechner--Dellago rule \(0.002\) (1 of 512), the \((\bar q_3,\bar q_{12})\) rule \(0.049\) (25 of 512) and the \(q_6\) rule at \(\tau\) labels \(0.016\) (8 of 512).
+The \(q_6\) cross-check at \(\tau_{\mathrm{LD}}\) labels \(0.758\) (388 of 512).
 PTM labels none of them.
 DeepIce and IceCoder are not rows of that table, because their published scopes are ice versus liquid and agreement with CHILL+, respectively.
 At \(\sigma=0.3\,\mathring{\mathrm{A}}\) on the cubic lattice, generator seed 5, the completed rule, CHILL+ and PTM are one session on the core of Table~\mref{tab:compare}: five warm-ups and 30 repetitions, \texttt{scripts/ptm\_rows.py}.
@@ -1723,9 +1749,9 @@ The completed rule is mode \texttt{seeded-adj}.
 Its timer is \texttt{std::chrono::steady\_clock} around \texttt{seededLabels}, which builds the neighbour lists inside the timer.
 The \(5.0\,\mathring{\mathrm{A}}\) argument of \texttt{kNearestNeighbourList} only sizes its cell list.
 The search falls back to brute force for any molecule whose fourth neighbour lies beyond it, so the labels do not depend on it (\texttt{tests/test\_neighbours.cpp}).
-The medians are \(7.143\,\mathrm{ms}\) for the completed rule, \(0.348\,\mathrm{ms}\) for CHILL+ and \(16.282\,\mathrm{ms}\) for PTM.
+The medians are \(7.104\,\mathrm{ms}\) for the completed rule, \(0.350\,\mathrm{ms}\) for CHILL+ and \(16.312\,\mathrm{ms}\) for PTM.
 PTM is \texttt{PolyhedralTemplateMatchingModifier}, called in the Python process of \texttt{scripts/ptm\_rows.py}, which starts \texttt{bench\_paper} as a child process pinned with \texttt{taskset}.
-The unrounded medians give \(7.143440/0.348223 = 20.514\), so the completed rule takes that many times as long as CHILL+.
+The unrounded medians give \(7.103615/0.349822 = 20.306\), so the completed rule takes that many times as long as CHILL+.
 The earlier supplement printed \(15.6\,\mathrm{ms}\) for the completed rule.
 That line is an earlier, undeposited run of the command that wrote \texttt{results/reference/}\allowbreak\texttt{sota-heldout-2026-10-31/}\allowbreak\texttt{sota\_compare-seeds5-9.txt}.
 The deposited copy of that file prints \(15.8\,\mathrm{ms}\) for \texttt{dseams-topo-seeded-adj} on ice Ic at this displacement and seed.
@@ -1738,48 +1764,48 @@ A growing nucleus is described by its hexagonal and double-diamond cages \citep{
 A stacking-disordered ice I nucleus mixes cubic and hexagonal sequences \citep{lupi2017stacking}.
 Hydrate precursors are counted as cages \citep{jacobson2010amorphous,zeron2024hydrate}, and the deformation of a cage is a shape match against its template \citep{goswami2021tum}.
 A per-molecule score returns local descriptors rather than the extended topology of these objects.
-Table~\ref{tab:sota} reports the per-molecule column on ice I, the null and the liquid.
+Table~\ref{tab:sota} reports the per-molecule column on ice I and the liquid.
 
 \begin{table}[htbp]
 \caption{\label{tab:sota}Lattice-label retention on ice Ic (512 sites) and Ih (360 sites) under a Gaussian displacement of \(\sigma\) per component (\(0.2\), \(0.3\), \(0.35\), \(0.4\,\mathring{\mathrm{A}}\)), means over realizations 5 to 9.
-The last two columns give the fraction labelled Ic or Ih on the 360-point random packing (null) and the 512-molecule mW liquid at \(215\,\mathrm{K}\).
+The last column gives the fraction labelled Ic or Ih on the 512-molecule mW liquid at \(215\,\mathrm{K}\).
 Labels other than the PTM row are from PydSEAMSlib built on seams-core \coretag, from freud and from OVITO, at the versions that record \texttt{sota-heldout-2026-10-31} prints.
 The PTM row is the mean over seeds 5 to 9 at \texttt{rmsd\_cutoff=0.1}, from \texttt{scripts/ptm\_cutoff\_sweep.py}.
 Its liquid cell is the false-crystal fraction from \texttt{scripts/sota\_compare.py -{}-liquid-data} on \texttt{data/mW\_liquid\_T215\_512.data} of the reproducibility package, and that fraction is \(0.000\).
-Section~\ref{sec:cagestar} defines the rules; the Lechner--Dellago, \((\bar q_3,\bar q_{12})\) and \(q_6\) rules are fitted on the ideal lattices and a calibration packing that is not the null.
-The \(q_6\) row is ice versus not and gives the fraction labelled ice.
+Section~\ref{sec:cagestar} defines the rules; the Lechner--Dellago, \((\bar q_3,\bar q_{12})\) and \(q_6\) rules are fitted on the ideal lattices and the calibration liquid.
+The \(q_6\) rows are ice versus not and give the fraction labelled ice.
+The first of them uses \(\tau\) and the second uses \(\tau_{\mathrm{LD}}\).
 With every seeded site already correct at \(0.2\,\mathring{\mathrm{A}}\), completion has nothing to add there.
 DeepIce (\url{https://github.com/mfulford/DeepIce}) returns ice versus liquid and IceCoder (\url{https://github.com/TeamSuman/IceCoder}) is scored by agreement with CHILL+, so neither has an Ic/Ih row.}
 \centering
 \scriptsize
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{lcccccccccc}
-method & Ic .2 & Ic .3 & Ic .35 & Ic .4 & Ih .2 & Ih .3 & Ih .35 & Ih .4 & null & liquid\\
+\begin{tabular}{lccccccccc}
+method & Ic .2 & Ic .3 & Ic .35 & Ic .4 & Ih .2 & Ih .3 & Ih .35 & Ih .4 & liquid\\
 \hline
-cages, cutoff (Eq.~\mref{eq:ice}) & 1.000 & 0.936 & 0.684 & 0.346 & 0.999 & 0.899 & 0.607 & 0.233 & 0.000 & 0.047\\
-cages, mutual 4-NN & 1.000 & 0.990 & 0.772 & 0.419 & 1.000 & 0.940 & 0.698 & 0.311 & 0.000 & 0.023\\
-cages, seeded (Eq.~\ref{eq:seeded}) & 1.000 & 0.999 & 0.951 & 0.698 & 1.000 & 0.994 & 0.917 & 0.589 & 0.000 & 0.023\\
-cages, seeded + ring completion (Eq.~\ref{eq:completion}) & 1.000 & 1.000 & 1.000 & 0.942 & 1.000 & 1.000 & 0.997 & 0.728 & 0.000 & 0.023\\
-CHILL+\((r_c)\) & 0.971 & 0.564 & 0.244 & 0.100 & 0.950 & 0.567 & 0.276 & 0.099 & 0.000 & 0.008\\
-PTM (OVITO) & 0.991 & 0.089 & 0.003 & 0.000 & 0.991 & 0.099 & 0.003 & 0.000 & 0.000 & 0.000\\
-\((\bar q_4,\bar q_6)\) & 0.563 & 0.020 & 0.003 & 0.000 & 0.970 & 0.345 & 0.099 & 0.032 & 0.006 & 0.004\\
-\((\bar q_3,\bar q_{12})\) & 0.240 & 0.009 & 0.002 & 0.000 & 0.994 & 0.727 & 0.477 & 0.243 & 0.003 & 0.135\\
-\(q_6\) (ice vs not) & 0.649 & 0.325 & 0.247 & 0.193 & 0.653 & 0.337 & 0.230 & 0.198 & 0.239 & 0.217\\
+cages, cutoff (Eq.~\mref{eq:ice}) & 1.000 & 0.936 & 0.684 & 0.346 & 0.999 & 0.899 & 0.607 & 0.233 & 0.047\\
+cages, mutual 4-NN & 1.000 & 0.990 & 0.772 & 0.419 & 1.000 & 0.940 & 0.698 & 0.311 & 0.023\\
+cages, seeded (Eq.~\ref{eq:seeded}) & 1.000 & 0.999 & 0.951 & 0.698 & 1.000 & 0.994 & 0.917 & 0.589 & 0.023\\
+cages, seeded + ring completion (Eq.~\ref{eq:completion}) & 1.000 & 1.000 & 1.000 & 0.942 & 1.000 & 1.000 & 0.997 & 0.728 & 0.023\\
+CHILL+\((r_c)\) & 0.971 & 0.564 & 0.244 & 0.100 & 0.950 & 0.567 & 0.276 & 0.099 & 0.008\\
+PTM (OVITO) & 0.991 & 0.089 & 0.003 & 0.000 & 0.991 & 0.099 & 0.003 & 0.000 & 0.000\\
+\((\bar q_4,\bar q_6)\) & 0.563 & 0.020 & 0.003 & 0.000 & 0.968 & 0.344 & 0.096 & 0.031 & 0.002\\
+\((\bar q_3,\bar q_{12})\) & 0.240 & 0.009 & 0.002 & 0.000 & 0.880 & 0.393 & 0.224 & 0.105 & 0.049\\
+\(q_6\) at \(\tau\) & 0.000 & 0.004 & 0.006 & 0.016 & 0.000 & 0.005 & 0.010 & 0.016 & 0.016\\
+\(q_6\) at \(\tau_{\mathrm{LD}}\) & 0.983 & 0.867 & 0.788 & 0.745 & 0.986 & 0.859 & 0.790 & 0.727 & 0.758\\
 \end{tabular}
 }
 \end{table}
 
-The null of Table~\ref{tab:sota} is a random packing with no short-range order.
-A supercooled liquid has that order.
 On the 512-molecule liquid, deposited with the reproducibility package, the seeded rule labels \(12\) molecules and the completed rule \(12\).
-The cutoff graph labels \(24\), CHILL+\((r_c)\) \(4\) as Ic or Ih, template matching \(0\), the Lechner--Dellago rule \(2\) and the \(q_6\) rule \(111\).
-A rerun of \texttt{scripts/sota\_compare.py -{}-liquid-data} without \texttt{-{}-calibration} refits the threshold and prints \(0.215\) (\(110\) of \(512\)).
-The table uses the frozen threshold.
+The cutoff graph labels \(24\), CHILL+\((r_c)\) \(4\) as Ic or Ih, template matching \(0\), the Lechner--Dellago rule \(1\) and the \(q_6\) rule at \(\tau\) labels \(8\).
+The cross-check at \(\tau_{\mathrm{LD}}\) labels \(388\).
+The table uses the frozen file \texttt{calibration.txt}.
 A liquid deep in the supercooled regime contains transient cages \citep{moore2011structural}.
 A cage method reports those cages.
 Nucleation studies therefore threshold on the largest connected cluster rather than on the count.
 
-The jitter sweep and the two nulls are constructed inputs.
+The jitter sweep is a constructed input.
 In Table~\ref{tab:md} we score the same rules on physical trajectories that no rule was fitted on (record \texttt{md-heldout-2026-10-31}).
 Ice Ic (4096 molecules) and ice Ih (4032) start from the lattices of Table~\ref{tab:sota} and run at \(200\) and \(250\,\mathrm{K}\), below the \(274.6\,\mathrm{K}\) melting point of mW \citep{molinero2009mw}.
 The liquid (4096 molecules) is a random packing melted for \(100\,\mathrm{ps}\) at \(350\,\mathrm{K}\) and equilibrated for \(300\,\mathrm{ps}\) of NPT at \(215\), \(250\) or \(300\,\mathrm{K}\), the liquid stage of the seeding campaign.
@@ -1790,12 +1816,9 @@ The Nose--Hoover damping is 100 timesteps in temperature and 1000 timesteps in p
 At a \(10\,\mathrm{fs}\) step that is \(1000\,\mathrm{fs}\) and \(10000\,\mathrm{fs}\), the damping of the deposited liquid input.
 Record \texttt{md-heldout-2026-10-31} reports a mean-squared displacement, centre of mass removed, of \(0.21\) to \(0.29\,\mathring{\mathrm{A}}^2\) on every crystal run and \(63\) to \(401\,\mathring{\mathrm{A}}^2\) on every liquid run.
 Those displacements were not remeasured on the regenerated dumps.
-The Lechner--Dellago centroids and the \(q_6\) threshold are those of Table~\ref{tab:sota}, fitted on the ideal lattices and the calibration packing and read from its calibration file.
+The Lechner--Dellago centroids and both \(q_6\) thresholds are those of Table~\ref{tab:sota}, read from the deposited \texttt{calibration.txt}.
 No held-out frame enters the fit.
-The \(q_6\) threshold is the midpoint of the mean \(q_6\) of ideal ice Ic and of one calibration packing.
-The Lechner--Dellago centroids are the means of those same three inputs, ideal Ic, ideal Ih and that packing.
-The file \texttt{calibration.txt} records them once, and every system in Table~\ref{tab:sota} and Table~\ref{tab:md} is scored with that file.
-The liquid and the held-out frames are not in the fit.
+The \(215\,\mathrm{K}\) liquid of Table~\ref{tab:sota} is not the calibration trajectory.
 The cage rules, CHILL+ and PTM have no data-fitted parameter.
 
 On the regenerated crystal frames the seeded and completed rules label every molecule with its construction polymorph.
@@ -1804,23 +1827,26 @@ The CHILL+ 15-frame means are at least \(0.998\).
 PTM keeps at least \(4093\) of \(4096\) Ic molecules and \(4031\) of \(4032\) Ih molecules in every \(200\,\mathrm{K}\) frame.
 At \(250\,\mathrm{K}\) it misses up to \(65\) Ic molecules of a frame and \(73\) Ih molecules of a frame.
 Those counts are \texttt{ok\_min} in the output of \texttt{scripts/md\_heldout\_score.py}.
-The Lechner--Dellago rule keeps \(0.922\) of Ic at \(200\,\mathrm{K}\) and \(0.740\) at \(250\,\mathrm{K}\), and \(0.999\) and \(0.988\) of Ih.
-The \(q_6\) rule calls \(0.790\) to \(0.887\) of the crystal ice.
+The Lechner--Dellago rule keeps \(0.922\) of Ic at \(200\,\mathrm{K}\) and \(0.740\) at \(250\,\mathrm{K}\), and \(0.999\) and \(0.990\) of Ih.
+The \(q_6\) rule at \(\tau\) calls \(0.000\) to \(0.001\) of the crystal ice.
+The cross-check at \(\tau_{\mathrm{LD}}\) calls \(0.997\) to \(1.000\).
 On the liquid frames the cutoff graph labels \(0.011\) to \(0.029\) of the molecules Ic or Ih.
 The mutual, seeded and completed rules label \(0.010\) to \(0.012\) at \(215\,\mathrm{K}\) and at most \(0.001\) at \(250\) and \(300\,\mathrm{K}\).
-CHILL+ and the Lechner--Dellago rule label at most \(0.005\), and the \(q_6\) rule calls \(0.162\) to \(0.225\) ice.
+CHILL+ and the Lechner--Dellago rule label at most \(0.005\).
+The \(q_6\) rule at \(\tau\) calls \(0.014\) to \(0.022\) of the liquid ice, and the cross-check calls \(0.683\) to \(0.752\).
 PTM labels no molecule on those frames.
 On these crystals the cage-rule and CHILL+ means stay at least \(0.998\).
-The two fitted rules lose up to \(0.26\) of them, and Table~\ref{tab:sota} separates the others at larger displacements.
+The Lechner--Dellago rule loses \(0.260\) of the Ic molecules at \(250\,\mathrm{K}\).
+The primary \(q_6\) rule labels at most \(0.001\) of either crystal, and Table~\ref{tab:sota} is where the two thresholds part.
 The \(21\) dumps, \(105\) frames, are not in this source tree.
 The supplementary data hold them, with their SHA-256, so the labels can be recomputed without LAMMPS.
 The runs use the seeds of record \texttt{md-heldout-2026-10-31} and the deposited templates.
-The packaged \texttt{scripts/md\_heldout.py} writes a crystal start whose header is \texttt{mW ic lattice} or \texttt{mW ih lattice}, and that file matches the record's SHA-256.
-The deposited crystal starts use the header \texttt{mW lattice}.
+The packaged \texttt{scripts/md\_heldout.py} writes a crystal start whose first line is \texttt{mW ic lattice, 4096 molecules} or \texttt{mW ih lattice, 4032 molecules}, and that file matches the record's SHA-256.
+The deposited crystal starts use \texttt{mW lattice, 4096 molecules} and \texttt{mW lattice, 4032 molecules}.
 The coordinate lines are the same six-decimal atom lines, so the coordinates agree and the bytes do not.
 The liquid start in that script is the equilibrated data file written by \texttt{in.liquid.lammps}.
-The deposited liquid \texttt{eq.data} files are a new integration of the same seeds, and the record's dumps are not deposited.
-\texttt{scripts/md\_heldout\_score.py} scores these dumps from \texttt{calibration.txt}.
+The deposited liquid \texttt{eq.data} files are the record's equilibrated starts and match its SHA-256; the production dumps are a new run from them, and the record's dumps are not deposited.
+\texttt{scripts/md\_heldout\_score.py} reads the \texttt{ITEM: ATOMS} header of these dumps, which are \texttt{id type x y z}, and scores them from \texttt{calibration.txt}.
 
 \begin{table}[htbp]
 \caption{\label{tab:md}Held-out mW trajectories regenerated with the seeds of record \texttt{md-heldout-2026-10-31} and the deposited templates.
@@ -1828,8 +1854,9 @@ Every row is scored on those dumps.
 On ice Ic (4096 molecules) and Ih (4032) at \(200\) and \(250\,\mathrm{K}\) the entries give the fraction of molecules labelled with the construction polymorph.
 On the liquid (4096) at \(215\), \(250\) and \(300\,\mathrm{K}\) they give the fraction labelled Ic or Ih.
 Each entry is the mean over 15 frames, five from each of three independent runs.
-Every run mean lies within \(0.013\) of it.
-The \((\bar q_4,\bar q_6)\) and \(q_6\) rules are those fitted for Table~\ref{tab:sota}; the \(q_6\) row is ice versus not and gives the fraction labelled ice.
+Every run mean lies within \(0.012\) of it.
+The \((\bar q_4,\bar q_6)\) and \(q_6\) rules are those fitted for Table~\ref{tab:sota}.
+The \(q_6\) rows are ice versus not and give the fraction labelled ice, the first at \(\tau\) and the second at \(\tau_{\mathrm{LD}}\).
 The PTM row uses \texttt{rmsd\_cutoff=0.1}.}
 \centering
 \scriptsize
@@ -1843,8 +1870,9 @@ cages, seeded (Eq.~\ref{eq:seeded}) & 1.000 & 1.000 & 1.000 & 1.000 & 0.012 & 0.
 cages, seeded + ring completion (Eq.~\ref{eq:completion}) & 1.000 & 1.000 & 1.000 & 1.000 & 0.012 & 0.001 & 0.001\\
 CHILL+\((r_c)\) & 1.000 & 0.999 & 1.000 & 0.998 & 0.005 & 0.001 & 0.001\\
 PTM (OVITO) & 1.000 & 0.990 & 1.000 & 0.989 & 0.000 & 0.000 & 0.000\\
-\((\bar q_4,\bar q_6)\) & 0.922 & 0.740 & 0.999 & 0.988 & 0.004 & 0.002 & 0.002\\
-\(q_6\) (ice vs not) & 0.887 & 0.792 & 0.885 & 0.790 & 0.225 & 0.175 & 0.162\\
+\((\bar q_4,\bar q_6)\) & 0.922 & 0.740 & 0.999 & 0.990 & 0.004 & 0.001 & 0.001\\
+\(q_6\) at \(\tau\) & 0.000 & 0.000 & 0.000 & 0.001 & 0.014 & 0.018 & 0.022\\
+\(q_6\) at \(\tau_{\mathrm{LD}}\) & 1.000 & 0.997 & 1.000 & 0.997 & 0.752 & 0.697 & 0.683\\
 \end{tabular}
 }
 \end{table}
@@ -2724,7 +2752,7 @@ On the mW frame the Primitive Rings line is 52190.000/3694790.404 of the whole-p
 RINGS builds a \(5\times5\times5\) superlattice for a periodic cell, and that distance matrix is the rest of the whole process.
 The adaptive common-neighbour analysis of OVITO takes \(10.7\), \(9.72\) and \(1.50\,\mathrm{ms}\) on the mW, Niu and jittered frames (best of seven, \texttt{raw/cna.txt} of the record).
 It has no diamond structure types and labels every molecule of the three frames other.
-The completed cage rule takes \(7.143\,\mathrm{ms}\) and PTM takes \(16.282\,\mathrm{ms}\) on the jittered lattice, the medians of the session in Section~\ref{sec:cagestar}.
+The completed cage rule takes \(7.104\,\mathrm{ms}\) and PTM takes \(16.312\,\mathrm{ms}\) on the jittered lattice, the medians of the session in Section~\ref{sec:cagestar}.
 On the mutual four-nearest list, the other option of every front end, the Niu CHILL+ labels agree with OVITO at 2611 molecules.
 
 \section{Applications}
@@ -3177,7 +3205,7 @@ deposit & trajectory & atoms & frame & result\\
 \label{sec:s-repro}
 The reproducibility package \citep{dseams2repro} is \url{https://github.com/d-SEAMS/dseams2_repro} at commit \texttt{\reprobase} (tag v2.7.0).
 The records dated 31 October 2026 ran on that commit with the first revision of the package patch (sha256 \texttt{0e53bc8e}, tree \texttt{5dde84a5}).
-The revision cited here (sha256 \texttt{f5328ee6}, tree \texttt{7863e79e}) adds the PTM cutoff \(0.1\) and \texttt{scripts/ptm\_cutoff\_sweep.py}.
+The revision cited here (sha256 \texttt{2f3b1c04}, tree \texttt{6c60bd26}) adds the PTM cutoff \(0.1\) and \texttt{scripts/ptm\_cutoff\_sweep.py}, fits \(q_6\) on the calibration liquid, and reads the dump column header.
 The 0.1 PTM rows ran on it.
 The patch adds the program-files archive, those records and the scripts that write the tables and figures from them.
 The supplementary data hold the patch in \texttt{patches/} and the records in \texttt{repro-records/}.
