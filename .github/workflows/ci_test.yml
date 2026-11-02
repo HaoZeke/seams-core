@@ -59,7 +59,7 @@ jobs:
           python3 -m cogapp --check --check-fail-msg="Run cog -r from the repository root." \
             meson.build pixi.toml CITATION.cff nix/package.nix \
             docs/source/Doxyfile_seams.cfg bindings/julia/Dseams/Project.toml
-          python3 -c 'from pathlib import Path; v=Path("VERSION").read_text().strip(); d=Path("RELEASE_DATE").read_text().strip(); h=next(l for l in Path("CHANGELOG.md").read_text().splitlines() if l.startswith("## [")); w="## [%s] - %s"%(v,d); assert h==w, (h,w)'
+          python3 -c 'from pathlib import Path; v=Path("VERSION").read_text().strip(); d=Path("RELEASE_DATE").read_text().strip(); heads=[l for l in Path("CHANGELOG.md").read_text().splitlines() if l.startswith("## [")]; w="## [%s] - %s"%(v,d); assert w in heads, (heads, w)'
           # A release runs: towncrier build --version "$(cat VERSION)" --date "$(cat RELEASE_DATE)"
 
   coverage:
