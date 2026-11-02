@@ -1699,7 +1699,7 @@ For PTM we run OVITO's \texttt{PolyhedralTemplateMatchingModifier} with \texttt{
 A molecule matched to cubic diamond is Ic, one matched to hexagonal diamond is Ih, and any other result, no match included, is unlabelled.
 The Lechner--Dellago row is a nearest-centroid rule in the \((\bar q_4,\bar q_6)\) plane on four nearest neighbours.
 The cubic and hexagonal centroids are the means of ideal Ic and ideal Ih.
-The water centroid is the mean of the calibration liquid defined below.
+The water centroid is the mean of the coexistence liquid at \(274.6\,\mathrm{K}\).
 The \((\bar q_3,\bar q_{12})\) row is the same rule in the plane of the averaged \(q_3\) and \(q_{12}\) that \citet{zeron2024hydrate} use for hydrates, computed with freud on the same four nearest neighbours, and its water centroid is that same liquid.
 A molecule is ice under the \(q_6\) row when \(q_6>\tau\), and that row cannot separate Ic from Ih.
 The ice error at a candidate \(\tau\) is the fraction of the coexistence-crystal molecule-frames with \(q_6\le\tau\).
@@ -1714,7 +1714,7 @@ The same rule at the cubic melting point gives \(\tau_{\mathrm{Ic}}=0.5592451095
 The means there are \(0.5819523930549622\) and \(0.4874526560306549\).
 The cross-check threshold is the equal-error point of the two normal distributions \citet{lechner2008accurate} publish for unaveraged \(q_6\) in Tables 1 and 2.
 Those tables are the Lennard-Jones FCC crystal, mean \(0.507298\) and standard deviation \(0.043301\), and the undercooled liquid, mean \(0.360012\) and standard deviation \(0.066518\), at \(k_{\mathrm{B}}T=0.92\varepsilon\) and \(P=5.68\,\varepsilon\sigma^{-3}\), with every neighbour inside \(1.4\sigma\).
-That paper states no cutoff.
+That paper states no \(q_6\) threshold.
 With ice on the high side the equal-error point of the two normals is \(\tau_{\mathrm{LD}}=(\mu_{\mathrm{liq}}\sigma_{\mathrm{FCC}}+\mu_{\mathrm{FCC}}\sigma_{\mathrm{liq}})/(\sigma_{\mathrm{FCC}}+\sigma_{\mathrm{liq}})=0.4492239774173867909924512152\).
 The neighbour shell in that paper is not the four nearest neighbours used here, and the substance is a Lennard-Jones fluid.
 Table~\ref{tab:sota} and Table~\ref{tab:md} give the \(q_6\) cells at \(\tau\) and, in the following row, at \(\tau_{\mathrm{LD}}\).
@@ -1735,8 +1735,10 @@ Its ten production rows average \(275.004\,\mathrm{K}\), \(-17.828\,\mathrm{atm}
 The thirty-one liquid equilibration rows from step 21000 at \(274.6\,\mathrm{K}\) average \(274.594\,\mathrm{K}\) and \(-13.109\,\mathrm{atm}\).
 Its ten production rows average \(274.610\,\mathrm{K}\), \(93.596\,\mathrm{atm}\) and \(1.001839\,\mathrm{g\,cm^{-3}}\).
 The Ic production rows average \(270.312\,\mathrm{K}\) and \(0.978800\,\mathrm{g\,cm^{-3}}\), and the \(271.5\,\mathrm{K}\) liquid production rows average \(271.060\,\mathrm{K}\) and \(1.002387\,\mathrm{g\,cm^{-3}}\).
-\texttt{sota\_compare.py -{}-write-calibration} writes the centroids and the thresholds to the deposited \texttt{calibration.txt}.
-Table~\ref{tab:sota} and Table~\ref{tab:md} are scored from that file.
+\texttt{sota\_compare.py -{}-write-calibration} writes the centroids and the thresholds to \texttt{calibration.txt}.
+Table~\ref{tab:sota} and Table~\ref{tab:md} were scored from that file at sha256 \texttt{09a15650}.
+The deposited copy keeps those decision lines, states that the 2008 paper gives no \(q_6\) threshold, and appends the measured thermostat rows.
+Its sha256 is \texttt{dbac499b}.
 At \(\tau\) the ideal lattices, with no displacement, are labelled ice in full: \(1.000\) of the 512 Ic sites and \(1.000\) of the 360 Ih sites.
 The jittered columns keep \(0.720\) and \(0.726\) at \(0.2\,\mathring{\mathrm{A}}\) and \(0.237\) and \(0.238\) at \(0.4\,\mathring{\mathrm{A}}\).
 The held-out crystals keep \(0.925\) and \(0.924\) at \(200\,\mathrm{K}\) and \(0.848\) and \(0.848\) at \(250\,\mathrm{K}\).
@@ -1749,6 +1751,10 @@ They part on the liquid: \(\tau\) marks \(0.264\) of it and \(\tau_{\mathrm{LD}}
 At \(\sigma=0.2\,\mathring{\mathrm{A}}\) the cutoff, mutual and seeded cage labels keep every cubic site, and all but the cutoff graph (\(0.999\)) keep every hexagonal one. PTM keeps \(0.991\) of the cubic sites and \(0.991\) of the hexagonal sites. CHILL+ keeps \(0.971\) and \(0.950\).
 The Lechner--Dellago rule keeps \(0.563\) of the cubic sites at \(0.2\,\mathring{\mathrm{A}}\) and labels \(0.435\) of them hexagonal.
 The \((\bar q_3,\bar q_{12})\) rule keeps \(0.240\) of the cubic and \(0.864\) of the hexagonal sites at \(0.2\,\mathring{\mathrm{A}}\), and \(0.000\) and \(0.098\) at \(0.4\,\mathring{\mathrm{A}}\).
+Moving the water centroid onto the coexistence liquid at \(274.6\,\mathrm{K}\) moves the hexagonal cells.
+The \((\bar q_4,\bar q_6)\) cells go from \(0.968\), \(0.344\), \(0.096\), \(0.031\) to \(0.970\), \(0.349\), \(0.097\), \(0.032\).
+The \((\bar q_3,\bar q_{12})\) cells go from \(0.880\), \(0.393\), \(0.224\), \(0.105\) to \(0.864\), \(0.383\), \(0.216\), \(0.098\).
+The cubic cells of both rows are unchanged at three decimals.
 At \(0.3\,\mathring{\mathrm{A}}\) the cutoff graph loses edges as neighbours cross \(3.5\,\mathring{\mathrm{A}}\) and keeps \(0.936\) and \(0.899\); the mutual graph keeps \(0.990\) and \(0.940\), the seeded rule \(0.999\) and \(0.994\), PTM \(0.089\) and \(0.099\) and CHILL+ \(0.564\) and \(0.567\).
 At \(0.4\,\mathring{\mathrm{A}}\) the seeded rule keeps \(0.698\) of Ic (realizations \(0.594\) to \(0.824\)) and \(0.589\) of Ih (\(0.511\) to \(0.678\)).
 At the same displacement the cutoff graph keeps \(0.346\) and \(0.233\), PTM \(0.000\) and \(0.000\) and CHILL+ \(0.100\) and \(0.099\).
@@ -1788,7 +1794,7 @@ Labels other than the PTM row are from PydSEAMSlib built on seams-core \coretag,
 The PTM row is the mean over seeds 5 to 9 at \texttt{rmsd\_cutoff=0.1}, from \texttt{scripts/ptm\_cutoff\_sweep.py}.
 Its liquid cell is the false-crystal fraction from \texttt{scripts/sota\_compare.py -{}-liquid-data} on \texttt{data/mW\_liquid\_T215\_512.data} of the reproducibility package, and that fraction is \(0.000\).
 Section~\ref{sec:cagestar} defines the rules.
-The Lechner--Dellago and \((\bar q_3,\bar q_{12})\) centroids use the ideal lattices and the calibration liquid.
+The Lechner--Dellago and \((\bar q_3,\bar q_{12})\) centroids use the ideal lattices and the coexistence liquid at \(274.6\,\mathrm{K}\).
 The \(q_6\) threshold uses ice Ih and the liquid at \(274.6\,\mathrm{K}\) and \(1\,\mathrm{atm}\).
 The \(q_6\) rows are ice versus not and give the fraction labelled ice.
 The first of them uses \(\tau\) and the second uses \(\tau_{\mathrm{LD}}\).
@@ -3223,7 +3229,7 @@ deposit & trajectory & atoms & frame & result\\
 \label{sec:s-repro}
 The reproducibility package \citep{dseams2repro} is \url{https://github.com/d-SEAMS/dseams2_repro} at commit \texttt{\reprobase} (tag v2.7.0).
 The records dated 31 October 2026 ran on that commit with the first revision of the package patch (sha256 \texttt{0e53bc8e}, tree \texttt{5dde84a5}).
-The revision cited here (sha256 \texttt{786c0382}, tree \texttt{b40046fc}) adds the PTM cutoff \(0.1\) and \texttt{scripts/ptm\_cutoff\_sweep.py}, fits \(q_6\) at the mW coexistence point, and reads the dump column header.
+The revision cited here (sha256 \texttt{4c7af516}, tree \texttt{6f8414eb}) adds the PTM cutoff \(0.1\) and \texttt{scripts/ptm\_cutoff\_sweep.py}, fits \(q_6\) at the mW coexistence point, reads the dump column header, and writes the freud means with \texttt{scripts/sota\_freud.py}.
 The 0.1 PTM rows ran on it.
 The patch adds the program-files archive, those records and the scripts that write the tables and figures from them.
 The supplementary data hold the patch in \texttt{patches/} and the records in \texttt{repro-records/}.
