@@ -4,9 +4,8 @@
 ** SPDX-License-Identifier: MIT
 **
 ** In-memory kernels behind the paper's comparison rows. Warmup repetitions
-** are not recorded. The neighbour list used by q6 is built once, outside
-** the timer, and written to the optional sidecar so another code can read
-** the same bonds.
+** are not recorded. Mode q6 builds the neighbour list outside its timer;
+** q6-full includes that search. Both write the optional sidecar.
 */
 
 #include <bop.hpp>
@@ -19,8 +18,10 @@
 #include <seams_input.hpp>
 #include <topo_bulk.hpp>
 
+#include <array>
 #include <chrono>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -109,13 +110,19 @@ void runChill(const std::string &traj, int frame, int warmup, int reps,
 constexpr double kCandidateA = 5.0;
 
 void runQ6(const std::string &traj, int frame, int warmup, int reps,
-           const std::string &sidecar) {
+           bool includeNeighbours, const std::string &sidecar) {
   auto cloud = load(traj, frame);
-  auto rows = nneigh::kNearestNeighbourList(cloud, 4, kCandidateA, 1, true);
-  header("q6", cloud.nop, warmup, reps);
+  std::vector<std::vector<int>> rows;
+  if (!includeNeighbours) {
+    rows = nneigh::kNearestNeighbourList(cloud, 4, kCandidateA, 1, true);
+  }
+  header(includeNeighbours ? "q6-full" : "q6", cloud.nop, warmup, reps);
   chill::SteinhardtQl last;
   for (int rep = 0; rep < warmup + reps; ++rep) {
     auto t0 = std::chrono::steady_clock::now();
+    if (includeNeighbours) {
+      rows = nneigh::kNearestNeighbourList(cloud, 4, kCandidateA, 1, true);
+    }
     last = chill::steinhardtQl(cloud, rows, 6);
     const double ms = millisSince(t0);
     if (rep >= warmup) {
@@ -124,6 +131,7 @@ void runQ6(const std::string &traj, int frame, int warmup, int reps,
   }
   if (!sidecar.empty()) {
     std::ofstream out(sidecar);
+    out << std::setprecision(17);
     out << "bonds\n";
     for (const auto &row : rows) {
       if (row.empty()) {
@@ -142,21 +150,43 @@ void runQ6(const std::string &traj, int frame, int warmup, int reps,
   }
 }
 
+void runRings(const std::string &traj, int frame, int warmup, int reps,
+              const std::string &sidecar) {
+  auto cloud = load(traj, frame);
+  header("rings", cloud.nop, warmup, reps);
+  std::vector<std::vector<int>> last;
+  for (int rep = 0; rep < warmup + reps; ++rep) {
+    auto t0 = std::chrono::steady_clock::now();
+    auto neighbours = nneigh::neighListO(3.5, cloud, 1);
+    auto indexed = nneigh::neighbourListByIndex(cloud, neighbours);
+    last = primitive::ringNetwork(indexed, 6);
+    const double ms = millisSince(t0);
+    if (rep >= warmup) {
+      std::cout << ms << "\n";
+    }
+  }
+  if (!sidecar.empty()) {
+    std::array<std::size_t, 7> counts{};
+    for (const auto &ring : last) {
+      if (ring.size() < counts.size()) {
+        ++counts[ring.size()];
+      }
+    }
+    std::ofstream out(sidecar);
+    for (std::size_t size = 3; size < counts.size(); ++size) {
+      out << size << " " << counts[size] << "\n";
+    }
+  }
+}
+
 std::vector<std::string> seededLabels(const molSys::PointCloud<molSys::Point<double>, double> &cloud,
                                       bool ringAdjacent, int depth) {
-  // Identify-diamond uses the mutual and union lists from one search.
-  // The ring-adjacent row uses the mutual list and the one-sided list,
-  // and does not read the pair.
-  std::vector<std::vector<int>> strictRows;
-  std::vector<std::vector<int>> permRows;
-  if (ringAdjacent) {
-    strictRows = nneigh::kNearestNeighbourList(cloud, 4, kCandidateA, 1, true);
-    permRows = nneigh::kNearestNeighbourList(cloud, 4, kCandidateA, 1, false);
-  } else {
-    auto pair = nneigh::kNearestNeighbourPair(cloud, 4, kCandidateA, 1);
-    strictRows = std::move(pair.first);
-    permRows = std::move(pair.second);
-  }
+  // One nomination pass produces both the mutual seed graph and the union
+  // completion graph. Building each graph through a separate public call
+  // repeats the same nearest-neighbour search.
+  auto pair = nneigh::kNearestNeighbourPair(cloud, 4, kCandidateA, 1);
+  auto strictRows = std::move(pair.first);
+  auto permRows = std::move(pair.second);
   auto strict = nneigh::neighbourListByIndex(cloud, strictRows);
   auto perm = nneigh::neighbourListByIndex(cloud, permRows);
   std::vector<std::vector<int>> sixS;
@@ -171,7 +201,8 @@ std::vector<std::string> seededLabels(const molSys::PointCloud<molSys::Point<dou
       sixP.push_back(ring);
     }
   }
-  auto labels = ring::seededCageAffiliation(sixS, strict, sixP, perm, ringAdjacent);
+  auto labels =
+      ring::seededCageAffiliation(sixS, strict, sixP, perm, ringAdjacent);
   std::vector<std::string> out(static_cast<std::size_t>(cloud.nop), "water");
   for (int i = 0; i < cloud.nop; ++i) {
     const bool hc = i < static_cast<int>(labels.hc.size()) && labels.hc[static_cast<std::size_t>(i)];
@@ -234,7 +265,8 @@ void runCageIds(const std::string &traj, int frame) {
 int main(int argc, char **argv) {
   if (argc < 6) {
     std::cerr << "usage: bench_paper traj frame warmup reps "
-                 "chill|q6|seeded|seeded-adj|cageids [sidecar]\n";
+                 "chill|q6|q6-full|rings|seeded|seeded-adj|cageids "
+                 "[sidecar]\n";
     return 2;
   }
   const std::string traj = argv[1];
@@ -247,7 +279,11 @@ int main(int argc, char **argv) {
     if (mode == "chill") {
       runChill(traj, frame, warmup, reps, sidecar);
     } else if (mode == "q6") {
-      runQ6(traj, frame, warmup, reps, sidecar);
+      runQ6(traj, frame, warmup, reps, false, sidecar);
+    } else if (mode == "q6-full") {
+      runQ6(traj, frame, warmup, reps, true, sidecar);
+    } else if (mode == "rings") {
+      runRings(traj, frame, warmup, reps, sidecar);
     } else if (mode == "seeded") {
       runSeeded(traj, frame, warmup, reps, false, 6, sidecar);
     } else if (mode == "seeded-adj") {
