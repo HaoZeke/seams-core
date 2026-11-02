@@ -218,16 +218,17 @@ bool equatorialConditions(const std::vector<std::vector<int>> &rings,
                           EquatorChoice *raw = nullptr);
 
 //! Membership of the neighbour rows after the leading self entry.
-//! Built once per frame so the basal test does not scan those rows.
+//! Stored as compressed sparse rows so memory is O(atoms + bonds).
 class NeighBond {
 public:
   void build(const std::vector<std::vector<int>> &nList);
   [[nodiscard]] bool operator()(int i, int j) const;
+  [[nodiscard]] std::size_t storageSize() const { return neighbours_.size(); }
 
 private:
   int n_ = 0;
-  int words_ = 0;
-  std::vector<std::uint64_t> bits_;
+  std::vector<std::size_t> offsets_;
+  std::vector<int> neighbours_;
 };
 
 //! Tests whether two rings are basal rings (true) or not (false): some

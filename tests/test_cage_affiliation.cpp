@@ -812,3 +812,22 @@ TEST_CASE("AffiliationUpdater matches a forced HC/DDC edge flip with fallback of
   }
   REQUIRE(sawSwitch);
 }
+
+TEST_CASE("NeighBond stores sparse neighbour rows", "[cage_affiliation]") {
+  const std::vector<std::vector<int>> rows = {
+      {0, 3, 1},
+      {1, 0},
+      {2},
+      {3, 0},
+  };
+  ring::NeighBond bonds;
+  bonds.build(rows);
+  REQUIRE(bonds.storageSize() == 4);
+  REQUIRE(bonds(0, 1));
+  REQUIRE(bonds(0, 3));
+  REQUIRE(bonds(1, 0));
+  REQUIRE(bonds(3, 0));
+  REQUIRE_FALSE(bonds(0, 2));
+  REQUIRE_FALSE(bonds(-1, 0));
+  REQUIRE_FALSE(bonds(0, 4));
+}
