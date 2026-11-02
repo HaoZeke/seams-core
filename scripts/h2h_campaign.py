@@ -1643,7 +1643,11 @@ def environment(args: argparse.Namespace) -> int:
 
     details = {
         "created": utc_now(),
-        "uname": platform.uname()._asdict(),
+        "uname": {
+            key: value
+            for key, value in platform.uname()._asdict().items()
+            if key != "node"
+        },
         "python": platform.python_version(),
         "affinity": sorted(os.sched_getaffinity(0)),
         "lscpu": subprocess.run(
