@@ -226,7 +226,7 @@ same computation.
 | shortcut-free rings, \(D=6\) | mW cubic, 4096 | GenIce2 | 6.44 | 10666 | same 8192 rings |
 | shortcut-free rings, \(D=6\) | CRN1, 1000 | GenIce2 | 2.64 | 1773 | same 1238 rings |
 | 5^12 and 5^12 6^2 cages | sI, 368 | GenIce2 | 28.1 | 436 | 16 and 48 in both |
-| Ic/Ih labels | jittered Ic, 512 | OVITO PTM | 7.143 | 16.282 | 512 and 52 Ic |
+| Ic/Ih labels | jittered Ic, 512 | OVITO PTM | 7.104 | 16.312 | 512 and 52 Ic |
 
 The frames are the 4096-molecule mW cubic frame, the final frame of
 the 2880-water Niu dump, the 1000-molecule continuous random network
@@ -266,8 +266,8 @@ The calls on each side are these.
   it, so the labels do not depend on it
   (~tests/test_neighbours.cpp~). CHILL+ in that session is ~neighListO~ at 3.5 Å,
   ~getCorrelPlus~ and ~getIceTypePlusNoPrint~, list inside the
-  timer, median 0.348 ms. The unrounded medians give
-  7.143440/0.348223 = 20.514. The earlier 15.6 ms is an earlier,
+  timer, median 0.350 ms. The unrounded medians give
+  7.103615/0.349822 = 20.306. The earlier 15.6 ms is an earlier,
   undeposited run of the command that wrote
   ~sota-heldout-2026-10-31/sota_compare-seeds5-9.txt~; the deposited
   copy of that file prints 15.8 ms for the same Python ~timed()~

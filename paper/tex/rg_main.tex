@@ -629,8 +629,8 @@ The d-SEAMS side is seams-core \coretag{} through its command line and PydSEAMSl
 Agreement compares the two outputs; the \(q_6\) rows give the largest difference of \(q_6\) and \(\bar q_6\).
 In the CNA rows a diamond atom and its first and second neighbours count as that phase.
 The mW RINGS rows are n=3: three recorded repetitions and no further warmup, run at the same time with one repetition pinned to each of cores 3, 4 and 5. The d-SEAMS repetitions used those same cores and finished before RINGS started. The CRN1 rows are unchanged.
-The PTM row is the median of 30 repetitions after five warm-ups, from the unedited log of \texttt{scripts/ptm\_rows.py} at commit \texttt{505c8979}, not the best of seven.
-CHILL+ in that session takes \(0.348\,\mathrm{ms}\).
+The PTM row is the median of 30 repetitions after five warm-ups, from the unedited log of \texttt{scripts/ptm\_rows.py} at commit \texttt{134edfbb}, not the best of seven.
+CHILL+ in that session takes \(0.350\,\mathrm{ms}\).
 Its d-SEAMS time is \texttt{bench\_paper} in mode \texttt{seeded-adj}.}
 \centering
 \scriptsize
@@ -645,7 +645,7 @@ CHILL+ labels, cutoff list & Niu final frame, 2880 & OVITO & 5.30 & 21.2 & 2610 
 Ic/Ih labels; seeded cages, CNA & mW cubic, 4096 & OVITO identify diamond & 110 & 5.69 & 4096 of 4096\\
 Ic/Ih labels; seeded cages, CNA & Niu final frame, 2880 & OVITO identify diamond & 70.8 & 4.95 & 1763 of 2880\\
 Ic/Ih labels; seeded cages, CNA & jittered Ic, 512 & OVITO identify diamond & 15.0 & 0.798 & 508 of 512\\
-Ic/Ih labels; completed cages, PTM & jittered Ic, 512 & OVITO PTM & 7.143 & 16.282 & 512 and 52 Ic\\
+Ic/Ih labels; completed cages, PTM & jittered Ic, 512 & OVITO PTM & 7.104 & 16.312 & 512 and 52 Ic\\
 primitive rings, \(D=6\), ring stage (n=3) & mW cubic, 4096 & RINGS & 6.735 & 52190 & same census, 8192 rings\\
 primitive rings, \(D=6\), ring stage & CRN1, 1000 & RINGS & 2.76 & 3770 & same census, 1238 rings\\
 primitive rings, \(D=6\), whole process (n=3) & mW cubic, 4096 & RINGS & 69.500 & 3694790.404 & same census\\
@@ -674,7 +674,7 @@ None of the other codes returns an HC or DDC label.
 We measure those labels against CHILL+, polyhedral template matching (PTM) and the Steinhardt rules on ice Ic (512 sites) and ice Ih (360 sites) under a Gaussian displacement of \(\sigma\) per component (Figure~\ref{fig:sota}, record \texttt{sota-heldout-2026-10-31}).
 At \(\sigma=0.3\,\mathring{\mathrm{A}}\) the cutoff graph keeps \(0.936\) and \(0.899\) of the Ic and Ih sites, the seeded rule \(0.999\) and \(0.994\), PTM \(0.089\) and \(0.099\) and CHILL+ \(0.564\) and \(0.567\).
 At \(0.4\,\mathring{\mathrm{A}}\) the seeded rule keeps \(0.698\) and \(0.589\), and ring completion raises those to \(0.942\) and \(0.728\).
-On a 360-point random packing no cage rule and no PTM label marks any molecule, and on a 512-molecule mW liquid at \(215\,\mathrm{K}\) the seeded rules label \(0.023\) of the molecules Ic or Ih.
+On a 512-molecule mW liquid at \(215\,\mathrm{K}\) the seeded rules label \(0.023\) of the molecules Ic or Ih.
 Section~\sref{sec:s-accuracy} of the supplement gives the full table, the held-out mW trajectories and the definitions of the rules.
 
 \begin{figure}[htbp]
@@ -685,8 +685,7 @@ Gaussian displacement $\sigma$ per component (Table~\sref{tab:sota});
 points are means over realizations 5 to 9, bars their range. At
 $0.4\,\mathring{\mathrm{A}}$ the seeded rule keeps $0.70$ and $0.59$,
 the cutoff graph $0.35$ and $0.23$, template matching $0.000$ and
-$0.000$ and CHILL+$(r_c)$ $0.10$ and $0.10$. No cage assignment
-labels any molecule of the null.}
+$0.000$ and CHILL+$(r_c)$ $0.10$ and $0.10$.}
 \label{fig:sota}
 \end{figure}
 
@@ -696,7 +695,7 @@ The reproducibility package is
 \url{https://github.com/d-SEAMS/dseams2_repro} \citep{dseams2repro},
 at commit \texttt{\reprobase} (tag v2.7.0).
 The records dated 31 October 2026 ran on that commit with the first revision of the package patch (sha256 \texttt{0e53bc8e}, tree \texttt{5dde84a5}).
-The revision cited here (sha256 \texttt{f5328ee6}, tree \texttt{7863e79e}) adds the PTM cutoff 0.1 and \texttt{scripts/ptm\_cutoff\_sweep.py}.
+The revision cited here (sha256 \texttt{2f3b1c04}, tree \texttt{6c60bd26}) adds the PTM cutoff 0.1 and \texttt{scripts/ptm\_cutoff\_sweep.py}, fits \(q_6\) on the calibration liquid, and reads the dump column header.
 The 0.1 PTM rows ran on it.
 The patch adds the program-files archive, those records and the scripts that write the tables and figures from them, and the supplementary data hold it in \texttt{patches/} and the records in \texttt{repro-records/}.
 With the patch, the source lock of the package builds the engine as the program files do, from commit \texttt{305fb3c6} and the ten release patches.
