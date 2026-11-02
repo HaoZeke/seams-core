@@ -1723,9 +1723,9 @@ The completed rule is mode \texttt{seeded-adj}.
 Its timer is \texttt{std::chrono::steady\_clock} around \texttt{seededLabels}, which builds the neighbour lists inside the timer.
 The \(5.0\,\mathring{\mathrm{A}}\) argument of \texttt{kNearestNeighbourList} only sizes its cell list.
 The search falls back to brute force for any molecule whose fourth neighbour lies beyond it, so the labels do not depend on it (\texttt{tests/test\_neighbours.cpp}).
-The medians are \(7.106\,\mathrm{ms}\) for the completed rule, \(0.345\,\mathrm{ms}\) for CHILL+ and \(16.306\,\mathrm{ms}\) for PTM.
+The medians are \(7.143\,\mathrm{ms}\) for the completed rule, \(0.348\,\mathrm{ms}\) for CHILL+ and \(16.282\,\mathrm{ms}\) for PTM.
 PTM is \texttt{PolyhedralTemplateMatchingModifier}, called in the Python process of \texttt{scripts/ptm\_rows.py}, which starts \texttt{bench\_paper} as a child process pinned with \texttt{taskset}.
-The unrounded medians give \(7.105830/0.344853 = 20.605\), so the completed rule takes that many times as long as CHILL+.
+The unrounded medians give \(7.143440/0.348223 = 20.514\), so the completed rule takes that many times as long as CHILL+.
 The earlier supplement printed \(15.6\,\mathrm{ms}\) for the completed rule.
 That line is an earlier, undeposited run of the command that wrote \texttt{results/reference/}\allowbreak\texttt{sota-heldout-2026-10-31/}\allowbreak\texttt{sota\_compare-seeds5-9.txt}.
 The deposited copy of that file prints \(15.8\,\mathrm{ms}\) for \texttt{dseams-topo-seeded-adj} on ice Ic at this displacement and seed.
@@ -1803,6 +1803,7 @@ The cutoff and mutual graphs do the same except for one Ih run at \(250\,\mathrm
 The CHILL+ 15-frame means are at least \(0.998\).
 PTM keeps at least \(4093\) of \(4096\) Ic molecules and \(4031\) of \(4032\) Ih molecules in every \(200\,\mathrm{K}\) frame.
 At \(250\,\mathrm{K}\) it misses up to \(65\) Ic molecules of a frame and \(73\) Ih molecules of a frame.
+Those counts are \texttt{ok\_min} in the output of \texttt{scripts/md\_heldout\_score.py}.
 The Lechner--Dellago rule keeps \(0.922\) of Ic at \(200\,\mathrm{K}\) and \(0.740\) at \(250\,\mathrm{K}\), and \(0.999\) and \(0.988\) of Ih.
 The \(q_6\) rule calls \(0.790\) to \(0.887\) of the crystal ice.
 On the liquid frames the cutoff graph labels \(0.011\) to \(0.029\) of the molecules Ic or Ih.
@@ -2723,7 +2724,7 @@ On the mW frame the Primitive Rings line is 52190.000/3694790.404 of the whole-p
 RINGS builds a \(5\times5\times5\) superlattice for a periodic cell, and that distance matrix is the rest of the whole process.
 The adaptive common-neighbour analysis of OVITO takes \(10.7\), \(9.72\) and \(1.50\,\mathrm{ms}\) on the mW, Niu and jittered frames (best of seven, \texttt{raw/cna.txt} of the record).
 It has no diamond structure types and labels every molecule of the three frames other.
-The completed cage rule takes \(7.106\,\mathrm{ms}\) and PTM takes \(16.306\,\mathrm{ms}\) on the jittered lattice, the medians of the session in Section~\ref{sec:cagestar}.
+The completed cage rule takes \(7.143\,\mathrm{ms}\) and PTM takes \(16.282\,\mathrm{ms}\) on the jittered lattice, the medians of the session in Section~\ref{sec:cagestar}.
 On the mutual four-nearest list, the other option of every front end, the Niu CHILL+ labels agree with OVITO at 2611 molecules.
 
 \section{Applications}
