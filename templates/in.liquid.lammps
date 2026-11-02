@@ -1,0 +1,23 @@
+# Equilibrate an mW liquid from a random packing: melt hot, then settle at
+# the target temperature and pressure, then write the data file the seed is
+# cut into. Variables: data, T, P, steps_melt, steps_eq, seed, out
+units           real
+atom_style      atomic
+boundary        p p p
+read_data       ${data}
+pair_style      sw
+pair_coeff      * * mW.sw mW
+mass            1 18.015
+velocity        all create 350.0 ${seed} dist gaussian
+timestep        5.0
+neighbor        2.0 bin
+neigh_modify    every 1 delay 0 check yes
+minimize        1.0e-4 1.0e-6 500 5000
+fix             melt all nvt temp 350.0 350.0 500.0
+run             ${steps_melt}
+unfix           melt
+timestep        10.0
+fix             npt all npt temp ${T} ${T} 1000.0 iso ${P} ${P} 10000.0
+thermo          1000
+run             ${steps_eq}
+write_data      ${out} nocoeff

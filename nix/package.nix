@@ -16,7 +16,12 @@
 
 stdenv.mkDerivation (finalAttrs: {
   pname = "seams";
+  # [[[cog
+  # import pathlib
+  # cog.outl('  version = "%s";' % pathlib.Path("VERSION").read_text().strip())
+  # ]]]
   version = "2.12.0";
+  # [[[end]]]
 
   src = lib.fileset.toSource {
     root = ./..;

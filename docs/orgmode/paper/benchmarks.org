@@ -201,17 +201,18 @@ record's =run.sh=. The record itself runs five.
 * Comparison with other codes
 
 Single-core timings in milliseconds on the same frames, record
-~h2h-2026-10-31~. Outside the R.I.N.G.S. rows each entry times the
+~h2h-2026-10-31~. Outside the RINGS rows each entry times the
 analysis call with the frame in memory, as the best of seven runs
 after one warm-up, and each timer holds the neighbour search of its
-code. The R.I.N.G.S. rows time one whole process on each side, input
+code. The RINGS rows time one whole process on each side, input
 included, and their d-SEAMS side is ~seams fingerprint~, which also
 finds the seven-rings, so the rings of size six and below are
-compared. The mW R.I.N.G.S. entry is one timed run after one warm-up.
+compared. The mW RINGS rows are n=3: three recorded repetitions and no further warmup, run at the same time with one repetition pinned to each of cores 3, 4 and 5.
 The last row times the completed seeded cage rule against PTM on the
-512-molecule jittered lattice at \(\sigma=0.3\) Å, generator seed 5;
-PTM has no d-SEAMS counterpart, so that row is not the same
-computation.
+512-molecule jittered lattice at \(\sigma=0.3\) Å, generator seed 5.
+That row is the median of 30 repetitions after five warm-ups, not the
+best of seven. PTM has no d-SEAMS counterpart, so that row is not the
+same computation.
 
 | computation | frame | other code | d-SEAMS 2.0 | other | agreement |
 |-------------+-------+------------+-------------+-------+-----------|
@@ -219,12 +220,13 @@ computation.
 | CHILL+ labels | Niu final frame, 2880 | OVITO | 5.28 | 21.3 | 2610 of 2880 |
 | \(q_6\), \(\bar q_6\), four nearest | mW cubic, 4096 | freud | 3.50 | 31.9 | 2.2e-7 |
 | \(q_6\), \(\bar q_6\), four nearest | Niu final frame, 2880 | freud | 2.58 | 26.4 | 0.32; 3.0e-5 on one graph |
-| primitive rings, \(D=6\), whole workflow | mW cubic, 4096 | R.I.N.G.S. | 31.0 | 2070379 | same census, 8192 rings |
-| primitive rings, \(D=6\), whole workflow | CRN1, 1000 | R.I.N.G.S. | 13.5 | 137797 | same census, 1238 rings |
+| primitive rings, \(D=6\), ring stage, n=3 | mW cubic, 4096 | RINGS | 6.735 | 52190 | same census, 8192 rings |
+| primitive rings, \(D=6\), whole workflow, n=3 | mW cubic, 4096 | RINGS | 69.500 | 3694790.404 | same census, 8192 rings |
+| primitive rings, \(D=6\), whole workflow | CRN1, 1000 | RINGS | 13.5 | 137797 | same census, 1238 rings |
 | shortcut-free rings, \(D=6\) | mW cubic, 4096 | GenIce2 | 6.44 | 10666 | same 8192 rings |
 | shortcut-free rings, \(D=6\) | CRN1, 1000 | GenIce2 | 2.64 | 1773 | same 1238 rings |
 | 5^12 and 5^12 6^2 cages | sI, 368 | GenIce2 | 28.1 | 436 | 16 and 48 in both |
-| Ic/Ih labels | jittered Ic, 512 | OVITO PTM | 15.6 | 16.4 | 512 and 502 Ic |
+| Ic/Ih labels | jittered Ic, 512 | OVITO PTM | 7.106 | 16.306 | 512 and 52 Ic |
 
 The frames are the 4096-molecule mW cubic frame, the final frame of
 the 2880-water Niu dump, the 1000-molecule continuous random network
@@ -242,7 +244,7 @@ parameters are two objects, and freud stores coordinates in single
 precision. d-SEAMS evaluates \(q_6\) on the mutual four-nearest graph
 and freud on the four nearest neighbours; the two graphs differ at 175
 of the 2880 Niu molecules. Given freud's neighbour rows, the engine
-returns freud's values to 3.0e-5. R.I.N.G.S. puts 97% of each run in
+returns freud's values to 3.0e-5. RINGS puts 97% of each run in
 the distance matrix of the 5 x 5 x 5 superlattice it builds for a
 periodic cell.
 
@@ -254,11 +256,25 @@ The calls on each side are these.
   ~steinhardtQl~
 - d-SEAMS rings: ~neighListO~, ~neighbourListByIndex~ and
   ~ringNetwork~, with ~findBySignature~ added for the sI cages
-- d-SEAMS against PTM: the completed seeded rule of
-  ~scripts/sota_compare.py~
-- d-SEAMS against R.I.N.G.S.: ~seams fingerprint crn.lammpstrj --cutoff 3.5 --type 1~
+- d-SEAMS against PTM: ~tests/bench_paper.cpp~ in mode
+  ~seeded-adj~, median of 30 after five warm-ups, the same session
+  as CHILL+ on that frame (~scripts/ptm_rows.py~). The timer is
+  ~std::chrono::steady_clock~ around ~seededLabels~, which builds
+  the neighbour lists inside the measured call. The 5.0 Å argument
+  of ~kNearestNeighbourList~ only sizes its cell list. The search
+  falls back to brute force when the fourth neighbour lies beyond
+  it, so the labels do not depend on it
+  (~tests/test_neighbours.cpp~). CHILL+ in that session is ~neighListO~ at 3.5 Å,
+  ~getCorrelPlus~ and ~getIceTypePlusNoPrint~, list inside the
+  timer, median 0.345 ms. The unrounded medians give
+  7.105830/0.344853 = 20.605. The earlier 15.6 ms is a draft of
+  ~sota-heldout-2026-10-31/sota_compare-seeds5-9.txt~; the deposited
+  copy of that file prints 15.8 ms for the same Python ~timed()~
+  call. The seeds 5--9 curve at cutoff 0.1 is
+  ~scripts/ptm_cutoff_sweep.py~ in the reproducibility package.
+- d-SEAMS against RINGS: ~seams fingerprint crn.lammpstrj --cutoff 3.5 --type 1~
 - OVITO CHILL+: ~ChillPlusModifier(cutoff=3.5)~ on a ~DataCollection~
-- OVITO PTM: ~PolyhedralTemplateMatchingModifier~
+- OVITO PTM: ~PolyhedralTemplateMatchingModifier(rmsd_cutoff=0.1)~
 - freud: ~freud.order.Steinhardt(l=6)~ with ~average=False~ and with
   ~average=True~, each over four nearest neighbours
 - GenIce2 rings: ~pairlist.pairs_iter~ at 3.5 Å into a networkx
@@ -266,7 +282,7 @@ The calls on each side are these.
 - GenIce2 cages: those rings, then ~polyhedra_iter(rings, 14)~ of
   ~cycless.polyhed~, keeping the cages of 12 and 14 five- and
   six-rings, as the genice2-cage formatter does
-- R.I.N.G.S.: ~rings input~ on the same coordinates with one species,
+- RINGS: ~rings input~ on the same coordinates with one species,
   periodic boundaries, primitive rings only, search depth 3 (rings of
   up to six members) and the O-O bond at 3.5 Å
 

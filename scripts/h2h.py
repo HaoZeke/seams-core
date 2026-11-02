@@ -279,6 +279,10 @@ def rings_workdir(name, pos, box, half_depth=3):
     (wd / "data").mkdir(parents=True)
     write_xyz(wd / "data" / "conf.xyz", pos, box)
     (wd / "options").write_text(RINGS_OPTIONS)
+    # 200, 500, 25.0, 0.125, 90 and 20 feed the g(r), S(q), angle and
+    # void grids. Those options are .false., so the six numbers have no
+    # effect. half_depth is TAILLE_REF and the maximum ring size is twice
+    # that. 10 is TAILLC, the maximum chain length, and chains are off.
     (wd / "input").write_text(
         "#######################################\n"
         "       R.I.N.G.S. input file          #\n"
@@ -787,6 +791,8 @@ def stage_env():
     import ovito
     from pydseams import yoda  # noqa: F401
 
+    fb = os.environ.get("H2H_BLAS_LIB", "").strip()
+    emit(H2H_BLAS_LIB=fb if fb else "unset")
     emit(python=platform.python_version(), numpy=np.__version__, numpy_path=np.__file__)
     emit(pydseamslib=md.version("pydseamslib"), ovito=ovito.version_string,
          freud=freud.__version__)
