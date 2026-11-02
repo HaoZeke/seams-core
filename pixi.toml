@@ -1,6 +1,11 @@
 [workspace]
 name = "seams-core"
+# [[[cog
+# import pathlib
+# cog.outl('version = "%s"' % pathlib.Path("VERSION").read_text().strip())
+# ]]]
 version = "2.12.0"
+# [[[end]]]
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-64", "osx-arm64"]
 authors = ["Rohit Goswami <rgoswami@ieee.org>"]

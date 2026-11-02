@@ -1,0 +1,35 @@
+# Settle 50 ps, then five dumps 20 ps apart. Production steps are
+# renumbered so the dumps fall at 2000, 4000, 6000, 8000 and 10000.
+# Variables: data, T, P, seed, style (iso or aniso), create (1 or 0).
+# The Nose-Hoover damping is 100 timesteps in temperature and 1000
+# timesteps in pressure, the recommendation in the LAMMPS fix nh
+# documentation, https://docs.lammps.org/fix_nh.html. At a 10 fs step
+# that is 1000 fs and 10000 fs, the same damping as templates/in.liquid.lammps.
+# pair_coeff reads mW.sw from the working directory. That file is the
+# deposited Stillinger-Weber parameter set.
+units           real
+atom_style      atomic
+boundary        p p p
+read_data       ${data}
+pair_style      sw
+pair_coeff      * * mW.sw mW
+mass            1 18.015
+timestep        10.0
+neighbor        2.0 bin
+neigh_modify    every 1 delay 0 check yes
+variable        do_v equal ${create}
+if "${do_v} > 0" then "velocity all create ${T} ${seed} dist gaussian"
+fix             npt all npt temp ${T} ${T} 1000.0 ${style} ${P} ${P} 10000.0
+thermo          1000
+run             5000
+reset_timestep  0
+run             2000
+write_dump      all custom traj.lammpstrj id type x y z modify sort id
+run             2000
+write_dump      all custom traj.lammpstrj id type x y z modify sort id append yes
+run             2000
+write_dump      all custom traj.lammpstrj id type x y z modify sort id append yes
+run             2000
+write_dump      all custom traj.lammpstrj id type x y z modify sort id append yes
+run             2000
+write_dump      all custom traj.lammpstrj id type x y z modify sort id append yes

@@ -49,6 +49,19 @@ jobs:
       - run: pixi run -e mpi ninja -C bbdir-mpi
       - run: pixi run -e mpi meson test -C bbdir-mpi --print-errorlogs domain domain_mpi seams_mpi_frames_match_serial
 
+  version-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check that cog still emits the VERSION file
+        run: |
+          python3 -m pip install --user 'cogapp==3.6.0'
+          python3 -m cogapp --check --check-fail-msg="Run cog -r from the repository root." \
+            meson.build pixi.toml CITATION.cff nix/package.nix \
+            docs/source/Doxyfile_seams.cfg bindings/julia/Dseams/Project.toml
+          python3 -c 'from pathlib import Path; v=Path("VERSION").read_text().strip(); d=Path("RELEASE_DATE").read_text().strip(); h=next(l for l in Path("CHANGELOG.md").read_text().splitlines() if l.startswith("## [")); w="## [%s] - %s"%(v,d); assert h==w, (h,w)'
+          # A release runs: towncrier build --version "$(cat VERSION)" --date "$(cat RELEASE_DATE)"
+
   coverage:
     runs-on: ubuntu-latest
     steps:
