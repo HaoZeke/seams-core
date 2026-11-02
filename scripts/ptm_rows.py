@@ -56,6 +56,16 @@ def stats_line(name, samples):
     )
 
 
+def porcelain():
+    out = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=ROOT, capture_output=True, text=True, check=True,
+    ).stdout
+    if not out.strip():
+        return "clean"
+    return "dirty " + " | ".join(line.strip() for line in out.splitlines())
+
+
 def main():
     if len(sys.argv) != 3:
         raise SystemExit("usage: ptm_rows.py traj log")
@@ -64,6 +74,7 @@ def main():
     os.environ["OMP_NUM_THREADS"] = "1"
     os.sched_setaffinity(0, {CORE})
     load_start = Path("/proc/loadavg").read_text().strip()
+    dirty_tree = porcelain()
     started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     side = log.with_suffix(".chill-labels")
     chill_samples, chill_cmd = run_bench("chill", traj, side)
@@ -74,6 +85,7 @@ def main():
     lines.append(f"started {started}")
     lines.append(f"finished {finished}")
     lines.append(f"load_start {load_start}")
+    lines.append(f"dirty_tree {dirty_tree}")
     lines.append(f"load_end {load_end}")
     lines.append("chill_cmd " + " ".join(chill_cmd))
     lines.append("dseams_cmd " + " ".join(str(x) for x in pair[0]["command"]))
