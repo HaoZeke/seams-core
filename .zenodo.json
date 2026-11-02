@@ -1,10 +1,12 @@
 {
+  "version": "2.12.0",
   "title": "d-SEAMS 2.0: Incremental ring and cage algorithms for ice structure analysis (reproducibility archive)",
   "upload_type": "software",
   "license": "MIT",
   "creators": [
     {
       "name": "Goswami, Rohit",
+      "affiliation": "TurtleTech ehf",
       "orcid": "0000-0002-2393-8056"
     },
     {
@@ -12,7 +14,7 @@
       "orcid": "0000-0001-8706-2383"
     },
     {
-      "name": "S, Ruhila"
+      "name": "Goswami, Ruhila"
     }
   ],
   "description": "Reproducibility archive for the d-SEAMS 2.0 paper: the Snakemake workflow that rebuilds the tip and baseline trees, gates on a green test suite, runs every benchmark behind the paper's tables through HyperQueue inside one Slurm allocation, and writes a single manifest; the reference manifest, run-conditions record, and state-of-the-art comparison sweep produced by that workflow; and the software source at the tagged release together with its exact external inputs (meson subproject wraps and the pixi lockfile).",

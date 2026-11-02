@@ -13,10 +13,13 @@ def _field(path: Path, pattern: str) -> str:
 
 def test_version_files_agree(root: Path):
     pins = {
+        "source": (root / "VERSION").read_text().strip(),
         "meson": _field(root / "meson.build", r"^\s*version:\s*'([^']+)'"),
         "pixi": _field(root / "pixi.toml", r'^version = "([^"]+)"'),
         "citation": _field(root / "CITATION.cff", r'^version: "([^"]+)"'),
         "nix": _field(root / "nix/package.nix", r'^\s*version = "([^"]+)";'),
+        "zenodo": _field(root / ".zenodo.json", r'"version": "([^"]+)"'),
+        "julia": _field(root / "bindings/julia/Dseams/Project.toml", r'^version = "([^"]+)"'),
         "doxygen": _field(
             root / "docs/source/Doxyfile_seams.cfg", r'^PROJECT_NUMBER\s+=\s+"v?([^"]+)"'
         ),

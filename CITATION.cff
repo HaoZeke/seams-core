@@ -2,7 +2,18 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it using the metadata below."
 title: "d-SEAMS: Deferred Structural Elucidation Analysis for Molecular Simulations"
 type: software
+# [[[cog
+# import pathlib
+# cog.outl('version: "%s"' % pathlib.Path("VERSION").read_text().strip())
+# ]]]
 version: "2.12.0"
+# [[[end]]]
+# [[[cog
+# import pathlib
+# cog.outl("date-released: %s" % pathlib.Path("RELEASE_DATE").read_text().strip())
+# ]]]
+date-released: 2026-11-01
+# [[[end]]]
 license: MIT
 repository-code: "https://github.com/d-SEAMS/seams-core"
 url: https://dseams.info
@@ -14,7 +25,8 @@ authors:
   - family-names: Goswami
     given-names: Rohit
     orcid: "https://orcid.org/0000-0002-2393-8056"
-  - family-names: S
+    affiliation: "TurtleTech ehf"
+  - family-names: Goswami
     given-names: Ruhila
 preferred-citation:
   type: article
@@ -26,7 +38,8 @@ preferred-citation:
     - family-names: Goswami
       given-names: Rohit
       orcid: "https://orcid.org/0000-0002-2393-8056"
-    - family-names: S
+      affiliation: "TurtleTech ehf"
+    - family-names: Goswami
       given-names: Ruhila
   doi: "10.1021/acs.jcim.0c00031"
   journal: "Journal of Chemical Information and Modeling"

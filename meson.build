@@ -7,7 +7,12 @@
 #-----------------------------------------------------------------------------------
 
 project('seams-core', ['cpp', 'c'],
+  # [[[cog
+  # import pathlib
+  # cog.outl("  version: '%s'," % pathlib.Path("VERSION").read_text().strip())
+  # ]]]
   version: '2.12.0',
+  # [[[end]]]
   default_options: ['warning_level=2', 'cpp_std=c++20', 'b_ndebug=if-release'],
   meson_version: '>=1.3.0')
 
