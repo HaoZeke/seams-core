@@ -12,7 +12,7 @@
 \usepackage{xurl}
 \usepackage{xcolor}
 \usepackage{siunitx}
-\sisetup{exponent-product=\times, group-minimum-digits=4}
+\sisetup{exponent-product=\times, group-minimum-digits=4, range-phrase=\textendash}
 \usepackage[hypertexnames=false]{hyperref}
 \usepackage{orcidlink}
 \input{figures/data/macros}
@@ -41,7 +41,7 @@
 \makeatletter
 % The primitive \input keeps a table body expandable inside an alignment.
 \newcommand{\tabbody}[1]{\@@input #1 }
-\newcommand{\iqr}[2]{\num{#1}\textendash\num{#2}}
+\newcommand{\iqr}[2]{\numrange{#1}{#2}}
 \def\sp@four#1, #2, #3, #4\@nil{#1 & #2 & #3 & #4}
 \newcommand{\kfour}[1]{\expandafter\expandafter\expandafter\sp@four\csname dsv@k@#1\endcsname\@nil}
 \def\ps@pprintTitle{\let\@oddhead\@empty\let\@evenhead\@empty\let\@oddfoot\@empty\let\@evenfoot\@oddfoot}
@@ -714,13 +714,17 @@ Confined & \num{10000} & d-SEAMS & \kfour{confined@1e4@dseams-rings} \\
 \section{One-thread ring and neighbour records}
 \label{sec:s-ring-perf}
 
-The records in \texttt{paper/tex/figures/data/ring-perf} are the r8.12 head-to-head samples.
-Each printed median is the type 7 median of six calls, and each bracket is the type 7 first and third quartiles, from \texttt{paper/tex/figures/ring\_perf\_type7.py}.
+The ring record \texttt{ring-head2head.json} is one thread on one core, six calls after two warmups.
+Each printed median is the type 7 median, and each bracket is the type 7 first and third quartiles, from \texttt{paper/tex/figures/ring\_perf\_type7.py}.
 The hardware line of that record is \texttt{uname -m} \texttt{x86\_64}, \texttt{nproc} 8, CPU model \texttt{Intel Xeon Processor}.
-The ring table is one thread of d-SEAMS against OVITO.
-On 4096, 110592 and 136000 molecules the OVITO quartile bracket lies below the d-SEAMS bracket.
-On 136 molecules the brackets overlap.
-Cells marked p are projected from the link-cell fit and were not timed.
+The ring samples were measured on commit \texttt{\seqsplit{cde33331381a0cf35126b456ffd1d520ad217f40}}.
+The neighbour samples were measured on commit \texttt{\seqsplit{5857ff2c5a3f5ce5737db4e0aeee38b33da8a959}}.
+On the skewed cell of \num{512} molecules the mutual four-neighbour list takes \qty{1.019}{\milli\second}, freud \qty{0.841}{\milli\second} and OVITO \qty{0.888}{\milli\second}.
+On every other measured neighbour row the d-SEAMS quartile bracket lies below the other codes.
+On every frame the d-SEAMS quartile bracket lies below the OVITO bracket.
+The script \texttt{paper/tex/repro/ring-perf.sh} regenerates both JSON files and both tables.
+A superscript p is a projected link-cell value.
+That cell was not timed.
 A blank cell was not part of the measured record.
 
 \begin{table}[tbp]
@@ -741,7 +745,8 @@ Frame & Molecules & d-SEAMS & OVITO \\
 \begin{table}[tbp]
 \centering
 \caption{\textbf{One-thread cutoff neighbour list, six calls, type 7 median and quartiles, in milliseconds.}
-A superscript p marks a projected link-cell cell, which was not timed.}
+A superscript p is a projected link-cell value.
+That cell was not timed.}
 \label{tab:s-neigh-perf}
 \resizebox{\linewidth}{!}{%
 \begin{tabular}{@{}lrl@{\hspace{0.8em}}l@{\hspace{0.8em}}l@{\hspace{0.8em}}l@{\hspace{0.8em}}l@{}}
@@ -787,6 +792,9 @@ The OVITO ring campaign and the split of the CHILL+ labels by coordination ran w
 
 The statistics script then writes the macros, tables and plot data, and the build script compiles both documents with tectonic and checks that the numbers of the cross-references between them are current.
 \VerbatimInput[fontsize=\footnotesize]{repro/stats.sh}
+
+The one-thread ring and neighbour samples, and the type 7 tables, come from the listing below.
+\VerbatimInput[fontsize=\footnotesize]{repro/ring-perf.sh}
 
 \bibliographystyle{elsarticle-num-names} \bibliography{dseams2}
 
