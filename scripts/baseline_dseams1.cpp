@@ -1,7 +1,9 @@
 // Driver for the published d-SEAMS 1 library (tag v1.0.1).
 // Compiled against that tree's headers, not against the current sources.
 // Same input as tests/bench_cages: one LAMMPS frame, cutoff 3.5, rings
-// through 6, then findHC and findDDC. Prints one JSON object.
+// through 7, then findHC and findDDC. Prints one JSON object. With a sixth
+// argument (warm-up calls) it prints one line per retained call in the
+// columns of `bench_paper ... cages` instead.
 
 #include <cage.hpp>
 #include <chrono>
@@ -50,6 +52,60 @@ int main(int argc, char **argv) {
 
   auto nList = nneigh::neighListO(3.5, &yCloud, atomType);
   auto hbond = nneigh::neighbourListByIndex(&yCloud, nList);
+
+  if (argc > 6) {
+    const int warmup = std::atoi(argv[6]);
+    const auto since = [](std::chrono::steady_clock::time_point start) {
+      return std::chrono::duration<double, std::milli>(
+                 std::chrono::steady_clock::now() - start)
+          .count();
+    };
+    std::cout << "mode cages\natoms " << yCloud.nop << "\nwarmup " << warmup
+              << "\nreps " << reps
+              << "\ncolumns ring_ms hc_ms ddc_ms path_ms\n";
+    std::vector<std::vector<int>> rings;
+    std::vector<std::vector<int>> six;
+    std::vector<int> listHC;
+    std::vector<int> listDDC;
+    std::vector<cage::Cage> cages;
+    for (int rep = 0; rep < warmup + reps; rep++) {
+      const auto t0 = std::chrono::steady_clock::now();
+      rings = primitive::ringNetwork(hbond, 7);
+      six.clear();
+      for (const auto &ring : rings) {
+        if (ring.size() == 6) {
+          six.push_back(ring);
+        }
+      }
+      const double ringMs = since(t0);
+      const auto t1 = std::chrono::steady_clock::now();
+      std::vector<ring::strucType> ringType(six.size(), ring::unclassified);
+      cages.clear();
+      listHC = ring::findHC(six, &ringType, hbond, &cages);
+      const double hcMs = since(t1);
+      const auto t2 = std::chrono::steady_clock::now();
+      listDDC = ring::findDDC(six, &ringType, &cages);
+      const double ddcMs = since(t2);
+      if (rep >= warmup) {
+        std::cout << ringMs << " " << hcMs << " " << ddcMs << " "
+                  << (ringMs + hcMs + ddcMs) << "\n";
+      }
+    }
+    int nHC = 0;
+    int nDDC = 0;
+    for (const auto &cage : cages) {
+      if (cage.type == cage::HexC) {
+        nHC++;
+      } else if (cage.type == cage::DoubleDiaC) {
+        nDDC++;
+      }
+    }
+    std::cerr << "rings " << rings.size() << " six_rings " << six.size()
+              << " hc_rings " << listHC.size() << " ddc_rings "
+              << listDDC.size() << " hc_cages " << nHC << " ddc_cages "
+              << nDDC << "\n";
+    return 0;
+  }
 
   std::vector<std::vector<int>> rings;
   const double tRings = bestMillis(
