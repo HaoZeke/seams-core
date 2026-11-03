@@ -103,12 +103,13 @@ void runChill(const std::string &traj, int frame, int warmup, int reps,
   }
 }
 
-// 5.0 A only sizes the cell list of kNearestNeighbourList. The search
+// The cell edge is the first-shell cutoff, as the command line uses.
+// It only sizes the cell list of kNearestNeighbourList. The search
 // falls back to brute force when the fourth neighbour lies beyond it,
 // so the labels do not depend on this value. tests/test_neighbours.cpp,
 // "k-nearest graph is exact under an undersized candidate cutoff".
 // The timing does depend on it.
-constexpr double kCandidateA = 5.0;
+constexpr double kCandidateA = 3.5;
 
 void runQ6(const std::string &traj, int frame, int warmup, int reps,
            bool includeNeighbours, const std::string &sidecar) {
