@@ -89,19 +89,29 @@
 % snapper:on
 
 \begin{abstract}
-Ice nucleation in molecular dynamics is read from the hydrogen-bond network, whose primitive rings form the hexagonal cages of ice~Ih and the double-diamond cages of ice~Ic.
-Analysis codes repeat this search on every saved frame, and d-SEAMS~1 enumerates every path up to the largest ring size and tests every ring pair for a cage.
-Here, we describe d-SEAMS~2.0, which builds primitive rings from pairs of shortest paths.
-It finds both cage types through an index from molecules to rings and carries rings and cage labels between frames.
-We show that a ring of at most seven members changes its primitive status only if one of its molecules is an end of a changed bond.
-The carried rings therefore equal those of a full search.
-On one core, the rings and both cage searches of a \dsv{hl@n}-molecule ice~Ic frame take \qty{\dsv{hl@two@ms}}{\milli\second}, against \qty{\dsv{hl@one@s}}{\second} for d-SEAMS~1.
-For three changed bonds on a nucleation frame, the ring update is \dsv{hl@ringgain} times faster than a full search.
-Past a fixed share of changed molecules or bonds, the program returns to the full search.
-In all \dsv{hl@matched} completed matched comparisons with OVITO, freud, pyscal, matscipy and an independent CHILL+ library, d-SEAMS~2.0 is faster, while local diamond-structure classifiers of OVITO and pyscal run up to \dsv{hl@local@max} times faster than its cage labels.
-On a deposited nucleation run of mW water, most molecules that the ice gains are cubic or shared by both cage types.
+Ice nucleation is read from primitive rings, which form the hexagonal cages of ice~Ih and the double-diamond cages of ice~Ic.
+d-SEAMS~2.0 is the first code to return a full ring search from a local update, and on one thread a \dsv{hl@n} molecule ice~Ic frame takes \qty{\dsv{hl@two@ms}}{\milli\second} against \qty{\dsv{hl@one@s}}{\second} for d-SEAMS~1.
+Rings are pairs of shortest paths, indexed from each molecule.
+A ring of at most seven members changes only at an end of a changed bond, so the carried rings match a full search.
+Three changed bonds make the update \dsv{hl@ringgain} times faster than a full search.
+In all \dsv{hl@matched} matched comparisons of the main campaign, d-SEAMS~2.0 is faster than OVITO, freud, pyscal, matscipy and a CHILL+ library.
+On a deposited mW run, most new ice is cubic or shared by both cage types.
+\end{abstract}
 
-\bigskip\noindent\textbf{PROGRAM SUMMARY}
+\begin{highlights}
+\item Primitive rings from pairs of shortest paths, each ring found once
+\item A frame-to-frame ring update that returns the rings of a full search
+\item Rings and both ice cage searches on \dsv{hl@n} molecules: \qty{\dsv{hl@two@ms}}{\milli\second} against \qty{\dsv{hl@one@s}}{\second}
+\item Faster than five other codes in all \dsv{hl@matched} matched comparisons of the main campaign
+\item Cubic and mixed molecules make up most of the ice grown in an mW nucleation run
+\end{highlights}
+
+\begin{keyword}
+Ice nucleation \sep Primitive rings \sep Topological cages \sep Incremental graph algorithms \sep Molecular dynamics
+\end{keyword}
+\end{frontmatter}
+
+\noindent\textbf{PROGRAM SUMMARY}
 
 % snapper:off
 \begin{small}
@@ -136,20 +146,6 @@ A component of more than \dsv{thr@packcap} conflicting double-diamond candidates
 \input{summary_refs}
 \end{small}
 % snapper:on
-\end{abstract}
-
-\begin{highlights}
-\item Primitive rings from pairs of shortest paths, each ring found once
-\item A frame-to-frame ring update that returns the rings of a full search
-\item Rings and both ice cage searches on \dsv{hl@n} molecules: \qty{\dsv{hl@two@ms}}{\milli\second} against \qty{\dsv{hl@one@s}}{\second}
-\item Faster than five other codes in all \dsv{hl@matched} completed matched comparisons
-\item Cubic and mixed molecules make up most of the ice grown in an mW nucleation run
-\end{highlights}
-
-\begin{keyword}
-Ice nucleation \sep Primitive rings \sep Topological cages \sep Incremental graph algorithms \sep Molecular dynamics \sep Stacking disorder
-\end{keyword}
-\end{frontmatter}
 
 \section{Introduction}
 \label{sec:intro}
@@ -160,7 +156,7 @@ The polytype of the nucleus is part of the answer, since stacking-disordered ice
 Every such study assigns a structure to every molecule of every frame, and the cost of that assignment multiplies with the length and the number of the runs.
 
 Most analysis codes classify molecules by local order parameters.
-These include the bond-orientational averages of Steinhardt and of Lechner and Dellago~\cite{steinhardt1983bond,lechner2008averaged}, the CHILL and CHILL+ bond correlations~\cite{moore2010chill,nguyen2015identification} and the template and neighbour analyses of crystal structures~\cite{larsen2016robust,stukowski2012structure,maras2016global}.
+These include the bond-orientational averages of Steinhardt and of Lechner and Dellago~\cite{steinhardt1983bond,lechner2008averaged,lechner2008accurate}, the CHILL and CHILL+ bond correlations~\cite{moore2010chill,nguyen2015identification} and the template and neighbour analyses of crystal structures~\cite{larsen2016robust,stukowski2012structure,maras2016global}.
 The Open Visualization Tool OVITO, freud and pyscal implement them for any particle system~\cite{stukowski2010visualization,ramasubramani2020freud,menon2019pyscal}.
 Their labels depend on the neighbour list that defines the local environment, and ice in nanotubes has no structure class among them~\cite{koga2001nanotube,goswami2020dseams}.
 
@@ -180,6 +176,7 @@ For primitive rings the question is local, because a ring gains or loses its sta
 We make this locality exact: a ring of at most seven members changes its status only if one of its molecules is an end of a changed bond, so every other ring can be carried to the next frame.
 
 Here, we describe d-SEAMS~2.0, called d-SEAMS below, which keeps the topological definitions of d-SEAMS~1 and replaces its algorithms.
+d-SEAMS is the first code in this comparison to return the primitive rings of a full search from a local update, and the rings and both cage searches of a \dsv{hl@n}-molecule ice~Ic frame take \qty{\dsv{hl@two@ms}}{\milli\second} against \qty{\dsv{hl@one@s}}{\second} for d-SEAMS~1.
 It constructs primitive rings from pairs of shortest paths~\cite{yuan2002rings}, so that each ring is found once.
 It finds both cage types through an index from molecules to rings, packs the double-diamond cages as a maximum matching and carries rings and cage labels across frames, with a fallback to the full search.
 We compare it with its predecessor and with seven other codes on machines of one type.
@@ -452,9 +449,8 @@ The program installs through pixi or Nix~\cite{pixi,dolstra2004nix}, and Section
 \subsection{Protocol}
 \label{sec:protocol}
 
-All timings ran on virtual machines of one type, on which \texttt{uname -m} reports \texttt{\dsv{hw@arch}} and \texttt{nproc} reports \dsv{hw@nproc} processing units.
-Their \texttt{/proc/cpuinfo} names the processor \texttt{\dsv{hw@model}}.
-The codes of each comparison ran on the same machine, every run used one core pinned with \texttt{taskset} and one thread, and d-SEAMS and d-SEAMS~1.0.1 were release builds with GCC~\dsv{hw@gcc}~\cite{dseams101}.
+The hardware line is \texttt{uname -m} \texttt{\dsv{hw@arch}}, \texttt{nproc} \dsv{hw@nproc}, CPU model \texttt{\dsv{hw@model}}.
+The codes of each comparison ran on the same machine, every timed process used one thread and was pinned with \texttt{taskset}, and d-SEAMS and d-SEAMS~1.0.1 were release builds with GCC~\dsv{hw@gcc}~\cite{dseams101}.
 The version comparison builds the cutoff graph once outside the timers and times the rings of up to seven members and both cage searches.
 In the comparison with other codes, each code runs in a worker process of its own, and its timer includes its own neighbour search, so every timing covers the same path from positions to labels.
 The frames are ideal ice~Ic and ice~Ih, a liquid and the square-tube ice of a deposited trajectory~\cite{goswami2019nanotubedata}, each replicated from about a thousand to about a million molecules.
@@ -531,6 +527,7 @@ In all \dsv{hl@matched} matched comparisons that completed, d-SEAMS is the faste
 Table~\ref{tab:ranges} gives the smallest and the largest ratio of each code to d-SEAMS, and the supplement gives every timing with its interval and quartiles.
 Table~\sref{tab:s-h2h} compares all codes head to head on frames of one size, Table~\sref{tab:s-ovito} gives the ring timings of d-SEAMS and OVITO on every frame and Table~\sref{tab:s-ladder} lists every completed case.
 OVITO, timed in a separate campaign on the same frames, finds the same number of rings of each size as d-SEAMS on every frame, and every OVITO call took longer than every d-SEAMS call.
+A later one-thread record, six calls on each frame, measures the opposite order on three larger frames: OVITO's ring stage takes less time than the d-SEAMS ring stage on 4096, 110592 and 136000 molecules (Table~\sref{tab:s-ring-perf}).
 Every matched ratio of the main campaign is separated after Holm's correction.
 
 \begin{table}[tbp]
@@ -659,6 +656,44 @@ Hexagonal, cubic and mixed molecules in each of the \dsv{n@frames} frames of \ds
 \label{fig:nucleation}
 \end{figure}
 
+The benchmark systems are the cages, the ice lattices, a nucleation seed, a brine slab and the two clathrate hydrates (Figures~\ref{fig:renders-cages}, \ref{fig:renders-ice}, \ref{fig:renders-seed} and~\ref{fig:renders-hydrate}).
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=0.48\textwidth]{figures/hc_cage_solvis_trim}\hfill
+\includegraphics[width=0.48\textwidth]{figures/ddc_cage_solvis_trim}
+\caption{\textbf{One hexagonal cage and one double-diamond cage, the two units the ice labels read.}
+The thick bonds are the cage.}
+\label{fig:renders-cages}
+\end{figure}
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=0.48\textwidth]{figures/ih_lattice_solvis_trim}\hfill
+\includegraphics[width=0.48\textwidth]{figures/ic_lattice_solvis_trim}
+\caption{\textbf{Oxygen lattices of ice Ih and ice Ic.}
+Every molecule of the hexagonal lattice lies on hexagonal cages, and every molecule of the cubic lattice lies on double-diamond cages.}
+\label{fig:renders-ice}
+\end{figure}
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=0.72\textwidth]{figures/seed_solvis_trim}
+\caption{\textbf{The nucleation seed is the thick-bonded cluster, and the thin bonds are the water outside it.}}
+\label{fig:renders-seed}
+\end{figure}
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=0.32\textwidth]{figures/brine_slab_xyzrender}\hfill
+\includegraphics[width=0.32\textwidth]{figures/si_hydrate_xyzrender}\hfill
+\includegraphics[width=0.32\textwidth]{figures/sii_hydrate_xyzrender}
+\caption{\textbf{The brine slab and the two methane hydrates.}
+In the brine drawing the ice is the connected slab and the ions sit in the liquid half.
+Every drawn hydrate cage contains one methane.}
+\label{fig:renders-hydrate}
+\end{figure}
+
 \section{Conclusions}
 \label{sec:conclusions}
 
@@ -688,10 +723,6 @@ With such an update, the LAMMPS compute that assigns CHILL+ labels during a run 
 
 The authors declare no competing financial interests or personal relationships that influenced the work reported in this paper.
 
-\section*{Funding}
-
-This research did not receive any specific grant from funding agencies in the public, commercial or not-for-profit sectors.
-
 \section*{Acknowledgments}
 
 We thank our families, pets and plants for their patience and support throughout this work.
@@ -699,14 +730,15 @@ We thank our families, pets and plants for their patience and support throughout
 \section*{Data and code availability}
 
 The program is seams-core under the MIT licence at \url{https://github.com/d-SEAMS/seams-core}, and its releases are archived on Zenodo under the concept DOI \href{https://doi.org/10.5281/zenodo.3874291}{10.5281/zenodo.3874291}~\cite{seamscore2026}.
-The measurements used version 2.12.0 of its sources with one fix to the storage of neighbour membership in the cage labels, and both are part of the release tagged \releasetag (Section~\sref{sec:s-machines}).
+The measurements used the public commit \texttt{d9e45397cc72552abd1d1bcdf16e671f3884cdeb} of version 2.12.0, whose \texttt{src} tree is \texttt{ffd7d964}, with one fix to the storage of neighbour membership in the cage labels (Section~\sref{sec:s-machines}).
+The version DOI for 2.12.0 is \DOIPENDING.
 The Python bindings are PydSEAMSlib~\cite{pydseamslib2026} and the Lua library is yodaStruct~\cite{yodastruct2026}.
 The nucleation and nanotube trajectories are deposited on figshare with the identifiers \href{https://doi.org/10.6084/m9.figshare.11448702.v1}{10.6084/m9.figshare.11448702.v1} and \href{https://doi.org/10.6084/m9.figshare.11448768.v1}{10.6084/m9.figshare.11448768.v1}~\cite{goswami2019nucleationdata,goswami2019nanotubedata}.
 The measured records, the scripts that turn them into the figures, tables and numbers of this paper and the comparison scripts are in the repository, and Section~\sref{sec:s-repro} gives the commands that reproduce every measurement.
 
 \section*{Declaration of generative AI and AI-assisted technologies in the manuscript preparation process}
 
-Chatbots were used to refine certain turns of phrase and to speed through some implementation details; all the work is the authors' own.
+During the preparation of this work the authors used generative AI tools in order to refine language, and after using these tools the authors reviewed and edited the content as needed and take full responsibility for the content of the published article.
 
 \bibliographystyle{elsarticle-num-names} \bibliography{dseams2}
 

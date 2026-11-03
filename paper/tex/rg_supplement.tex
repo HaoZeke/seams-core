@@ -310,17 +310,19 @@ Whole path & & & \dsv{v@slope@one@path} & \dsv{v@slope@two@path} \\
 \subsection{Machines and builds}
 \label{sec:s-machines}
 
-All measurements ran on virtual machines of one type, on which \texttt{uname -m} reports \texttt{\dsv{hw@arch}} and \texttt{nproc} reports \dsv{hw@nproc} processing units.
-Their \texttt{/proc/cpuinfo} names the processor \texttt{\dsv{hw@model}}.
-The version comparison, the update measurements, the nucleation runs and the OVITO ring campaign ran on one machine, and the comparator campaign ran on a second machine of the same type.
-The records of the two machines give the same architecture, processor count, processor and compiler, and the statistics script stops when any of the first three differ.
-Every timed process ran on core~\dsv{set@core}, pinned with \texttt{taskset}, and the thread counts of OpenMP, OpenBLAS, MKL, Rayon and OVITO were set to one.
+The hardware line is \texttt{uname -m} \texttt{\dsv{hw@arch}}, \texttt{nproc} \dsv{hw@nproc}, CPU model \texttt{\dsv{hw@model}}.
+The version comparison, the update measurements, the nucleation runs and the OVITO ring campaign ran on one machine, and the comparator campaign ran on a second machine with the same hardware line.
+The statistics script stops when the architecture, the output of \texttt{nproc} or the CPU model differs.
+Every timed process used one thread and was pinned with \texttt{taskset}, and the thread counts of OpenMP, OpenBLAS, MKL, Rayon and OVITO were set to one.
 The clock frequency was left at the setting of the machine.
 
 seams-core was built with Meson and GCC~\dsv{hw@gcc} in release mode with the options of Section~\ref{sec:s-repro}.
-The measured program is version 2.12.0 with one fix to the cage labels, which is part of the release tagged \releasetag.
+The measured program is the public commit \texttt{d9e45397cc72552abd1d1bcdf16e671f3884cdeb} of version 2.12.0, with one fix to the cage labels.
+The version DOI for that release is \DOIPENDING.
 The fix stores the neighbour membership of the affiliation pass as compressed sparse rows instead of a bit matrix over all pairs of molecules, so that a frame of \num{e6} molecules fits in memory.
-Every measurement used the library and the command-line program of the git tree \texttt{ffd7d964} of the directory \texttt{src}, the tree that \texttt{git rev-parse HEAD:src} prints in a checkout of these sources.
+Every measurement used the library and the command-line program of the git tree \texttt{ffd7d964} of the directory \texttt{src}.
+That is the tree \texttt{git rev-parse HEAD:src} prints in a checkout of the public commit above.
+The workflow is the shell listings of Section~\ref{sec:s-repro}, run from the repository root.
 The drivers of the version comparison and of the OVITO ring campaign come from the tree \texttt{95d29350} of the directory \texttt{tests}, and the driver of the update sweep from the blob \texttt{dfc526f1} of \texttt{tests/bench\_churn\_sweep.cpp}.
 The SHA-256 sums of all binaries are stored with the records.
 The comparator campaign records the commit and the tree of its own build, whose \texttt{src} tree is the same; its benchmark driver has every mode that the campaign calls, and its build files carry the version string 2.13.0.
@@ -707,6 +709,48 @@ Confined & \num{10000} & d-SEAMS & \kfour{confined@1e4@dseams-rings} \\
  & & cycless & \kfour{confined@1e4@genice-rings} \\
 \bottomrule
 \end{tabular}
+\end{table}
+
+\section{One-thread ring and neighbour records}
+\label{sec:s-ring-perf}
+
+The records in \texttt{paper/tex/figures/data/ring-perf} are the r8.12 head-to-head samples.
+Each printed median is the type 7 median of six calls, and each bracket is the type 7 first and third quartiles, from \texttt{paper/tex/figures/ring\_perf\_type7.py}.
+The hardware line of that record is \texttt{uname -m} \texttt{x86\_64}, \texttt{nproc} 8, CPU model \texttt{Intel Xeon Processor}.
+The ring table is one thread of d-SEAMS against OVITO.
+On 4096, 110592 and 136000 molecules the OVITO quartile bracket lies below the d-SEAMS bracket.
+On 136 molecules the brackets overlap.
+Cells marked p are projected from the link-cell fit and were not timed.
+A blank cell was not part of the measured record.
+
+\begin{table}[tbp]
+\centering
+\caption{\textbf{One-thread primitive-ring stage, six calls, type 7 median and quartiles, in milliseconds.}
+The ring counts of the four frames are 8192, 200, 221184 and 160000.}
+\label{tab:s-ring-perf}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{@{}lrl@{\hspace{1.2em}}l@{}}
+\toprule
+Frame & Molecules & d-SEAMS & OVITO \\
+\midrule
+\tabbody{figures/data/tab-ring-perf}
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\caption{\textbf{One-thread cutoff neighbour list, six calls, type 7 median and quartiles, in milliseconds.}
+A superscript p marks a projected link-cell cell, which was not timed.}
+\label{tab:s-neigh-perf}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{@{}lrl@{\hspace{0.8em}}l@{\hspace{0.8em}}l@{\hspace{0.8em}}l@{\hspace{0.8em}}l@{}}
+\toprule
+Frame & Molecules & d-SEAMS & freud AABB & freud link cell & OVITO & scipy \\
+\midrule
+\tabbody{figures/data/tab-neigh-perf}
+\bottomrule
+\end{tabular}}
 \end{table}
 
 \section{Reproduction}
