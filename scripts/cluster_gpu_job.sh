@@ -7,10 +7,10 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:2
 #SBATCH --time=02:00:00
-#SBATCH --output=offload-elja-%j.out
+#SBATCH --output=offload-cluster-%j.out
 #
 # OpenMP target offload build, Catch2 suite, and nsys profile on an
-# Elja A100 node. Not the host-only pixi environment. Slurm copies
+# A100 node of the cluster. Not the host-only pixi environment. Slurm copies
 # the batch script into the spool, so BASH_SOURCE is not the repo
 # path; SLURM_SUBMIT_DIR is.
 #
@@ -45,11 +45,11 @@ export NVHPC_CUDA_HOME=$NVHPC_ROOT/cuda/12.2
 
 ROOT=${SLURM_SUBMIT_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}
 JOB_ID=${SLURM_JOB_ID:-manual}
-OUT=${OUT_DIR:-$ROOT/offload-elja-$JOB_ID}
+OUT=${OUT_DIR:-$ROOT/offload-cluster-$JOB_ID}
 BUILD=$OUT/build
 mkdir -p "$OUT"
 cd "$ROOT"
-INC=${SEAMS_INC:-$ROOT/elja-sysroot/usr/include}
+INC=${SEAMS_INC:-$ROOT/cluster-sysroot/usr/include}
 GCC_LIB=$GCCCORE/lib/gcc/x86_64-pc-linux-gnu/13.3.0
 
 # Keep the vendor CUDA include list. OpenHPC 22.3 still names the
@@ -110,9 +110,9 @@ apply_nvhpc() {
 apply_nvhpc "$NVHPC_23" 12.2
 
 # GPU nodes have no glibc-devel. Login-node C runtime objects live
-# in elja-crt/ (copied before submit). gcc and clang find crt1.o
+# in cluster-crt/ (copied before submit). gcc and clang find crt1.o
 # via LIBRARY_PATH.
-CRT=${SEAMS_CRT:-$ROOT/elja-crt}
+CRT=${SEAMS_CRT:-$ROOT/cluster-crt}
 if [[ ! -f $CRT/crt1.o || ! -f $CRT/crti.o || ! -f $CRT/crtn.o ]]; then
   echo "missing C runtime objects in $CRT (copy crt1.o crti.o crtn.o Scrt1.o from a login /usr/lib64)" >&2
   exit 1
@@ -140,8 +140,8 @@ for pair in libpthread.so:libpthread.so.0 libdl.so:libdl.so.2 librt.so:librt.so.
 done
 export LIBRARY_PATH=$CRT:/lib64${LIBRARY_PATH:+:$LIBRARY_PATH}
 # GPU nodes have no glibc-devel headers. Login /usr/include is
-# copied to elja-sysroot/usr/include before submit.
-INC=${SEAMS_INC:-$ROOT/elja-sysroot/usr/include}
+# copied to cluster-sysroot/usr/include before submit.
+INC=${SEAMS_INC:-$ROOT/cluster-sysroot/usr/include}
 if [[ ! -f $INC/features.h ]]; then
   echo "missing $INC/features.h (rsync /usr/include from a login node)" >&2
   exit 1
