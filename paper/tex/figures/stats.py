@@ -2,7 +2,9 @@
 
 Reads paper/tex/figures/data/ and writes data/macros.tex, the table bodies
 data/tab-*.tex and the plot tables data/plot-*.dat. The fallback thresholds
-come from their defaults in src/. Standard library only.
+come from their defaults in src/, and the settings of the measurements from
+the named constants of the scripts and drivers that use them, which must
+agree with each other and with the records. Standard library only.
 
 Medians carry exact binomial order-statistic intervals at 95% coverage and
 quartiles interpolated linearly between order statistics. Ratios of medians
@@ -12,6 +14,7 @@ the convention of the head-to-head campaign.
 Usage: python3 stats.py [DATA_DIR]
 """
 
+import ast
 import csv
 import decimal
 import json
@@ -65,6 +68,74 @@ WORDS = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
          "nine", "ten")
 # The captions of these figures give the fewest calls behind one of their marks.
 CALL_FIGURES = ("versions", "codes")
+
+# Every setting that the text prints, with each file that sets it and the
+# pattern of the setting in that file. The files must agree, and the text
+# prints a setting only through its macro set@NAME. A third entry rounds the
+# printed setting to that many significant figures.
+CUTOFF_SOURCES = (
+    ("scripts/h2h_campaign.py", r"^CUTOFF_A = ([0-9.]+)$"),
+    ("paper/tex/figures/worked_example.py", r"^CUTOFF_A = ([0-9.]+)$"),
+    ("paper/tex/figures/nucleation_churn.py", r"^CUTOFF_A = ([0-9.]+)$"),
+    ("paper/tex/repro/updates.sh", r"^CUTOFF=([0-9.]+)$"),
+    ("tests/bench_paper.cpp", r"neighListO\(([0-9.]+),"),
+    ("tests/bench_churn_sweep.cpp", r"std::atof\(argv\[4\]\) : ([0-9.]+);"),
+    ("scripts/baseline_dseams1.cpp", r"neighListO\(([0-9.]+),"),
+)
+CAMPAIGN = "scripts/h2h_campaign.py"
+CAMPAIGN_SH = "paper/tex/repro/campaign.sh"
+VERSIONS_SH = "paper/tex/repro/versions.sh"
+UPDATES_SH = "paper/tex/repro/updates.sh"
+STATS = "paper/tex/figures/stats.py"
+SETTINGS = (
+    ("cutoff", CUTOFF_SOURCES),
+    ("height", (("src/topo_one_dim.cpp", r"double avgPrismHeight = ([0-9.]+);"),
+                ("paper/tex/figures/worked_example.py",
+                 r"^PRISM_HEIGHT_A = ([0-9.]+)$"))),
+    ("bond", ((CAMPAIGN, r"^BOND_A = ([0-9.]+)$"),
+              ("paper/tex/figures/worked_example.py", r"^BOND_A = ([0-9.]+)$"))),
+    ("q6", ((CAMPAIGN, r"^Q6_THRESHOLD = ([0-9.]+)$"),), 3),
+    ("ptm", ((CAMPAIGN, r"^PTM_RMSD = ([0-9.]+)$"),)),
+    ("coverage", ((CAMPAIGN, r"^COVERAGE = ([0-9.]+)$"),
+                  (STATS, r"^COVERAGE = ([0-9.]+)$"))),
+    ("draws", ((CAMPAIGN, r"^BOOTSTRAP_DRAWS = (\d+)$"),
+               (STATS, r"^DRAWS = (\d+)$"))),
+    ("seed", ((CAMPAIGN, r"^BOOTSTRAP_SEED = (\d+)$"),
+              (STATS, r"^SEED = (\d+)$"))),
+    ("significance", ((CAMPAIGN, r"^SIGNIFICANCE = ([0-9.]+)$"),)),
+    ("palmer", ((CAMPAIGN, r"^PALMER_MAX_NEIGHBOURS = (\d+)$"),)),
+    ("minring", ((CAMPAIGN, r"^MIN_RING = (\d+)$"),
+                 ("paper/tex/figures/worked_example.py", r"^MIN_RING = (\d+)$"))),
+    ("maxring", ((CAMPAIGN, r"^MAX_RING = (\d+)$"),
+                 ("paper/tex/figures/worked_example.py", r"^MAX_RING = (\d+)$"),
+                 ("tests/bench_paper.cpp",
+                  r"last = primitive::ringNetwork\(indexed, (\d+)\);"))),
+    ("core", (("paper/tex/repro/build.sh", r"^CORE=(\d+)$"),
+              (CAMPAIGN, r'"H2H_CORE", "(\d+)"'))),
+    ("memory", ((CAMPAIGN, r"^WORKER_MEMORY_GIB = (\d+)$"),)),
+    ("warmup", ((CAMPAIGN, r'"H2H_WARMUP", "(\d+)"'),)),
+    ("repeats", ((CAMPAIGN, r'"H2H_REPEATS", "(\d+)"'),
+                 (CAMPAIGN_SH, r"^REPEATS=(\d+)$"))),
+    ("repeats@largest", ((CAMPAIGN_SH, r"^REPEATS_LARGEST=(\d+)$"),)),
+    ("target", ((CAMPAIGN, r"^EXPENSIVE_TARGET_S = ([0-9.]+)$"),)),
+    ("minrepeats", ((CAMPAIGN, r"^EXPENSIVE_MIN_REPEATS = (\d+)$"),)),
+    ("timeout", ((CAMPAIGN_SH, r"^CASE_TIMEOUT_S=(\d+)$"),)),
+    ("ringtimeout", ((CAMPAIGN_SH, r"^RING_CASE_TIMEOUT_S=(\d+)$"),)),
+    ("rings@warmup", ((CAMPAIGN, r"^RINGS_WARMUP = (\d+)$"),)),
+    ("rings@repeats", ((CAMPAIGN, r"^RINGS_REPEATS = (\d+)$"),)),
+    ("runtimeout", ((CAMPAIGN_SH, r"^RINGS_RUN_TIMEOUT_S=(\d+)$"),)),
+    ("v@warmup", ((VERSIONS_SH, r"^WARMUP=(\d+)$"),)),
+    ("v@repeats", ((VERSIONS_SH, r"^REPEATS=(\d+)$"),)),
+    ("cellsites", ((VERSIONS_SH, r"^SITES_PER_CELL=(\d+)$"),)),
+    ("sweep@a", ((UPDATES_SH, r"^FRAME_A=(\d+)$"),)),
+    ("sweep@b", ((UPDATES_SH, r"^FRAME_B=(\d+)$"),)),
+    ("sweep@calls", ((UPDATES_SH, r"^CALLS=(\d+)$"),)),
+    ("n@first", ((UPDATES_SH, r"^FIRST=(\d+)$"),)),
+    ("n@last", ((UPDATES_SH, r"^LAST=(\d+)$"),)),
+    ("n@warmup", ((UPDATES_SH, r"^WARMUP=(\d+)$"),)),
+    ("n@runs", ((UPDATES_SH, r"^RUNS=(\d+)$"),)),
+)
+SET = {}
 
 macros = []
 # The calls behind each mark of a plot file, in the order of its rows.
@@ -248,12 +319,18 @@ def versions():
                     for p in DATA.glob("dseams2-ic-*.txt"))
     sizes1 = sorted(int(p.stem.split("-")[-1])
                     for p in DATA.glob("dseams1-ic-*.txt"))
+    if sizes2 != SET["ladder"] or sorted(SET["v1"]) != sizes1:
+        raise SystemExit(f"the ladder records differ from versions.sh: {sizes2} {sizes1}")
     samples = {}
     for tag, sizes in (("one", sizes1), ("two", sizes2)):
         version = "dseams1" if tag == "one" else "dseams2"
         for n in sizes:
             cols, rows = read_samples([DATA / f"{version}-ic-{n}.txt"])
             assert cols == ["ring_ms", "hc_ms", "ddc_ms", "path_ms"], cols
+            calls = SET["v1"][n][1] if tag == "one" else int(SET["v@repeats"])
+            if len(rows) != calls:
+                raise SystemExit(f"{version} at {n}: {len(rows)} calls, versions.sh "
+                                 f"sets {calls}")
             samples[(tag, n)] = rows
             counts = read_counts(DATA / f"{version}-ic-{n}.err")
             for key, value in counts.items():
@@ -314,6 +391,8 @@ def versions():
     for key, value in counts.items():
         define(f"v@mw@count@{key}", f"\\num{{{value}}}")
     b = [r[PATH] for r in rows]
+    if len(b) != int(SET["v@repeats"]):
+        raise SystemExit(f"dseams2 on the mW crystal: {len(b)} calls")
     atoms = next(line.split()[1] for line in mw.read_text().splitlines()
                  if line.startswith("atoms "))
     if int(counts["six_rings"]) != SIX_RINGS_PER_MOLECULE * int(atoms):
@@ -432,8 +511,17 @@ def churn():
     meta = lines[0].split()
     reps = int(meta[meta.index("reps") + 1])
     nop = int(meta[meta.index("nop") + 1])
+    frames = [int(f) for f in meta[meta.index("frames") + 1].split("->")]
+    cutoff = decimal.Decimal(meta[meta.index("cutoff") + 1])
+    if (frames != [int(SET["sweep@a"]), int(SET["sweep@b"])] or cutoff != SET["cutoff"]
+            or reps != int(SET["sweep@calls"])):
+        raise SystemExit(f"the sweep record differs from updates.sh: {lines[0]}")
     define("c@reps", str(reps))
     define("c@nop", str(nop))
+    # The first row keeps frame A and the last moves every molecule; the text
+    # lists the radii in between.
+    radii = [row["radius"] for row in rows[1:-1]]
+    define("set@radii", f"\\qtylist{{{';'.join(radii)}}}{{\\angstrom}}")
     for row in rows:
         for key in CHURN_TIMES:
             xs = calls[(row["radius"], key)]
@@ -749,6 +837,8 @@ def nucleation():
                 rows.append(fields)
         labels[graph] = rows
     frames = len(labels["cutoff"])
+    if frames != int(SET["n@last"]) - int(SET["n@first"]) + 1:
+        raise SystemExit(f"the nucleation runs read {frames} frames")
     define("n@frames", str(frames))
     define("n@sites", f"\\num{{{labels['cutoff'][0]['nop']}}}")
     out = ["frame cut_hex cut_cubic cut_both seed_hex seed_cubic seed_both"]
@@ -815,6 +905,8 @@ def nucleation():
             times.setdefault((parts[0], parts[1]), []).append(float(parts[3]))
     rng = random.Random(SEED)
     for (graph, mode), xs in times.items():
+        if len(xs) != int(SET["n@runs"]):
+            raise SystemExit(f"nucleation {graph} {mode}: {len(xs)} timed runs")
         define_median(f"n@{graph}@{mode}", xs)
         define(f"n@{graph}@{mode}@frame", sig(median(xs) / frames))
         q1, q3 = quartiles(xs)
@@ -861,6 +953,8 @@ def ovito_rings():
     for row in rows:
         system, scale, method = row["system"], row["scale"], row["method"]
         xs = [float(x) for x in row["samples_ms"].split(",")]
+        if len(xs) != SET["o"][scale][1]:
+            raise SystemExit(f"{method} on {system} {scale}: {len(xs)} timed calls")
         samples[(system, scale, method)] = xs
         census.setdefault((system, scale), set()).add(row["rings_3_to_6"])
         define(f"o@{system}@{scale}@sites", f"\\num{{{row['molecules']}}}")
@@ -1091,6 +1185,60 @@ def read_setting(name, sources):
     return found.pop()
 
 
+def settings():
+    """The settings of the measurements, from the files that set them."""
+    for name, sources, *figures in SETTINGS:
+        value = read_setting(name, sources)
+        SET[name] = value
+        define(f"set@{name}", sig(float(value), *figures) if figures
+               else f"{value.normalize():f}")
+    for name in ("coverage", "significance"):
+        define(f"set@{name}@pct", f"{(100 * SET[name]).normalize():f}")
+    for name in ("minring", "maxring", "n@warmup", "n@runs"):
+        define(f"set@{name}@word", word(SET[name]))
+    if (int(SET["minring"]), int(SET["maxring"])) != (MIN_RING, MAX_RING):
+        raise SystemExit("the ring columns of the records differ from the scripts")
+    worked = (ROOT / "paper/tex/figures/worked_example.py").read_text()
+    prisms = re.search(r"^PRISM_SIZES = \(([^)]*)\)$", worked, re.M).group(1)
+    if tuple(int(p) for p in prisms.split(",")) != PRISM_SIZES:
+        raise SystemExit("the prism columns of the records differ from worked_example.py")
+    # matscipy's compiled ring search takes an exclusive bound on the members.
+    if "maxlength=MAX_RING + 1" not in (ROOT / CAMPAIGN).read_text():
+        raise SystemExit("matscipy no longer counts the rings up to MAX_RING")
+    define("set@maxlength", str(int(SET["maxring"]) + 1))
+    shell = (ROOT / VERSIONS_SH).read_text()
+    cells = [int(m) for m in re.search(r'^CELLS="([^"]+)"$', shell, re.M).group(1).split()]
+    if cells != list(range(cells[0], cells[-1] + 1)):
+        raise SystemExit(f"the text gives a run of consecutive ladder cells: {cells}")
+    SET["ladder"] = [int(SET["cellsites"]) * m ** 3 for m in cells]
+    define("set@cells@first", str(cells[0]))
+    define("set@cells@last", str(cells[-1]))
+    define("set@ladder@first", str(SET["ladder"][0]))
+    define("set@ladder@last", str(SET["ladder"][-1]))
+    SET["v1"] = {}
+    for spec in re.search(r'^SPECS="([^"]+)"$', shell, re.M).group(1).split():
+        n, warmup, repeats = map(int, spec.split(":"))
+        SET["v1"][n] = (warmup, repeats)
+        define(f"set@v1@{n}@warmup", str(warmup))
+        define(f"set@v1@{n}@repeats", str(repeats))
+    # The text gives the calls of the two largest frames of d-SEAMS 1 once.
+    below, top = sorted(SET["v1"])[-2:]
+    if SET["v1"][below] != SET["v1"][top]:
+        raise SystemExit("the two largest frames of d-SEAMS 1 ran different calls")
+    ovito = (ROOT / "scripts/h2h_ovito_rings.py").read_text()
+    plan = ast.literal_eval(re.search(r"^PLAN = (\{.*\})$", ovito, re.M).group(1))
+    SET["o"] = plan
+    largest = max(plan, key=float)
+    smaller = {calls for scale, calls in plan.items() if scale != largest}
+    if len(smaller) != 1:
+        raise SystemExit(f"the OVITO ring campaign varies its calls below {largest}")
+    (warmup, repeats), = smaller
+    define("set@o@warmup", str(warmup))
+    define("set@o@repeats", str(repeats))
+    define("set@o@warmup@largest", str(plan[largest][0]))
+    define("set@o@repeats@largest", str(plan[largest][1]))
+
+
 def hardware():
     """The machine records of the timings must name the same processor."""
     fields = []
@@ -1160,6 +1308,7 @@ def figure_calls():
 
 
 def main():
+    settings()
     versions()
     churn()
     h2h()
