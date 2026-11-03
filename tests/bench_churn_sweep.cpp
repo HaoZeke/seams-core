@@ -42,6 +42,11 @@ using Clock = std::chrono::steady_clock;
 using Rings = std::vector<std::vector<int>>;
 using Cloud = molSys::PointCloud<molSys::Point<double>, double>;
 
+// The last radius of the sweep reaches past every box, so that every molecule
+// takes its frame-B position. Its rows print kWholeFrameRow as the radius.
+constexpr double kWholeFrame = 1e9;
+constexpr double kWholeFrameRow = -1.0;
+
 double ms(Clock::time_point a, Clock::time_point b) {
   return std::chrono::duration<double, std::milli>(b - a).count();
 }
@@ -114,7 +119,7 @@ int main(int argc, char **argv) {
               "affilInc_ms ringsEqual affilEqual\n");
   std::printf("# calls radius timing, then every repetition in ms\n");
 
-  const double radii[] = {0, 3, 5, 7, 9, 11, 13, 15, 18, 21, 25, 1e9};
+  const double radii[] = {0, 3, 5, 7, 9, 11, 13, 15, 18, 21, 25, kWholeFrame};
   bool allEqual = true;
   for (const double radius : radii) {
     Cloud c = a;
@@ -206,17 +211,19 @@ int main(int argc, char **argv) {
     }
     allEqual = allEqual && ringsEqual && affEqual;
     std::printf("%g %d %d %d %zu %d %d %.3f %.3f %.3f %.3f %s %s\n",
-                radius >= 1e9 ? -1.0 : radius, moved, changedAtoms, churn,
-                sixC.size(), ringRecomp, affReclass, median(tRingBatch),
-                median(tRingInc), median(tAffBatch), median(tAffInc),
-                ringsEqual ? "yes" : "NO", affEqual ? "yes" : "NO");
+                radius >= kWholeFrame ? kWholeFrameRow : radius, moved,
+                changedAtoms, churn, sixC.size(), ringRecomp, affReclass,
+                median(tRingBatch), median(tRingInc), median(tAffBatch),
+                median(tAffInc), ringsEqual ? "yes" : "NO",
+                affEqual ? "yes" : "NO");
     const std::pair<const char *, const std::vector<double> *> series[] = {
         {"ringBatch_ms", &tRingBatch},
         {"ringInc_ms", &tRingInc},
         {"affilBatch_ms", &tAffBatch},
         {"affilInc_ms", &tAffInc}};
     for (const auto &[name, times] : series) {
-      std::printf("calls %g %s", radius >= 1e9 ? -1.0 : radius, name);
+      std::printf("calls %g %s",
+                  radius >= kWholeFrame ? kWholeFrameRow : radius, name);
       for (const double t : *times) {
         std::printf(" %.4f", t);
       }
