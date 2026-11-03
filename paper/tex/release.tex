@@ -1,20 +1,13 @@
-% The seams-core release that the paper cites and that the program files
-% hold: the main-branch commit it is built on, its source tree and
-% program-files archive, and the Zenodo concept DOI of the seams-core
-% GitHub releases with its latest version. No commit holds the tree of the
-% release; it is the base commit with the ten patches of the program files.
-% Set the version DOI in \seamscoredoi once a release with that tree is
-% archived. The reproducibility package is cited at its commit
-% (\reprocommit, tag v2.7.0). The 31 October records used the first
-% revision of the package patch, sha256 0e53bc8e, tree 5dde84a5.
-% The revision cited here, sha256 f1721ac7, tree 5722048b, adds the
-% PTM cutoff 0.1 and scripts/ptm_cutoff_sweep.py, fits q6 at the mW
-% coexistence point, reads the dump column header, and writes the freud
-% means with scripts/sota_freud.py. It rewrites the Lechner-Dellago
-% curves of Figure sota with scripts/regen_ld_figure.py.
+% The seams-core release that the paper cites and that the program files hold: the main-branch commit it is built on, its source tree and program-files archive, and the Zenodo concept DOI of the seams-core GitHub releases with its latest version.
+% No commit holds the tree of the release; it is the base commit with the ten patches of the program files.
+% Set the version DOI in \seamscoredoi once a release with that tree is archived.
+% The reproducibility package is cited at its commit (\reprocommit, tag v2.7.0).
+% The 31 October records used the first revision of the package patch, sha256 0e53bc8e, tree 5dde84a5.
+% The revision cited here, sha256 f1721ac7, tree 5722048b, adds the PTM cutoff 0.1 and scripts/ptm_cutoff_sweep.py, fits q6 at the mW coexistence point, reads the dump column header, and writes the freud means with scripts/sota_freud.py.
+% It rewrites the Lechner-Dellago curves of Figure sota with scripts/regen_ld_figure.py.
 % That script takes its sigmas and seeds from the command line.
-% Set \reprodoi once
-% that tree is archived.
+% Set \reprodoi once that tree is archived.
+% snapper:off
 \RequirePackage{seqsplit}
 \newcommand*{\seamscoretag}{v2.12.0}
 \newcommand*{\seamscoretree}{598e964e}
@@ -56,3 +49,9 @@
     latest version \seamscoreconceptlatest%
   \else Zenodo, \expandafter\url\expandafter{\core@doiurl}\fi}
 \makeatother
+% snapper:on
+% The tag of the seams-core release that contains the measured fix to the cage labels.
+% Set it once that release is made; until then both documents print the placeholder.
+% snapper:off
+\newcommand*{\releasetag}{[to be added]}
+% snapper:on
