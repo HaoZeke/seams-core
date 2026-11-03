@@ -55,12 +55,21 @@ struct PackedRows {
  *  sweep per candidate ring.
  */
 struct BoundedBalls {
-  std::vector<std::vector<std::pair<int, int>>> ball;
+  // One packed table for every ball. off[v] is the first pair of vertex v
+  // and off[v + 1] is the end. A vector per vertex was one allocation each.
+  std::vector<int> off;
+  std::vector<std::pair<int, int>> cols;
+
+  void clear() {
+    off.clear();
+    cols.clear();
+  }
 
   template <typename Graph>
-  void fillVertex(int v, const Graph &adjacency, int radius,
+  void appendBall(int v, const Graph &adjacency, int radius,
                   std::vector<int> &dist, std::vector<int> &touched,
-                  std::vector<int> &frontier, std::vector<int> &next) {
+                  std::vector<int> &frontier, std::vector<int> &next,
+                  std::vector<std::pair<int, int>> &out) const {
     const int nVertices = static_cast<int>(adjacency.size());
     for (const int w : touched) {
       dist[w] = -1;
@@ -82,15 +91,13 @@ struct BoundedBalls {
       }
       frontier.swap(next);
     }
-    auto &b = ball[v];
-    b.clear();
-    b.reserve(touched.size());
+    const auto begin = out.size();
     for (const int w : touched) {
       if (w != v) {
-        b.emplace_back(w, dist[w]);
+        out.emplace_back(w, dist[w]);
       }
     }
-    std::sort(b.begin(), b.end());
+    std::sort(out.begin() + static_cast<std::ptrdiff_t>(begin), out.end());
   }
 
   template <typename Graph> void fillAll(const Graph &adjacency, int radius) {
@@ -99,27 +106,10 @@ struct BoundedBalls {
     fillList(adjacency, radius, all);
   }
 
-  // Same sweep as fillList, keeping each ball's buffer when the
-  // vertex count has not changed. A whole-frame refill only.
+  // Same sweep as fillList. clear() keeps the column capacity, so a
+  // later frame of the same size does not allocate the table again.
   template <typename Graph> void refillAll(const Graph &adjacency, int radius) {
-    const int nVertices = static_cast<int>(adjacency.size());
-    if (static_cast<int>(ball.size()) != nVertices) {
-      ball.assign(static_cast<std::size_t>(nVertices), {});
-    }
-    const int nWhich = nVertices;
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel if (nWhich >= 256 && !omp_in_parallel())
-#endif
-    {
-      std::vector<int> dist(nVertices, -1);
-      std::vector<int> touched, frontier, next;
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp for schedule(static)
-#endif
-      for (int v = 0; v < nWhich; v++) {
-        fillVertex(v, adjacency, radius, dist, touched, frontier, next);
-      }
-    }
+    fillAll(adjacency, radius);
   }
 
   template <typename Graph>
@@ -127,18 +117,95 @@ struct BoundedBalls {
                 const std::vector<int> &which) {
     const int nVertices = static_cast<int>(adjacency.size());
     const int nWhich = static_cast<int>(which.size());
-    ball.assign(nVertices, {});
+    off.assign(static_cast<std::size_t>(nVertices) + 1, 0);
+    cols.clear();
+    if (nWhich == 0) {
+      return;
+    }
+    bool identity = nWhich == nVertices;
+    for (int k = 0; identity && k < nWhich; k++) {
+      identity = which[static_cast<std::size_t>(k)] == k;
+    }
 #ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel if (nWhich >= 256 && !omp_in_parallel())
+    const bool parallel =
+        nWhich >= 256 && !omp_in_parallel() && omp_get_max_threads() > 1;
+#else
+    const bool parallel = false;
+#endif
+    if (!parallel && identity) {
+      cols.reserve(static_cast<std::size_t>(nVertices) * 16);
+      std::vector<int> dist(nVertices, -1);
+      std::vector<int> touched, frontier, next;
+      for (int v = 0; v < nVertices; v++) {
+        off[static_cast<std::size_t>(v)] = static_cast<int>(cols.size());
+        appendBall(v, adjacency, radius, dist, touched, frontier, next, cols);
+      }
+      off[static_cast<std::size_t>(nVertices)] = static_cast<int>(cols.size());
+      return;
+    }
+
+    struct Bag {
+      std::vector<std::pair<int, int>> raw;
+      std::vector<int> verts;
+      std::vector<int> begins;
+    };
+#ifdef SEAMS_HAS_OPENMP
+    const int nThreads = parallel ? omp_get_max_threads() : 1;
+#else
+    const int nThreads = 1;
+#endif
+    std::vector<Bag> bags(static_cast<std::size_t>(nThreads));
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel if (parallel)
 #endif
     {
+#ifdef SEAMS_HAS_OPENMP
+      const int tid = parallel ? omp_get_thread_num() : 0;
+#else
+      const int tid = 0;
+#endif
+      auto &bag = bags[static_cast<std::size_t>(tid)];
       std::vector<int> dist(nVertices, -1);
       std::vector<int> touched, frontier, next;
 #ifdef SEAMS_HAS_OPENMP
 #pragma omp for schedule(static)
 #endif
       for (int k = 0; k < nWhich; k++) {
-        fillVertex(which[k], adjacency, radius, dist, touched, frontier, next);
+        const int v = which[static_cast<std::size_t>(k)];
+        bag.verts.push_back(v);
+        bag.begins.push_back(static_cast<int>(bag.raw.size()));
+        appendBall(v, adjacency, radius, dist, touched, frontier, next,
+                   bag.raw);
+      }
+    }
+    std::vector<int> counts(static_cast<std::size_t>(nVertices), 0);
+    for (const auto &bag : bags) {
+      for (std::size_t i = 0; i < bag.verts.size(); i++) {
+        const int b = bag.begins[i];
+        const int e = i + 1 < bag.begins.size()
+                          ? bag.begins[i + 1]
+                          : static_cast<int>(bag.raw.size());
+        counts[static_cast<std::size_t>(bag.verts[i])] = e - b;
+      }
+    }
+    for (int v = 0; v < nVertices; v++) {
+      off[static_cast<std::size_t>(v + 1)] =
+          off[static_cast<std::size_t>(v)] +
+          counts[static_cast<std::size_t>(v)];
+    }
+    cols.resize(static_cast<std::size_t>(off[static_cast<std::size_t>(nVertices)]));
+    std::vector<int> cursor(off.begin(), off.end() - 1);
+    for (const auto &bag : bags) {
+      for (std::size_t i = 0; i < bag.verts.size(); i++) {
+        const int v = bag.verts[i];
+        const int b = bag.begins[i];
+        const int e = i + 1 < bag.begins.size()
+                          ? bag.begins[i + 1]
+                          : static_cast<int>(bag.raw.size());
+        const int n = e - b;
+        std::copy(bag.raw.begin() + b, bag.raw.begin() + e,
+                  cols.begin() + cursor[static_cast<std::size_t>(v)]);
+        cursor[static_cast<std::size_t>(v)] += n;
       }
     }
   }
@@ -151,7 +218,7 @@ struct BoundedBalls {
   int refreshNear(const Graph &oldAdj, const Graph &newAdj,
                   const std::vector<int> &changed, int radius) {
     const int nVertices = static_cast<int>(newAdj.size());
-    if (static_cast<int>(ball.size()) != nVertices) {
+    if (static_cast<int>(off.size()) != nVertices + 1) {
       refillAll(newAdj, radius);
       return nVertices;
     }
@@ -190,17 +257,46 @@ struct BoundedBalls {
     }
     std::vector<int> scratchDist(nVertices, -1);
     std::vector<int> touched, fr, nxt;
+    std::vector<std::pair<int, int>> repl;
+    std::vector<int> replAt(static_cast<std::size_t>(nVertices), -1);
+    std::vector<int> replN(static_cast<std::size_t>(nVertices), 0);
     for (const int v : affected) {
-      fillVertex(v, newAdj, radius, scratchDist, touched, fr, nxt);
+      replAt[static_cast<std::size_t>(v)] = static_cast<int>(repl.size());
+      const auto before = repl.size();
+      appendBall(v, newAdj, radius, scratchDist, touched, fr, nxt, repl);
+      replN[static_cast<std::size_t>(v)] =
+          static_cast<int>(repl.size() - before);
     }
+    std::vector<std::pair<int, int>> neu;
+    neu.reserve(cols.size());
+    std::vector<int> newOff(static_cast<std::size_t>(nVertices) + 1, 0);
+    for (int v = 0; v < nVertices; v++) {
+      newOff[static_cast<std::size_t>(v)] = static_cast<int>(neu.size());
+      if (replAt[static_cast<std::size_t>(v)] >= 0) {
+        const int b = replAt[static_cast<std::size_t>(v)];
+        const int n = replN[static_cast<std::size_t>(v)];
+        neu.insert(neu.end(), repl.begin() + b, repl.begin() + b + n);
+      } else {
+        neu.insert(neu.end(),
+                   cols.begin() + off[static_cast<std::size_t>(v)],
+                   cols.begin() + off[static_cast<std::size_t>(v + 1)]);
+      }
+    }
+    newOff[static_cast<std::size_t>(nVertices)] = static_cast<int>(neu.size());
+    cols.swap(neu);
+    off.swap(newOff);
     return static_cast<int>(affected.size());
   }
 
   //! Graph distance from v to w when within the radius, else a large sentinel
   int dist(int v, int w) const {
-    const auto &b = ball[v];
-    auto it = std::lower_bound(b.begin(), b.end(), std::make_pair(w, 0));
-    if (it != b.end() && it->first == w) {
+    if (off.empty() || v < 0 || v + 1 >= static_cast<int>(off.size())) {
+      return 1 << 20;
+    }
+    const auto b = cols.begin() + off[static_cast<std::size_t>(v)];
+    const auto e = cols.begin() + off[static_cast<std::size_t>(v + 1)];
+    const auto it = std::lower_bound(b, e, std::make_pair(w, 0));
+    if (it != e && it->first == w) {
       return it->second;
     }
     return 1 << 20;
@@ -209,7 +305,7 @@ struct BoundedBalls {
 
 //! Bounded breadth-first levels from src, scratch reused across sources
 template <typename Graph>
-void levelsFrom(const Graph &adjacency, int src, int maxLvl,
+void levelsFrom(const Graph &adjacency, int src, int maxLvl, int minVertex,
                 std::vector<int> &lvl, std::vector<int> &touched,
                 std::vector<int> &frontier, std::vector<int> &next) {
   for (const int w : touched) {
@@ -223,7 +319,9 @@ void levelsFrom(const Graph &adjacency, int src, int maxLvl,
     next.clear();
     for (const int u : frontier) {
       for (const int w : adjacency[u]) {
-        if (w >= 0 && w < static_cast<int>(lvl.size()) && lvl[w] == -1) {
+        // A ring whose lowest member is src never uses a shorter path
+        // through a lower index: that vertex would sit on the ring.
+        if (w >= minVertex && w < static_cast<int>(lvl.size()) && lvl[w] == -1) {
           lvl[w] = depth;
           touched.push_back(w);
           next.push_back(w);
@@ -302,13 +400,16 @@ void shortestPathsFrom(const Graph &adjacency, int src, RingScratch &scr) {
       if (w < 0 || w >= nVertices || scr.lvl[w] != lv - 1) {
         continue;
       }
+      const int plen = lv - 1;
       for (int k = 0; k < scr.pathCount[w]; k++) {
-        const int from = scr.pathFirst[w] + k * (lv - 1);
-        for (int j = 0; j < lv - 1; j++) {
-          const int u = scr.pathBuf[from + j];
-          scr.pathBuf.push_back(u);
+        const int from = scr.pathFirst[w] + k * plen;
+        const int dest = static_cast<int>(scr.pathBuf.size());
+        scr.pathBuf.resize(scr.pathBuf.size() + static_cast<std::size_t>(lv));
+        if (plen > 0) {
+          std::copy_n(scr.pathBuf.begin() + from, plen,
+                      scr.pathBuf.begin() + dest);
         }
-        scr.pathBuf.push_back(v);
+        scr.pathBuf[static_cast<std::size_t>(dest + plen)] = v;
         count++;
       }
     }
@@ -362,8 +463,12 @@ void enumerateFromSource(const Graph &adjacency, const BoundedBalls &balls,
     scr.lvl.assign(nVertices, -1);
     scr.touched.clear();
   }
-  levelsFrom(adjacency, src, maxLvl, scr.lvl, scr.touched, scr.frontier,
-             scr.next);
+  // Full search enumerates each ring from its lowest member, so the
+  // breadth-first walk stays at indices >= src. The updater passes a
+  // through-mask and must still see every neighbour.
+  const int minVertex = through == nullptr ? src : 0;
+  levelsFrom(adjacency, src, maxLvl, minVertex, scr.lvl, scr.touched,
+             scr.frontier, scr.next);
   // Directing: only the lowest-indexed member of a ring enumerates it, so
   // vertices below the source leave the level field entirely. Only touched
   // vertices hold a level.
@@ -619,11 +724,8 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
                   rings.begin() + static_cast<std::ptrdiff_t>(offset[k]));
         std::vector<std::vector<int>>().swap(perSource[k]);
       }
-#pragma omp for schedule(static)
-      for (int v = 0; v < nVertices; v++) {
-        std::vector<std::pair<int, int>>().swap(balls.ball[v]);
-      }
     }
+    balls.clear();
     return rings;
   }
 #endif
