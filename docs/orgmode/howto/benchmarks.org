@@ -13,11 +13,49 @@ The drivers that exist today:
 | =tests/bench_churn_sweep= | incremental affiliation against a full pass |
 | =tests/bench_trajectory_incremental= | a trajectory update |
 | =tests/bench_gpu_batch= | a device-resident batch, when the build has one |
+| =tests/bench_paper= | repeated kernels of CHILL+ (the ice classifier of Nguyen and Molinero), \(q_6\), seeded cages and rings |
 
 Build with tests and run the binary.
 Record the host, the compiler, the commit, and whether =SEAMS_OFFLOAD= was set.
 A host-only build takes the host branch of the device code.
 Say so.
+
+=scripts/h2h_campaign.py= writes the shared oxygen frames of the four systems and runs each comparator in its own process on one pinned core.
+It keeps every timing sample.
+Its =summarize= command reports distribution-free intervals of the medians and the confusion matrices of the labels.
+It also runs Mann-Whitney and Fisher tests.
+The =rings= command times whole processes of d-SEAMS and of Rigorous Investigation of Networks Generated using Simulations (RINGS).
+Keep those rows apart from the ring-kernel rows, which time the rings in memory.
+
+The =case= command runs five warm-up calls and then records 30 calls up to \(10^5\) molecules and ten at \(10^6\).
+The =rings= command records 30 calls at every size.
+The ring codes of matscipy and cycless and the reference library of CHILL+ run one warm-up call.
+They then record as many calls as fit in two minutes, with a floor of six and the ceiling above.
+A case that runs past its time limit records a timeout instead.
+The campaign orders two methods by time only when both do the same work.
+The Open Visualization Tool (OVITO) and pyscal3 also provide local classifiers.
+These are polyhedral template matching and adaptive common neighbour analysis (CNA) in OVITO and a diamond classifier in each code.
+The seeded row of d-SEAMS computes the rings and the cage labels instead.
+Their confusion matrices compare the labels.
+Their timings appear beside those of the cage labels without ranking the codes.
+
+The public =ring_statistics= function of matscipy 1.3.1 runs the ring kernel twice.
+Its row is kept apart from the row that calls the compiled routines once.
+The GenIce row calls the pair-list and cycle functions of cycless that the ring formatter of GenIce uses.
+RINGS and the ring driver of d-SEAMS both read the frame and find the primitive rings of up to six members in the whole-process rows.
+
+The cage row at a million molecules uses the sparse table of neighbour membership in =cageAffiliation=.
+The table stores compressed neighbour rows and needs memory in proportion to the atoms plus the bonds.
+An atom-by-atom bit matrix would need memory quadratic in the number of atoms before the cage sweep starts.
+
+#+begin_src bash
+python scripts/h2h_campaign.py prepare \
+  --data campaign-data --liquid LIQUID_DUMP --confined CONFINED_DUMP
+python scripts/h2h_campaign.py case ic 1e3 \
+  --data campaign-data --output campaign-results \
+  --bench BUILD/tests/bench_paper --palmer LIB_CHILL
+python scripts/h2h_campaign.py summarize --output campaign-results
+#+end_src
 
 =pixi run -e repro= is the Snakemake campaign (freud, pyscal3, the paper benches).
 That environment is Linux only.
