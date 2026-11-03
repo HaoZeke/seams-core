@@ -15,7 +15,7 @@ ship a toolkit matching the driver can still use a bundled
 release). clang with libomptarget is the fallback (~-fopenmp
 -fopenmp-targets=nvptx64-nvidia-cuda~).
 
-* Elja A100
+* Cluster A100 nodes
 
 GPU partitions: ~gpu-1xA100~, ~gpu-2xA100~, ~gpu-long~. Account:
 ~chem-ui~. Do not compile on the login node.
@@ -37,20 +37,20 @@ export PKG_CONFIG_PATH=$EB/Eigen/3.4.0-GCCcore-13.3.0/share/pkgconfig:$EB/FlexiB
 export LD_LIBRARY_PATH=$EB/Python/3.12.3-GCCcore-13.3.0/lib:$NVHPC_ROOT/compilers/lib:$NVHPC_ROOT/cuda/12.2/lib64:$NVHPC_ROOT/math_libs/12.2/lib64:$EB/GCCcore/13.3.0/lib64:$EB/FlexiBLAS/3.4.4-GCC-13.3.0/lib:$EB/Z3/4.13.0-GCCcore-13.2.0/lib:$EB/hwloc/2.9.2-GCCcore-13.2.0/lib
 export PYTHONPATH=$EB/Meson/1.4.0-GCCcore-13.3.0/lib/python3.12/site-packages
 # GPU nodes lack glibc-devel. Before sbatch, from a login node:
-#   cp /usr/lib64/crt1.o crti.o crtn.o Scrt1.o elja-crt/
-#   rsync -a /usr/include/ elja-sysroot/usr/include/
-export LIBRARY_PATH=$PWD/elja-crt:/lib64
-export CFLAGS="-B$PWD/elja-crt"
-export CXXFLAGS="-B$PWD/elja-crt"
-export LDFLAGS="-B$PWD/elja-crt -L$PWD/elja-crt -L/lib64 -L$EB/hwloc/2.9.2-GCCcore-13.2.0/lib -lhwloc"
+#   cp /usr/lib64/crt1.o crti.o crtn.o Scrt1.o cluster-crt/
+#   rsync -a /usr/include/ cluster-sysroot/usr/include/
+export LIBRARY_PATH=$PWD/cluster-crt:/lib64
+export CFLAGS="-B$PWD/cluster-crt"
+export CXXFLAGS="-B$PWD/cluster-crt"
+export LDFLAGS="-B$PWD/cluster-crt -L$PWD/cluster-crt -L/lib64 -L$EB/hwloc/2.9.2-GCCcore-13.2.0/lib -lhwloc"
 
 # nvc++ 23.7 accepts -mp=gpu against driver 12.2. Meson does not
 # list C++20 for this release, so setup uses -Dcpp_std=none and
 # -std=c++20 (the tree uses concepts).
 export CC=$EB/GCCcore/13.3.0/bin/gcc
 export CXX=nvc++
-export CFLAGS="-idirafter $PWD/elja-sysroot/usr/include"
-export CXXFLAGS="-std=c++20 -idirafter $PWD/elja-sysroot/usr/include"
+export CFLAGS="-idirafter $PWD/cluster-sysroot/usr/include"
+export CXXFLAGS="-std=c++20 -idirafter $PWD/cluster-sysroot/usr/include"
 meson setup build-offload --buildtype=debugoptimized \
   -Dcpp_std=none \
   -Dwith_openmp_offload=enabled \
@@ -105,7 +105,5 @@ and a device is present the TUM kernels run in a target region.
 
 * Profile
 
-~scripts/elja_gpu_job.sh~ is the sbatch body: it configures the
-offload build, runs the test suite, then ~nsys profile~ and
-~nsys stats --force-export=true~. The stats file must be
-non-empty.
+~scripts/cluster_gpu_job.sh~ is the sbatch body: it configures the offload build, runs the test suite, then ~nsys profile~ and ~nsys stats --force-export=true~.
+The stats file must be non-empty.

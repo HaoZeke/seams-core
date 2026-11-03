@@ -128,7 +128,7 @@ the rings of a frame from that frame alone.
 | machine | stack | records |
 |---------+-------+---------|
 | cloud VM, 8 vCPU KVM guest, Intel Xeon (family 6, model 207) | Ubuntu 24.04.5, GCC 13.3.0, Python 3.12.3, NumPy 2.5.4, SciPy 1.18.1 | ~bench-2026-10-31~, ~cli-carry-2026-10-31~, ~h2h-2026-10-31~ and the label records |
-| Elja, dual-socket Intel Xeon Platinum 8358 (32 cores per socket, 2.60 GHz) | conda-forge GCC of the pixi environment | ~paper_manifest-elja-1785712.json~, ~elja-1788072~, ~elja-production~ |
-| Elja, two AMD EPYC 7713 (64 cores per socket) | conda-forge toolchain of the pixi environment, Python 3.12.14 | ~elja-1798666~ |
-| Elja, two A100-PCIE-40GB | CUDA and NVRTC | ~tip-gpu-batch-elja-1787449.txt~ |
+| cluster node, dual-socket Intel Xeon Platinum 8358 (32 cores per socket, 2.60 GHz) | conda-forge GCC of the pixi environment | ~paper_manifest-cluster-cpu-1785712.json~, ~cluster-cpu-1788072~, ~cluster-production~ |
+| cluster node, two AMD EPYC 7713 (64 cores per socket) | conda-forge toolchain of the pixi environment, Python 3.12.14 | ~cluster-cpu-1798666~ |
+| cluster GPU node, two A100-PCIE-40GB | CUDA and NVRTC | ~tip-gpu-batch-cluster-1787449.txt~ |
 | AMD Ryzen 9 9950X workstation, 16 cores, 32 threads | conda-forge GCC, OpenMP on (~terra-2026-09-02~) | ~terra-2026-09-01~, ~terra-2026-09-02~ |

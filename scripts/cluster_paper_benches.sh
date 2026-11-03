@@ -12,7 +12,7 @@
 #               parent)
 #   BASE_SHA    baseline commit (default: merge-base with main is NOT computed
 #               here; the audited baseline is pinned)
-#   OUT_DIR     output directory (default: $SEAMS_ROOT/bench-elja-$SLURM_JOB_ID)
+#   OUT_DIR     output directory (default: $SEAMS_ROOT/bench-cluster-$SLURM_JOB_ID)
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -21,7 +21,7 @@ SEAMS_ROOT=${SEAMS_ROOT:-$(dirname "$SCRIPT_DIR")}
 # 1c8efa38 is a 2026 surrogate and is not the default.
 BASE_SHA=${BASE_SHA:-6e51956f3b9059729f36bcc208f6b6d18c3fec22}
 JOB_ID=${SLURM_JOB_ID:-nojob}
-OUT_DIR=${OUT_DIR:-$SEAMS_ROOT/bench-elja-$JOB_ID}
+OUT_DIR=${OUT_DIR:-$SEAMS_ROOT/bench-cluster-$JOB_ID}
 BASE_TREE=${BASE_TREE:-$SEAMS_ROOT/../seams-base}
 
 # Compute nodes have no git; the prep phase runs on the login node and leaves
@@ -56,7 +56,7 @@ log() { printf '%s %s\n' "$(date +%H:%M:%S)" "$*" | tee -a "$OUT_DIR/driver.log"
 # ---------------------------------------------------------------- conditions
 TIP_SHA=$(cat "$SEAMS_ROOT/.tip_sha" 2>/dev/null || echo unknown)
 if [ ! -d "$BASE_TREE" ]; then
-  log "baseline tree $BASE_TREE missing -- run 'elja_paper_benches.sh prep' on the login node first"
+  log "baseline tree $BASE_TREE missing -- run 'cluster_paper_benches.sh prep' on the login node first"
   exit 1
 fi
 log "tip $TIP_SHA base $BASE_SHA job $JOB_ID node $(hostname)"
@@ -179,5 +179,5 @@ fi
 
 echo "loadavg_at_end: $(cut -d' ' -f1 /proc/loadavg)" >> "$OUT_DIR/conditions.txt"
 log "assembling bench.json"
-python3 "$SCRIPT_DIR/elja_bench_json.py" "$OUT_DIR" > "$OUT_DIR/bench.json"
+python3 "$SCRIPT_DIR/cluster_bench_json.py" "$OUT_DIR" > "$OUT_DIR/bench.json"
 log "done: $OUT_DIR/bench.json"

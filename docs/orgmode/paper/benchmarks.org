@@ -15,9 +15,9 @@ machines and the codes.
 
 | record | processor | allocation | engine | read by |
 |--------+-----------+------------+--------+---------|
-| ~elja-1788072~ | 2 x Xeon Platinum 8358 | exclusive ~64cpu_256mem~, load 0.95 | v2.6.0 sources | neighbour-list and ring scaling, cage stages |
-| ~paper_manifest-elja-1785712.json~ | 2 x Xeon Platinum 8358 | ~64cpu_256mem~, load 4.96 | ~13c95cec~ | one frame against d-SEAMS 1 |
-| ~elja-1798666~ | 2 x AMD EPYC 7713 | exclusive ~128cpu_256mem~, load 0.24 | ~e7856408~ | second architecture, \(q_l\) check, walk control |
+| ~cluster-cpu-1788072~ | 2 x Xeon Platinum 8358 | exclusive ~64cpu_256mem~, load 0.95 | v2.6.0 sources | neighbour-list and ring scaling, cage stages |
+| ~paper_manifest-cluster-cpu-1785712.json~ | 2 x Xeon Platinum 8358 | ~64cpu_256mem~, load 4.96 | ~13c95cec~ | one frame against d-SEAMS 1 |
+| ~cluster-cpu-1798666~ | 2 x AMD EPYC 7713 | exclusive ~128cpu_256mem~, load 0.24 | ~e7856408~ | second architecture, \(q_l\) check, walk control |
 | ~terra-2026-09-01~ | Ryzen 9 9950X | shared workstation, load 4.32 | ~770accf9~ | walk and PTM controls |
 | ~sota-heldout-2026-10-31~ | Xeon, 8-vCPU cloud VM | labels only, no timing | v2.12.0 | lattice-label retention |
 | ~md-heldout-2026-10-31~ | Xeon, 8-vCPU cloud VM | labels only, no timing | v2.12.0 | held-out mW trajectories |
@@ -27,20 +27,18 @@ machines and the codes.
 | ~hydrate-inside-2026-10-31~ | Xeon, 8-vCPU cloud VM | labels only | v2.12.0 | ray-parity hydrate occupancy |
 | ~walks-2026-10-31~ | Xeon, 8-vCPU cloud VM | labels only | v2.12.0 | label walks of the applications |
 | ~terra-2026-09-02~ | Ryzen 9 9950X | shared workstation | ~0a7fc546~ | OpenMP strong scaling, GenIce atlas and ions, hydrate occupancy |
-| ~tip-gpu-batch-elja-1787449.txt~ | 2 x A100-PCIE-40GB | ~gpu-2xA100~, load 0.00 | not named in the record | device-resident batch |
-| ~elja-production~ | 2 x Xeon Platinum 8358 | exclusive ~64cpu_256mem~, one job per temperature | v2.9.2 (~d1983d53~) | seeding and brine campaigns |
+| ~tip-gpu-batch-cluster-1787449.txt~ | 2 x A100-PCIE-40GB | ~gpu-2xA100~, load 0.00 | not named in the record | device-resident batch |
+| ~cluster-production~ | 2 x Xeon Platinum 8358 | exclusive ~64cpu_256mem~, one job per temperature | v2.9.2 (~d1983d53~) | seeding and brine campaigns |
 
-Every Elja CPU timing record built the d-SEAMS 1 baseline, seams-core
-commit ~1c8efa38~, next to the engine commit listed. The GPU job built
-only the engine. Load is the one-minute load average when the record
-started, and ~elja-1788072~ gives it before the workflow.
+Every CPU timing record of the cluster built the d-SEAMS 1 baseline, seams-core commit ~1c8efa38~, next to the engine commit listed.
+The GPU job built only the engine.
+Load is the one-minute load average when the record started, and ~cluster-cpu-1788072~ gives it before the workflow.
 
 * One frame against d-SEAMS 1
 
-The 4096-molecule mW cubic frame has 8192 six-rings. Both versions
-assign none of them to a hexagonal cage (HC) and every one to a
-double-diamond cage (DDC). One core, best of five calls per stage,
-record ~paper_manifest-elja-1785712.json~.
+The 4096-molecule mW cubic frame has 8192 six-rings.
+Both versions assign none of them to a hexagonal cage (HC) and every one to a double-diamond cage (DDC).
+One core, best of five calls per stage, record ~paper_manifest-cluster-cpu-1785712.json~.
 
 | stage | d-SEAMS 1 baseline | d-SEAMS 2.0 |
 |-------+--------------------+-------------|
@@ -74,13 +72,10 @@ within 0.2%.
 
 * Neighbour lists, CHILL+ and rings against system size
 
-Single core of exclusive Elja ~64cpu_256mem~, record ~elja-1788072~,
-milliseconds. "base" columns are baseline commit ~1c8efa38~, the
-others engine v2.6.0. Cutoff list and index-ordered builder at
-\(r_c=3.5\) Å; CHILL+ bond correlations (~getCorrelPlus~) on the
-cutoff list; primitive rings with \(D=6\) on the index-ordered list.
-The cells are synthetic cubic cells at the mW number density of
-0.0332 Å^-3 with a deterministic jitter.
+Single core of an exclusive ~64cpu_256mem~ node of the cluster, record ~cluster-cpu-1788072~, milliseconds.
+The "base" columns are baseline commit ~1c8efa38~, the others engine v2.6.0.
+Cutoff list and index-ordered builder at \(r_c=3.5\) Å; CHILL+ bond correlations (~getCorrelPlus~) on the cutoff list; primitive rings with \(D=6\) on the index-ordered list.
+The cells are synthetic cubic cells at the mW number density of 0.0332 Å^-3 with a deterministic jitter.
 
 | n | cutoff, base | cutoff | index, base | index | CHILL+, base | CHILL+ | rings, base | rings |
 |-------+---------+--------+----------+--------+---------+--------+----------+---------|
@@ -117,11 +112,9 @@ rings account for 26 ms of that and the two neighbour lists for 13 ms.
 
 * Second architecture
 
-One core of an AMD EPYC 7713 (Elja ~128cpu_256mem~, load 0.2 at
-start), record ~elja-1798666~, engine commit ~e7856408~. The reference
-column is baseline commit ~1c8efa38~ in the first six rows, the full
-rebuild of the same engine in the two incremental rows, and one thread
-against 32 in the last row. Milliseconds.
+One core of an AMD EPYC 7713 (~128cpu_256mem~ node of the cluster, load 0.2 at start), record ~cluster-cpu-1798666~, engine commit ~e7856408~.
+The reference column is baseline commit ~1c8efa38~ in the first six rows, the full rebuild of the same engine in the two incremental rows, and one thread against 32 in the last row.
+Milliseconds.
 
 | stage | reference | 2.0 | factor |
 |-------+-----------+-----+--------|
@@ -293,11 +286,8 @@ it once, untimed, and it returns the same 16 and 48 cages.
 
 * Steinhardt parameters across codes
 
-The rules ~ql_compare_dseams~ and ~ql_compare_python~ evaluate
-Steinhardt \(q_4\), \(q_6\) and \(q_8\) with the engine, freud and
-pyscal3 on an ideal fcc cell (108 atoms in a 12 Å box, cutoff 3.2 Å)
-and an ideal bcc cell (54 atoms, same box, cutoff 4.0 Å). Record
-~elja-1798666~, files =ql-dseams.txt= and =ql-python.txt=.
+The rules ~ql_compare_dseams~ and ~ql_compare_python~ evaluate Steinhardt \(q_4\), \(q_6\) and \(q_8\) with the engine, freud and pyscal3 on an ideal fcc cell (108 atoms in a 12 Å box, cutoff 3.2 Å) and an ideal bcc cell (54 atoms, same box, cutoff 4.0 Å).
+Record ~cluster-cpu-1798666~, files =ql-dseams.txt= and =ql-python.txt=.
 
 | cell | \(q_4\) | \(q_6\) | \(q_8\) |
 |------+---------+---------+---------|
@@ -308,10 +298,7 @@ The three codes print the same six decimals.
 
 * Device-resident batch
 
-One process of ~bench_gpu_batch~ under ~nsys~ on the eleven stored
-frames of the 4096-molecule mW cubic dump, one NVIDIA
-A100-PCIE-40GB of an Elja ~gpu-2xA100~ node, CUDA 12.2, record
-~tip-gpu-batch-elja-1787449.txt~.
+One process of ~bench_gpu_batch~ under ~nsys~ on the eleven stored frames of the 4096-molecule mW cubic dump, one NVIDIA A100-PCIE-40GB of a ~gpu-2xA100~ node of the cluster, CUDA 12.2, record ~tip-gpu-batch-cluster-1787449.txt~.
 
 | quantity | value |
 |----------+-------|
