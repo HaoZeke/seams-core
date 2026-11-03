@@ -55,7 +55,10 @@ if get_option('with_cli') and get_option('with_tests')
       seams_exe.full_path(),
       seams_lang.full_path(),
     ],
-    env: {'DSEAMS_ROOT': meson.project_source_root()},
+    env: {
+      'DSEAMS_ROOT': meson.project_source_root(),
+      'SEAMS_LANG_LIB': seams_lang.full_path(),
+    },
     depends: [seams_exe, seams_lang],
     timeout: 600,
   )
