@@ -27,9 +27,9 @@ EIGEN_PRE=$EB/Eigen/3.4.0-GCCcore-13.3.0
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 ROOT=${SEAMS_6RAT_ROOT:-$(cd -- "$SCRIPT_DIR/.." && pwd)}
-BUILD=${SEAMS_6RAT_BUILD:-$ROOT/offload-elja/build}
-CRT=${SEAMS_CRT:-$ROOT/elja-crt}
-INC=${SEAMS_INC:-$ROOT/elja-sysroot/usr/include}
+BUILD=${SEAMS_6RAT_BUILD:-$ROOT/offload-cluster/build}
+CRT=${SEAMS_CRT:-$ROOT/cluster-crt}
+INC=${SEAMS_INC:-$ROOT/cluster-sysroot/usr/include}
 IMPLA=${SEAMS_IMPLA:-$ROOT}
 OUTDIR=${SEAMS_OUTDIR:-$ROOT/results/chill_useddevice_${SLURM_JOB_ID:-manual}}
 mkdir -p "$OUTDIR"
