@@ -13,7 +13,8 @@
 ** radius of the box centre take their frame-B positions and the rest keep
 ** their frame-A ones. The updaters alternate between A and the test frame,
 ** so every timed update sees the same change; each time is the median of the
-** repetitions. Every incremental result is checked against the batch one.
+** repetitions, and the calls lines after each row list every repetition.
+** Every incremental result is checked against the batch one.
 **
 ** Usage: bench_churn_sweep TRAJ [frameA] [frameB] [cutoff] [atomType] [reps]
 **                          [ringFullPassFraction] [affilBatchFraction]
@@ -32,6 +33,7 @@
 #include <cstdlib>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -110,6 +112,7 @@ int main(int argc, char **argv) {
   std::printf("# radius moved changedAtoms bondChurn nSix ringRecomp "
               "affilReclass ringBatch_ms ringInc_ms affilBatch_ms "
               "affilInc_ms ringsEqual affilEqual\n");
+  std::printf("# calls radius timing, then every repetition in ms\n");
 
   const double radii[] = {0, 3, 5, 7, 9, 11, 13, 15, 18, 21, 25, 1e9};
   bool allEqual = true;
@@ -207,6 +210,18 @@ int main(int argc, char **argv) {
                 sixC.size(), ringRecomp, affReclass, median(tRingBatch),
                 median(tRingInc), median(tAffBatch), median(tAffInc),
                 ringsEqual ? "yes" : "NO", affEqual ? "yes" : "NO");
+    const std::pair<const char *, const std::vector<double> *> series[] = {
+        {"ringBatch_ms", &tRingBatch},
+        {"ringInc_ms", &tRingInc},
+        {"affilBatch_ms", &tAffBatch},
+        {"affilInc_ms", &tAffInc}};
+    for (const auto &[name, times] : series) {
+      std::printf("calls %g %s", radius >= 1e9 ? -1.0 : radius, name);
+      for (const double t : *times) {
+        std::printf(" %.4f", t);
+      }
+      std::printf("\n");
+    }
   }
   return allEqual ? 0 : 1;
 }
