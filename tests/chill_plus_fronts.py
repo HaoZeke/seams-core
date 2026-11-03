@@ -67,7 +67,8 @@ def cli(seams):
     return out
 
 
-def python():
+def python(lib):
+    os.environ["SEAMS_LANG_LIB"] = lib
     try:
         import pydseams
     except ImportError as exc:
@@ -149,7 +150,7 @@ def main(argv):
 
     results = {"cli": cli(seams)}
     missing = []
-    for name, run in (("python", python), ("r", lambda: r_front(env)),
+    for name, run in (("python", lambda: python(lib)), ("r", lambda: r_front(env)),
                       ("julia", lambda: julia_front(env))):
         try:
             results[name] = run()
