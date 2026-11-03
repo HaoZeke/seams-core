@@ -583,7 +583,14 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
   const int nFrom = static_cast<int>(from.size());
 
 #ifdef SEAMS_HAS_OPENMP
-  if (nFrom >= 256 && !omp_in_parallel()) {
+  // One thread writes straight into the output vector. The parallel
+  // collector gives every source its own ring list, and on one thread
+  // that list of lists costs more than the search. The directing step
+  // clears levels only inside the ball this source touched, so the
+  // search stays linear in the number of vertices.
+  const bool parallelSources = nFrom >= 256 && !omp_in_parallel() &&
+                               omp_get_max_threads() > 1;
+  if (parallelSources) {
     // Sources are independent given the shared read-only balls; per-source
     // collection keeps the output identical to the serial ascending-source
     // order
