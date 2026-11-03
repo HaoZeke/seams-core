@@ -197,6 +197,33 @@ TEST_CASE("ringNetwork matches the generate-then-filter route", "[franzblau]") {
   }
 }
 
+// A directing scan over every vertex below the source is quadratic in the
+// number of molecules. Eight times the molecules must stay well under
+// sixty four times the time.
+TEST_CASE("ring search stays near linear on a larger crystal", "[franzblau]") {
+  auto small = jitteredNetwork(512, 0.05);
+  auto large = jitteredNetwork(4096, 0.05);
+  auto best = [](const std::vector<std::vector<int>> &idx) {
+    double ms = 1.0e300;
+    for (int rep = 0; rep < 3; rep++) {
+      const auto t0 = std::chrono::steady_clock::now();
+      auto rings = primitive::ringNetwork(idx, 6);
+      const auto t1 = std::chrono::steady_clock::now();
+      REQUIRE_FALSE(rings.empty());
+      const double one =
+          std::chrono::duration<double, std::milli>(t1 - t0).count();
+      if (one < ms) {
+        ms = one;
+      }
+    }
+    return ms;
+  };
+  const double tSmall = best(small);
+  const double tLarge = best(large);
+  INFO("small_ms " << tSmall << " large_ms " << tLarge);
+  REQUIRE(tLarge < tSmall * 20.0);
+}
+
 TEST_CASE("ringNetwork lists its rings in canonical sorted order",
           "[franzblau]") {
   // Callers and the incremental updater compare ring lists element by
