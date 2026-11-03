@@ -24,6 +24,7 @@ Say so.
 It keeps every timing sample.
 Its =summarize= command reports distribution-free intervals of the medians and the confusion matrices of the labels.
 It also runs Mann-Whitney and Fisher tests.
+Each timing row gives the first and third quartiles of its samples beside the median.
 The =rings= command times whole processes of d-SEAMS and of Rigorous Investigation of Networks Generated using Simulations (RINGS).
 Keep those rows apart from the ring-kernel rows, which time the rings in memory.
 

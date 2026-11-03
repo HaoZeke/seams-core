@@ -12,7 +12,8 @@ The campaign has four commands:
 ``worker METHOD NPZ RESULT LABELS``
     Internal Python-method worker used by ``case``.
 ``summarize``
-    Write timing intervals, tests, confusion matrices, and completion status.
+    Write timing intervals and quartiles, tests, confusion matrices, and
+    completion status.
 
 The in-memory timed scope includes each code's own neighbour search. Whole
 process ring rows use separate drivers and are never mixed with those rows.
@@ -149,6 +150,8 @@ BOOTSTRAP_DRAWS = 10000
 # medians lies between the INTERVAL_QUANTILES of its bootstrap ratios.
 COVERAGE = 0.95
 INTERVAL_QUANTILES = (0.025, 0.975)
+# The timing rows give the first and third quartiles of the timed calls.
+QUARTILES = (0.25, 0.75)
 # A timing difference needs a Holm-adjusted p-value below SIGNIFICANCE.
 SIGNIFICANCE = 0.05
 # A failed process reports the last STDERR_TAIL characters of its stderr.
@@ -1334,6 +1337,7 @@ def summarize(args: argparse.Namespace) -> int:
     for record in records:
         samples = record["samples_ms"]
         low, high = median_interval(samples)
+        first, third = np.quantile(samples, QUARTILES)
         rows.append(
             {
                 "system": record["system"],
@@ -1345,6 +1349,8 @@ def summarize(args: argparse.Namespace) -> int:
                 "median_ms": statistics.median(samples),
                 "ci95_low_ms": low,
                 "ci95_high_ms": high,
+                "q1_ms": float(first),
+                "q3_ms": float(third),
             }
         )
     comparisons = []
@@ -1563,6 +1569,7 @@ def summarize(args: argparse.Namespace) -> int:
         "errors": errors,
         "statistics": {
             "median_interval": "exact binomial order-statistic, at least 95%",
+            "quartiles": "linear interpolation between order statistics",
             "bootstrap_draws": BOOTSTRAP_DRAWS,
             "bootstrap_seed": BOOTSTRAP_SEED,
             "multiple_testing": "Holm correction over timing comparisons",
@@ -1601,15 +1608,17 @@ def summarize(args: argparse.Namespace) -> int:
         "Medians and exact order-statistic intervals are in milliseconds.",
         "An ordering is reported only for equivalent workloads.",
         "",
-        "| system | scale | molecules | operation | method | n | median | 95% CI |",
-        "|---|---:|---:|---|---|---:|---:|---:|",
+        "| system | scale | molecules | operation | method | n | median | 95% CI "
+        "| Q1-Q3 |",
+        "|---|---:|---:|---|---|---:|---:|---:|---:|",
     ]
     for row in rows:
         markdown.append(
             f"| {row['system']} | {row['scale']} | {row['molecules']} | "
             f"{row['operation']} | {row['method']} | {row['repeats']} | "
             f"{row['median_ms']:.6g} | "
-            f"[{row['ci95_low_ms']:.6g}, {row['ci95_high_ms']:.6g}] |"
+            f"[{row['ci95_low_ms']:.6g}, {row['ci95_high_ms']:.6g}] | "
+            f"{row['q1_ms']:.6g}-{row['q3_ms']:.6g} |"
         )
     markdown.extend(
         [
