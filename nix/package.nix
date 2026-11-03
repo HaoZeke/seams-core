@@ -20,7 +20,7 @@ stdenv.mkDerivation (finalAttrs: {
   # import pathlib
   # cog.outl('  version = "%s";' % pathlib.Path("VERSION").read_text().strip())
   # ]]]
-  version = "2.13.0";
+  version = "2.12.0";
   # [[[end]]]
 
   src = lib.fileset.toSource {
