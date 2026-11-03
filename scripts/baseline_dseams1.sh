@@ -10,7 +10,9 @@
 #   SEAMS_BASELINE worktree of v1.0.1 (default: $SEAMS_ROOT/build/baseline-v1.0.1)
 #   SEAMS_TRAJ     LAMMPS dump (default: $SEAMS_ROOT/input/traj/mW_cubic.lammpstrj)
 #   SEAMS_REPS     repetitions (default: 1)
-#   SEAMS_OUT      JSON path (default: stdout)
+#   SEAMS_WARMUP   unrecorded warm-up calls; when set, print one line per
+#                  retained call instead of the JSON summary
+#   SEAMS_OUT      JSON or sample path (default: stdout)
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -83,6 +85,18 @@ echo "baseline compiler: $CXX" >&2
 "$CXX" -std=c++17 -O2 -I"$TREE/src/include/internal" -I"$TREE/src/include/external" \
   -o "$BUILD/baseline_dseams1" "$SCRIPT_DIR/baseline_dseams1.cpp" "${OBJS[@]}" \
   -L/usr/lib/x86_64-linux-gnu -lgsl -lgslcblas -lm
+
+if [[ -n ${SEAMS_WARMUP:-} ]]; then
+  # One line per retained call, in the columns of `bench_paper ... cages`.
+  if [[ -n ${SEAMS_OUT:-} ]]; then
+    "$BUILD/baseline_dseams1" "$TRAJ" "$FRAME" "$REPS" 1 "$COMMIT" \
+      "$SEAMS_WARMUP" > "$SEAMS_OUT"
+  else
+    "$BUILD/baseline_dseams1" "$TRAJ" "$FRAME" "$REPS" 1 "$COMMIT" \
+      "$SEAMS_WARMUP"
+  fi
+  exit 0
+fi
 
 SHA=$(sha256sum "$TRAJ" | awk '{print $1}')
 JSON=$("$BUILD/baseline_dseams1" "$TRAJ" "$FRAME" "$REPS" 1 "$COMMIT")

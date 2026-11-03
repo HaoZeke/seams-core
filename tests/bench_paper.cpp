@@ -9,6 +9,7 @@
 */
 
 #include <bop.hpp>
+#include <cage.hpp>
 #include <cage_affiliation.hpp>
 #include <cage_enum.hpp>
 #include <franzblau.hpp>
@@ -234,6 +235,59 @@ void runSeeded(const std::string &traj, int frame, int warmup, int reps,
   }
 }
 
+// The stages and graph of scripts/baseline_dseams1.cpp: cutoff graph built
+// once outside the timers, rings through seven, then findHC and findDDC.
+// The ring search index belongs to the cage stage, so it is inside hc_ms.
+void runCages(const std::string &traj, int frame, int warmup, int reps) {
+  auto cloud = load(traj, frame);
+  auto neighbours = nneigh::neighListO(3.5, cloud, 1);
+  auto indexed = nneigh::neighbourListByIndex(cloud, neighbours);
+  std::cout << "mode cages\natoms " << cloud.nop << "\nwarmup " << warmup
+            << "\nreps " << reps << "\ncolumns ring_ms hc_ms ddc_ms path_ms\n";
+  std::vector<std::vector<int>> rings;
+  std::vector<std::vector<int>> six;
+  std::vector<int> listHC;
+  std::vector<int> listDDC;
+  std::vector<cage::Cage> cages;
+  for (int rep = 0; rep < warmup + reps; ++rep) {
+    const auto t0 = std::chrono::steady_clock::now();
+    rings = primitive::ringNetwork(indexed, 7);
+    six.clear();
+    for (const auto &ring : rings) {
+      if (ring.size() == 6) {
+        six.push_back(ring);
+      }
+    }
+    const double ringMs = millisSince(t0);
+    const auto t1 = std::chrono::steady_clock::now();
+    const auto index = ring::buildRingSearchIndex(six, cloud);
+    std::vector<ring::strucType> ringType(six.size(),
+                                          ring::strucType::unclassified);
+    cages.clear();
+    listHC = ring::findHC(six, ringType, indexed, cages, index);
+    const double hcMs = millisSince(t1);
+    const auto t2 = std::chrono::steady_clock::now();
+    listDDC = ring::findDDC(six, ringType, listHC, cages, index);
+    const double ddcMs = millisSince(t2);
+    if (rep >= warmup) {
+      std::cout << ringMs << " " << hcMs << " " << ddcMs << " "
+                << (ringMs + hcMs + ddcMs) << "\n";
+    }
+  }
+  int nHC = 0;
+  int nDDC = 0;
+  for (const auto &cage : cages) {
+    if (cage.type == cage::cageType::HexC) {
+      nHC++;
+    } else if (cage.type == cage::cageType::DoubleDiaC) {
+      nDDC++;
+    }
+  }
+  std::cerr << "rings " << rings.size() << " six_rings " << six.size()
+            << " hc_rings " << listHC.size() << " ddc_rings " << listDDC.size()
+            << " hc_cages " << nHC << " ddc_cages " << nDDC << "\n";
+}
+
 void runCageIds(const std::string &traj, int frame) {
   auto cloud = load(traj, frame);
   auto neighbours = nneigh::neighListO(3.5, cloud, 1);
@@ -265,7 +319,7 @@ void runCageIds(const std::string &traj, int frame) {
 int main(int argc, char **argv) {
   if (argc < 6) {
     std::cerr << "usage: bench_paper traj frame warmup reps "
-                 "chill|q6|q6-full|rings|seeded|seeded-adj|cageids "
+                 "chill|q6|q6-full|rings|seeded|seeded-adj|cages|cageids "
                  "[sidecar]\n";
     return 2;
   }
@@ -288,6 +342,8 @@ int main(int argc, char **argv) {
       runSeeded(traj, frame, warmup, reps, false, 6, sidecar);
     } else if (mode == "seeded-adj") {
       runSeeded(traj, frame, warmup, reps, true, 7, sidecar);
+    } else if (mode == "cages") {
+      runCages(traj, frame, warmup, reps);
     } else if (mode == "cageids") {
       runCageIds(traj, frame);
     } else {
