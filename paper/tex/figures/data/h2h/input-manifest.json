@@ -1,0 +1,241 @@
+{
+  "created": "2026-11-03T01:55:24Z",
+  "liquid_source": {
+    "name": "traj.lammpstrj",
+    "sha256": "d02023892336c43cf409da8ee4b7dee2b8f30f94ee9e76a1c1d1ae99e646ea2b",
+    "frame": 1
+  },
+  "confined_source": {
+    "name": "dump-240-square.lammpstrj",
+    "sha256": "ed256843b474ce06e724f6bb1caeba8e2a9f78b9aa6b5430048fe191e8790d77",
+    "doi": "10.6084/m9.figshare.11448768.v1",
+    "frame": 1,
+    "oxygen_type": 2
+  },
+  "frames": [
+    {
+      "system": "ic",
+      "scale": "1e3",
+      "molecules": 1000,
+      "box_A": [
+        31.75426480542942,
+        31.75426480542942,
+        31.75426480542942
+      ],
+      "npz": "ic-1e3.npz",
+      "trajectory": "ic-1e3.lammpstrj",
+      "npz_sha256": "051d248ca73f8548a99ec21ad871f246bd85e5470ff347232c8be0dd93fa8c16",
+      "trajectory_sha256": "79253e32eeaeb4a8e7b8166fe64e20690108ecbbdbc89ac3f9b392221ca8d4e4"
+    },
+    {
+      "system": "ic",
+      "scale": "1e4",
+      "molecules": 10648,
+      "box_A": [
+        69.85938257194472,
+        69.85938257194472,
+        69.85938257194472
+      ],
+      "npz": "ic-1e4.npz",
+      "trajectory": "ic-1e4.lammpstrj",
+      "npz_sha256": "0df8fde3790e9a3584fbc4c8e7a52bb4bbee7c0434072b7172ba1825c7a9c3e5",
+      "trajectory_sha256": "9659a909456d5c0dcf0637db637320158a9c31af3745d42b575308f494d2cfee"
+    },
+    {
+      "system": "ic",
+      "scale": "1e5",
+      "molecules": 97336,
+      "box_A": [
+        146.06961810497532,
+        146.06961810497532,
+        146.06961810497532
+      ],
+      "npz": "ic-1e5.npz",
+      "trajectory": "ic-1e5.lammpstrj",
+      "npz_sha256": "306e42a59f186f14f38bf68a1c4fe94782ccc13e94101bf1d5fa5f4d78782a94",
+      "trajectory_sha256": "f78f5c1ec05a3edffbc80b9ddc5f43b3eba29aa414f043ae58fb28bfe04d50b0"
+    },
+    {
+      "system": "ic",
+      "scale": "1e6",
+      "molecules": 1000000,
+      "box_A": [
+        317.54264805429415,
+        317.54264805429415,
+        317.54264805429415
+      ],
+      "npz": "ic-1e6.npz",
+      "trajectory": "ic-1e6.lammpstrj",
+      "npz_sha256": "8ceeadc37797dc6c02ba137ad42925f56865def3bb9883259fa1fee03fb694e7",
+      "trajectory_sha256": "c0b879d795405171b6686b65585c3850646a6ec02a606731be9c7b6fa85b0346"
+    },
+    {
+      "system": "ih",
+      "scale": "1e3",
+      "molecules": 1000,
+      "box_A": [
+        22.45365597551247,
+        38.890872965260115,
+        36.66666666666667
+      ],
+      "npz": "ih-1e3.npz",
+      "trajectory": "ih-1e3.lammpstrj",
+      "npz_sha256": "774905c1184c6e6a21cb491f0b52e54e207dae7e420a9fcefc7b0793e5d16c7b",
+      "trajectory_sha256": "a216733afe1584d5e621b06a3ae853b6563b554670000c3ac0f192eef5ea54b4"
+    },
+    {
+      "system": "ih",
+      "scale": "1e4",
+      "molecules": 10648,
+      "box_A": [
+        49.39804314612743,
+        85.55992052357225,
+        80.66666666666667
+      ],
+      "npz": "ih-1e4.npz",
+      "trajectory": "ih-1e4.lammpstrj",
+      "npz_sha256": "603a917ca3ccf3397eb8a402612b15e5b4bfde3158de96e76d275a2fd579ffaa",
+      "trajectory_sha256": "810cd14581fb9ed3618a26339d47c172233c63dd522d405d2f8270ca31bd3325"
+    },
+    {
+      "system": "ih",
+      "scale": "1e5",
+      "molecules": 97336,
+      "box_A": [
+        103.28681748735735,
+        178.89801564019652,
+        168.66666666666669
+      ],
+      "npz": "ih-1e5.npz",
+      "trajectory": "ih-1e5.lammpstrj",
+      "npz_sha256": "b530bd3e0db04f823d4d677abc15dfa471b121dea492ce70e7b51b061812bab6",
+      "trajectory_sha256": "6a7424f0104887820684a35134b655cf0c2b0ce9860fd3bb958d647a76555a51"
+    },
+    {
+      "system": "ih",
+      "scale": "1e6",
+      "molecules": 1000000,
+      "box_A": [
+        224.53655975512467,
+        388.90872965260115,
+        366.6666666666667
+      ],
+      "npz": "ih-1e6.npz",
+      "trajectory": "ih-1e6.lammpstrj",
+      "npz_sha256": "6568944a1d24d5cb8f266a8ea2199dd9af1e1541c2a7e667e4784458d1cdaa83",
+      "trajectory_sha256": "eb72e60d2fa7aba7aca81c7e69a0a99abe03e3b7fdffbadafe74a07bc252f228"
+    },
+    {
+      "system": "liquid",
+      "scale": "1e3",
+      "molecules": 4096,
+      "box_A": [
+        49.62270434822753,
+        49.62270434822753,
+        49.62270434822753
+      ],
+      "npz": "liquid-1e3.npz",
+      "trajectory": "liquid-1e3.lammpstrj",
+      "npz_sha256": "aaf92c93201b4b2376b7da37c173225ecf8dcbf865016c81d94fe05409ee6724",
+      "trajectory_sha256": "a41eec66c831ee277cbd20f17a21540e261fc91cbc691733980d7db933e75440"
+    },
+    {
+      "system": "liquid",
+      "scale": "1e4",
+      "molecules": 32768,
+      "box_A": [
+        99.24540869645506,
+        99.24540869645506,
+        99.24540869645506
+      ],
+      "npz": "liquid-1e4.npz",
+      "trajectory": "liquid-1e4.lammpstrj",
+      "npz_sha256": "6068bba795f403e70ead3bdbfb8e616c6efc50772f536b7e022bebc82b64d2a9",
+      "trajectory_sha256": "10ae1ef7611ed78283fecdc4fc6b86a3cb4acdd0629701a9589e9e92547795b4"
+    },
+    {
+      "system": "liquid",
+      "scale": "1e5",
+      "molecules": 110592,
+      "box_A": [
+        148.8681130446826,
+        148.8681130446826,
+        148.8681130446826
+      ],
+      "npz": "liquid-1e5.npz",
+      "trajectory": "liquid-1e5.lammpstrj",
+      "npz_sha256": "53420136683a40dd96c6116d2400de0fb944c6eec82e209d4a0b97e15b85f3c0",
+      "trajectory_sha256": "76bf0227dc761a4093ce162a9db627ec3d057c66f30da5b24f972145b067d82e"
+    },
+    {
+      "system": "liquid",
+      "scale": "1e6",
+      "molecules": 884736,
+      "box_A": [
+        297.7362260893652,
+        297.7362260893652,
+        297.7362260893652
+      ],
+      "npz": "liquid-1e6.npz",
+      "trajectory": "liquid-1e6.lammpstrj",
+      "npz_sha256": "5a5fffd3cd037fab23d302bf3267d33ba162c78da3e83e0dc88a9ac429eea633",
+      "trajectory_sha256": "dcf6019d3ef5d31effe16d3c8675123c73bc22b4ab06e152bb7e9e51472e2ce0"
+    },
+    {
+      "system": "confined",
+      "scale": "1e3",
+      "molecules": 1000,
+      "box_A": [
+        80.0,
+        80.0,
+        180.20265674635874
+      ],
+      "npz": "confined-1e3.npz",
+      "trajectory": "confined-1e3.lammpstrj",
+      "npz_sha256": "7678f2da78d7143bdad51fe98911c95f553c0cea3a474c136aa667b1e3ad642f",
+      "trajectory_sha256": "7cf6274f9b43ee1c91df2e1a45f2d78b3f6af6748df0cb23c8a9bcb07bcb6ac3"
+    },
+    {
+      "system": "confined",
+      "scale": "1e4",
+      "molecules": 10000,
+      "box_A": [
+        160.0,
+        200.0,
+        360.4053134927175
+      ],
+      "npz": "confined-1e4.npz",
+      "trajectory": "confined-1e4.lammpstrj",
+      "npz_sha256": "009bdbb69b8088f57179706cb58ca7c2f52b1994e28ef5877728db71139f101e",
+      "trajectory_sha256": "8258e4dd829c618aaa57b6b6bfd1dcc4caf7f451122a9927e064827ec9a0620b"
+    },
+    {
+      "system": "confined",
+      "scale": "1e5",
+      "molecules": 100000,
+      "box_A": [
+        400.0,
+        400.0,
+        720.810626985435
+      ],
+      "npz": "confined-1e5.npz",
+      "trajectory": "confined-1e5.lammpstrj",
+      "npz_sha256": "80235949a790db6265375ff78a3cb33082e82d95785f37cd6eeded16058bd139",
+      "trajectory_sha256": "4363a99ff33f9dd4779985e9d40966ecaf4a18b54614a7943fb68986abe62111"
+    },
+    {
+      "system": "confined",
+      "scale": "1e6",
+      "molecules": 1000000,
+      "box_A": [
+        800.0,
+        800.0,
+        1802.0265674635875
+      ],
+      "npz": "confined-1e6.npz",
+      "trajectory": "confined-1e6.lammpstrj",
+      "npz_sha256": "0cf4bc935acba67ac575ae4e6ac96eacb23c27bda6b059ff0649dfbf4fccabc1",
+      "trajectory_sha256": "003b1a285f8f2bbe5691298a5599d6ec2a33e08002ea1dde31858fb2cbdc1359"
+    }
+  ]
+}

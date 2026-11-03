@@ -1,0 +1,17 @@
+2026-11-03T19:04:34Z
+Linux 6.12.94+
+uname -m: x86_64
+nproc: 8
+model name	: Intel(R) Xeon(R) Processor
+cpu family	: 6
+model		: 207
+stepping	: 2
+cpu MHz		: 2400.000
+MemTotal:       49342768 kB
+c++ (GCC) 15.2.0
+ffd7d96460e7b00961378776d230c4701e452c10   (tree of src)
+dfc526f16f51c3c410bf69e954a6f52aea170b2f   (blob of tests/bench_churn_sweep.cpp)
+c3c75050bb7762cf0d3417e2fbab326422f23ea04a64b6f69eaf33334e4d1403  nucleation.lammpstrj
+9080abedd97e989a7e073b021e63a2f8c607d8eacd755dbaf570276c9583cb50  build/tests/bench_churn_sweep
+241f8a4299a5c17a0d43b26587596068ffe8f8202ea57d237b86e43ed8050ff8  build/src/libyodaLib.so
+SWEEP_EXIT=0

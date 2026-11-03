@@ -1,0 +1,28 @@
+2026-11-03T10:05:06Z
+Linux 6.12.94+
+uname -m: x86_64   (added 2026-11-03T19:04Z on the same machine and boot)
+nproc: 8   (added 2026-11-03T19:04Z on the same machine and boot)
+model name	: Intel(R) Xeon(R) Processor
+cpu family	: 6
+model		: 207
+stepping	: 2
+cpu MHz		: 2400.000
+MemTotal:       49342768 kB
+c++ (GCC) 15.2.0
+1acb4e9d929fd0f63ae6d3ec8a4a80ef914fcae4   (HEAD at measurement, a local commit that was rewritten before publication; its trees follow)
+ffd7d96460e7b00961378776d230c4701e452c10   (tree of src at HEAD, the same in the built working tree)
+359cde961324a6b56a0ee22b6b6511cb1b00b8d8   (tree of tests at HEAD; the drivers were built from the working tree, whose tests tree is 95d2935098d87e88067527bab105ef79c251f72a)
+66d854880bb9431abc9eb25d68b0622d94a0160dd03e1ac7d636343d9830485d  input/traj/mW_cubic.lammpstrj
+c3c75050bb7762cf0d3417e2fbab326422f23ea04a64b6f69eaf33334e4d1403  nucleation.lammpstrj
+79253e32eeaeb4a8e7b8166fe64e20690108ecbbdbc89ac3f9b392221ca8d4e4  ladder/ic-1000.lammpstrj
+0f3505afcb8432a0845daee8f75f34be49c73b2a1ec6dd7964b45b4ab21be340  ladder/ic-1728.lammpstrj
+27652f5a1e423a9ad08703fc34349bac8657679934c7bdf26cbc669471f766c8  ladder/ic-216.lammpstrj
+e3ad99ca21a661a4a13e610c355afc718fba4157f192b7a601a8a07568412fde  ladder/ic-2744.lammpstrj
+f8133442c73e17520ed78db32790aa30be0b99d69be39a85e0304273347dcd14  ladder/ic-4096.lammpstrj
+45559e13801b76e677fa00fea2ddaa46270427d743a4cccac97889f42b79ef03  ladder/ic-512.lammpstrj
+1b8cc79deda36cb11e5c871a05dff143977661b9985aad6eeb1da7970cc1f4bf  build/tests/bench_paper
+afa379bc5a239a1311f2dfe7e7736f79f3eeea4a08151f4e4dd36177f54cf358  build/tests/bench_churn_sweep
+d142a18f374de43112d967c8b35491cb35196ac700d4caeb7c9db1d54654db94  build/baseline-v1.0.1/driver-build/baseline_dseams1
+241f8a4299a5c17a0d43b26587596068ffe8f8202ea57d237b86e43ed8050ff8  build/src/libyodaLib.so
+STAGE_FAST_EXIT=0
+MEASURE_EXIT=0
