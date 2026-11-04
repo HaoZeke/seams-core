@@ -53,7 +53,7 @@ def cpu_model():
     with open("/proc/cpuinfo", encoding="utf-8") as handle:
         for line in handle:
             if line.startswith("model name"):
-                return line.split(":", 1)[1].strip()
+                return " ".join(line.split(":", 1)[1].replace("(R)", "").split())
     return ""
 
 

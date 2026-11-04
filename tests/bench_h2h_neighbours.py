@@ -174,6 +174,11 @@ def git_dirty() -> str:
     return "dirty" if unstaged != 0 or staged != 0 else "clean"
 
 
+def published_cpu_model(name: str) -> str:
+    """Drop the register mark so the record reads 'Intel Xeon Processor'."""
+    return " ".join(name.replace("(R)", "").split())
+
+
 def cpu_model_name() -> str:
     try:
         with Path("/proc/cpuinfo").open("r", encoding="utf-8") as fh:
@@ -181,7 +186,7 @@ def cpu_model_name() -> str:
                 if line.startswith("model name"):
                     parts = line.split(":", 1)
                     if len(parts) == 2:
-                        return parts[1].strip()
+                        return published_cpu_model(parts[1].strip())
     except OSError:
         pass
     return "unknown"

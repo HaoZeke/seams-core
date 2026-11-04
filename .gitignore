@@ -372,3 +372,6 @@ repro/zenodo/payload/
 
 # Generated before the PDF build by paper/tex/figures/stats.py
 paper/tex/figures/data/macros.tex
+paper/tex/figures/data/host.txt
+paper/tex/figures/data/churn-host.txt
+paper/tex/figures/data/h2h/environment.json

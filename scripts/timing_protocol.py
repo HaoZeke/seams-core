@@ -129,7 +129,10 @@ def cpuinfo_core(core: int) -> dict:
                 "cache size",
                 "bogomips",
             )
-            return {key: fields.get(key, "") for key in keep}
+            out = {key: fields.get(key, "") for key in keep}
+            if out.get("model name"):
+                out["model name"] = " ".join(out["model name"].replace("(R)", "").split())
+            return out
     return {}
 
 

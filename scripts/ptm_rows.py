@@ -26,7 +26,7 @@ def host_lines():
     family = model = ""
     for line in Path("/proc/cpuinfo").read_text().splitlines():
         if line.startswith("model name") and cpu == "unknown":
-            cpu = line.split(":", 1)[1].strip()
+            cpu = " ".join(line.split(":", 1)[1].replace("(R)", "").split())
         if line.startswith("cpu family") and not family:
             family = line.split(":", 1)[1].strip()
         if line.startswith("model\t") and not model:

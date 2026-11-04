@@ -1653,7 +1653,7 @@ def environment(args: argparse.Namespace) -> int:
     details = {
         "created": utc_now(),
         "uname": {
-            key: value
+            key: value.replace("(R)", "") if isinstance(value, str) else value
             for key, value in platform.uname()._asdict().items()
             if key != "node"
         },
@@ -1661,7 +1661,7 @@ def environment(args: argparse.Namespace) -> int:
         "affinity": sorted(os.sched_getaffinity(0)),
         "lscpu": subprocess.run(
             ["lscpu"], check=False, capture_output=True, text=True
-        ).stdout,
+        ).stdout.replace("(R)", ""),
         "memtotal": next(
             line
             for line in pathlib.Path("/proc/meminfo").read_text().splitlines()
