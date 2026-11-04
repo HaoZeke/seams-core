@@ -62,6 +62,21 @@ def quantile_linear(sorted_vals: list[float], q: float) -> float:
     return sorted_vals[lo] * (1.0 - frac) + sorted_vals[lo + 1] * frac
 
 
+def type7(values: list[float], probability: float) -> float:
+    ordered = sorted(float(value) for value in values)
+    count = len(ordered)
+    if count < MIN_REPEATS:
+        raise ValueError(f"need n >= {MIN_REPEATS}, got {count}")
+    position = (count - 1) * probability + 1.0
+    index = int(math.floor(position))
+    if index >= count:
+        return ordered[-1]
+    if index < 1:
+        return ordered[0]
+    weight = position - index
+    return ordered[index - 1] + weight * (ordered[index] - ordered[index - 1])
+
+
 def summarize_samples(samples_ms: list[float]) -> dict[str, float]:
     if len(samples_ms) < 2:
         raise ValueError("need at least two samples")
@@ -606,6 +621,22 @@ def main() -> None:
             run_ring_tool,
             f"{spec.name}/ring",
         )
+        dseams_count = int(ring_stage["dseams_omp1"]["count"])
+        ovito_count = int(ring_stage["ovito"]["count"])
+        if dseams_count != ovito_count:
+            raise SystemExit(
+                f"{spec.name} ring counts differ: dseams {dseams_count} ovito {ovito_count}"
+            )
+        print(f"[ring] {spec.name} counts equal {dseams_count}", flush=True)
+        for tool in ("dseams_omp1", "ovito"):
+            samples = [float(value) for value in ring_stage[tool]["samples_ms"]]
+            median = type7(samples, 0.5)
+            shown = " ".join(f"{value:.6f}" for value in samples)
+            print(
+                f"[ring] {spec.name} {tool} n={len(samples)} "
+                f"median_ms {median:.6f} samples_ms {shown}",
+                flush=True,
+            )
 
         def run_total_tool(tool: str) -> dict[str, object]:
             threads = 1 if tool.endswith("omp1") else args.dseams_threads
