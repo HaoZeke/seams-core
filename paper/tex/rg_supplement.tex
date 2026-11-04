@@ -721,7 +721,7 @@ Confined & \num{10000} & d-SEAMS & \kfour{confined@1e4@dseams-rings} \\
 The ring record \texttt{ring-head2head.json} is one thread on one core, six calls after two warmups.
 Each printed median is the type 7 median, and each bracket is the type 7 first and third quartiles, from \texttt{paper/tex/figures/ring\_perf\_type7.py}.
 The hardware line of that record is \texttt{uname -m} \texttt{x86\_64}, \texttt{nproc} 8, CPU model \texttt{Intel Xeon Processor}.
-The ring samples were measured on commit \texttt{\seqsplit{65104214fa10cb008e96a07c247bda2b002af2f8}}.
+The ring samples were measured on commit \texttt{\seqsplit{0798085b4b543660c5891d6f1241cc7c53aef043}}.
 The neighbour samples were measured on commit \texttt{\seqsplit{5857ff2c5a3f5ce5737db4e0aeee38b33da8a959}}.
 On the skewed cell of \num{512} molecules the mutual four-neighbour list takes \qty{1.019}{\milli\second}, freud \qty{0.841}{\milli\second} and OVITO \qty{0.888}{\milli\second}.
 On every other measured neighbour row the d-SEAMS quartile bracket lies below the other codes.
