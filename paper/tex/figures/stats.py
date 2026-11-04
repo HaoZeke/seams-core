@@ -1137,8 +1137,6 @@ def ranges(rings):
 
 
 THRESHOLDS = (
-    ("ringatoms", "franzblau.cpp", r"double fullPassFraction = ([0-9.]+);"),
-    ("ringbonds", "franzblau.cpp", r"double bondCrossover = ([0-9.]+);"),
     ("cagerows", "cage_affiliation.cpp", r"double batchFraction = ([0-9.]+);"),
     ("packcap", "cage_pack.cpp", r"static constexpr int kCap = ([0-9]+);"),
     ("edgelo", "include/internal/cage_enum.hpp",
@@ -1149,10 +1147,7 @@ THRESHOLDS = (
 
 
 # Copies of the thresholds in the scripts, which must equal the defaults in src/.
-THRESHOLD_COPIES = (
-    ("ringatoms", "paper/tex/figures/nucleation_churn.py", r"^ATOM_FRACTION = ([0-9.]+)$"),
-    ("ringbonds", "paper/tex/figures/nucleation_churn.py", r"^BOND_CROSSOVER = ([0-9.]+)$"),
-)
+THRESHOLD_COPIES = ()
 
 
 def thresholds():
@@ -1288,6 +1283,8 @@ def marks():
                 pairs = [(k, f"{k}_q1", f"{k}_q3") for k in
                          ("ring_batch", "ring_inc", "affil_batch", "affil_inc")]
             for m, lo, hi in pairs:
+                if m not in row or lo not in row or hi not in row:
+                    continue
                 spread = max(row[hi] / row[m], row[m] / row[lo])
                 worst[family] = max(worst.get(family, 1.0), spread)
     for family, spread in worst.items():
