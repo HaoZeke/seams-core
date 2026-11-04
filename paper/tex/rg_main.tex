@@ -535,7 +535,8 @@ OVITO, timed in a separate campaign on the same frames, finds the same number of
 A one-thread record on one core, six calls after two warmups, commit \texttt{\seqsplit{0798085b4b543660c5891d6f1241cc7c53aef043}}, is faster than OVITO on every frame (Table~\sref{tab:s-ring-perf}).
 The type 7 medians are \qty{0.190}{\milli\second} against \qty{1.152}{\milli\second} at \num{136} molecules, \qty{2.884}{\milli\second} against \qty{17.394}{\milli\second} at \num{4096}, \qty{81.914}{\milli\second} against \qty{551.202}{\milli\second} at \num{110592} and \qty{113.576}{\milli\second} against \qty{775.992}{\milli\second} at \num{136000}.
 On that core the cutoff neighbour list is faster than freud, OVITO and scipy on every frame those codes timed.
-The mutual four-neighbour list is faster on the same frames except the skewed cell of \num{512} molecules, where freud takes \qty{0.841}{\milli\second} and OVITO \qty{0.888}{\milli\second} against \qty{1.019}{\milli\second} for d-SEAMS.
+The mutual four-neighbour list is faster on the same frames except the skewed cell of \num{512} molecules, where freud takes \qty{\dsv{neigh@skew@freud}}{\milli\second} and OVITO \qty{\dsv{neigh@skew@ovito}}{\milli\second} against \qty{\dsv{neigh@skew@dseams}}{\milli\second} for d-SEAMS.
+The three codes return \num{\dsv{neigh@skew@count}} directed edges on that frame.
 Every matched ratio of the main campaign is separated after Holm's correction.
 
 \begin{table}[tbp]

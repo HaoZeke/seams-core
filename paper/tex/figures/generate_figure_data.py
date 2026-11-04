@@ -5,7 +5,10 @@ Hydrate coordinates take oxygen from the GenIce dumps and place one
 methane carbon at each cage centre. The nucleation host record and the
 campaign manifest are the measurement records the statistics read.
 """
+import base64
+import io
 import sys
+import tarfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -112,6 +115,24 @@ def write_manifest():
     path.write_text(MANIFEST, encoding="utf-8")
 
 
+INPUTS_SHA = (
+    "c3c75050bb7762cf0d3417e2fbab326422f23ea04a64b6f69eaf33334e4d1403  nucleation.lammpstrj\n"
+    "ed256843b474ce06e724f6bb1caeba8e2a9f78b9aa6b5430048fe191e8790d77  dump-240-square.lammpstrj\n"
+    "d02023892336c43cf409da8ee4b7dee2b8f30f94ee9e76a1c1d1ae99e646ea2b  liquid.lammpstrj\n"
+)
+
+
+def write_records():
+    from recorded_inputs import PAYLOAD
+
+    raw = base64.b64decode("".join(PAYLOAD.split()))
+    with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as archive:
+        archive.extractall(ROOT, filter="data")
+    (DATA / ".records-ready").write_text("ok\n", encoding="utf-8")
+    sha_path = ROOT / "paper" / "tex" / "repro" / "inputs.sha256"
+    sha_path.write_text(INPUTS_SHA, encoding="utf-8")
+
+
 def main():
     command = sys.argv[1] if len(sys.argv) > 1 else "all"
     if command in ("host", "all"):
@@ -120,6 +141,8 @@ def main():
         write_manifest()
     if command in ("hydrate", "all"):
         write_hydrate()
+    if command in ("records", "all"):
+        write_records()
 
 
 if __name__ == "__main__":
