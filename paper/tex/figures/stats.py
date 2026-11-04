@@ -600,14 +600,13 @@ def churn():
                   if r["affilReclass"] == r["nSix"]])
     # The main text gives the smallest change and the limits of both updates.
     update = []
-    for name, inc, full, gain, fall in (
-            ("rings", "ringInc_ms", "ringBatch_ms", last, rfall),
-            ("cage labels", "affilInc_ms", "affilBatch_ms", alast, afall)):
+    for name, inc, full in (
+            ("rings", "ringInc_ms", "ringBatch_ms"),
+            ("cage labels", "affilInc_ms", "affilBatch_ms")):
         update.append(
             f"{name} & \\num{{{sig(small[full])}}} & {span(*small[full + '@q'])} & "
             f"\\num{{{sig(small[inc])}}} & {span(*small[inc + '@q'])} & "
-            f"\\num{{{sig(small[full] / small[inc])}}} & "
-            f"\\num{{{gain['bondChurn']}}} & \\num{{{fall['bondChurn']}}}\\\\")
+            f"\\num{{{sig(small[full] / small[inc])}}}\\\\")
     write_table("tab-update.tex", update)
     define("c@fallbacks", str(len(fallbacks)))
     define("c@fallback@below",
