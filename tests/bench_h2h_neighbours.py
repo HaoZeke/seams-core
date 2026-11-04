@@ -604,6 +604,47 @@ def read_directed_edges(path: str) -> set[tuple[int, int]]:
     return edges
 
 
+def mutual_directed_count(query_points, neighbour_points) -> int:
+    """Directed edges of the mutual graph: i lists j and j lists i."""
+    listed: dict[int, set[int]] = {}
+    for query, neighbour in zip(query_points, neighbour_points):
+        listed.setdefault(int(query), set()).add(int(neighbour))
+    count = 0
+    for origin, neighbours in listed.items():
+        for neighbour in neighbours:
+            if origin in listed.get(neighbour, ()):
+                count += 1
+    return count
+
+
+def mutual_from_slots(index_rows) -> int:
+    """Directed mutual edges from an (n, k) table of neighbour indices."""
+    listed = []
+    for row in index_rows:
+        listed.append({int(neighbour) for neighbour in row if int(neighbour) >= 0})
+    count = 0
+    for origin, neighbours in enumerate(listed):
+        for neighbour in neighbours:
+            if 0 <= neighbour < len(listed) and origin in listed[neighbour]:
+                count += 1
+    return count
+
+
+def type7(values: list[float], probability: float) -> float:
+    ordered = sorted(float(value) for value in values)
+    count = len(ordered)
+    if count < MIN_REPEATS:
+        raise ValueError(f"need n >= {MIN_REPEATS}, got {count}")
+    position = (count - 1) * probability + 1.0
+    index = int(math.floor(position))
+    if index >= count:
+        return ordered[-1]
+    if index < 1:
+        return ordered[0]
+    weight = position - index
+    return ordered[index - 1] + weight * (ordered[index] - ordered[index - 1])
+
+
 def ovito_directed_and_unique_edges(
     frame: Frame, cutoff: float, ovito_threads: int
 ) -> dict[str, int]:
@@ -813,15 +854,16 @@ def worker_external(args: argparse.Namespace) -> None:
         if tool == "freud_aabb_knn":
             try:
                 t0 = time.perf_counter()
-                count = int(
-                    len(
-                        freud.locality.AABBQuery(box, points)
-                        .query(
-                            points,
-                            {"mode": "nearest", "num_neighbors": args.k, "exclude_ii": True},
-                        )
-                        .toNeighborList()
+                neighbours = (
+                    freud.locality.AABBQuery(box, points)
+                    .query(
+                        points,
+                        {"mode": "nearest", "num_neighbors": args.k, "exclude_ii": True},
                     )
+                    .toNeighborList()
+                )
+                count = mutual_directed_count(
+                    neighbours.query_point_indices, neighbours.point_indices
                 )
                 t1 = time.perf_counter()
                 print(json.dumps({"ms": (t1 - t0) * 1000.0, "count": count, "tool": tool}))
@@ -832,21 +874,20 @@ def worker_external(args: argparse.Namespace) -> None:
         if tool == "freud_linkcell_knn":
             try:
                 t0 = time.perf_counter()
-                count = int(
-                    len(
-                        freud.locality.LinkCell(
-                            box, points, cell_width=args.cutoff
-                        )
-                        .query(
-                            points,
-                            {
-                                "mode": "nearest",
-                                "num_neighbors": args.k,
-                                "exclude_ii": True,
-                            },
-                        )
-                        .toNeighborList()
+                neighbours = (
+                    freud.locality.LinkCell(box, points, cell_width=args.cutoff)
+                    .query(
+                        points,
+                        {
+                            "mode": "nearest",
+                            "num_neighbors": args.k,
+                            "exclude_ii": True,
+                        },
                     )
+                    .toNeighborList()
+                )
+                count = mutual_directed_count(
+                    neighbours.query_point_indices, neighbours.point_indices
                 )
                 t1 = time.perf_counter()
                 print(json.dumps({"ms": (t1 - t0) * 1000.0, "count": count, "tool": tool}))
@@ -865,14 +906,16 @@ def worker_external(args: argparse.Namespace) -> None:
 
         if tool == "ovito_cutoff":
             t0 = time.perf_counter()
-            count = int(CutoffNeighborFinder(args.cutoff, data).find_all()[0].shape[0])
+            pairs = CutoffNeighborFinder(args.cutoff, data).find_all()[0]
+            count = int(np.unique(pairs, axis=0).shape[0])
             t1 = time.perf_counter()
             print(json.dumps({"ms": (t1 - t0) * 1000.0, "count": count, "tool": tool}))
             return
 
         if tool == "ovito_knn":
             t0 = time.perf_counter()
-            count = int(NearestNeighborFinder(args.k, data).find_all()[0].shape[0])
+            slots = NearestNeighborFinder(args.k, data).find_all()[0]
+            count = mutual_from_slots(slots)
             t1 = time.perf_counter()
             print(json.dumps({"ms": (t1 - t0) * 1000.0, "count": count, "tool": tool}))
             return
@@ -908,10 +951,10 @@ def worker_external(args: argparse.Namespace) -> None:
                 return
             if tool == "scipy_ckdtree_knn":
                 t0 = time.perf_counter()
-                dists = tree.query(
+                indices = tree.query(
                     frame.positions, k=args.k + 1, workers=args.scipy_threads
-                )[0][:, 1:]
-                count = int(np.isfinite(dists).sum())
+                )[1][:, 1:]
+                count = mutual_from_slots(indices)
                 t1 = time.perf_counter()
                 print(json.dumps({"ms": (t1 - t0) * 1000.0, "count": count, "tool": tool}))
                 return
@@ -1184,6 +1227,31 @@ def main() -> None:
             "scipy_ckdtree_knn",
         ]
 
+        def report_stage(stage_name: str, result: dict[str, object]) -> None:
+            counts: dict[str, int] = {}
+            for tool, row in result.items():
+                if tool == "unsupported" or not isinstance(row, dict) or "count" not in row:
+                    continue
+                counts[tool] = int(row["count"])
+            if len(set(counts.values())) > 1:
+                raise SystemExit(f"{spec.name} {stage_name} counts differ: {counts}")
+            if counts:
+                print(
+                    f"[neigh] {spec.name} {stage_name} counts equal {next(iter(counts.values()))}",
+                    flush=True,
+                )
+            for tool, row in result.items():
+                if not isinstance(row, dict) or "samples_ms" not in row:
+                    continue
+                samples = [float(value) for value in row["samples_ms"]]
+                median = type7(samples, 0.5)
+                shown = " ".join(f"{value:.6f}" for value in samples)
+                print(
+                    f"[neigh] {spec.name} {stage_name} {tool} n={len(samples)} "
+                    f"median_ms {median:.6f} samples_ms {shown}",
+                    flush=True,
+                )
+
         cutoff_result = run_interleaved(
             cutoff_tools,
             warmup,
@@ -1198,6 +1266,8 @@ def main() -> None:
             lambda tool: run_stage_tool("knn", tool),
             f"{spec.name}/knn",
         )
+        report_stage("cutoff", cutoff_result)
+        report_stage("knn", knn_result)
 
         dataset_out: dict[str, object] = {
             "source": frame.source,
@@ -1206,13 +1276,10 @@ def main() -> None:
             "triclinic": bool(frame.is_triclinic),
             "count_semantics": {
                 "cutoff_directed_edges": (
-                    "directed neighbour-image records returned by each backend"
+                    "unique directed pairs inside the cutoff, one minimum image each"
                 ),
-                "dseams_knn_directed_edges": (
-                    "directed edges in the mutual-k graph; this can be below n_atoms * k"
-                ),
-                "freud_knn_directed_edges": (
-                    "directed neighbours from fixed-k query; equals n_atoms * k when supported"
+                "knn_directed_edges": (
+                    "directed edges of the mutual k-nearest graph"
                 ),
             },
             "cutoff_stage": cutoff_result,
@@ -1228,15 +1295,9 @@ def main() -> None:
             freud_knn = int(knn_result["freud_aabb_knn"]["count"])
         if dseams_knn is not None or freud_knn is not None:
             dataset_out["knn_count_explanation"] = {
-                "expected_directed_edges_n_times_k": expected_directed_knn,
-                "dseams_mutual_graph_directed_edges": dseams_knn,
-                "freud_fixed_k_directed_edges": freud_knn,
-                "dseams_minus_expected": (
-                    None if dseams_knn is None else dseams_knn - expected_directed_knn
-                ),
-                "freud_minus_expected": (
-                    None if freud_knn is None else freud_knn - expected_directed_knn
-                ),
+                "definition": "directed edges of the mutual k-nearest graph",
+                "dseams_mutual_directed_edges": dseams_knn,
+                "freud_mutual_directed_edges": freud_knn,
             }
 
         if spec.check_cutoff_set_equality:

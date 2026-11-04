@@ -1318,6 +1318,79 @@ def type7_quantile(values, probability):
     return ordered[index - 1] + weight * (ordered[index] - ordered[index - 1])
 
 
+NEIGH_CUTOFF = (
+    "dseams_omp1",
+    "freud_aabb_cutoff",
+    "freud_linkcell_cutoff",
+    "ovito_cutoff",
+    "scipy_ckdtree_cutoff",
+)
+
+
+def neigh_timing_cell(samples):
+    median = type7_quantile(samples, 0.5)
+    q1 = type7_quantile(samples, 0.25)
+    q3 = type7_quantile(samples, 0.75)
+    return rf"\num{{{median:.3f}}} (\iqr{{{q1:.3f}}}{{{q3:.3f}}})", median
+
+
+def neigh_panel():
+    """Type 7 neighbour table and the skew-frame macros."""
+    path = DATA / "neigh-head2head.json"
+    if not path.is_file():
+        return None
+    record = json.loads(path.read_text(encoding="utf-8"))
+    policy = record["thread_policy"]
+    for key in ("ovito_threads", "freud_threads", "scipy_threads"):
+        if int(policy[key]) != 1:
+            raise SystemExit(f"neighbour record {key} is {policy[key]}")
+    if any(int(value) != 1 for value in policy["dseams_threads_reported"]):
+        raise SystemExit("neighbour record is not one d-SEAMS thread")
+    if int(record["protocol"]["repeats"]) < 6 or int(record["protocol"]["warmup_runs"]) != 2:
+        raise SystemExit("neighbour record is not six calls after two warmups")
+    projections = record.get("linkcell_policy", {}).get("projections", {})
+    rows = []
+    for name, frame in record["datasets"].items():
+        stage = frame["cutoff_stage"]
+        cells = []
+        for tool in NEIGH_CUTOFF:
+            row = stage.get(tool)
+            if isinstance(row, dict) and "samples_ms" in row:
+                cell, _median = neigh_timing_cell(row["samples_ms"])
+                cells.append(cell)
+                continue
+            projected = projections.get(f"{name}/cutoff", {})
+            if tool == "freud_linkcell_cutoff" and "projected_sample_ms" in projected:
+                cells.append(
+                    rf"\num{{{float(projected['projected_sample_ms']):.3f}}}\textsuperscript{{p}}"
+                )
+            else:
+                cells.append("")
+        rows.append(
+            f"{name} & {frame['n_atoms']} & " + " & ".join(cells) + " \\\\"
+        )
+    write_table("tab-neigh-perf.tex", rows)
+    skew = record["datasets"]["tri-skew-512"]["knn_stage"]
+    labels = (
+        ("dseams_omp1", "neigh@skew@dseams"),
+        ("freud_aabb_knn", "neigh@skew@freud"),
+        ("ovito_knn", "neigh@skew@ovito"),
+    )
+    counts = set()
+    for tool, macro in labels:
+        samples = skew[tool]["samples_ms"]
+        _cell, median = neigh_timing_cell(samples)
+        define(macro, f"{median:.3f}")
+        counts.add(int(skew[tool]["count"]))
+        sys.stdout.write(
+            f"neigh skew {tool} median {median:.3f} count {skew[tool]['count']}\n"
+        )
+    if len(counts) != 1:
+        raise SystemExit(f"skew neighbour counts differ: {counts}")
+    define("neigh@skew@count", str(counts.pop()))
+    return True
+
+
 def ring_panel():
     """Type 7 ring table, plot and macros from ring-head2head.json."""
     path = DATA / "ring-head2head.json"
@@ -1433,6 +1506,7 @@ def main():
     (DATA / "macros.tex").write_text(header + "\n".join(macros) + "\n% snapper:on\n")
     sys.stdout.write(f"{len(macros)} macros\n")
     ring_panel()
+    neigh_panel()
 
 
 if __name__ == "__main__":

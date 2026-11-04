@@ -382,3 +382,15 @@ paper/tex/figures/data/nucleation-host.txt
 paper/tex/figures/data/ring-head2head.json
 paper/tex/figures/data/neigh-head2head.json
 paper/tex/figures/xyzrender_xyz/*.xyz
+paper/tex/figures/data/**
+paper/tex/figures/fig-cages.png
+paper/tex/figures/fig-churn.png
+paper/tex/figures/fig-codes.png
+paper/tex/figures/fig-nucleation.png
+paper/tex/figures/fig-update.png
+paper/tex/figures/fig-versions.png
+paper/tex/figures/systems.png
+paper/tex/figures/classify.png
+paper/tex/figures/ringperf.png
+paper/tex/figures/interface.png
+paper/tex/repro/inputs.sha256
