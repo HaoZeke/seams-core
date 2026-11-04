@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Type 7 medians of the r8.12 neighbour and ring samples.
+"""Type 7 medians of the one-thread ring samples and the neighbour samples.
 
 The samples are the committed JSON beside this script. The stored
-median in that JSON is not the value printed here.
+median in that JSON is not the value printed here. The ring record
+must set ovito_threads to 1.
 """
 
 import json
@@ -44,6 +45,12 @@ def main():
     root = Path(__file__).resolve().parent / "data" / "ring-perf"
     ring = json.loads((root / "ring-head2head.json").read_text())
     neigh = json.loads((root / "neigh-head2head.json").read_text())
+    ovito_threads = int(ring["thread_policy"]["ovito_threads"])
+    dseams_threads = [int(value) for value in ring["thread_policy"]["dseams_threads_reported"]]
+    if ovito_threads != 1 or any(value != 1 for value in dseams_threads):
+        raise SystemExit(
+            f"ring record is not one thread: ovito {ovito_threads} dseams {dseams_threads}"
+        )
     machine = ring["machine"]
     lines = []
     lines.append(
@@ -60,6 +67,15 @@ def main():
         + " median type 7 quartile type 7"
     )
     lines.append("git_sha " + ring["git_sha"])
+    lines.append(
+        "ring ovito_threads "
+        + str(ovito_threads)
+        + " dseams_threads "
+        + " ".join(str(value) for value in dseams_threads)
+    )
+    lines.append(
+        "neigh ovito_threads " + str(neigh["thread_policy"]["ovito_threads"])
+    )
 
     ring_rows = []
     for name, body in ring["datasets"].items():
