@@ -56,6 +56,7 @@ Each =run.sh= refuses a source tree that differs from the archive.
 The carry record takes the session count as a fifth argument, five by default, and with ~BEFORE=1~ it also times the build without the cage-label wait by reversing its =backoff.patch=.
 The ring update enumerates the sources in T, the vertices within reach of a changed row in either frame, and it takes a full pass only when T is the whole vertex set.
 python3 scripts/write_machine_records.py writes the host records, and python3 paper/tex/figures/stats.py writes macros.tex before the PDF build.
+snakemake -c1 builds the plot tables, the ring macros, the input manifest, the nucleation host record and the hydrate coordinates from those scripts.
 The raw ring samples, the neighbour samples and the brine coordinates sit in the kit archive, not in the git tree.
 
 The head-to-head =run.sh= reads ~ARCHIVE~, ~H2H_SEAMS~ (the ~seams~ binary of that archive) and ~PYDSEAMS~ (a PydSEAMSlib built on the same archive).
