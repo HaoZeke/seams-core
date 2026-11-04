@@ -532,8 +532,8 @@ In all \dsv{hl@matched} matched comparisons that completed, d-SEAMS is the faste
 Table~\ref{tab:ranges} gives the smallest and the largest ratio of each code to d-SEAMS, and the supplement gives every timing with its interval and quartiles.
 Table~\sref{tab:s-h2h} compares all codes head to head on frames of one size, Table~\sref{tab:s-ovito} gives the ring timings of d-SEAMS and OVITO on every frame and Table~\sref{tab:s-ladder} lists every completed case.
 OVITO, timed in a separate campaign on the same frames, finds the same number of rings of each size as d-SEAMS on every frame, and every OVITO call took longer than every d-SEAMS call.
-A one-thread record on one core, six calls after two warmups, commit \texttt{\seqsplit{ea2114c5ff37244d8717e97ae62c573298e362b4}}, is faster than OVITO on every frame (Table~\sref{tab:s-ring-perf}).
-The type 7 medians are \qty{0.195}{\milli\second} against \qty{1.155}{\milli\second} at \num{136} molecules, \qty{3.035}{\milli\second} against \qty{17.489}{\milli\second} at \num{4096}, \qty{86.072}{\milli\second} against \qty{565.255}{\milli\second} at \num{110592} and \qty{115.599}{\milli\second} against \qty{753.395}{\milli\second} at \num{136000}.
+A one-thread record on one core, six calls after two warmups, commit \texttt{\seqsplit{65104214fa10cb008e96a07c247bda2b002af2f8}}, is faster than OVITO on every frame (Table~\sref{tab:s-ring-perf}).
+The type 7 medians are \qty{0.193}{\milli\second} against \qty{1.171}{\milli\second} at \num{136} molecules, \qty{2.902}{\milli\second} against \qty{18.048}{\milli\second} at \num{4096}, \qty{81.903}{\milli\second} against \qty{553.979}{\milli\second} at \num{110592} and \qty{111.594}{\milli\second} against \qty{749.657}{\milli\second} at \num{136000}.
 On that core the cutoff neighbour list is faster than freud, OVITO and scipy on every frame those codes timed.
 The mutual four-neighbour list is faster on the same frames except the skewed cell of \num{512} molecules, where freud takes \qty{0.841}{\milli\second} and OVITO \qty{0.888}{\milli\second} against \qty{1.019}{\milli\second} for d-SEAMS.
 Every matched ratio of the main campaign is separated after Holm's correction.
@@ -736,7 +736,7 @@ We thank our families, pets and plants for their patience and support throughout
 
 The program is seams-core under the MIT licence at \url{https://github.com/d-SEAMS/seams-core}, and its releases are archived on Zenodo under the concept DOI \href{https://doi.org/10.5281/zenodo.3874291}{10.5281/zenodo.3874291}~\cite{seamscore2026}.
 The version comparison, the update measurements and the main comparator campaign are the records stored at commit \texttt{d9e45397cc72552abd1d1bcdf16e671f3884cdeb}, whose \texttt{src} tree is \texttt{ffd7d964} (Section~\sref{sec:s-machines}).
-The one-thread ring samples were measured on commit \texttt{\seqsplit{ea2114c5ff37244d8717e97ae62c573298e362b4}}.
+The one-thread ring samples were measured on commit \texttt{\seqsplit{65104214fa10cb008e96a07c247bda2b002af2f8}}.
 The one-thread neighbour samples were measured on commit \texttt{\seqsplit{5857ff2c5a3f5ce5737db4e0aeee38b33da8a959}}.
 The version DOI for 2.12.0 is \DOIPENDING.
 The Python bindings are PydSEAMSlib~\cite{pydseamslib2026} and the Lua library is yodaStruct~\cite{yodastruct2026}.
