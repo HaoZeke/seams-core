@@ -133,14 +133,15 @@ An index from each molecule to the six-membered rings through it turns the searc
 The double-diamond cages are packed as a maximum matching with a certificate of optimality.
 Between frames, the program carries every ring of up to seven members whose molecules keep all their bonds and searches again only from the molecules whose bonds changed, which gives the rings of a full search.
 The cage labels are updated in the same way, from the rings near a changed bond or a changed ring.
-Both updates return to the full search once the changed share of the molecules or bonds passes a fixed threshold.
+The ring update takes a full pass only when every molecule is within reach of a changed row.
+The cage-label update returns to the full search once the changed share of the molecules passes a fixed threshold.
 The program also finds the prism blocks of ice in nanotubes from pairs of stacked rings and the clathrate cages from their face signatures.\\
 {\em Additional comments including restrictions and unusual features:}
 The program reads LAMMPS dump, XYZ and CON files, and it runs as a command-line program, as a C++ library and through its C interface.
 A LAMMPS compute assigns CHILL+ labels during a run.
 Rings of more than seven members are carried only when they also avoid a margin around the molecules whose bonds changed.
 The margin is one bond for rings of eight to eleven members and one more bond for every four further members.
-After a fallback on a trajectory of fixed size, the cage-label update runs the full pass on every later frame, and with more than one thread the ring update does the same.
+After a fallback on a trajectory of fixed size, the cage-label update runs the full pass on every later frame.
 A component of more than \dsv{thr@packcap} conflicting double-diamond candidates whose conflicts are not those of a bipartite graph receives no cages, and the packing of its frame is marked as not tight.
 
 \input{summary_refs}
@@ -178,7 +179,8 @@ We make this locality exact: a ring of at most seven members changes its status 
 Here, we describe d-SEAMS~2.0, called d-SEAMS below, which keeps the topological definitions of d-SEAMS~1 and replaces its algorithms.
 d-SEAMS is the first code in this comparison to return the primitive rings of a full search from a local update, and the rings and both cage searches of a \dsv{hl@n}-molecule ice~Ic frame take \qty{\dsv{hl@two@ms}}{\milli\second} against \qty{\dsv{hl@one@s}}{\second} for d-SEAMS~1.
 It constructs primitive rings from pairs of shortest paths~\cite{yuan2002rings}, so that each ring is found once.
-It finds both cage types through an index from molecules to rings, packs the double-diamond cages as a maximum matching and carries rings and cage labels across frames, with a fallback to the full search.
+It finds both cage types through an index from molecules to rings, packs the double-diamond cages as a maximum matching and carries rings from the molecules within reach of a changed row.
+The cage labels are carried in the same way, and that update returns to the full search at a fixed share of changed rows.
 We compare it with its predecessor and with seven other codes on machines of one type.
 On a nucleation trajectory of mW water, it finds the growing ice to be built mostly from cubic and mixed molecules.
 Unlike the ring statistics codes, d-SEAMS assembles the rings into cages, and unlike the local classifiers, it takes its labels from the topology of the network.
@@ -329,8 +331,8 @@ Algorithm~\ref{alg:update} uses Proposition~\ref{prop:local} for rings of up to 
 Every primitive ring of $G$ that avoids $X$ is carried, and every primitive ring of $G'$ that meets $X$ is found by the search from its lowest member in $X$.
 That search runs over all of $G'$ and keeps only the rings whose lowest member in $X$ is its start.
 The carried rings and the found rings are therefore the primitive rings of $G'$, each once, and the update returns the ring set of a full search on every frame (Section~\sref{sec:s-update}).
-The search from $X$ costs as much as Algorithm~\ref{alg:rings} on $|X|$ vertices, but the bond difference and the carried set cost a pass over the neighbour rows of all $n$ molecules.
-The update falls back to the full search when the share of the molecules in $X$ or the number of changed bonds per molecule passes its limit in Table~\ref{tab:thresholds}, or when the frames differ in size.
+The search from $T$ costs as much as Algorithm~\ref{alg:rings} on $|T|$ vertices, but the bond difference and the carried set cost a pass over the neighbour rows of all $n$ molecules.
+The update runs that full search when the frames differ in size or when $T$ is the whole vertex set.
 
 \begin{algorithm}[tbp]
 \caption{Update of the primitive rings of up to seven members from $G$ to $G'$.}
@@ -338,12 +340,16 @@ The update falls back to the full search when the share of the molecules in $X$ 
 % snapper:off
 \begin{algorithmic}[1]
 \State Compare the neighbour rows of $G$ and $G'$ and collect the changed bonds and the set $X$ of their ends.
-\If{$|X|>\dsv{thr@ringatoms}\,n$, more than $\dsv{thr@ringbonds}\,n$ bonds have changed or the frames differ in size}
+\If{the frames differ in size}
 \State Run Algorithm~\ref{alg:rings} on $G'$ and return its rings.
 \EndIf
-\State Remove every ring of $G$ that has a member in $X$, and keep the others.
-\For{each $s\in X$}
-\State Run the search of Algorithm~\ref{alg:rings} from $s$ over all of $G'$, and keep the rings whose lowest member in $X$ is $s$.
+\State Build $T$, the vertices within reach of a changed row in either frame.
+\If{$T$ is the whole vertex set}
+\State Run Algorithm~\ref{alg:rings} on $G'$ and return its rings.
+\EndIf
+\State Remove every ring of $G$ that has a member in $T$, and keep the others.
+\For{each $s\in T$}
+\State Run the search of Algorithm~\ref{alg:rings} from $s$ over all of $G'$, and keep the rings whose lowest member in $T$ is $s$.
 \EndFor
 \State Return the kept rings together with the rings found.
 \end{algorithmic}
@@ -360,7 +366,8 @@ After a fallback, it runs the full pass on every later frame until the number of
 
 \begin{table}[tbp]
 \centering
-\caption{\textbf{The two updates return to the full search, and the packing and the clathrate search stop, at fixed limits.}
+\caption{\textbf{The cage-label update returns to the full search at a fixed share, and the packing and the clathrate search stop at fixed limits.}
+The ring update takes a full pass only when $T$ is the whole vertex set.
 The limits are the defaults in the sources of the program, from which the script that writes the numbers of this paper reads them.}
 \label{tab:thresholds}
 \small
@@ -369,8 +376,6 @@ The limits are the defaults in the sources of the program, from which the script
 \toprule
 Stage & The stage falls back or stops when & Limit \\
 \midrule
-Ring update & more molecules than this share of all molecules are in $X$ & \qty{\dsv{thr@ringatoms@pct}}{\percent} \\
- & more bonds than this number per molecule have changed & \num{\dsv{thr@ringbonds}} \\
 Cage-label update & more molecules than this share have a changed neighbour row, or more six-rings than this share pass through such a molecule or have to be evaluated again & \qty{\dsv{thr@cagerows@pct}}{\percent} \\
 Double-diamond packing & a component of conflicts that is not the line graph of a bipartite graph has more candidates than this & \dsv{thr@packcap} \\
 Clathrate cages & an edge of a face lies outside this length window & \qtyrange{\dsv{thr@edgelo}}{\dsv{thr@edgehi}}{\angstrom} \\
@@ -584,23 +589,21 @@ The same rings build the prism blocks of confined ice and the clathrate cages (S
 To control the number of changed bonds, we took two consecutive frames of the nucleation trajectory of Section~\ref{sec:nucleation} and replaced the positions of the earlier frame inside a sphere at the centre of the cell with those of the later one (Section~\sref{sec:s-updates}).
 Growing the sphere raises the number of changed bonds, and Figure~\ref{fig:churn} times both updates against their full searches.
 With three changed bonds on a frame of a nucleation run, the ring update is \dsv{hl@ringgain} times faster than a full search (Table~\ref{tab:update}).
-It takes less time than the full search at every change below its fallback, while the cage-label update, which compares every neighbour row, gains less than a factor of two at any change.
-Every update returns the rings and labels of the full search, including those that fall back.
+The cage-label update, which compares every neighbour row, gains less than a factor of two at any change.
+Every update returns the rings and labels of the full search.
 
 \begin{table}[tbp]
 \centering
 \caption{\textbf{With three changed bonds, the ring update is \dsv{hl@ringgain} times faster than the full search, and the cage-label update gains a factor of \dsv{c@small@affgain}.}
-Medians and quartiles of \dsv{c@reps} calls in milliseconds on frames of \dsv{c@nop} molecules, the gain as the ratio of the medians, the largest change at which the update took less time than the full search without falling back and the smallest change at which it fell back (Table~\sref{tab:s-churn}).}
+Medians and quartiles of \dsv{c@reps} calls in milliseconds on frames of \dsv{c@nop} molecules, and the gain as the ratio of the medians (Table~\sref{tab:s-churn}).}
 \label{tab:update}
 \small
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{@{}lrrrrrrr@{}}
+\begin{tabular}{@{}lrrrrr@{}}
 \toprule
- & \multicolumn{5}{c}{Three changed bonds} & \multicolumn{2}{c}{Changed bonds} \\
-\cmidrule(lr){2-6}\cmidrule(l){7-8}
- & \multicolumn{2}{c}{Full search} & \multicolumn{2}{c}{Update} & & Last & First \\
+ & \multicolumn{2}{c}{Full search} & \multicolumn{2}{c}{Update} & \\
 \cmidrule(lr){2-3}\cmidrule(lr){4-5}
-Update & Median & Quartiles & Median & Quartiles & Gain & gain & fallback \\
+Update & Median & Quartiles & Median & Quartiles & Gain \\
 \midrule
 \tabbody{figures/data/tab-update}
 \bottomrule
@@ -612,8 +615,7 @@ Update & Median & Quartiles & Median & Quartiles & Gain & gain & fallback \\
 \input{figures/fig-churn}
 \caption{\textbf{On frames of \dsv{c@nop} molecules, the ring update takes less time than the full search up to \dsv{c@ringlast@churn} changed bonds, and the cage-label update gains at most a factor of \dsv{c@small@affgain}.}
 Each frame splices a sphere of a later frame into an earlier one, and marks are medians of \dsv{c@reps} calls, whose quartiles lie inside the marks.
-The dotted lines mark the smallest change at which the ring update (blue) and the cage-label update (vermilion) fall back to the full search.
-On these frames the median time of every fallback is at most \dsv{c@fallback@worst} times that of the full search from the start.}
+The cage-label update returns to the full search at the share in Table~\ref{tab:thresholds}.}
 \label{fig:churn}
 \end{figure}
 
@@ -621,7 +623,8 @@ The saved frames of that trajectory are further apart.
 Consecutive frames change a median of \rthree{m@median@bonds} bonds per molecule, with quartiles of \rthree{m@q1@bonds} and \rthree{m@q3@bonds}, and all \dsv{m@transitions} transitions fall back.
 Over the whole trajectory, file reading included, rebuilding every frame from the start takes \dsv{n@cutoff@ratio} times as long as carrying the rings and labels on the cutoff graph (Table~\sref{tab:s-nucleation}).
 On the seeded graph it takes \dsv{n@seeded@ratio} times as long.
-Both modes write identical output files, and the ring update gains only between frames that change fewer bonds per molecule than its fallback limit.
+Both modes write identical output files.
+The ring update searches the molecules in $T$ and takes a full pass only when $T$ is every molecule.
 
 \subsection{Cages in a nucleation trajectory}
 \label{sec:nucleation}
@@ -705,8 +708,7 @@ The gain grows with the size of the frame because most of it comes from the inde
 
 For any ring size, the rings carried between frames equal those of a full search, and for rings of up to seven members only the ends of changed bonds are searched again.
 With three changed bonds on a frame of a nucleation run, the ring update is \dsv{hl@ringgain} times faster than a full search.
-The measurements also fix the limits of the update.
-The saved frames of the deposited trajectory change about one bond per molecule, several times the limit of the fallback, so every one of them falls back.
+The ring update searches the molecules in $T$ and takes a full pass only when $T$ is every molecule.
 The cage-label update stays linear in the number of molecules because it compares every neighbour row.
 
 In all \dsv{hl@matched} completed matched comparisons with OVITO, freud, pyscal, matscipy and the CHILL+ library, d-SEAMS is the faster code, while local diamond-structure classifiers run up to \dsv{hl@local@max} times faster than its cage labels.

@@ -1229,18 +1229,12 @@ struct primitive::RingUpdater::Impl {
   int pendingOld = 0;
   bool slotSorted[2] = {false, false};
   bool hot = false;
-  double fullPassFraction = 0.2;
-  // Changed bonds per molecule above which the reused whole-frame pass
-  // replaces the splice. setBondCrossover overrides it. A negative value
-  // disables this test and leaves the vertex fraction in charge.
-  double bondCrossover = 0.15;
-
-  // A whole-frame pass on more than one thread. Later frames skip the
-  // sorted diff: that diff, and the second copy out of the per-source
-  // pools, were slower than a fresh search on the imbalanced frames.
-  // One thread keeps the diff. Its reused pass stays ahead of a rebuild
-  // through the highest bond fraction measured on these dumps (2.6896).
-  static bool skipDiffAfterFullPass(int threads) { return threads > 1; }
+  // The default does not use a fraction. After T is built, a full pass
+  // runs only when T is the whole vertex set.
+  double fullPassFraction = 1.0;
+  bool useVertexFraction = false;
+  // A negative value leaves the bond-count test off.
+  double bondCrossover = -1.0;
 
   void writeGraph(const std::vector<std::vector<int>> &nList, int slot,
                   bool sortRows) {
@@ -1505,6 +1499,7 @@ double primitive::RingUpdater::lastChangedBondFraction() const {
 
 void primitive::RingUpdater::setFullPassFraction(double fraction) {
   impl_->fullPassFraction = fraction;
+  impl_->useVertexFraction = true;
 }
 
 void primitive::RingUpdater::setBondCrossover(double changedBondsPerMolecule) {
@@ -1530,14 +1525,7 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
   const bool sameSize =
       st.primed && st.graph[st.which].size() == static_cast<std::size_t>(nVertices);
   const int slot = sameSize ? 1 - st.which : 0;
-  if (st.hot && sameSize && st.fullPassFraction < 1.0) {
-    // Packed rows in list order, balls and ring slots kept. The sorted diff
-    // is what made this thread count slower than a fresh ringNetwork.
-    st.writeGraph(nList, slot, false);
-    st.which = slot;
-    st.fastEnumerate(st.graph[st.which]);
-    return st.flattened;
-  }
+  st.hot = false;
   st.writeGraph(nList, slot, true);
   if (!sameSize) {
     // A missing frame or a different molecule count leaves no row to diff.
@@ -1620,25 +1608,20 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
     return st.flattened;
   }
 
-  const bool forceIncremental = st.fullPassFraction >= 1.0;
-  const bool forceFull = st.fullPassFraction <= 0.0;
   const auto atomLimit =
       static_cast<std::size_t>(st.fullPassFraction * nVertices);
   const bool overBonds =
       st.bondCrossover >= 0.0 && st.changedBondFraction > st.bondCrossover;
-  const bool overAtoms = changed.size() > atomLimit;
-  if (!forceIncremental && (forceFull || overAtoms || overBonds)) {
+  const bool overAtoms =
+      st.useVertexFraction && st.fullPassFraction < 1.0 &&
+      (st.fullPassFraction <= 0.0 || changed.size() > atomLimit);
+  if (overAtoms || overBonds) {
     st.which = slot;
-    if (Impl::skipDiffAfterFullPass(nThreads)) {
-      st.hot = true;
-    }
     st.fastEnumerate(st.graph[st.which]);
     return st.flattened;
   }
 
   // T: within reach of a changed vertex in the union of both frames' graphs.
-  // Below the crossover this set is a small patch; above it the caller has
-  // already taken the reused whole-frame pass.
   std::vector<char> inT(static_cast<std::size_t>(nVertices), 0);
   std::vector<int> T = changed;
   for (const int v : changed) {
@@ -1665,6 +1648,14 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
       }
     }
     frontier.swap(wave);
+  }
+
+  // Each source in T is enumerated once. A full pass enumerates n sources.
+  // Those counts meet when T is the whole vertex set, and only then.
+  if (static_cast<int>(T.size()) == nVertices) {
+    st.which = slot;
+    st.fastEnumerate(st.graph[st.which]);
+    return st.flattened;
   }
 
   if (st.ballsStale) {
