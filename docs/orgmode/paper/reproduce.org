@@ -90,7 +90,10 @@ baseline commit ~1c8efa38~ and its build. The ~3~ is the pinned core.
 Each =run.sh= refuses a source tree that differs from the archive.
 The carry record takes the session count as a fifth argument, five by
 default, and with ~BEFORE=1~ it also times the build without the
-back-off by reversing its =backoff.patch=.
+cage-label wait by reversing its =backoff.patch=.
+The ring update enumerates the sources in T, the vertices within reach
+of a changed row in either frame, and it takes a full pass only when T
+is the whole vertex set.
 
 The head-to-head =run.sh= reads ~ARCHIVE~, ~H2H_SEAMS~ (the ~seams~ binary of that archive) and ~PYDSEAMS~ (a PydSEAMSlib built on the same archive).
 It and =rings_mw.sh=, which runs the mW RINGS row, call =h2h.py=, and =compare_table.py= prints the rows of the table.

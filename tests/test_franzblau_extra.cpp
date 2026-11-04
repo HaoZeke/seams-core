@@ -371,6 +371,31 @@ TEST_CASE("RingUpdater equals full recomputation across perturbed frames",
   }
 }
 
+TEST_CASE("a path stays incremental while one edge changes", "[franzblau]") {
+  const int n = 80;
+  std::vector<std::vector<int>> rows(static_cast<std::size_t>(n));
+  for (int v = 0; v < n; ++v) {
+    rows[static_cast<std::size_t>(v)].push_back(v);
+    if (v > 0) {
+      rows[static_cast<std::size_t>(v)].push_back(v - 1);
+    }
+    if (v + 1 < n) {
+      rows[static_cast<std::size_t>(v)].push_back(v + 1);
+    }
+  }
+  primitive::RingUpdater updater(6);
+  REQUIRE(updater.update(rows) == primitive::ringNetwork(rows, 6));
+  REQUIRE(updater.lastRecomputedSources() == n);
+  auto changed = rows;
+  changed[0] = {0};
+  changed[1].erase(std::remove(changed[1].begin(), changed[1].end(), 0),
+                   changed[1].end());
+  const auto &inc = updater.update(changed);
+  REQUIRE(inc == primitive::ringNetwork(changed, 6));
+  REQUIRE(updater.lastRecomputedSources() < n);
+  REQUIRE(updater.lastRecomputedSources() > 0);
+}
+
 TEST_CASE("RingUpdater matches ringNetwork element by element on every frame",
           "[franzblau]") {
   const int n = 1200;

@@ -152,7 +152,9 @@ On the last frame of the 8000-molecule cell the ring update enumerates
 are medians over three sessions, and the nucleation and Niu values,
 frames 2-11 means, come from one session. On frames 2-11 of the nucleation excerpt 2845 bonds
 change per frame on average, and 1948 on frames 2-11 of Niu trajectory
-3 (2880 molecules), so both updaters take the batch pass there.
+3 (2880 molecules).
+The affiliation update takes the batch pass there.
+The ring update enumerates the sources in T and takes a full pass only when T is the whole vertex set.
 
 ** Churn sweep
 

@@ -183,8 +183,9 @@ The update keeps the rings of the previous frame in their stored form, sorted, t
 For the next frame it takes seven steps.
 \begin{enumerate}
 \item Compare the neighbour rows of $G$ and $G'$, and collect the changed bonds and the set $X$ of their ends.
-\item Run the full search of Algorithm~\mref{alg:rings} on $G'$ when $|X|>\dsv{thr@ringatoms}\,n$, when more than $\dsv{thr@ringbonds}\,n$ bonds have changed or when the number of molecules differs between the frames.
+\item Run the full search of Algorithm~\mref{alg:rings} on $G'$ when the number of molecules differs between the frames.
 \item Otherwise build $T=B_r(X)$ in $G\cup G'$, with $r$ from Eq.~(\ref{eq:s-radius}).
+      A full search also runs when $T$ is the whole vertex set.
 \item Refresh the distance rows of the vertices within $\rho$ bonds of $X$ in $G\cup G'$.
       Every other row is the same in both graphs, since a path of at most $\rho$ bonds uses a changed bond only if it reaches an end of that bond within $\rho-1$ bonds.
 \item Remove every stored ring that meets $T$.
@@ -210,8 +211,8 @@ The found rings meet $T$ and the carried rings avoid it, so the two sets are dis
 By induction from a full search on the first frame, the update gives every frame of a trajectory the rings of a full search.
 The comparison of the rows and the merge cost $O(n\Delta)$ per frame, and the searches cost as much as Algorithm~\mref{alg:rings} on $|T|$ start vertices, with trees over all of $G'$.
 On the spliced frames of Section~\ref{sec:s-updates}, the ring update takes \qty{\dsv{c@ringlast@inc}}{\milli\second} at \dsv{c@ringlast@churn} changed bonds, against \qty{\dsv{c@ringlast@batch}}{\milli\second} for the full search (Table~\ref{tab:s-churn}).
-A fallback runs the full search in the buffers that the update keeps, and on the frames of Table~\ref{tab:s-churn} it takes less time than a full search from the start.
-With more than one thread, the update runs the full search without the row comparison on every frame after its first fallback, until the number of molecules changes.
+The ring update enumerates the sources in $T$ and no others.
+A full pass runs only when $T$ is the whole vertex set.
 Every timing of this paper uses one thread.
 
 \subsection{The cage-label update}
@@ -567,7 +568,7 @@ Method & Kind & Cases & Frames \\
 \centering
 \caption{\textbf{On frames of \dsv{c@nop} molecules, the ring update carries the rings up to \dsv{c@ringlast@churn} changed bonds and the cage-label update carries the labels up to \dsv{c@afflast@churn}, and both return the rings and labels of the full search.}
 Each frame splices a sphere of frame \dsv{set@sweep@b} of the nucleation trajectory into frame \dsv{set@sweep@a}; the radius is in \unit{\angstrom}, and the last row replaces every position.
-The changed molecules are the ends of the changed bonds, the times are medians and quartiles of \dsv{c@reps} calls in milliseconds, and a dagger marks an update that fell back to the full search.
+The changed molecules are the ends of the changed bonds, the times are medians and quartiles of \dsv{c@reps} calls in milliseconds, and a dagger marks a recorded call that searched every source.
 The last column states whether the rings and the labels equal those of the full search.}
 \label{tab:s-churn}
 \footnotesize
