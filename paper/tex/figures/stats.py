@@ -1263,7 +1263,7 @@ def hardware():
     host = (DATA / "host.txt").read_text()
     define("hw@arch", arch.replace("_", "\\_"))
     define("hw@nproc", nproc)
-    define("hw@model", model)
+    define("hw@model", model.replace("(R)", "").replace("  ", " "))
     define("hw@gcc", re.search(r"^c\+\+ \(GCC\) (\S+)", host, re.M).group(1))
     return fields[0]
 

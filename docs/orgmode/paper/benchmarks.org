@@ -1,15 +1,10 @@
-#+TITLE: Benchmarks
-#+OPTIONS: toc:nil num:nil ^:nil
+#+TITLE: Benchmarks #+OPTIONS: toc:nil num:nil ^:nil
 
-Timing tables of the d-SEAMS 2.0 paper and its supplement. Each table
-names its record, a directory or file under =results/reference/= of
-[[https://github.com/d-SEAMS/dseams2_repro][dseams2_repro]]. The
-values below are those of seams-core v2.12.0, the release the paper
-describes. A rerun at a later release adds its own table under the
-same heading and names its record, so the paper's values stay
-readable next to the current ones. [[file:reproduce.org][Reproduce]]
-gives the commands, and [[file:versions.org][Versions]] gives the
-machines and the codes.
+Timing tables of the d-SEAMS 2.0 paper and its supplement.
+Each table names its record, a directory or file under =results/reference/= of [[https://github.com/d-SEAMS/dseams2_repro][dseams2_repro]].
+The values below are those of seams-core v2.12.0, the release the paper describes.
+A rerun at a later release adds its own table under the same heading and names its record, so the paper's values stay readable next to the current ones.
+[[file:reproduce.org][Reproduce]] gives the commands, and [[file:versions.org][Versions]] gives the machines and the codes.
 
 * Records
 
@@ -48,14 +43,12 @@ One core, best of five calls per stage, record ~paper_manifest-cluster-cpu-17857
 | DDC, the combined minimum less the HC minimum | 0.30 s | 3.5 ms |
 | ring detection plus the combined call | 4.0 s | 63 ms |
 
-The path is 63.6 times faster. The drivers of this record time the HC
-call and the combined call, which builds its local ring-type and cage
-vectors inside the timer.
+The path is 63.6 times faster.
+The drivers of this record time the HC call and the combined call, which builds its local ring-type and cage vectors inside the timer.
 
-On pinned core 3 of the cloud VM, record ~bench-2026-10-31~, the
-drivers time ~findDDC~ alone. The ring types and cages that ~findHC~
-leaves are computed once and restored outside the timer before each
-call. Values are medians over three sessions.
+On pinned core 3 of the cloud VM, record ~bench-2026-10-31~, the drivers time ~findDDC~ alone.
+The ring types and cages that ~findHC~ leaves are computed once and restored outside the timer before each call.
+Values are medians over three sessions.
 
 | stage | d-SEAMS 1 baseline | d-SEAMS 2.0 |
 |-------+--------------------+-------------|
@@ -65,10 +58,8 @@ call. Values are medians over three sessions.
 | sum of the three stages | 3.0 s | 54 ms |
 | combined HC and DDC call | | 50.3 ms |
 
-The sum is 56 times faster. Built with the ~-O3 -funroll-loops~ of the
-engine's drivers instead of ~-O2~, the baseline drivers time each
-stage within 1.5% of the ~-O2~ build, and the three cage-driver stages
-within 0.2%.
+The sum is 56 times faster.
+Built with the ~-O3 -funroll-loops~ of the engine's drivers instead of ~-O2~, the baseline drivers time each stage within 1.5% of the ~-O2~ build, and the three cage-driver stages within 0.2%.
 
 * Neighbour lists, CHILL+ and rings against system size
 
@@ -86,10 +77,8 @@ The cells are synthetic cubic cells at the mW number density of 0.0332 Å^-3 wit
 | 16000 | 225.734 | 22.712 | 1516.346 | 22.345 | 59.033 | 23.363 | 3626.729 | 226.554 |
 | 32000 | 859.556 | 43.663 | 5975.106 | 42.700 | 110.161 | 45.881 | 4486.953 | 528.897 |
 
-From 1000 to 32000 atoms the 2.0 cutoff list grows by a factor of 30,
-and the baseline list by a factor of 435. At 32000 atoms the
-index-ordered builder falls from 6.0 s to 43 ms, and the two builders
-together from 6.8 s to 86 ms.
+From 1000 to 32000 atoms the 2.0 cutoff list grows by a factor of 30, and the baseline list by a factor of 435.
+At 32000 atoms the index-ordered builder falls from 6.0 s to 43 ms, and the two builders together from 6.8 s to 86 ms.
 
 * OpenMP strong scaling
 
@@ -107,8 +96,8 @@ seven runs per thread count, one thread per physical core
 | cutoff neighbour list | 46 ms | 11 ms | 4.3 |
 | index-ordered neighbour list | 45 ms | 8 ms | 5.8 |
 
-At sixteen threads the pipeline is 43 ms above the ideal line. The
-rings account for 26 ms of that and the two neighbour lists for 13 ms.
+At sixteen threads the pipeline is 43 ms above the ideal line.
+The rings account for 26 ms of that and the two neighbour lists for 13 ms.
 
 * Second architecture
 
@@ -147,21 +136,16 @@ Every updated ring set and every updated cage flag equals the rebuild.
 | Niu trajectory 3, cutoff graph, rings, eight threads (cores 0-7) | 2.244 ms | 2.184 ms |
 | Niu trajectory 3, cutoff graph, affiliation, eight threads (cores 0-7) | 2.725 ms | 2.622 ms |
 
-On the last frame of the 8000-molecule cell the ring update enumerates
-794 of the 8000 sources again. The 8000-molecule and mW cubic values
-are medians over three sessions, and the nucleation and Niu values,
-frames 2-11 means, come from one session. On frames 2-11 of the nucleation excerpt 2845 bonds
-change per frame on average, and 1948 on frames 2-11 of Niu trajectory
-3 (2880 molecules).
+On the last frame of the 8000-molecule cell the ring update enumerates 794 of the 8000 sources again.
+The 8000-molecule and mW cubic values are medians over three sessions, and the nucleation and Niu values, frames 2-11 means, come from one session.
+On frames 2-11 of the nucleation excerpt 2845 bonds change per frame on average, and 1948 on frames 2-11 of Niu trajectory 3 (2880 molecules).
 The affiliation update takes the batch pass there.
 The ring update enumerates the sources in T and takes a full pass only when T is the whole vertex set.
 
 ** Churn sweep
 
-~tests/bench_churn_sweep.cpp~ starts from frame 147 of the figshare mW
-nucleation excerpt (4096 molecules, cutoff graph) and moves the
-molecules within a radius of the box centre to their frame-148
-positions. Median of seven repetitions, one thread, one session.
+~tests/bench_churn_sweep.cpp~ starts from frame 147 of the figshare mW nucleation excerpt (4096 molecules, cutoff graph) and moves the molecules within a radius of the box centre to their frame-148 positions.
+Median of seven repetitions, one thread, one session.
 
 | changed bonds | ring update | ring rebuild | affiliation update | affiliation rebuild |
 |---------------+-------------+--------------+--------------------+---------------------|
@@ -174,12 +158,11 @@ From 57 changed bonds the affiliation update runs the batch pass.
 
 * Carried command line
 
-~seams cages~ over a frame range on pinned core 3 of the cloud VM,
-~OMP_NUM_THREADS=1~, record ~cli-carry-2026-10-31~. Milliseconds per
-frame, whole process. The ratio is rebuild over carry, so a value
-above 1 means the carried walk is faster. The last column is the same
-ratio for the build without the back-off. The carried and rebuilt
-JSON outputs are identical byte for byte in every case.
+~seams cages~ over a frame range on pinned core 3 of the cloud VM, ~OMP_NUM_THREADS=1~, record ~cli-carry-2026-10-31~.
+Milliseconds per frame, whole process.
+The ratio is rebuild over carry, so a value above 1 means the carried walk is faster.
+The last column is the same ratio for the build without the back-off.
+The carried and rebuilt JSON outputs are identical byte for byte in every case.
 
 | trajectory | graph | frames | rebuild | carried | ratio | no back-off |
 |------------+-------+--------+---------+---------+-------+-------------|
@@ -190,24 +173,19 @@ JSON outputs are identical byte for byte in every case.
 | Niu trajectory 3, 2880 | seeded | 148 | 32.51 | 32.94 | 0.987 | 0.961 |
 | Niu trajectory 3, 2880 | cutoff | 148 | 20.13 | 20.54 | 0.980 | 0.958 |
 
-These values are medians over three alternating sessions of the
-record's =run.sh=. The record itself runs five.
+These values are medians over three alternating sessions of the record's =run.sh=.
+The record itself runs five.
 
 * Comparison with other codes
 
 Single-core timings in milliseconds on the same frames, record
-~h2h-2026-10-31~. Outside the RINGS rows each entry times the
-analysis call with the frame in memory, as the best of seven runs
-after one warm-up, and each timer holds the neighbour search of its
-code. The RINGS rows time one whole process on each side, input
-included, and their d-SEAMS side is ~seams fingerprint~, which also
-finds the seven-rings, so the rings of size six and below are
-compared. The mW RINGS rows are n=3: three recorded repetitions and no further warmup, run at the same time with one repetition pinned to each of cores 3, 4 and 5.
-The last row times the completed seeded cage rule against PTM on the
-512-molecule jittered lattice at \(\sigma=0.3\) Å, generator seed 5.
-That row is the median of 30 repetitions after five warm-ups, not the
-best of seven. PTM has no d-SEAMS counterpart, so that row is not the
-same computation.
+~h2h-2026-10-31~.
+Outside the RINGS rows each entry times the analysis call with the frame in memory, as the best of seven runs after one warm-up, and each timer holds the neighbour search of its code.
+The RINGS rows time one whole process on each side, input included, and their d-SEAMS side is ~seams fingerprint~, which also finds the seven-rings, so the rings of size six and below are compared.
+The mW RINGS rows are n=3: three recorded repetitions and no further warmup, run at the same time with one repetition pinned to each of cores 3, 4 and 5.
+The last row times the completed seeded cage rule against PTM on the 512-molecule jittered lattice at \(\sigma=0.3\) Å, generator seed 5.
+That row is the median of 30 repetitions after five warm-ups, not the best of seven.
+PTM has no d-SEAMS counterpart, so that row is not the same computation.
 
 | computation | frame | other code | d-SEAMS 2.0 | other | agreement |
 |-------------+-------+------------+-------------+-------+-----------|
@@ -223,25 +201,12 @@ same computation.
 | 5^12 and 5^12 6^2 cages | sI, 368 | GenIce2 | 28.1 | 436 | 16 and 48 in both |
 | Ic/Ih labels | jittered Ic, 512 | OVITO PTM | 7.104 | 16.312 | 512 and 52 Ic |
 
-The frames are the 4096-molecule mW cubic frame, the final frame of
-the 2880-water Niu dump, the 1000-molecule continuous random network
-CRN1 and the 2 x 2 x 2 GenIce sI framework of 368 waters. Every code
-gets the same oxygen coordinates and orthorhombic cell, and every
-library runs on one thread.
+The frames are the 4096-molecule mW cubic frame, the final frame of the 2880-water Niu dump, the 1000-molecule continuous random network CRN1 and the 2 x 2 x 2 GenIce sI framework of 368 waters.
+Every code gets the same oxygen coordinates and orthorhombic cell, and every library runs on one thread.
 
-OVITO CHILL+ and the d-SEAMS CHILL+\((r_c)\) both run at
-\(r_c=3.5\) Å. d-SEAMS clathrate, interfacial clathrate and water
-match OVITO hydrate, interfacial hydrate and other. The CHILL+ labels
-agree on every mW molecule and differ at 270 Niu molecules, 109 of
-which d-SEAMS labels interfacial clathrate and OVITO other. freud's
-timer holds two neighbour searches, since the plain and averaged
-parameters are two objects, and freud stores coordinates in single
-precision. d-SEAMS evaluates \(q_6\) on the mutual four-nearest graph
-and freud on the four nearest neighbours; the two graphs differ at 175
-of the 2880 Niu molecules. Given freud's neighbour rows, the engine
-returns freud's values to 3.0e-5. RINGS puts 97% of each run in
-the distance matrix of the 5 x 5 x 5 superlattice it builds for a
-periodic cell.
+OVITO CHILL+ and the d-SEAMS CHILL+\((r_c)\) both run at \(r_c=3.5\) Å. d-SEAMS clathrate, interfacial clathrate and water match OVITO hydrate, interfacial hydrate and other. The CHILL+ labels agree on every mW molecule and differ at 270 Niu molecules, 109 of which d-SEAMS labels interfacial clathrate and OVITO other. freud's timer holds two neighbour searches, since the plain and averaged parameters are two objects, and freud stores coordinates in single precision. d-SEAMS evaluates \(q_6\) on the mutual four-nearest graph and freud on the four nearest neighbours; the two graphs differ at 175 of the 2880 Niu molecules.
+Given freud's neighbour rows, the engine returns freud's values to 3.0e-5.
+RINGS puts 97% of each run in the distance matrix of the 5 x 5 x 5 superlattice it builds for a periodic cell.
 
 The calls on each side are these.
 
@@ -273,18 +238,12 @@ The calls on each side are these.
 - OVITO PTM: ~PolyhedralTemplateMatchingModifier(rmsd_cutoff=0.1)~
 - freud: ~freud.order.Steinhardt(l=6)~ with ~average=False~ and with
   ~average=True~, each over four nearest neighbours
-- GenIce2 rings: ~pairlist.pairs_iter~ at 3.5 Å into a networkx
-  graph, then ~cycles_iter(graph, 6, pos)~ of ~cycless.cycles~
+- GenIce2 rings: ~pairlist.pairs_iter~ at 3.5 Å into a networkx graph, then ~cycles_iter(graph, 6, pos)~ of ~cycless.cycles~
 - GenIce2 cages: those rings, then ~polyhedra_iter(rings, 14)~ of
-  ~cycless.polyhed~, keeping the cages of 12 and 14 five- and
-  six-rings, as the genice2-cage formatter does
-- RINGS: ~rings input~ on the same coordinates with one species,
-  periodic boundaries, primitive rings only, search depth 3 (rings of
-  up to six members) and the O-O bond at 3.5 Å
+  ~cycless.polyhed~, keeping the cages of 12 and 14 five- and six-rings, as the genice2-cage formatter does
+- RINGS: ~rings input~ on the same coordinates with one species, periodic boundaries, primitive rings only, search depth 3 (rings of up to six members) and the O-O bond at 3.5 Å
 
-The genice2-cage formatter run from the command line first replicates
-the sI unit cell and builds a hydrogen-bond graph, so the record runs
-it once, untimed, and it returns the same 16 and 48 cages.
+The genice2-cage formatter run from the command line first replicates the sI unit cell and builds a hydrogen-bond graph, so the record runs it once, untimed, and it returns the same 16 and 48 cages.
 
 * Steinhardt parameters across codes
 

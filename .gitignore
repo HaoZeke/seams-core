@@ -369,3 +369,6 @@ repro/results/
 repro/zenodo/payload/
 .tip_sha
 /.lammps-src
+
+# Generated before the PDF build by paper/tex/figures/stats.py
+paper/tex/figures/data/macros.tex

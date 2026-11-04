@@ -312,24 +312,27 @@ Whole path & & & \dsv{v@slope@one@path} & \dsv{v@slope@two@path} \\
 \label{sec:s-machines}
 
 The hardware line is \texttt{uname -m} \texttt{\dsv{hw@arch}}, \texttt{nproc} \dsv{hw@nproc}, CPU model \texttt{\dsv{hw@model}}.
-The version comparison, the update measurements, the nucleation runs and the OVITO ring campaign ran on one machine, and the comparator campaign ran on a second machine with the same hardware line.
-The statistics script stops when the architecture, the output of \texttt{nproc} or the CPU model differs.
-Every timed process used one thread and was pinned with \texttt{taskset}, and the thread counts of OpenMP, OpenBLAS, MKL, Rayon and OVITO were set to one.
-The clock frequency was left at the setting of the machine.
+We ran the version comparison, the update measurements, the nucleation runs and the OVITO ring campaign on one machine.
+We ran the comparator campaign on a second machine with the same hardware line.
+We stopped the statistics script when the architecture, the output of \texttt{nproc} or the CPU model differed.
+We pinned every timed process with \texttt{taskset}, and we set the thread counts of OpenMP, OpenBLAS, MKL, Rayon and OVITO to one.
+We left the clock frequency at the setting of the machine.
 
-seams-core was built with Meson and GCC~\dsv{hw@gcc} in release mode with the options of Section~\ref{sec:s-repro}.
-The measured program is the public commit \texttt{d9e45397cc72552abd1d1bcdf16e671f3884cdeb} of version 2.12.0, with one fix to the cage labels.
+We built seams-core with Meson and GCC~\dsv{hw@gcc} in release mode with the options of Section~\ref{sec:s-repro}.
+We measured the public commit \texttt{d9e45397cc72552abd1d1bcdf16e671f3884cdeb} of version 2.12.0, with one fix to the cage labels.
 The version DOI for that release is \DOIPENDING.
-The fix stores the neighbour membership of the affiliation pass as compressed sparse rows instead of a bit matrix over all pairs of molecules, so that a frame of \num{e6} molecules fits in memory.
-Every measurement used the library and the command-line program of the git tree \texttt{ffd7d964} of the directory \texttt{src}.
+We stored the neighbour membership of the affiliation pass as compressed sparse rows instead of a bit matrix over all pairs of molecules, so that a frame of \num{e6} molecules fits in memory.
+We used the library and the command-line program of the git tree \texttt{ffd7d964} of the directory \texttt{src}.
 That is the tree \texttt{git rev-parse HEAD:src} prints in a checkout of the public commit above.
-The workflow is the shell listings of Section~\ref{sec:s-repro}, run from the repository root.
-The drivers of the version comparison and of the OVITO ring campaign come from the tree \texttt{95d29350} of the directory \texttt{tests}, and the driver of the update sweep from the blob \texttt{dfc526f1} of \texttt{tests/bench\_churn\_sweep.cpp}.
-The SHA-256 sums of all binaries are stored with the records.
-The comparator campaign records the commit and the tree of its own build, whose \texttt{src} tree is the same; its benchmark driver has every mode that the campaign calls, and its build files carry the version string 2.13.0.
-d-SEAMS~1.0.1 was built from the tag v1.0.1, commit 6e51956f, with the same compiler in C++17 at optimization level 2, against Boost and GSL~2.8~\cite{dseams101}.
-Its driver, \texttt{scripts/baseline\_dseams1.cpp}, calls the ring and cage functions of that release on the same graph as the benchmark driver of d-SEAMS.
-The comparator campaign used Python~3.13.14, Meson~1.10.2 and GNU Fortran~15.2.0, and the OVITO ring campaign used Python~3.12.3; Table~\ref{tab:s-settings} lists the versions of the codes.
+We ran the workflow of Section~\ref{sec:s-repro} from the repository root.
+We took the drivers of the version comparison and of the OVITO ring campaign from the tree \texttt{95d29350} of the directory \texttt{tests}, and the driver of the update sweep from the blob \texttt{dfc526f1} of \texttt{tests/bench\_churn\_sweep.cpp}.
+We stored the SHA-256 sums of all binaries with the records.
+We recorded the commit and the tree of the comparator campaign, whose \texttt{src} tree is the same.
+Its benchmark driver has every mode that the campaign calls, and its build files carry the version string 2.13.0.
+We built d-SEAMS~1.0.1 from the tag v1.0.1, commit 6e51956f, with the same compiler in C++17 at optimization level 2, against Boost and GSL~2.8~\cite{dseams101}.
+We called the ring and cage functions of that release on the same graph as the benchmark driver of d-SEAMS.
+We used Python~3.13.14, Meson~1.10.2 and GNU Fortran~15.2.0 in the comparator campaign, and Python~3.12.3 in the OVITO ring campaign.
+Table~\ref{tab:s-settings} lists the versions of the codes.
 
 \subsection{Frames}
 \label{sec:s-frames}
@@ -568,7 +571,7 @@ Method & Kind & Cases & Frames \\
 \centering
 \caption{\textbf{On frames of \dsv{c@nop} molecules, the ring update carries the rings up to \dsv{c@ringlast@churn} changed bonds and the cage-label update carries the labels up to \dsv{c@afflast@churn}, and both return the rings and labels of the full search.}
 Each frame splices a sphere of frame \dsv{set@sweep@b} of the nucleation trajectory into frame \dsv{set@sweep@a}; the radius is in \unit{\angstrom}, and the last row replaces every position.
-The changed molecules are the ends of the changed bonds, the times are medians and quartiles of \dsv{c@reps} calls in milliseconds, and a dagger marks a recorded call that searched every source.
+The changed molecules are the ends of the changed bonds, the times are medians and quartiles of \dsv{c@reps} calls in milliseconds, and a dagger is a recorded call that searched every source.
 The last column states whether the rings and the labels equal those of the full search.}
 \label{tab:s-churn}
 \footnotesize
