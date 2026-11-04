@@ -370,8 +370,15 @@ repro/zenodo/payload/
 .tip_sha
 /.lammps-src
 
-# Generated before the PDF build by paper/tex/figures/stats.py
+# Generated before the PDF build by paper/tex/figures/stats.py and Snakefile
 paper/tex/figures/data/macros.tex
 paper/tex/figures/data/host.txt
 paper/tex/figures/data/churn-host.txt
 paper/tex/figures/data/h2h/environment.json
+paper/tex/figures/data/plot-*.dat
+paper/tex/figures/data/ringperf_macros.tex
+paper/tex/figures/data/h2h/input-manifest.json
+paper/tex/figures/data/nucleation-host.txt
+paper/tex/figures/data/ring-head2head.json
+paper/tex/figures/data/neigh-head2head.json
+paper/tex/figures/xyzrender_xyz/*.xyz
