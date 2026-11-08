@@ -1,4 +1,4 @@
-HOSTNAME cursor
+HOSTNAME redacted
 nproc 1
 nproc_all 8
 affinity pid 391313's current affinity list: 0

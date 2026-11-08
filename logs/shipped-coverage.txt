@@ -1,0 +1,6 @@
+Name                                  Stmts   Miss  Cover   Missing
+-------------------------------------------------------------------
+benchmarks/shipped.py                    38      0   100%
+paper/tex/repro/shipped_campaign.py     232      1    99%   457
+-------------------------------------------------------------------
+TOTAL                                   270      1    99%
