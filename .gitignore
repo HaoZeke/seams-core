@@ -88,6 +88,7 @@ yodaStruct
 *.aux
 *.lof
 *.log
+.timing-scratch/
 *.lot
 *.fls
 *.out
