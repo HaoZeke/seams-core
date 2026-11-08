@@ -352,10 +352,10 @@ PY
       echo "build_failed introspect" >&2
       exit 3
     fi
-    phys=$(cd "$root" && pwd -P)
     find bbdir-cov -name '*.gcda' -delete
-    cmd_b=$(pixi run ninja -C bbdir-cov -t commands tests/test_bulkTUM | sed -e "s|$phys/||g" -e "s|$root/||g")
-    cmd_d=$(pixi run ninja -C bbdir-cov -t commands tests/check_device_host | sed -e "s|$phys/||g" -e "s|$root/||g")
+    strip_repo() { pixi run python3 -c 'import os,sys; r=os.stat(sys.argv[1]); t=sys.stdin.read(); p=set();exec("for tok in t.replace(chr(61),chr(32)).replace(chr(58),chr(32)).split():\n path=tok if tok.startswith(chr(47)) else chr(32).strip()\n while path and path!=chr(47):\n  try: st=os.stat(path)\n  except OSError:\n   path=os.path.dirname(path); continue\n  if (st.st_dev, st.st_ino)==(r.st_dev, r.st_ino): p.add(path); break\n  path=os.path.dirname(path)\nfor prefix in sorted(p, key=len, reverse=True): t=t.replace(prefix+chr(47),chr(32).strip())\nsys.stdout.write(t)")' "$root"; }
+    cmd_b=$(pixi run ninja -C bbdir-cov -t commands tests/test_bulkTUM | strip_repo)
+    cmd_d=$(pixi run ninja -C bbdir-cov -t commands tests/check_device_host | strip_repo)
     if [ -z "$cmd_b" ] || [ -z "$cmd_d" ]; then
       echo "build_failed commands" >&2
       exit 3

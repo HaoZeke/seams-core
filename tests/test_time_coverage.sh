@@ -7,6 +7,7 @@ root=$(git rev-parse --show-toplevel)
 cd "$root"
 mkdir -p "$root/.timing-scratch"
 export TMPDIR="$root/.timing-scratch"
+export SEAMS_REPO="$root"
 scratch=$(mktemp -d "$TMPDIR/scratch.XXXXXX")
 trap 'rm -rf "$scratch"' EXIT
 exec 9>"$scratch/xtrace"
@@ -160,7 +161,7 @@ if [ "$1" = run ]; then
         if [ "${PIXIE_COMMANDS:-ok}" = empty ]; then
           exit 0
         fi
-        echo "gcc -fprofile-arcs -ftest-coverage -o test"
+        echo "gcc -I${SEAMS_REPO}/include -fprofile-arcs -ftest-coverage -o test"
         exit 0
       fi
       exit "${PIXIE_NINJA:-0}"

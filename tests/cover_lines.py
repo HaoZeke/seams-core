@@ -108,7 +108,7 @@ def xtrace_hits(text):
     return hits
 
 
-def run_python(body, argv, data_file, work):
+def run_python(body, argv, data_file, work, stdin_text=None):
     work.mkdir(parents=True, exist_ok=True)
     slot = work / f"block_{len(list(work.glob('block_*.py')))}.py"
     slot.write_text(body if body.endswith("\n") else body + "\n")
@@ -129,6 +129,8 @@ def run_python(body, argv, data_file, work):
         cwd=work,
         env=env,
         check=False,
+        input=stdin_text,
+        text=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -306,8 +308,8 @@ def exercise(text, scratch, repo, data):
     ran = []
     work = scratch / "pyblocks"
 
-    def once(argv):
-        ran.append(run_python(text, argv, data, work))
+    def once(argv, stdin_text=None):
+        ran.append(run_python(text, argv, data, work, stdin_text))
 
     if "def qtype7" in text:
         once([str(scratch / "fixture.log")])
@@ -363,6 +365,9 @@ def exercise(text, scratch, repo, data):
         once([str(scratch / "match.log"), "", str(derive), str(derive)])
     elif "json.load" in text:
         once([str(scratch / "opts.json")])
+    elif "st_ino" in text:
+        once([str(repo)], stdin_text=str(repo) + "/include token\n")
+        once([str(repo)], stdin_text="plain\n")
     return ran
 
 
