@@ -1,0 +1,80 @@
++paper/tex/repro/shipped.sh:5:export OMP_NUM_THREADS=1
++paper/tex/repro/shipped.sh:5:OMP_NUM_THREADS=1
++paper/tex/repro/shipped.sh:6:export OMP_DYNAMIC=FALSE
++paper/tex/repro/shipped.sh:6:OMP_DYNAMIC=FALSE
++paper/tex/repro/shipped.sh:7:export OVITO_THREAD_COUNT=1
++paper/tex/repro/shipped.sh:7:OVITO_THREAD_COUNT=1
++++paper/tex/repro/shipped.sh:8:dirname paper/tex/repro/shipped.sh
+++paper/tex/repro/shipped.sh:8:CDPATH=
+++paper/tex/repro/shipped.sh:8:cd -- paper/tex/repro/../../..
+++paper/tex/repro/shipped.sh:8:pwd
++paper/tex/repro/shipped.sh:8:ROOT=/seams
++paper/tex/repro/shipped.sh:9:export SEAMS_BASE=bbdir-base
++paper/tex/repro/shipped.sh:9:SEAMS_BASE=bbdir-base
++paper/tex/repro/shipped.sh:10:export SEAMS_TIP=.timing-scratch/tip
++paper/tex/repro/shipped.sh:10:SEAMS_TIP=.timing-scratch/tip
++paper/tex/repro/shipped.sh:11:export SEAMS_1E6=input/traj/ice-1e6.lammpstrj
++paper/tex/repro/shipped.sh:11:SEAMS_1E6=input/traj/ice-1e6.lammpstrj
++paper/tex/repro/shipped.sh:12:export SEAMS_SCRATCH=.timing-scratch/work
++paper/tex/repro/shipped.sh:12:SEAMS_SCRATCH=.timing-scratch/work
++paper/tex/repro/shipped.sh:13:'[' '!' -d bbdir-base ']'
++paper/tex/repro/shipped.sh:14:echo 'missing input bbdir-base'
+missing input bbdir-base
++paper/tex/repro/shipped.sh:15:echo 'SEAMS_BASE is a build of commit 1c8efa382c4ae88ebc68e40a991260c4d57edbd5.'
+SEAMS_BASE is a build of commit 1c8efa382c4ae88ebc68e40a991260c4d57edbd5.
++paper/tex/repro/shipped.sh:16:echo 'docs/orgmode/paper/versions.org names that commit as the d-SEAMS 1 baseline.'
+docs/orgmode/paper/versions.org names that commit as the d-SEAMS 1 baseline.
++paper/tex/repro/shipped.sh:17:exit 1
++paper/tex/repro/shipped.sh:5:export OMP_NUM_THREADS=1
++paper/tex/repro/shipped.sh:5:OMP_NUM_THREADS=1
++paper/tex/repro/shipped.sh:6:export OMP_DYNAMIC=FALSE
++paper/tex/repro/shipped.sh:6:OMP_DYNAMIC=FALSE
++paper/tex/repro/shipped.sh:7:export OVITO_THREAD_COUNT=1
++paper/tex/repro/shipped.sh:7:OVITO_THREAD_COUNT=1
++++paper/tex/repro/shipped.sh:8:dirname paper/tex/repro/shipped.sh
+++paper/tex/repro/shipped.sh:8:CDPATH=
+++paper/tex/repro/shipped.sh:8:cd -- paper/tex/repro/../../..
+++paper/tex/repro/shipped.sh:8:pwd
++paper/tex/repro/shipped.sh:8:ROOT=/seams
++paper/tex/repro/shipped.sh:9:export SEAMS_BASE=.timing-scratch/base
++paper/tex/repro/shipped.sh:9:SEAMS_BASE=.timing-scratch/base
++paper/tex/repro/shipped.sh:10:export SEAMS_TIP=.timing-scratch/tip
++paper/tex/repro/shipped.sh:10:SEAMS_TIP=.timing-scratch/tip
++paper/tex/repro/shipped.sh:11:export SEAMS_1E6=input/traj/ice-1e6.lammpstrj
++paper/tex/repro/shipped.sh:11:SEAMS_1E6=input/traj/ice-1e6.lammpstrj
++paper/tex/repro/shipped.sh:12:export SEAMS_SCRATCH=.timing-scratch/work
++paper/tex/repro/shipped.sh:12:SEAMS_SCRATCH=.timing-scratch/work
++paper/tex/repro/shipped.sh:13:'[' '!' -d .timing-scratch/base ']'
++paper/tex/repro/shipped.sh:19:'[' '!' -f input/traj/ice-1e6.lammpstrj ']'
++paper/tex/repro/shipped.sh:20:echo 'missing input input/traj/ice-1e6.lammpstrj'
+missing input input/traj/ice-1e6.lammpstrj
++paper/tex/repro/shipped.sh:21:echo 'SEAMS_1E6 is the 995328-molecule frame.'
+SEAMS_1E6 is the 995328-molecule frame.
++paper/tex/repro/shipped.sh:22:echo 'pixi run paper-ice-1e6 writes it from input/traj/mW_cubic.lammpstrj.'
+pixi run paper-ice-1e6 writes it from input/traj/mW_cubic.lammpstrj.
++paper/tex/repro/shipped.sh:23:exit 1
++paper/tex/repro/shipped.sh:5:export OMP_NUM_THREADS=1
++paper/tex/repro/shipped.sh:5:OMP_NUM_THREADS=1
++paper/tex/repro/shipped.sh:6:export OMP_DYNAMIC=FALSE
++paper/tex/repro/shipped.sh:6:OMP_DYNAMIC=FALSE
++paper/tex/repro/shipped.sh:7:export OVITO_THREAD_COUNT=1
++paper/tex/repro/shipped.sh:7:OVITO_THREAD_COUNT=1
++++paper/tex/repro/shipped.sh:8:dirname paper/tex/repro/shipped.sh
+++paper/tex/repro/shipped.sh:8:CDPATH=
+++paper/tex/repro/shipped.sh:8:cd -- paper/tex/repro/../../..
+++paper/tex/repro/shipped.sh:8:pwd
++paper/tex/repro/shipped.sh:8:ROOT=/seams
++paper/tex/repro/shipped.sh:9:export SEAMS_BASE=.timing-scratch/base
++paper/tex/repro/shipped.sh:9:SEAMS_BASE=.timing-scratch/base
++paper/tex/repro/shipped.sh:10:export SEAMS_TIP=.timing-scratch/tip
++paper/tex/repro/shipped.sh:10:SEAMS_TIP=.timing-scratch/tip
++paper/tex/repro/shipped.sh:11:export SEAMS_1E6=.timing-scratch/ice-1e6.lammpstrj
++paper/tex/repro/shipped.sh:11:SEAMS_1E6=.timing-scratch/ice-1e6.lammpstrj
++paper/tex/repro/shipped.sh:12:export SEAMS_SCRATCH=.timing-scratch/work
++paper/tex/repro/shipped.sh:12:SEAMS_SCRATCH=.timing-scratch/work
++paper/tex/repro/shipped.sh:13:'[' '!' -d .timing-scratch/base ']'
++paper/tex/repro/shipped.sh:19:'[' '!' -f .timing-scratch/ice-1e6.lammpstrj ']'
++paper/tex/repro/shipped.sh:25:mkdir -p .timing-scratch/work
++paper/tex/repro/shipped.sh:26:PY=.timing-scratch/py
++paper/tex/repro/shipped.sh:27:.timing-scratch/py paper/tex/repro/shipped_campaign.py
++paper/tex/repro/shipped.sh:28:.timing-scratch/py paper/tex/repro/check_shipped_numbers.py

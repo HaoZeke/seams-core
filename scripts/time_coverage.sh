@@ -330,21 +330,42 @@ PY
     rm -rf "$scratch"
     ;;
   record)
+    os_name=$(uname -s)
+    if [ "$os_name" != Linux ]; then
+      echo "record_requires_linux ${os_name}: record mode uses LD_PRELOAD, sha256sum, and /proc/meminfo" >&2
+      exit 2
+    fi
     mult=${3:?multiplier}
     root=$(git rev-parse --show-toplevel)
     cd "$root" || exit 1
     unset LIBRARY_PATH
     unset LD_LIBRARY_PATH
-    export OMP_NUM_THREADS=$(nproc)
+    if command -v nproc >/dev/null 2>&1; then
+      export OMP_NUM_THREADS=$(nproc)
+    else
+      export OMP_NUM_THREADS=$(sysctl -n hw.ncpu)
+    fi
     export TMPDIR=.
-    model=$(lscpu | awk -F: '/Model name/{gsub(/^[ \t]+/, "", $2); print $2; exit}')
-    family=$(lscpu | awk -F: '/^CPU family:/{gsub(/^[ \t]+/, "", $2); print $2; exit}')
-    model_num=$(lscpu | awk -F: '/^Model:/{gsub(/^[ \t]+/, "", $2); print $2; exit}')
+    if command -v lscpu >/dev/null 2>&1; then
+      model=$(lscpu | awk -F: '/Model name/{gsub(/^[ \t]+/, "", $2); print $2; exit}')
+      family=$(lscpu | awk -F: '/^CPU family:/{gsub(/^[ \t]+/, "", $2); print $2; exit}')
+      model_num=$(lscpu | awk -F: '/^Model:/{gsub(/^[ \t]+/, "", $2); print $2; exit}')
+      cpu_text=$(lscpu)
+    else
+      model=$(sysctl -n machdep.cpu.brand_string)
+      family=$(sysctl -n machdep.cpu.family)
+      model_num=$(sysctl -n machdep.cpu.model)
+      cpu_text=$(sysctl -a machdep.cpu hw 2>/dev/null || true)
+    fi
     if ! pixi run ninja -C bbdir-cov tests/test_bulkTUM tests/check_device_host; then
       echo "build_failed ninja" >&2
       exit 3
     fi
-    if ! pixi run gcc -shared -fPIC -pthread -o bbdir-cov/monotonic_realtime.so scripts/monotonic_realtime.c -ldl; then
+    shim_ld=""
+    if [ "$(uname -s)" != Darwin ]; then
+      shim_ld="-ldl"
+    fi
+    if ! pixi run gcc -shared -fPIC -pthread -o bbdir-cov/monotonic_realtime.so scripts/monotonic_realtime.c $shim_ld; then
       echo "build_failed gcc" >&2
       exit 3
     fi
@@ -353,7 +374,7 @@ PY
       exit 3
     fi
     find bbdir-cov -name '*.gcda' -delete
-    strip_repo() { pixi run python3 -c 'import os,sys; r=os.stat(sys.argv[1]); t=sys.stdin.read(); p=set();exec("for tok in t.replace(chr(61),chr(32)).replace(chr(58),chr(32)).split():\n path=tok if tok.startswith(chr(47)) else chr(32).strip()\n while path and path!=chr(47):\n  try: st=os.stat(path)\n  except OSError:\n   path=os.path.dirname(path); continue\n  if (st.st_dev, st.st_ino)==(r.st_dev, r.st_ino): p.add(path); break\n  path=os.path.dirname(path)\nfor prefix in sorted(p, key=len, reverse=True): t=t.replace(prefix+chr(47),chr(32).strip())\nsys.stdout.write(t)")' "$root"; }
+    strip_repo() { pixi run python3 scripts/strip_repo.py "$root"; }
     cmd_b=$(pixi run ninja -C bbdir-cov -t commands tests/test_bulkTUM | strip_repo)
     cmd_d=$(pixi run ninja -C bbdir-cov -t commands tests/check_device_host | strip_repo)
     if [ -z "$cmd_b" ] || [ -z "$cmd_d" ]; then
@@ -370,10 +391,10 @@ PY
       echo "cpu_model: $model"
       echo "cpu_family: $family"
       echo "cpu_model_num: $model_num"
-      echo "cpu_counts: $(lscpu | awk -F: '/^CPU\(s\)/{gsub(/^[ \t]+/, "", $2); c=$2} /^Core\(s\) per socket/{gsub(/^[ \t]+/, "", $2); cores=$2} /^Socket\(s\)/{gsub(/^[ \t]+/, "", $2); sock=$2} /^Thread\(s\) per core/{gsub(/^[ \t]+/, "", $2); thr=$2} END{print "cpus", c, "cores_per_socket", cores, "sockets", sock, "threads_per_core", thr}')"
+      echo "cpu_counts: $(printf '%s\n' "$cpu_text" | awk -F: '/^CPU\(s\)/{gsub(/^[ \t]+/, "", $2); c=$2} /^Core\(s\) per socket/{gsub(/^[ \t]+/, "", $2); cores=$2} /^Socket\(s\)/{gsub(/^[ \t]+/, "", $2); sock=$2} /^Thread\(s\) per core/{gsub(/^[ \t]+/, "", $2); thr=$2} END{print "cpus", c, "cores_per_socket", cores, "sockets", sock, "threads_per_core", thr}')"
       echo "compile_bulk: $cmd_b"
       echo "compile_device: $cmd_d"
-      mhz=$(lscpu | awk -F: '/MHz/{gsub(/^[ \t]+/, "", $2); print $2; exit}')
+      mhz=$(printf '%s\n' "$cpu_text" | awk -F: '/MHz/{gsub(/^[ \t]+/, "", $2); print $2; exit}')
       echo "cpu_mhz: ${mhz:-unavailable}"
       echo "memory_kib: $(awk '/MemTotal/{print $2}' /proc/meminfo)"
       echo "compiler: $(pixi run c++ --version | awk 'NR==1{print; exit}')"

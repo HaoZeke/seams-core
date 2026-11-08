@@ -20,8 +20,6 @@ jobs:
           cache-key: pixi-default-
       - name: Check coverage timeouts match the derive script
         run: scripts/time_coverage.sh check
-      - name: Test the coverage timing script
-        run: tests/test_time_coverage.sh
       # The conda arm64-apple-darwin20.0.0 toolchain needs the macOS 11 SDK it
       # was built against: the runner's Xcode SDK is too new for the conda
       # ld64, whose TAPI parser then imports nothing from libSystem and every
@@ -33,6 +31,9 @@ jobs:
           sudo tar -xf MacOSX11.0.sdk.tar.xz -C /opt
           echo "SDKROOT=/opt/MacOSX11.0.sdk" >> "$GITHUB_ENV"
           echo "CONDA_BUILD_SYSROOT=/opt/MacOSX11.0.sdk" >> "$GITHUB_ENV"
+      # macOS checks the record refusal. The shim build stays on Linux.
+      - name: Test the coverage timing script
+        run: tests/test_time_coverage.sh
       - run: pixi run setup
       - run: pixi run build
       - run: pixi run test

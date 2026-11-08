@@ -21,19 +21,63 @@ ROOT = Path(os.environ["SEAMS_ROOT"]) if "SEAMS_ROOT" in os.environ else _HERE.p
 sys.path.insert(0, str(ROOT / "tests"))
 from bench_h2h_rings import (  # noqa: E402
     read_lammps_frame,
+    replicate_frame,
     run_ovito_worker,
     save_frame_npz,
     type7,
+    write_lammps_dump,
 )
+
+def runtime_path(env_key: str, default: Path) -> Path:
+    raw = os.environ.get(env_key)
+    return Path(raw) if raw else default
+
+
+def prepare_scratch(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def require_input(path: Path, kind: str, hint: str) -> None:
+    present = path.is_dir() if kind == "dir" else path.is_file()
+    if present:
+        return
+    raise SystemExit(f"missing input {path}\n{hint}")
+
+
+def ice_factors() -> tuple[int, int, int]:
+    raw = os.environ.get("SEAMS_ICE_REP", "9,9,3")
+    nx, ny, nz = (int(part) for part in raw.split(","))
+    return nx, ny, nz
+
+
+def make_ice_frame() -> Path:
+    """Write the 995328-molecule frame from the 4096-atom cubic cell."""
+    dest = Path(os.environ.get("SEAMS_ICE_OUT", str(ROOT / "input/traj/ice-1e6.lammpstrj")))
+    nx, ny, nz = ice_factors()
+    base = read_lammps_frame(str(ROOT / "input/traj/mW_cubic.lammpstrj"), 1)
+    frame = replicate_frame(base, nx, ny, nz)
+    write_lammps_dump(str(dest), frame, atom_type=1)
+    return dest
+
 
 OUT = Path(os.environ.get("SEAMS_OUT", ROOT / "paper/tex/figures/data"))
 H2H = ROOT / "tests/bench_h2h_rings.py"
-BASE = Path(os.environ.get("SEAMS_BASE", "<seams-base>/bbdir-release"))
-TIP = Path(os.environ.get("SEAMS_TIP", str(ROOT / "bbdir-release")))
+BASE = runtime_path("SEAMS_BASE", ROOT / "bbdir-base")
+TIP = runtime_path("SEAMS_TIP", ROOT / "bbdir-release")
 CORE = os.environ.get("SEAMS_CORE", "0")
-ORTH = Path(os.environ.get(
-    "SEAMS_ORTH", ROOT / "input/traj/orth-1e5-ring-scale.lammpstrj"))
-MILLION = Path(os.environ.get("SEAMS_1E6", "<v37-frames>/ice-1e6.lammpstrj"))
+ORTH = runtime_path("SEAMS_ORTH", ROOT / "input/traj/orth-1e5-ring-scale.lammpstrj")
+MILLION = runtime_path("SEAMS_1E6", ROOT / "input/traj/ice-1e6.lammpstrj")
+SCRATCH = prepare_scratch(runtime_path("SEAMS_SCRATCH", ROOT / "paper/tex/repro/work"))
+BASE_HINT = (
+    "SEAMS_BASE is a build of commit 1c8efa382c4ae88ebc68e40a991260c4d57edbd5. "
+    "docs/orgmode/paper/versions.org names that commit as the d-SEAMS 1 baseline."
+)
+ICE_HINT = (
+    "SEAMS_1E6 is the 995328-molecule frame. "
+    "pixi run paper-ice-1e6 writes input/traj/ice-1e6.lammpstrj "
+    "from input/traj/mW_cubic.lammpstrj."
+)
 N_ORTH = 12
 N_BIG = 6
 STAGES = ("io_ms", "neigh_ms", "knn_ms", "knn_pair_ms", "rings_ms", "affil_ms", "seeded_ms")
@@ -88,9 +132,27 @@ def machine_banner(command: str) -> str:
     ])
 
 
+def redact_paths(text: str) -> str:
+    pairs = []
+    for path, label in (
+        (SCRATCH, "<scratch>"),
+        (BASE, "<seams-base>"),
+        (TIP, "<seams-tip>"),
+        (MILLION.parent, "<v37-frames>"),
+        (ROOT, "<repo>"),
+    ):
+        resolved = str(Path(path).resolve())
+        if resolved.startswith("/") and len(resolved) > 1:
+            pairs.append((resolved, label))
+    pairs.sort(key=lambda item: len(item[0]), reverse=True)
+    for real, label in pairs:
+        text = text.replace(real, label)
+    return text
+
+
 def write_log(name: str, command: str, body: str) -> None:
     LOGS.mkdir(parents=True, exist_ok=True)
-    text = machine_banner(command) + body
+    text = redact_paths(machine_banner(command) + body)
     if "(R)" in text.split("lscpu <<LSC", 1)[-1].split("LSC", 1)[-1]:
         raise SystemExit(f"(R) leaked into {name}")
     (LOGS / name).write_text(text if text.endswith("\n") else text + "\n")
@@ -367,13 +429,15 @@ def write_outputs(record: dict) -> None:
 
 
 def main() -> None:
+    require_input(BASE, "dir", BASE_HINT)
+    require_input(MILLION, "file", ICE_HINT)
     host = subprocess.check_output(["lscpu"], text=True)
     model = next(ln.split(":", 1)[1].strip() for ln in host.splitlines() if ln.startswith("Model name"))
     orth = read_lammps_frame(str(ORTH), 1)
-    npz = Path("<scratch>/v40-orth.npz")
+    npz = SCRATCH / "v40-orth.npz"
     save_frame_npz(orth, str(npz))
     big = read_lammps_frame(str(MILLION), 1)
-    npz_big = Path("<scratch>/v40-1e6.npz")
+    npz_big = SCRATCH / "v40-1e6.npz"
     save_frame_npz(big, str(npz_big))
 
     base_stages = Path(BASE / "tests/bench_stages")
@@ -453,5 +517,12 @@ def main() -> None:
     print("base_1e6_oom", base_oom, "matrix_GiB", record["matrix_gib_1e6"])
 
 
-if __name__ == "__main__":
+def entry(argv: list[str]) -> None:
+    if len(argv) > 1 and argv[1] == "--make-ice":
+        print(make_ice_frame())
+        return
     main()
+
+
+if __name__ == "__main__":
+    entry(sys.argv)

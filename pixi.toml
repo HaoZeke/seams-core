@@ -22,6 +22,7 @@ pip = "*"
 meson-python = ">=0.16"
 pytest = ">=8.0"
 lcov = ">=1.16"
+coverage = ">=7.4"
 libhwy = ">=1.3.0"
 chemfiles = ">=0.10"
 # Ozaki tests link libgmp and libmpfr.
@@ -39,6 +40,7 @@ test-bindings = { cmd = "meson test -C bbdir-lang seams_lang_fixtures --print-er
 # Python tests live in d-SEAMS/PydSEAMSlib
 coverage-setup = "meson setup bbdir-cov --prefix=$CONDA_PREFIX -Dwith_tests=true -Dwith_python=false -Db_coverage=true -Dbuildtype=debugoptimized --wipe 2>/dev/null; meson setup bbdir-cov --prefix=$CONDA_PREFIX -Dwith_tests=true -Dwith_python=false -Db_coverage=true -Dbuildtype=debugoptimized"
 coverage-build = { cmd = "ninja -j4 -C bbdir-cov", depends-on = ["coverage-setup"] }
+paper-ice-1e6 = "python paper/tex/repro/shipped_campaign.py --make-ice"
 coverage-run = { cmd = """
 meson test -C bbdir-cov --num-processes 1 && ninja -C bbdir-cov coverage && \
 lcov --remove bbdir-cov/meson-logs/coverage.info \

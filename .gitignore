@@ -67,6 +67,7 @@ output/
 .gdb_history
 *.lammpstrj
 !input/traj/*.lammpstrj
+input/traj/ice-1e6.lammpstrj
 bin/
 build/
 # docs/source/*.rst is generated from orgmode, but track orgmode + conf.py
@@ -89,6 +90,7 @@ yodaStruct
 *.lof
 *.log
 .timing-scratch/
+paper/tex/repro/work/
 *.lot
 *.fls
 *.out

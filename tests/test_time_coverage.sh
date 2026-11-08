@@ -80,7 +80,11 @@ grep -q 'mismatch' "$scratch/check.txt"
 runsh check logs/github-runner-timings.log > "$scratch/live.txt"
 grep -q '^match ' "$scratch/live.txt"
 cp tests/meson.build "$scratch/meson.build"
-sed -i 's/b_coverage'"'"') ? 35/b_coverage'"'"') ? 99/' "$scratch/meson.build"
+python3 - "$scratch/meson.build" << 'PY'
+import pathlib, sys
+path = pathlib.Path(sys.argv[1])
+path.write_text(path.read_text().replace("b_coverage') ? 35", "b_coverage') ? 99", 1))
+PY
 must_fail "check must fail when the build file disagrees" runsh check logs/github-runner-timings.log "$scratch/meson.build" > "$scratch/badbuild.txt"
 grep -q mismatch "$scratch/badbuild.txt"
 cp tests/meson.build "$scratch/meson.build"
@@ -161,7 +165,7 @@ if [ "$1" = run ]; then
         if [ "${PIXIE_COMMANDS:-ok}" = empty ]; then
           exit 0
         fi
-        echo "gcc -I${SEAMS_REPO}/include -fprofile-arcs -ftest-coverage -o test"
+        echo "${SEAMS_REPO}/include gcc -fprofile-arcs -ftest-coverage -o test"
         exit 0
       fi
       exit "${PIXIE_NINJA:-0}"
@@ -187,6 +191,13 @@ fi
 exit 0
 EOF
 chmod +x "$scratch/bin/pixi"
+os_name=$(uname -s)
+refuse_record() {
+  host_os=$1
+  must_fail "record must refuse ${host_os}" runsh record "$scratch/record-darwin.log" 0 > "$scratch/record-darwin.txt" 2>&1
+  grep -q "record_requires_linux ${host_os}" "$scratch/record-darwin.txt"
+}
+if [ "$os_name" = Linux ]; then
 PATH="$scratch/bin:$PATH" runsh record "$scratch/record.log" 0 > "$scratch/record-status.txt" || true
 grep -q 'cpu_model:' "$scratch/record.log"
 grep -q 'cpu_family:' "$scratch/record.log"
@@ -197,6 +208,28 @@ grep -q 'compile_bulk:' "$scratch/record.log"
 grep -q 'clock_delta=' "$scratch/record.log"
 SEAMS_STATUS=clean PATH="$scratch/bin:$PATH" runsh record "$scratch/record-clean.log" 0 > "$scratch/record-clean-status.txt" || true
 grep -q 'status: clean' "$scratch/record-clean.log"
+filtered="$scratch/filtered"
+mkdir -p "$filtered"
+for tool in bash cat git awk uname sha256sum date find python3; do
+  tool_src=$(PATH="/usr/bin:/bin" command -v "$tool")
+  ln -s "$tool_src" "$filtered/$tool"
+done
+rm -f "$filtered/sysctl"
+cat > "$filtered/sysctl" << 'EOF'
+#!/bin/bash -x
+case "$*" in
+  *hw.ncpu*) echo 4 ;;
+  *brand_string*) echo "Intel Xeon Processor" ;;
+  *family*) echo 6 ;;
+  *.model*) echo 85 ;;
+  *) printf '%s\n' "CPU(s): 4" "Core(s) per socket: 2" "Socket(s): 1" "Thread(s) per core: 2" "CPU MHz: 2000" ;;
+esac
+EOF
+chmod +x "$filtered/sysctl"
+ln -sfn "$scratch/bin/pixi" "$filtered/pixi"
+PATH="$filtered" runsh record "$scratch/record-sysctl.log" 0 > "$scratch/record-sysctl-status.txt" || true
+grep -q 'cpu_model: Intel Xeon Processor' "$scratch/record-sysctl.log"
+grep -q 'omp_num_threads:' "$scratch/record-sysctl.log"
 PIXIE_TEST_LINE="1/1 seams-core:bulkTUM FAILED" PATH="$scratch/bin:$PATH" runsh record "$scratch/record-miss.log" 0 > "$scratch/record-miss-status.txt" || true
 grep -q 'clock_missing' "$scratch/record-miss.log"
 PIXIE_MESON=1 PATH="$scratch/bin:$PATH" runsh record "$scratch/record-rc.log" 0 > "$scratch/record-rc-status.txt" || true
@@ -213,35 +246,40 @@ PIXIE_OPTS='[{"name":"b_coverage","value":false},{"name":"buildtype","value":"de
 PIXIE_OPTS="$PIXIE_OPTS" PATH="$scratch/bin:$PATH" must_fail "record must fail when coverage is off" runsh record "$scratch/record-nocov.log" 0 > "$scratch/record-nocov.txt" 2>&1
 grep -q 'build_not_coverage' "$scratch/record-nocov.log"
 "$scratch/bin/pixi" run true
-
-os_name=$(uname -s)
+mkdir -p "$scratch/darwin-bin"
+cat > "$scratch/darwin-bin/uname" << 'EOF'
+#!/bin/bash -x
+if [ "${1:-}" = -s ]; then
+  echo Darwin
+  exit 0
+fi
+exec /usr/bin/uname "$@"
+EOF
+chmod +x "$scratch/darwin-bin/uname"
+PATH="$scratch/darwin-bin:$PATH" refuse_record Darwin
 cat > "$scratch/tick.c" << 'EOF'
 #define _GNU_SOURCE
+#include <dlfcn.h>
 #include <time.h>
 #include <stdio.h>
 int main(void) {
   struct timespec mono, real;
   if (clock_gettime(CLOCK_MONOTONIC, &mono) != 0) return 1;
   if (clock_gettime(CLOCK_REALTIME, &real) != 0) return 1;
-  if (mono.tv_sec < 0 || real.tv_sec < 0) return 1;
-  printf("clocks_ok\n");
+  Dl_info info;
+  if (dladdr((void *)clock_gettime, &info) == 0 || !info.dli_fname) return 2;
+  printf("%s\n", info.dli_fname);
   return 0;
 }
 EOF
 pixi run gcc -shared -fPIC -pthread -o "$scratch/mono.so" scripts/monotonic_realtime.c -ldl
-pixi run gcc -o "$scratch/tick" "$scratch/tick.c"
-"$scratch/tick" > "$scratch/plain.txt"
-preload_rc=0
-dyld_rc=0
-LD_PRELOAD="$scratch/mono.so" "$scratch/tick" > "$scratch/preload.txt" || preload_rc=$?
-echo "linux_preload_ok"
-DYLD_INSERT_LIBRARIES="$scratch/mono.so" "$scratch/tick" > "$scratch/dyld.txt" || dyld_rc=$?
-echo "darwin_insert_ok"
-echo "preload changed a program that ignores civil time"
-test "$preload_rc" -eq 0
-cmp "$scratch/plain.txt" "$scratch/preload.txt"
-test "$dyld_rc" -eq 0
-cmp "$scratch/plain.txt" "$scratch/dyld.txt"
+pixi run gcc -o "$scratch/tick" "$scratch/tick.c" -ldl
+LD_PRELOAD="$scratch/mono.so" "$scratch/tick" > "$scratch/preload.txt"
+grep -q mono.so "$scratch/preload.txt"
+echo linux_shim_loaded
+else
+refuse_record "$os_name"
+fi
 note_os() {
   if [ "$1" = Linux ]; then
     echo "linux_required"
@@ -257,7 +295,26 @@ note_os other
 echo "The Apple clock header defines CLOCK_REALTIME and CLOCK_MONOTONIC."
 echo "It does not define CLOCK_REALTIME_COARSE."
 echo "The shim reads the coarse clock only when that macro exists."
+pixi run python3 - << 'PY'
+import sys
+sys.path.insert(0, "tests")
+from cover_lines import parse_missing_field, missing_field_from_report_line
+line = "block.py    61    10   84%   32-34, 41, 48-49"
+field = missing_field_from_report_line(line)
+got = parse_missing_field(field)
+assert got == {32, 33, 34, 41, 48, 49}, got
+print("missing_field_ok")
+PY
+printf '%s\n' "$root/include nowhere/else" /usr/bin | pixi run python3 -m coverage run \
+  --data-file "$root/.timing-scratch/strip.dat" scripts/strip_repo.py "$root" \
+  > "$scratch/stripped.txt"
+grep -q '^include ' "$scratch/stripped.txt"
+pixi run python3 -m coverage json --data-file "$root/.timing-scratch/strip.dat" \
+  -o "$root/logs/strip-repo-lines.json" --pretty-print
+pixi run python3 scripts/strip_repo.py "$root" < "$root/logs/strip-repo-lines.json" > "$scratch/strip-clean.json"
+mv "$scratch/strip-clean.json" "$root/logs/strip-repo-lines.json"
 
+if [ "$os_name" = Linux ]; then
 echo "time_coverage tests passed"
 mkdir -p logs
 export SEAMS_COVER_LOOSE=1
@@ -283,3 +340,4 @@ pixi run python3 tests/cover_lines.py \
   "$root/tests/test_time_coverage.sh" \
   "$root/logs/time-coverage-py.txt" \
   "$root/logs/time-coverage-xtrace.log"
+fi

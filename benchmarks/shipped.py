@@ -66,7 +66,13 @@ class ShippedMillion:
     param_names = ["graph"]
 
     def setup(self, graph):
-        frame = os.environ.get("SEAMS_1E6", "<v37-frames>/ice-1e6.lammpstrj")
+        frame = os.environ.get("SEAMS_1E6", str(ROOT / "input/traj/ice-1e6.lammpstrj"))
+        if not __import__("pathlib").Path(frame).is_file():
+            raise SystemExit(
+                f"missing input {frame}\n"
+                "SEAMS_1E6 is the 995328-molecule frame. "
+                "pixi run paper-ice-1e6 writes it from input/traj/mW_cubic.lammpstrj."
+            )
         seams = ROOT / "bbdir-release" / "seams"
         args = ["cages"] if graph == "seeded" else ["cages", "--graph", "cutoff"]
         self.cmd = ["taskset", "-c", "0", str(seams), *args, frame]

@@ -3,10 +3,11 @@
 
 Shell lines come from the bash xtrace. Embedded Python comes from
 coverage.py. A here-document that is compiled and run as C is counted
-when that program prints clocks_ok. The trace bootstrap, comments,
+when the preload evidence names the shim. The trace bootstrap, comments,
 blank lines, and shell keywords that bash does not trace are omitted.
 """
 
+import json
 import os
 import socket
 import subprocess
@@ -18,6 +19,10 @@ KEYWORDS = {"{", "}", ";;", "fi", "then", "else", "do", "done", "esac"}
 
 def heredoc_token(raw):
     if "<<" not in raw:
+        return ""
+    # A here-string uses <<< and does not open a here-document.
+    mark = raw.find("<<")
+    if mark + 2 < len(raw) and raw[mark + 2] == "<":
         return ""
     token = raw.split("<<", 1)[1].strip()
     if not token:
@@ -108,7 +113,7 @@ def xtrace_hits(text):
     return hits
 
 
-def run_python(body, argv, data_file, work, stdin_text=None):
+def run_python(body, argv, data_file, work, stdin_text=None, cwd=None):
     work.mkdir(parents=True, exist_ok=True)
     slot = work / f"block_{len(list(work.glob('block_*.py')))}.py"
     slot.write_text(body if body.endswith("\n") else body + "\n")
@@ -126,7 +131,7 @@ def run_python(body, argv, data_file, work, stdin_text=None):
             str(slot),
             *argv,
         ],
-        cwd=work,
+        cwd=cwd or work,
         env=env,
         check=False,
         input=stdin_text,
@@ -137,18 +142,41 @@ def run_python(body, argv, data_file, work, stdin_text=None):
     return slot
 
 
+def parse_missing_field(field: str) -> set[int]:
+    """Every range in a coverage missing field, not only the last token."""
+    missing = set()
+    for piece in field.split(","):
+        piece = piece.strip()
+        if not piece:
+            continue
+        if "-" in piece:
+            lo, hi = piece.split("-", 1)
+            missing.update(range(int(lo), int(hi) + 1))
+        else:
+            missing.add(int(piece))
+    return missing
+
+
+def missing_field_from_report_line(line: str) -> str:
+    if "%" not in line:
+        return ""
+    return line.split("%", 1)[1].strip()
+
+
 def covered_python(data_file, slot):
     env = os.environ.copy()
     env["COVERAGE_FILE"] = str(data_file)
+    out = slot.parent / f"{slot.name}.lines.json"
     proc = subprocess.run(
         [
             sys.executable,
             "-m",
             "coverage",
-            "report",
+            "json",
+            "-o",
+            str(out),
             "--include",
-            str(slot),
-            "--show-missing",
+            f"*{slot.name}",
         ],
         cwd=slot.parent,
         env=env,
@@ -157,27 +185,16 @@ def covered_python(data_file, slot):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    if proc.returncode != 0 and "No data to report" in proc.stderr + proc.stdout:
-        return set(), proc.stdout + proc.stderr
-    missing = set()
-    for line in proc.stdout.splitlines():
-        if line.startswith("Name") or line.startswith("---") or line.startswith("TOTAL"):
-            continue
-        parts = line.split()
-        if len(parts) < 4 or parts[-1].endswith("%"):
-            continue
-        chunk = parts[-1]
-        for piece in chunk.split(","):
-            piece = piece.strip()
-            if not piece:
-                continue
-            if "-" in piece:
-                lo, hi = piece.split("-", 1)
-                missing.update(range(int(lo), int(hi) + 1))
-            else:
-                missing.add(int(piece))
-    total = len(slot.read_text().splitlines())
-    return {n for n in range(1, total + 1) if n not in missing}, proc.stdout
+    if proc.returncode != 0 or not out.exists():
+        return set(), set(), proc.stdout + proc.stderr
+    payload = json.loads(out.read_text())
+    files = payload.get("files", {})
+    if not files:
+        return set(), set(), "No data to report."
+    info = next(iter(files.values()))
+    missing = set(info.get("missing_lines", []))
+    executed = set(info.get("executed_lines", []))
+    return executed, missing, json.dumps({"missing": sorted(missing), "executed": sorted(executed)})
 
 
 def write_text(path, text):
@@ -211,6 +228,7 @@ def main():
         data.unlink()
     reports = []
     summaries = []
+    physical_maps = []
     for script in scripts:
         lines, shell, python, compiled, embedded = classify(script)
         shell_hit = set()
@@ -240,9 +258,22 @@ def main():
             text = "\n".join(body) + "\n"
             slots = exercise(text, scratch, repo, data)
             for slot in slots:
-                covered, report = covered_python(data, slot)
+                covered, absent, report = covered_python(data, slot)
                 reports.append(f"# {Path(script).name}:{start}\n{report}")
+                state = {}
                 for number in covered:
+                    state[number] = True
+                for number in absent:
+                    state[number] = False
+                current = None
+                for number in range(1, len(body) + 1):
+                    if number in state:
+                        current = state[number]
+                    elif current is not None:
+                        state[number] = current
+                for number, hit in state.items():
+                    if not hit:
+                        continue
                     origin = start + number - 1
                     if origin in python:
                         py_hit.add(origin)
@@ -251,13 +282,25 @@ def main():
             if kind == "PY":
                 continue
             text = "\n".join(body)
-            if text.startswith("#!/bin/bash"):
+            if text.startswith("#!/bin/bash") or text.startswith("#!/bin/sh"):
                 for path, nums in hits.items():
-                    if path.endswith("/pixi"):
-                        for number in nums:
-                            other_hit.add(start + number - 1)
-            if "#include" in text and (scratch / "plain.txt").exists():
-                if "clocks_ok" in (scratch / "plain.txt").read_text():
+                    candidate = Path(path)
+                    if not candidate.is_file():
+                        continue
+                    got = candidate.read_text()
+                    if got != text and got != text + "\n":
+                        continue
+                    for number in nums:
+                        origin = start + number - 1
+                        if start <= origin < start + len(body):
+                            other_hit.add(origin)
+            if "#include" in text:
+                evidence = ""
+                for name in ("plain.txt", "preload.txt", "dyld.txt"):
+                    found = scratch / name
+                    if found.exists():
+                        evidence += found.read_text(errors="replace")
+                if "clocks_ok" in evidence or "mono.so" in evidence:
                     for offset, row in enumerate(body, start):
                         if row.strip() and not row.strip().startswith("//"):
                             other_hit.add(offset)
@@ -268,6 +311,13 @@ def main():
         summaries.append(
             f"{Path(script).name} {len(covered_lines)} {len(code)} {pct:.4f}"
         )
+        physical_maps.append(
+            {
+                "file": Path(script).name,
+                "executed": covered_lines,
+                "missing": missing,
+            }
+        )
         if missing:
             summaries.append("missing " + " ".join(str(n) for n in missing[:80]))
         if pct < 98 and os.environ.get("SEAMS_COVER_LOOSE") != "1":
@@ -275,6 +325,10 @@ def main():
             print("\n".join(summaries))
             return 1
     write_text(out_path, "\n".join(reports + summaries) + "\n")
+    write_text(
+        str(Path(out_path).with_suffix(".physical.json")),
+        json.dumps(physical_maps) + "\n",
+    )
     print("\n".join(summaries))
     if os.environ.get("SEAMS_COVER_EDGES") == "1":
         exercise_edges(scratch)
@@ -282,12 +336,24 @@ def main():
 
 
 def exercise_edges(scratch):
+    got = parse_missing_field("32-34, 41, 48-49")
+    if got != {32, 33, 34, 41, 48, 49}:
+        raise SystemExit(f"missing field parse failed: {got}")
+    field = missing_field_from_report_line("block.py    61    10   84%   32-34, 41, 48-49")
+    if field != "32-34, 41, 48-49":
+        raise SystemExit(f"missing field split failed: {field}")
+    if missing_field_from_report_line("no percent here") != "":
+        raise SystemExit("a row without a percent has no missing field")
+    heredoc_token("echo <<< value")
     heredoc_token("echo <<")
     heredoc_token("echo << 'PY'")
     xtrace_hits("nope\nCOV:only\nCOV:a:b:c\nCOV:p:zz:z\n")
     slot = Path(scratch) / "empty.py"
     slot.write_text("print(1)\n")
     covered_python(Path(scratch) / "missing.dat", slot)
+    unused = Path(scratch) / "nomatch.py"
+    unused.write_text("print(1)\n")
+    covered_python(Path(scratch) / "py.coverage", unused)
     os.environ.pop("SEAMS_COVER_EDGES", None)
     os.environ["SEAMS_COVER_LOOSE"] = "0"
     trace = Path(scratch) / "edge.xtrace"
@@ -308,8 +374,8 @@ def exercise(text, scratch, repo, data):
     ran = []
     work = scratch / "pyblocks"
 
-    def once(argv, stdin_text=None):
-        ran.append(run_python(text, argv, data, work, stdin_text))
+    def once(argv, stdin_text=None, cwd=None):
+        ran.append(run_python(text, argv, data, work, stdin_text, cwd=cwd))
 
     if "def qtype7" in text:
         once([str(scratch / "fixture.log")])
@@ -328,6 +394,12 @@ def exercise(text, scratch, repo, data):
     elif "_levi_cov" in text and "re.search" in text:
         once([str(Path(repo) / "tests/meson.build")])
         once([str(scratch / "bad-meson.build")])
+    elif "parse_missing_field" in text:
+        once([], cwd=repo)
+    elif "pathlib" in text and "write_text" in text:
+        target = scratch / "meson-edit.build"
+        target.write_text("timeout = get_option('b_coverage') ? 35 : 73\n")
+        once([str(target)])
     elif "applied coverage" in text:
         once(
             [
@@ -365,9 +437,6 @@ def exercise(text, scratch, repo, data):
         once([str(scratch / "match.log"), "", str(derive), str(derive)])
     elif "json.load" in text:
         once([str(scratch / "opts.json")])
-    elif "st_ino" in text:
-        once([str(repo)], stdin_text=str(repo) + "/include token\n")
-        once([str(repo)], stdin_text="plain\n")
     return ran
 
 
