@@ -89,7 +89,10 @@ foreach name, src : test_sources
   if name == 'cage_enum'
     _timeout = 300
   elif name == 'bulkTUM'
-    _timeout = 300
+    # Coverage and ordinary ceilings are derived in
+    # logs/github-runner-timings.log. The rule is
+    # ceil(max + (max - min)) on that job class.
+    _timeout = get_option('b_coverage') ? 35 : 73
   elif name == 'bop' and offload_enabled
     _timeout = 600
   endif
@@ -358,6 +361,13 @@ _check_device_host = executable('check_device_host', 'check_device_host.cpp',
 
 # Both checks exit 1 on any mismatch. levi:<q> is the PG(2, q) incidence
 # graph, with 12, 54 and 375 six-rings through each vertex for q = 2, 3, 5.
+# Rule: timeout = ceil(max + (max - min)).
+# Median is the type-7 quantile at one half.
+# The interquartile range is the type-7 quartile gap.
+# logs/github-runner-timings.log holds four ceilings.
+# Coverage bulk is 35 and ordinary bulk is 73.
+# Coverage device_host_levi5 is 96 and ordinary is 235.
+# scripts/time_coverage.sh check fails when this file disagrees.
 _device_host_cases = {
   'mW_cutoff': ['traj/mW_cubic.lammpstrj', '1', '1', '3.5', '2', 'cutoff'],
   'mW_knn': ['traj/mW_cubic.lammpstrj', '1', '1', '3.5', '2', 'knn'],
@@ -367,12 +377,21 @@ _device_host_cases = {
   'levi3': ['levi:3', '2'],
   'levi5': ['levi:5', '1'],
 }
+# levi5 ceilings. Coverage and ordinary values are separate.
+# Meson rejects a nested ternary, so the two numbers live on their own lines.
+_levi_cov = 96
+_levi_ord = 235
 foreach name, args : _device_host_cases
+  # levi5 uses the measured timeout above. The other cases stay at 300 s.
+  _host_timeout = 300
+  if name == 'levi5'
+    _host_timeout = get_option('b_coverage') ? _levi_cov : _levi_ord
+  endif
   test('device_host_' + name, _check_device_host,
     args: args,
     workdir: meson.project_source_root() / 'input',
     env: _test_env,
-    timeout: 300)
+    timeout: _host_timeout)
 endforeach
 
 # The CUDA batch kernels on the host, no device needed

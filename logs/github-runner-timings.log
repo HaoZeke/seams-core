@@ -1,0 +1,30 @@
+# GitHub Actions durations for bulkTUM and device_host_levi5.
+# Read from the Actions job logs. Each seconds value is the printed OK time.
+# kind=coverage is the coverage job. kind=ordinary is build-test.
+# The ceiling is ceil(max + (max - min)) within one kind and test.
+# Coverage lists every successful public coverage job of this test.
+# Ordinary lists the ubuntu-latest and macos-latest jobs of those runs.
+kind=coverage run=42212270967 job=127873550823 sha=7f310225b7ea6c9e9e79d48d2b3547ef0f66610c runner=coverage test=bulkTUM seconds=26.79
+kind=coverage run=42212270967 job=127873550823 sha=7f310225b7ea6c9e9e79d48d2b3547ef0f66610c runner=coverage test=device_host_levi5 seconds=73.20
+kind=coverage run=42206398825 job=127854024445 sha=7adea07c56565fc76eaff96cfe2398baeee414cc runner=coverage test=bulkTUM seconds=28.31
+kind=coverage run=42206398825 job=127854024445 sha=7adea07c56565fc76eaff96cfe2398baeee414cc runner=coverage test=device_host_levi5 seconds=77.39
+kind=coverage run=42199223154 job=127830096762 sha=3919f2ecaff7c1ced1f89bc7303a8e5f80faf9e6 runner=coverage test=bulkTUM seconds=22.15
+kind=coverage run=42199223154 job=127830096762 sha=3919f2ecaff7c1ced1f89bc7303a8e5f80faf9e6 runner=coverage test=device_host_levi5 seconds=59.21
+kind=coverage run=41960161301 job=127024381675 sha=3dfd932bf83bb0f0c694fb747db399f78648b6c3 runner=coverage test=bulkTUM seconds=24.27
+kind=coverage run=41960161301 job=127024381675 sha=3dfd932bf83bb0f0c694fb747db399f78648b6c3 runner=coverage test=device_host_levi5 seconds=64.88
+kind=ordinary run=42212270967 job=127873550954 sha=7f310225b7ea6c9e9e79d48d2b3547ef0f66610c runner=ubuntu-latest test=bulkTUM seconds=45.65
+kind=ordinary run=42212270967 job=127873550954 sha=7f310225b7ea6c9e9e79d48d2b3547ef0f66610c runner=ubuntu-latest test=device_host_levi5 seconds=112.35
+kind=ordinary run=42212270967 job=127873551110 sha=7f310225b7ea6c9e9e79d48d2b3547ef0f66610c runner=macos-latest test=bulkTUM seconds=36.84
+kind=ordinary run=42212270967 job=127873551110 sha=7f310225b7ea6c9e9e79d48d2b3547ef0f66610c runner=macos-latest test=device_host_levi5 seconds=112.94
+kind=ordinary run=42206398825 job=127854024600 sha=7adea07c56565fc76eaff96cfe2398baeee414cc runner=ubuntu-latest test=bulkTUM seconds=46.98
+kind=ordinary run=42206398825 job=127854024600 sha=7adea07c56565fc76eaff96cfe2398baeee414cc runner=ubuntu-latest test=device_host_levi5 seconds=107.76
+kind=ordinary run=42206398825 job=127854024524 sha=7adea07c56565fc76eaff96cfe2398baeee414cc runner=macos-latest test=bulkTUM seconds=41.35
+kind=ordinary run=42206398825 job=127854024524 sha=7adea07c56565fc76eaff96cfe2398baeee414cc runner=macos-latest test=device_host_levi5 seconds=146.20
+kind=ordinary run=42199223154 job=127830097087 sha=3919f2ecaff7c1ced1f89bc7303a8e5f80faf9e6 runner=ubuntu-latest test=bulkTUM seconds=42.44
+kind=ordinary run=42199223154 job=127830097087 sha=3919f2ecaff7c1ced1f89bc7303a8e5f80faf9e6 runner=ubuntu-latest test=device_host_levi5 seconds=128.37
+kind=ordinary run=42199223154 job=127830097107 sha=3919f2ecaff7c1ced1f89bc7303a8e5f80faf9e6 runner=macos-latest test=bulkTUM seconds=51.14
+kind=ordinary run=42199223154 job=127830097107 sha=3919f2ecaff7c1ced1f89bc7303a8e5f80faf9e6 runner=macos-latest test=device_host_levi5 seconds=148.74
+kind=ordinary run=41960161301 job=127024381357 sha=3dfd932bf83bb0f0c694fb747db399f78648b6c3 runner=ubuntu-latest test=bulkTUM seconds=29.60
+kind=ordinary run=41960161301 job=127024381357 sha=3dfd932bf83bb0f0c694fb747db399f78648b6c3 runner=ubuntu-latest test=device_host_levi5 seconds=95.51
+kind=ordinary run=41960161301 job=127024381703 sha=3dfd932bf83bb0f0c694fb747db399f78648b6c3 runner=macos-latest test=bulkTUM seconds=47.61
+kind=ordinary run=41960161301 job=127024381703 sha=3dfd932bf83bb0f0c694fb747db399f78648b6c3 runner=macos-latest test=device_host_levi5 seconds=164.80
