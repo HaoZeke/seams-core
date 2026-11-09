@@ -46,16 +46,26 @@ def exec_file(path, argv, name="__main__"):
         sys.argv = saved
 
 
-def test_openmm_unit_stub_and_import():
+def test_openmm_unit_stub_and_import(monkeypatch):
+    import builtins
     import conftest
+
+    real_import = builtins.__import__
+
+    def blocked(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "openmm" or name.startswith("openmm."):
+            raise ImportError(name)
+        return real_import(name, globals, locals, fromlist, level)
 
     saved = {}
     for name in [key for key in sys.modules if key == "openmm" or key.startswith("openmm.")]:
         saved[name] = sys.modules.pop(name)
     try:
+        monkeypatch.setattr(builtins, "__import__", blocked)
         conftest.install_openmm_unit()
         assert sys.modules["openmm.unit"].angstrom is not None
-        for name in [key for key in sys.modules if key == "openmm" or key.startswith("openmm.")]:
+        monkeypatch.undo()
+        for name in [key for key in list(sys.modules) if key == "openmm" or key.startswith("openmm.")]:
             sys.modules.pop(name)
         unit = types.ModuleType("openmm.unit")
         unit.angstrom = object()
@@ -67,7 +77,7 @@ def test_openmm_unit_stub_and_import():
         assert sys.modules["openmm.unit"] is unit
     finally:
         for name in [key for key in list(sys.modules) if key == "openmm" or key.startswith("openmm.")]:
-            sys.modules.pop(name)
+            sys.modules.pop(name, None)
         sys.modules.update(saved)
 
 

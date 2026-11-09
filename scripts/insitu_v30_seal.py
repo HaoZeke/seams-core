@@ -205,6 +205,21 @@ def cmd_python(args):
         "--tb=line",
     ]
     code = stamp_run(cmd, log_path, work, env)
+    if code == 0 and env.get("DSEAMS_V30_LIVE") == "1":
+        live = [
+            coverage,
+            "-m",
+            "coverage",
+            "run",
+            "--append",
+            "--branch",
+            "--data-file",
+            str(data),
+            "--source",
+            cmd[cmd.index("--source") + 1],
+            "test_live_cover.py",
+        ]
+        code = stamp_run(live, log_path, work, env)
     json_path = out / "coverage.json"
     subprocess.run(
         [coverage, "-m", "coverage", "json", "--data-file", str(data), "-o", str(json_path)],
