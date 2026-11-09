@@ -550,19 +550,34 @@ def cmd_assemble(args):
         pairs.append((prefix, prefix.replace("/", "$")))
     note.append("probe_dense is not in this receipt. Its source is not in the tree.")
     (dest / "PATHS.txt").write_text("\n".join(note) + "\n")
+    def text_file(path):
+        if path.suffix in {".bundle", ".so", ".o", ".a", ".gz", ".png", ".pdf"}:
+            return False
+        blob = path.read_bytes()
+        if b"\0" in blob:
+            return False
+        try:
+            blob.decode("utf-8")
+        except UnicodeDecodeError:
+            return False
+        return True
+
     for path in sorted(src_dir.iterdir()):
         if not path.is_file():
             continue
         if path.name == ".coverage":
             continue
-        text = path.read_text(errors="replace")
+        if not text_file(path):
+            (dest / path.name).write_bytes(path.read_bytes())
+            continue
+        text = path.read_text(encoding="utf-8")
         (dest / path.name).write_text(substitute(text, pairs))
     if (src_dir / "gcov").is_dir():
         target = dest / "gcov"
         target.mkdir(exist_ok=True)
         for path in sorted((src_dir / "gcov").iterdir()):
             if path.is_file():
-                (target / path.name).write_text(substitute(path.read_text(errors="replace"), pairs))
+                (target / path.name).write_text(substitute(path.read_text(encoding="utf-8"), pairs))
     head, tree = head_tree(root)
     (dest / "TIP.txt").write_text("HEAD %s\nTREE %s\n" % (head, tree))
     names = []
