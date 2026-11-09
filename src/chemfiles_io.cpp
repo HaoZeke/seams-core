@@ -574,7 +574,3 @@ sinp::openFrame(const std::string &filename, int frame, int typeI,
   return readLammpsTrjO(filename, frame, again, 1);
 #endif
 }
-
-#ifndef SEAMS_HAS_CHEMFILES
-int sinp::chemfilesSteps(const std::string &) { return -1; }
-#endif
