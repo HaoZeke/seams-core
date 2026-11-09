@@ -95,7 +95,8 @@ def main():
         locked.write_text("1\ncomment\nO 0 0 0\n")
         locked.chmod(0)
         expect(["rings", str(locked), "--frame", "1", "--last", "2"], 0, out_has="rings ")
-        expect(["rings", str(locked), "--frame", "2", "--last", "2"], 0, out_has="rings ")
+        expect(["rings", str(locked), "--frame", "2", "--last", "2"], 2,
+               err_line="frame 2 is past the last frame in this file")
         locked_pdb = work / "locked.pdb"
         locked_pdb.write_text("END\n")
         locked_pdb.chmod(0)

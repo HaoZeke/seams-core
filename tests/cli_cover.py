@@ -83,7 +83,7 @@ def main():
     xyz_dir = work / "fallback.xyz"
     xyz_dir.mkdir()
     expect(["rings", str(xyz_dir), "--frame", "2", "--last", "3"], 2,
-           err_line="XYZ read failed: the file has no frames")
+           err_line="frame 2 is past the last frame in this file")
     pdb_dir = work / "fallback.pdb"
     pdb_dir.mkdir()
     expect(["read", str(pdb_dir), "--frame", "1", "--last", "2"], 0,
@@ -176,26 +176,64 @@ def main():
     expect(["ions", str(tiny), *one, "--ion-types", ","], 0, out_has="ions 0")
 
     dimer = work / "dimer.lammpstrj"
+    # O-H 0.96 A, H-O-H about 104 deg, one donated H between the oxygens.
     dimer.write_text(
         "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n6\n"
         "ITEM: BOX BOUNDS pp pp pp\n0 20\n0 20\n0 20\n"
         "ITEM: ATOMS id mol type x y z\n"
-        "1 1 2 0.0 0.0 0.0\n"
-        "2 1 1 0.96 0.0 0.0\n"
-        "3 1 1 -0.24 0.93 0.0\n"
-        "4 2 2 2.70 0.0 0.0\n"
-        "5 2 1 1.74 0.0 0.0\n"
-        "6 2 1 3.20 0.90 0.0\n"
+        "1 1 2 0.00 0.00 0.00\n"
+        "2 1 1 0.96 0.00 0.00\n"
+        "3 1 1 -0.24 0.93 0.00\n"
+        "4 2 2 2.80 0.00 0.00\n"
+        "5 2 1 1.84 0.00 0.00\n"
+        "6 2 1 3.50 0.75 0.00\n"
     )
     expect(["hbonds", str(dimer), *one, "--type", "2", "--htype", "1",
             "--cutoff", "3.5", "--hdist", "2.5", "--hangle", "30"],
-           0, out_has="hbonds 1")
+           0, out_has="nop 2 hbonds 1")
     expect(["f4", str(dimer), *one, "--type", "2", "--htype", "1", "--cutoff", "3.5"],
-           0, out_has="f4 1")
+           0, out_has="nop 6 f4 1 n 2")
+    expect(["hbonds", str(water), *one, "--type", "2", "--htype", "1",
+            "--hdist", "2.5", "--hangle", "30"], 0, out_has="nop 250 hbonds 471")
+    expect(["f4", str(water), *one, "--type", "2", "--htype", "1"],
+           0, out_has="nop 750 f4 0.221753 n 250")
 
     expect(["fingerprint", str(mw), *one, "--cutoff", "3.0", "--hops", "2",
             "--type", "1", "--library", str(path_a) + "," + str(path_b)],
            0, out_has="depth")
+
+    shuf = work / "shuf.lammpstrj"
+    shuf.write_text(
+        "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n6\n"
+        "ITEM: BOX BOUNDS pp pp pp\n0 20\n0 20\n0 20\n"
+        "ITEM: ATOMS id mol type x y z\n"
+        "6 2 1 3.50 0.75 0.00\n"
+        "2 1 1 0.96 0.00 0.00\n"
+        "5 2 2 2.80 0.00 0.00\n"
+        "1 1 2 0.00 0.00 0.00\n"
+        "3 1 1 -0.24 0.93 0.00\n"
+        "4 2 1 1.84 0.00 0.00\n"
+    )
+    per = work / "shuf-per.txt"
+    expect(["cages", str(shuf), *one, "--graph", "cutoff", "--per-atom", str(per)],
+           0, out_has="nop 2")
+    text = per.read_text()
+    check("shuf id 1", "1 2 0 0 0" in text, text)
+    check("shuf id 5", "5 2 2.8" in text or "5 2 2.80" in text, text)
+    expect(["hbonds", str(shuf), *one, "--type", "2", "--htype", "1",
+            "--hdist", "2.5", "--hangle", "30"], 0, out_has="nop 2 hbonds 1")
+    gap = work / "gap.dump"
+    gap.write_text(
+        "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n2\n"
+        "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        "ITEM: ATOMS id mol type x y z\n"
+        "4 7 2 1 1 1\n"
+        "1 7 1 0 0 0\n"
+    )
+    gper = work / "gap-per.txt"
+    expect(["cages", str(gap), *one, "--graph", "cutoff", "--per-atom", str(gper)],
+           0, out_has="nop 1")
+    check("gap id 4", "4 2 1 1 1" in gper.read_text(), gper.read_text())
     stray = work / "stray.lammpstrj"
     dump(stray, 2, "1 1 1 1 1\n2 1 4 1 1\n")
     expect(["fingerprint", str(stray), *one, "--cutoff", "3.5", "--hops", "2",
@@ -211,7 +249,7 @@ def main():
     )
     expect(["cn", str(zero), "--ions", "--site", "1=cationHead,2=anion",
             "--cutoff", "6", *one], 0, out_has="degree 0",
-           err_line="The point cloud has no simulation box; cannot build a neighbour list.")
+           err_line="The simulation box has a non-positive edge; cannot build a neighbour list.")
 
     short = work / "short-box.lammpstrj"
     short.write_text(

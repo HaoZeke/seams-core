@@ -54,7 +54,7 @@ pairs | density-z | domains~. ~chill_plus~ is an accepted alias of
 | ~rdf~ | partial site-site \(g_{IJ}(r)\) | ~# r g count~ then ~# types I J rmax R bins N volume V~ then one ~r g count~ row per bin |
 | ~cn~ | site-site coordination number | ~# site-site~ then ~# types I J cutoff R cn X nI N nJ M volume V~ |
 | ~cn --ions --site~ | cage degree on ~ionCloud~ | ~cage ionCloud types 1 2 cutoff R degree D nCation N nAnion M~ |
-| ~hbonds~ | geometric hydrogen-bond count | ~nop N hbonds E~ |
+| ~hbonds~ | O-O pairs that pass the hydrogen-bond test, each pair once (edges/2) | ~nop N hbonds E~ |
 | ~pairs --site~ | mutual-nearest contact pairs | ~contact-pair count N nCation C nAnion A~ |
 | ~density-z~ | type-resolved \(\rho\) along one axis | ~# z rho~ then one ~z rho~ row per bin |
 | ~domains --site --subset~ | polar/apolar Stoddard component | ~subset polar n N largest L P P_inf~ |
@@ -109,6 +109,9 @@ An empty cloud (~nop 0~) still prints. ~chill~ / ~chill-plus~ print
 water 0~. ~rdf~ / ~cn~ still emit their headers. ~hbonds~ prints
 ~nop 0 hbonds 0~. ~density-z~ prints ~# z rho~ and zero-density bins.
 
+~hbonds~ counts O-O pairs. Each accepted pair is stored on both
+rows of the bond list, and the printed count is that edge total
+divided by two. It is not a count of donor-H-acceptor triples.
 ~hbonds~ loads the heavy-atom cloud with ~--type~ and the hydrogen
 cloud with ~--htype~, then builds a cutoff neighbour list. Without
 ~--donors~ it uses the water two-hydrogen-per-molecule set
