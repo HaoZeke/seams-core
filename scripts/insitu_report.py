@@ -32,10 +32,11 @@ def main():
     lines = []
     lines.append("# In-situ overhead")
     lines.append("")
-    lines.append("LAMMPS samples are its reported loop time divided by the number of steps.")
-    lines.append("Every other code uses the wall clock of the same driver call, divided by the number of steps.")
+    lines.append("LAMMPS samples are its reported loop time divided by the step count.")
+    lines.append("Every other code times the same driver call and divides that wall clock by how many steps ran.")
     lines.append("The plain run and the in-situ run use the same input on one process and one thread.")
     lines.append("Six samples are kept. The quartiles are Hyndman-Fan type 7.")
+    lines.append("The interquartile range (IQR) is the third quartile minus the first.")
     lines.append("Overhead is the live sample minus the plain sample at the same index, in seconds per step.")
     lines.append("")
     lines.append("CPU `%s`." % host["cpu"])
@@ -74,9 +75,9 @@ def main():
         lines.extend(code_lines)
     lines.append("")
     lines.append("Overhead is seconds per step. The ratio is the live step time divided by the plain step time.")
-    lines.append("The GROMACS row in the first table is whatever the samples file recorded for that code.")
-    lines.append("The size table below is the native d-SEAMS module, not a PLUMED action.")
-    lines.append("OpenMM's DCD file is float32. On this water system its postprocess matches the in-situ record.")
+    lines.append("The GROMACS row uses the samples recorded for that code.")
+    lines.append("The size table records the native d-SEAMS module.")
+    lines.append("OpenMM writes a disk coordinate dump (DCD) in float32. On this water system that file matches the in-situ record.")
     lines.append("")
     if "scale" in data:
         lines.append("# LAMMPS size and cadence")
@@ -185,7 +186,11 @@ def main():
             )
         )
         lines.append("")
-        lines.append("The in-situ number is the median extra loop time of an 8-step every-step run, so it includes the first frame.")
+        steps = data.get("scale", {}).get("1000", {}).get("1", {}).get("steps", "")
+        lines.append(
+            "The in-situ number is the median extra time per step of the 1000-water every-step run (%s steps), so it includes the first frame."
+            % steps
+        )
         if "steady" in data:
             steady = data["steady"]
             delta = [steady["live"][i] - steady["plain"][i] for i in range(len(steady["plain"]))]
@@ -218,12 +223,11 @@ def main():
     if "ladder" in data:
         lines.append("# OpenMP threads")
         lines.append("")
-        lines.append("Each sample is the analysis of the dumped frames divided by the frame count, after one warmup.")
+        lines.append("The command line census above is one frame. Each sample here is the analysis of the dumped frames divided by the frame count, after one warmup.")
         lines.append("The thread counts are the powers of two up to the processors the process may use.")
-        lines.append("A larger count scales when its third quartile is below the smaller count's first quartile.")
+        lines.append("A larger thread count scales when its third quartile is below the smaller thread count's first quartile.")
+        lines.append("Waters and threads in the table are those counts.")
         lines.append("")
-        lines.append("| Waters | Threads | Q1 | Median | Q3 |")
-        lines.append("| --- | --- | --- | --- | --- |")
         previous = {}
         scaling_failed = []
         for block in data["ladder"]:
@@ -233,7 +237,10 @@ def main():
                 q1 = type7(samples, 0.25)
                 med = type7(samples, 0.5)
                 q3 = type7(samples, 0.75)
-                lines.append("| %s | %s | %s | %s | %s |" % (waters, count, fmt(q1), fmt(med), fmt(q3)))
+                lines.append(
+                    "Thread quartile for %s waters at %s threads: first %s, median %s, third %s."
+                    % (waters, count, fmt(q1), fmt(med), fmt(q3))
+                )
                 if waters in previous and not (q3 < previous[waters]):
                     scaling_failed.append((waters, count))
                 previous[waters] = q1
@@ -259,22 +266,20 @@ def main():
         live = block.get("live") or []
         if len(plain) != len(live) or not plain:
             continue
-        lines.append("## %s" % name)
+        lines.append("## %s raw samples" % name)
         lines.append("")
-        lines.append("Plain seconds per step:")
-        lines.append("")
-        for value in plain:
-            lines.append(fmt(value))
-        lines.append("")
-        lines.append("Live seconds per step:")
-        lines.append("")
-        for value in live:
-            lines.append(fmt(value))
-        lines.append("")
-        lines.append("Overhead seconds per step:")
-        lines.append("")
-        for i in range(len(plain)):
-            lines.append(fmt(live[i] - plain[i]))
+        lines.append(
+            "Recorded plain %s seconds per step: %s."
+            % (name, " ".join(fmt(value) for value in plain))
+        )
+        lines.append(
+            "Measured in-situ %s seconds per step: %s."
+            % (name, " ".join(fmt(value) for value in live))
+        )
+        lines.append(
+            "Subtracted extra %s seconds per step: %s."
+            % (name, " ".join(fmt(live[i] - plain[i]) for i in range(len(plain))))
+        )
         lines.append("")
     dest.write_text("\n".join(lines) + "\n")
     if "ladder" in data:
