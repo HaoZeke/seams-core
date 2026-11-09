@@ -115,6 +115,10 @@ molSys::PointCloud<molSys::Point<double>, double> readXYZ(std::string filename);
 //! Reads bonds into a vector of vectors from a file with a specific format
 std::vector<std::vector<int>> readBonds(std::string filename);
 
+//! Number of steps chemfiles can read. Returns -1 when chemfiles is not
+//! linked, or when the file is not a trajectory it knows.
+int chemfilesSteps(const std::string &filename);
+
 #ifdef SEAMS_HAS_CHEMFILES
 //! How one chemfiles step is turned into a cloud.
 //! typeFilter > 0 keeps that species number. guessOxygen keeps
@@ -127,10 +131,6 @@ struct ChemfilesRead {
   bool guessOxygen = false;
   std::string selection;
 };
-
-//! Number of steps chemfiles can read, or -1 when the file is not a
-//! trajectory it knows.
-int chemfilesSteps(const std::string &filename);
 
 molSys::PointCloud<molSys::Point<double>, double>
 readChemfiles(std::string filename,
