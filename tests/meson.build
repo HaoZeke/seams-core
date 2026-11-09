@@ -458,6 +458,18 @@ _frame_clock = executable('frame_clock', 'insitu/frame_clock.cpp',
   include_directories: _incdirs,
   build_rpath: _test_rpath)
 test('frame_clock_usage', _frame_clock, should_fail: true)
+_phase_pin = executable('phase_pin', 'phase_pin.cpp',
+  dependencies: [yds_dep],
+  cpp_args: _args,
+  link_args: _test_link_args,
+  include_directories: _incdirs,
+  build_rpath: _test_rpath)
+_pin_env = environment()
+_pin_env.prepend('LD_LIBRARY_PATH', meson.project_build_root() / 'src')
+_pin_env.set('DSEAMS_PIN', '1')
+_pin_env.set('DSEAMS_PHASE', '1')
+_pin_env.set('OMP_NUM_THREADS', '2')
+test('phase_pin', _phase_pin, env: _pin_env, timeout: 120)
 test('frame_clock_tiny', _frame_clock,
   args: [meson.project_source_root() / 'input' / 'traj' / 'agi_water_tiny.lammpstrj'],
   env: _test_env,
