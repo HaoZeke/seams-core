@@ -49,7 +49,7 @@ def main():
     lines.append("")
     lines.append("| Code | Steps | Frames | Q1 overhead | Median | Q3 | IQR | Median ratio |")
     lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
-    for name, block in data["codes"].items():
+    for name, block in data.get("codes", {}).items():
         plain = block.get("plain") or []
         live = block.get("live") or []
         if len(plain) != len(live) or not plain:
@@ -75,8 +75,8 @@ def main():
         )
     lines.append("")
     lines.append("Overhead is seconds per step. The ratio is the live step time divided by the plain step time.")
-    lines.append("The GROMACS row is the interactive molecular dynamics client, kept as a fallback.")
-    lines.append("The installed GROMACS is built with PLUMED, and mdrun -plumed with the DSEAMS action is the native path.")
+    lines.append("The GROMACS row in the first table is whatever the samples file recorded for that code.")
+    lines.append("The size table below is the native d-SEAMS module, not a PLUMED action.")
     lines.append("OpenMM's DCD file is float32. On this water system its postprocess matches the in-situ record.")
     lines.append("")
     if "scale" in data:
@@ -113,6 +113,15 @@ def main():
             for every, block in cadences.items():
                 lines.append("## lammps %s waters every %s" % (natoms, every))
                 lines.append("")
+                if "warmup_plain" in block:
+                    lines.append("Warmup plain seconds per step:")
+                    lines.append("")
+                    lines.append(fmt(block["warmup_plain"]))
+                    lines.append("")
+                    lines.append("Warmup live seconds per step:")
+                    lines.append("")
+                    lines.append(fmt(block["warmup_live"]))
+                    lines.append("")
                 lines.append("Plain seconds per step:")
                 lines.append("")
                 for value in block["plain"]:
@@ -129,12 +138,12 @@ def main():
                     lines.append(fmt(value))
                 lines.append("")
     if "gromacs_scale" in data:
-        lines.append("# GROMACS PLUMED size and cadence")
+        lines.append("# GROMACS native module size and cadence")
         lines.append("")
         lines.append("The same diamond lattices as the LAMMPS table, one site per water.")
-        lines.append("Plain is mdrun. Live is mdrun -plumed with the DSEAMS action.")
+        lines.append("Plain is mdrun. Live is the d-SEAMS module compiled into mdrun.")
         lines.append("Both times are the mdrun wall time divided by the number of steps.")
-        lines.append("The run uses the OpenMPI GROMACS when that binary is present, on one rank and one thread.")
+        lines.append("The run uses one rank and one thread.")
         lines.append("The analysed-frame column is the median extra seconds per step multiplied by the cadence.")
         lines.append("")
         lines.append("| Waters | Cadence | Steps | Median absolute | Median ratio | Per analysed frame |")
@@ -217,6 +226,7 @@ def main():
         lines.append("| Waters | Threads | Q1 | Median | Q3 |")
         lines.append("| --- | --- | --- | --- | --- |")
         previous = {}
+        scaling_failed = []
         for block in data["ladder"]:
             waters = block["waters"]
             for count, row in block["threads"].items():
@@ -226,9 +236,14 @@ def main():
                 q3 = type7(samples, 0.75)
                 lines.append("| %s | %s | %s | %s | %s |" % (waters, count, fmt(q1), fmt(med), fmt(q3)))
                 if waters in previous and not (q3 < previous[waters]):
-                    raise SystemExit("thread scaling failed for %s waters at %s threads" % (waters, count))
+                    scaling_failed.append((waters, count))
                 previous[waters] = q1
         lines.append("")
+        if scaling_failed:
+            lines.append("Thread scaling failed. A larger count must sit below the previous count's first quartile.")
+            for waters, count in scaling_failed:
+                lines.append("Failed at %s waters with %s threads." % (waters, count))
+            lines.append("")
     if "mpi" in data:
         lines.append("# Ranks")
         lines.append("")
@@ -240,7 +255,7 @@ def main():
             if row.get("note"):
                 lines.append(row["note"])
         lines.append("")
-    for name, block in data["codes"].items():
+    for name, block in data.get("codes", {}).items():
         plain = block.get("plain") or []
         live = block.get("live") or []
         if len(plain) != len(live) or not plain:
@@ -263,6 +278,17 @@ def main():
             lines.append(fmt(live[i] - plain[i]))
         lines.append("")
     dest.write_text("\n".join(lines) + "\n")
+    if "ladder" in data:
+        # Re-check after the file is written so the tables remain.
+        previous = {}
+        for block in data["ladder"]:
+            waters = block["waters"]
+            for count, row in block["threads"].items():
+                q1 = type7(row["samples"], 0.25)
+                q3 = type7(row["samples"], 0.75)
+                if waters in previous and not (q3 < previous[waters]):
+                    raise SystemExit("thread scaling failed for %s waters at %s threads" % (waters, count))
+                previous[waters] = q1
 
 
 if __name__ == "__main__":

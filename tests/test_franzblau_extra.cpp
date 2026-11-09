@@ -420,4 +420,59 @@ TEST_CASE("ring search split and bond crossover are readable", "[franzblau]") {
   auto moved = std::move(updater);
   const auto again = moved.update(nList);
   REQUIRE(again.size() == rings.size());
+  primitive::RingUpdater assigned(4);
+  assigned = std::move(moved);
+  REQUIRE(assigned.update(nList).size() == rings.size());
+}
+
+TEST_CASE("shortestPath walks a triangle and an empty update is quiet",
+          "[franzblau]") {
+  primitive::Graph graph;
+  graph.pts.resize(3);
+  for (int i = 0; i < 3; ++i) {
+    graph.pts[static_cast<std::size_t>(i)].atomIndex = i;
+    graph.pts[static_cast<std::size_t>(i)].inGraph = true;
+  }
+  graph.pts[0].neighListIndex = {1, 2};
+  graph.pts[1].neighListIndex = {0, 2};
+  graph.pts[2].neighListIndex = {0, 1};
+  std::vector<int> path;
+  std::vector<int> visited;
+  REQUIRE(primitive::shortestPath(graph, 1, 0, path, visited, 6, 0) == 0);
+  REQUIRE(primitive::shortestPath(graph, 0, 0, path, visited, 4, 4) == 0);
+
+  primitive::RingUpdater quiet(2);
+  const std::vector<std::vector<int>> empty;
+  REQUIRE(quiet.update(empty).empty());
+  REQUIRE(quiet.lastChangedBonds() == 0);
+  REQUIRE(quiet.lastChangedBondFraction() == 0.0);
+}
+
+TEST_CASE("a small edit expands into a full ring pass", "[franzblau]") {
+  const int n = 30;
+  std::vector<std::vector<int>> nList(static_cast<std::size_t>(n));
+  auto link = [&](int a, int b) {
+    auto &row = nList[static_cast<std::size_t>(a)];
+    if (std::find(row.begin(), row.end(), b) == row.end()) {
+      row.push_back(b);
+    }
+  };
+  for (int i = 0; i < n; ++i) {
+    nList[static_cast<std::size_t>(i)] = {i};
+    link(i, (i + 1) % n);
+    link(i, (i + n - 1) % n);
+  }
+  for (int j = 2; j <= 12; ++j) {
+    link(0, j);
+    link(j, 0);
+  }
+  primitive::RingUpdater updater(8);
+  updater.setFullPassFraction(0.2);
+  REQUIRE_FALSE(updater.update(nList).empty());
+  link(0, 20);
+  link(20, 0);
+  const auto second = updater.update(nList);
+  const auto full = primitive::ringNetwork(nList, 8);
+  REQUIRE(second.size() == full.size());
+  REQUIRE(updater.lastRecomputedSources() > 0);
 }

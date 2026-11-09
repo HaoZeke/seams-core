@@ -207,7 +207,14 @@ class HookTests(unittest.TestCase):
                 self.step = step
 
         eng = Eng()
-        DseamsReporter(eng, "dump", 1).report(_Sim(3), State())
+        sim = _Sim(3)
+
+        class Ctx:
+            def getState(self, getPositions=True, enforcePeriodicBox=True):
+                return State()
+
+        sim.context = Ctx()
+        DseamsReporter(eng, "dump", 1).report(sim, None)
         self.assertEqual(eng.step, 3)
 
     def test_engine_round_trip(self):

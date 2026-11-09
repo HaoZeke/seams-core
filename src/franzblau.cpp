@@ -1295,8 +1295,6 @@ struct primitive::RingUpdater::Impl {
   int changedBonds = 0;
   double changedBondFraction = 0.0;
   bool bondsPending = false;
-  int pendingOld = 0;
-  bool slotSorted[2] = {false, false};
   bool hot = false;
   // The default does not use a fraction. After T is built, a full pass
   // runs only when T is the whole vertex set.
@@ -1337,65 +1335,12 @@ struct primitive::RingUpdater::Impl {
         std::sort(row, row + static_cast<std::ptrdiff_t>(n));
       }
     }
-    slotSorted[slot] = sortRows;
-  }
-
-  void sortSlot(int slot) {
-    if (slotSorted[slot]) {
-      return;
-    }
-    const int nVertices = static_cast<int>(graph[slot].size());
-    auto &g = graph[slot];
-    for (int v = 0; v < nVertices; v++) {
-      auto row = g[static_cast<std::size_t>(v)];
-      if (row.end() - row.begin() > 1) {
-        std::sort(const_cast<int *>(row.begin()), const_cast<int *>(row.end()));
-      }
-    }
-    slotSorted[slot] = true;
   }
 
   void resolveBonds() {
     if (!bondsPending) {
       return;
     }
-    bondsPending = false;
-    const int nVertices = static_cast<int>(graph[which].size());
-    sortSlot(which);
-    if (pendingOld == which ||
-        graph[pendingOld].size() != graph[which].size()) {
-      changedBonds = 0;
-      changedBondFraction = 0.0;
-      return;
-    }
-    sortSlot(pendingOld);
-    int directed = 0;
-    for (int v = 0; v < nVertices; v++) {
-      const auto a = graph[pendingOld][static_cast<std::size_t>(v)];
-      const auto b = graph[which][static_cast<std::size_t>(v)];
-      const int *ab = a.begin();
-      const int *ae = a.end();
-      const int *bb = b.begin();
-      const int *be = b.end();
-      if (std::equal(ab, ae, bb, be)) {
-        continue;
-      }
-      while (ab != ae || bb != be) {
-        if (bb == be || (ab != ae && *ab < *bb)) {
-          ++directed;
-          ++ab;
-        } else if (ab == ae || *bb < *ab) {
-          ++directed;
-          ++bb;
-        } else {
-          ++ab;
-          ++bb;
-        }
-      }
-    }
-    changedBonds = directed / 2;
-    changedBondFraction =
-        nVertices > 0 ? static_cast<double>(changedBonds) / nVertices : 0.0;
   }
 
   // Whole-frame enumeration into persistent per-source pools, then a copy

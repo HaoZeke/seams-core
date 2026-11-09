@@ -843,4 +843,10 @@ TEST_CASE("AffiliationUpdater matches a cycle stored out of lexicographic order"
   rings.insert(rings.begin(), rings.back());
   const auto &third = updater.update(rings, nList);
   REQUIRE(third.hc.size() == rings.size());
+  ring::AffiliationUpdater other;
+  other = std::move(updater);
+  const std::vector<std::vector<int>> noRings;
+  REQUIRE(other.update(noRings, nList).hc.empty());
+  ring::AffiliationUpdater fresh(std::move(other));
+  REQUIRE(fresh.update(rings, nList).hc.size() == rings.size());
 }

@@ -1076,6 +1076,8 @@ TEST_CASE("a wide parity product searches the large equator", "[topo]") {
   (void)ring::getAtomTypesTopoBulk(rings, ringType, atomTypes);
   int numHC = 0, numDDC = 0, mixed = 0, prism = 0, basal = 0;
   (void)ring::getStrucNumbers(ringType, cages, numHC, numDDC, mixed, prism, basal);
+  std::vector<int> peripheralBare;
+  (void)ring::conditionOneDDC(rings, peripheralBare, 0);
   std::vector<int> listDDC = ddc;
   std::vector<int> listHC2;
   (void)ring::findMixedRings(rings, ringType, listDDC, listHC2);

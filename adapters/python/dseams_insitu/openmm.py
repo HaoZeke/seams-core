@@ -1,4 +1,4 @@
-"""OpenMM reporter. The state positions are copied to the host."""
+"""OpenMM reporter. Positions come from the context, on the host."""
 
 
 class DseamsReporter:
@@ -14,11 +14,13 @@ class DseamsReporter:
         return {"steps": remain, "periodic": None, "include": ["positions"]}
 
     def report(self, simulation, state):
+        del state
         from openmm.unit import angstrom
 
-        pos = state.getPositions(asNumpy=True).value_in_unit(angstrom)
-        vecs = state.getPeriodicBoxVectors(asNumpy=True).value_in_unit(angstrom)
+        pulled = simulation.context.getState(getPositions=True, enforcePeriodicBox=True)
+        pos = pulled.getPositions(asNumpy=True).value_in_unit(angstrom)
+        vecs = pulled.getPeriodicBoxVectors(asNumpy=True).value_in_unit(angstrom)
         box = self.engine.box_from_rows(vecs)
         self.engine.observe(
-            int(simulation.currentStep), pos, box, self.dump, types=self.types
+            int(simulation.currentStep), pos, box, None, types=self.types
         )

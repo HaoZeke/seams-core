@@ -1418,6 +1418,8 @@ def thread_ladder(dump, natoms):
     for count in threads:
         env = os.environ.copy()
         env["OMP_NUM_THREADS"] = str(count)
+        # Active spinning makes eight short regions slower than one thread.
+        env["OMP_WAIT_POLICY"] = "passive"
         env["SEAMS_LIB"] = LIB
         env["LD_LIBRARY_PATH"] = ":".join(
             [
