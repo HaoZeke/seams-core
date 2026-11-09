@@ -16,32 +16,80 @@ import sys
 from pathlib import Path
 
 
-def physical(text):
-    """Line numbers that contain code after comments are stripped."""
+def _python_code(line, quote):
+    """Drop a hash comment. A string that contains a C marker stays code."""
+    i = 0
+    code = False
+    while i < len(line):
+        if quote:
+            if line.startswith(quote, i):
+                i += len(quote)
+                quote = None
+                code = True
+                continue
+            if len(quote) == 1 and line[i] == "\\":
+                i += 2
+                continue
+            i += 1
+            continue
+        if line.startswith('"""', i) or line.startswith("'''", i):
+            quote = line[i : i + 3]
+            i += 3
+            code = True
+            continue
+        if line[i] in ("'", '"'):
+            quote = line[i]
+            i += 1
+            code = True
+            continue
+        if line[i] == "#":
+            break
+        if not line[i].isspace():
+            code = True
+        i += 1
+    return code, quote
+
+
+def _c_code(line, block):
+    stripped = line
+    if block:
+        end = stripped.find("*/")
+        if end < 0:
+            return False, True
+        stripped = stripped[end + 2 :]
+        block = False
+    while True:
+        start = stripped.find("/*")
+        if start < 0:
+            break
+        end = stripped.find("*/", start + 2)
+        if end < 0:
+            stripped = stripped[:start]
+            block = True
+            break
+        stripped = stripped[:start] + stripped[end + 2 :]
+    if "//" in stripped:
+        stripped = stripped[: stripped.find("//")]
+    return bool(stripped.strip()), block
+
+
+def physical(text, suffix=".cpp"):
+    """Line numbers that contain code after comments are stripped.
+
+    Python uses hash comments. C and C++ use block and line comments.
+    A bare call keeps the C rules.
+    """
     lines = text.splitlines()
     keep = []
     block = False
+    quote = None
+    python = suffix == ".py"
     for number, line in enumerate(lines, start=1):
-        stripped = line
-        if block:
-            end = stripped.find("*/")
-            if end < 0:
-                continue
-            stripped = stripped[end + 2 :]
-            block = False
-        while True:
-            start = stripped.find("/*")
-            if start < 0:
-                break
-            end = stripped.find("*/", start + 2)
-            if end < 0:
-                stripped = stripped[:start]
-                block = True
-                break
-            stripped = stripped[:start] + stripped[end + 2 :]
-        if "//" in stripped:
-            stripped = stripped[: stripped.find("//")]
-        if stripped.strip():
+        if python:
+            code, quote = _python_code(line, quote)
+        else:
+            code, block = _c_code(line, block)
+        if code:
             keep.append(number)
     return set(keep)
 
@@ -118,7 +166,7 @@ def main():
                 continue
             text = candidate.read_text(errors="replace")
             rel = candidate.relative_to(root)
-            code = physical(text)
+            code = physical(text, candidate.suffix)
             counts = gcov_counts(path)
             covered = {n for n in code if counts.get(n, 0) > 0}
             # A physical line gcov marks as non-code stays covered.
@@ -150,7 +198,7 @@ def main():
                     continue
                 executed = set(info.get("executed_lines", []))
                 missing = set(info.get("missing_lines", []))
-                code = physical(source.read_text(errors="replace"))
+                code = physical(source.read_text(errors="replace"), source.suffix)
                 statements = (executed | missing) & code
                 if not statements:
                     rows.append((str(rel), 0, 0, 1.0))

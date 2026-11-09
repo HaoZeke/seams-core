@@ -52,11 +52,13 @@ def main():
         need(False, "probe")
     except SystemExit:
         pass
-    module.physical("keep /* c */ tail\n")
-    module.physical("/* open\nstill\n*/ after\n")
-    module.physical("/* never ends\n")
-    module.physical("head /* cut\n")
-    module.physical("code // note\n")
+    need(1 in module.physical("keep /* c */ tail\n"), "c block kept the tail")
+    need(3 in module.physical("/* open\nstill\n*/ after\n"), "c block kept the line after it")
+    need(module.physical("/* never ends\n") == set(), "an open c comment kept a line")
+    need(1 in module.physical("head /* cut\n"), "c comment ate the code before it")
+    need(1 in module.physical("code // note\n"), "c line comment ate the code")
+    py = 'note = "/* never ends\\n"\nvalue = 1\n'
+    need(module.physical(py, ".py") == {1, 2}, "a python string opened a c comment")
     with tempfile.TemporaryDirectory() as raw:
         root = Path(raw)
         folder = root / "notes"
@@ -114,9 +116,10 @@ def main():
         need(code == 1, "gcov without source text was accepted")
         hidden = root / "bbdir"
         hidden.mkdir()
-        (hidden / "hidden.cpp").write_text("int real;\n")
+        (nested / "widget.cpp").write_text("int other;\n")
+        (hidden / "widget.cpp").write_text("int real;\n")
         code, text = run(module, root, gcov)
-        need(code == 0, "a build-directory decoy hid the real source")
+        need(code == 1 and "0 0 0.000000" in text, "a build-directory copy was scored")
         comment_only = inner / "comment.py"
         comment_only.write_text("# only\n")
         payload = {"files": {str(comment_only): {"executed_lines": [], "missing_lines": []}}}
