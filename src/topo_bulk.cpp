@@ -522,9 +522,6 @@ struct DdcMaskCount {
     const int ringsHere[3] = {a, b, c};
     for (const int ring : ringsHere) {
       for (const int id : at[static_cast<size_t>(ring)]) {
-        if (id < 0 || id >= static_cast<int>(chainSeen.size())) {
-          continue;
-        }
         if (chainSeen[static_cast<size_t>(id)] == chainTick) {
           continue;
         }
