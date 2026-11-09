@@ -12,6 +12,7 @@
 #include <topo_bulk.hpp>
 
 #include <algorithm>
+#include <bit>
 #include <cstdint>
 #include <memory>
 #include <numeric>
@@ -85,6 +86,10 @@ struct FrameContext {
   // The basal search reads these atoms for every candidate.
   std::vector<int> flat6;
   bool allHex = false;
+  // Atom sets of each ring, and neighbour bits, when the cloud fits in 64 bits.
+  std::vector<std::uint64_t> ringMask;
+  std::vector<std::uint64_t> atomAdj;
+  bool bits64 = false;
 
   FrameContext() = default;
 
@@ -138,6 +143,36 @@ struct FrameContext {
     adjRings.resize(static_cast<std::size_t>(nR));
     adjReady.assign(static_cast<std::size_t>(nR), 0);
     basalReady.assign(static_cast<std::size_t>(nR), 0);
+    bits64 = false;
+    ringMask.clear();
+    atomAdj.clear();
+    const int nAtoms = static_cast<int>(nList_.size());
+    if (allHex && nAtoms > 0 && nAtoms <= 64) {
+      bits64 = true;
+      ringMask.assign(static_cast<std::size_t>(nR), 0);
+      for (int i = 0; i < nR; i++) {
+        std::uint64_t mask = 0;
+        for (int t = 0; t < 6; t++) {
+          const int atom = flat6[static_cast<std::size_t>(i) * 6 + static_cast<std::size_t>(t)];
+          if (atom >= 0 && atom < nAtoms) {
+            mask |= std::uint64_t{1} << static_cast<unsigned>(atom);
+          }
+        }
+        ringMask[static_cast<std::size_t>(i)] = mask;
+      }
+      atomAdj.assign(static_cast<std::size_t>(nAtoms), 0);
+      for (int atom = 0; atom < nAtoms; atom++) {
+        std::uint64_t bits = 0;
+        const auto &row = nList_[static_cast<std::size_t>(atom)];
+        for (std::size_t n = 1; n < row.size(); n++) {
+          const int nb = row[n];
+          if (nb >= 0 && nb < nAtoms && nb != atom) {
+            bits |= std::uint64_t{1} << static_cast<unsigned>(nb);
+          }
+        }
+        atomAdj[static_cast<std::size_t>(atom)] = bits;
+      }
+    }
 #if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
 #pragma omp parallel if (!omp_in_parallel())
 #endif
@@ -414,6 +449,49 @@ struct FrameContext {
                                std::vector<ring::strucType> &types) const {
     std::vector<int> prismatic;
     listHC.clear();
+    if (bits64) {
+      const std::uint64_t mj = ringMask[static_cast<std::size_t>(j)];
+      const int *atoms = flat6.data() + static_cast<std::ptrdiff_t>(i) * 6;
+      for (int start = 0; start < 6; start++) {
+        const int t0 = atoms[start];
+        const int t1 = atoms[(start + 1) % 6];
+        const int t2 = atoms[(start + 2) % 6];
+        const RingRow A = ringsOf(t0);
+        const RingRow B = ringsOf(t1);
+        const RingRow C = ringsOf(t2);
+        int ia = 0;
+        int ib = 0;
+        int ic = 0;
+        while (ia < A.n && ib < B.n && ic < C.n) {
+          const int x = A.p[ia];
+          const int y = B.p[ib];
+          const int z = C.p[ic];
+          if (x == y && y == z) {
+            if (x != i && x != j &&
+                std::popcount(ringMask[static_cast<std::size_t>(x)] & mj) == 3) {
+              prismatic.push_back(x);
+            }
+            ++ia;
+            ++ib;
+            ++ic;
+          } else {
+            const int lo = std::min(x, std::min(y, z));
+            if (x == lo) {
+              ++ia;
+            }
+            if (y == lo) {
+              ++ib;
+            }
+            if (z == lo) {
+              ++ic;
+            }
+          }
+        }
+      }
+      std::sort(prismatic.begin(), prismatic.end());
+      prismatic.erase(std::unique(prismatic.begin(), prismatic.end()), prismatic.end());
+      return prismatic;
+    }
     (void)ring::findPrismatic(*rings, listHC, types, i, j, prismatic, index);
     return prismatic;
   }

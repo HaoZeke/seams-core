@@ -2868,10 +2868,27 @@ void ring::NeighBond::build(const std::vector<std::vector<int>> &nList) {
     cols_.insert(cols_.end(), row.begin(), row.end());
   }
   off_[static_cast<size_t>(n_)] = static_cast<int>(cols_.size());
+  bits_.clear();
+  if (n_ > 0 && n_ <= 64) {
+    bits_.assign(static_cast<size_t>(n_), 0);
+    for (int i = 0; i < n_; i++) {
+      std::uint64_t bits = 0;
+      for (int k = off_[static_cast<size_t>(i)]; k < off_[static_cast<size_t>(i + 1)]; k++) {
+        bits |= std::uint64_t{1} << static_cast<unsigned>(cols_[static_cast<size_t>(k)]);
+      }
+      bits_[static_cast<size_t>(i)] = bits;
+    }
+  }
 }
 
 bool ring::NeighBond::operator()(int i, int j) const {
-  if (i < 0 || j < 0 || i >= n_ || off_.empty()) {
+  if (i < 0 || j < 0 || i >= n_ || j >= n_) {
+    return false;
+  }
+  if (!bits_.empty()) {
+    return ((bits_[static_cast<size_t>(i)] >> static_cast<unsigned>(j)) & 1ULL) != 0;
+  }
+  if (off_.empty()) {
     return false;
   }
   const auto b = cols_.begin() + off_[static_cast<size_t>(i)];

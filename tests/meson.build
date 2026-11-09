@@ -361,10 +361,9 @@ _check_device_host = executable('check_device_host', 'check_device_host.cpp',
   build_rpath: '$ORIGIN/../src')
 
 # Both checks exit 1 on any mismatch. levi:<q> is the PG(2, q) incidence
-# graph, with 12 and 54 six-rings through each vertex for q = 2 and 3.
-# q = 5 has 62 vertices of degree 6 and about 375 six-rings through each
-# vertex. The host cage census on that graph does not return within the
-# default timeout on one core, so it is not part of this suite.
+# graph, with 12, 54 and 375 six-rings through each vertex for q = 2, 3, 5.
+# The cage test answers bond queries from a bit set when the cloud has at
+# most 64 atoms, which is what brings q = 5 inside the default timeout.
 _device_host_cases = {
   'mW_cutoff': ['traj/mW_cubic.lammpstrj', '1', '1', '3.5', '2', 'cutoff'],
   'mW_knn': ['traj/mW_cubic.lammpstrj', '1', '1', '3.5', '2', 'knn'],
@@ -372,6 +371,7 @@ _device_host_cases = {
   'example_knn': ['traj/exampleTraj.lammpstrj', '1', '2', '3.5', '2', 'knn'],
   'levi2': ['levi:2', '2'],
   'levi3': ['levi:3', '2'],
+  'levi5': ['levi:5', '1'],
 }
 foreach name, args : _device_host_cases
   test('device_host_' + name, _check_device_host,

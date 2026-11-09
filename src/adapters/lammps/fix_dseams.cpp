@@ -13,6 +13,9 @@
 #include "comm.h"
 #include "domain.h"
 #include "lammpsplugin.h"
+#include "neigh_list.h"
+#include "neigh_request.h"
+#include "neighbor.h"
 #include "update.h"
 #include "version.h"
 
@@ -59,6 +62,8 @@ class FixDseams : public Fix {
   FixDseams(LAMMPS *lmp, int narg, char **arg);
   ~FixDseams() override;
   int setmask() override;
+  void init() override;
+  void init_list(int id, NeighList *ptr) override;
   void end_of_step() override;
 
  private:
@@ -69,10 +74,13 @@ class FixDseams : public Fix {
   std::string dump_;
   std::string record_;
   seams_insitu_engine *eng_;
+  NeighList *list_;
+  std::vector<double> built_x_;
 };
 
 FixDseams::FixDseams(LAMMPS *lmp, int narg, char **arg) :
-    Fix(lmp, narg, arg), active_(0), every_(1), depth_(8), cutoff_(3.5), eng_(nullptr) {
+    Fix(lmp, narg, arg), active_(0), every_(1), depth_(8), cutoff_(3.5), eng_(nullptr),
+    list_(nullptr) {
   int iarg = 3;
   while (iarg < narg) {
     if (std::strcmp(arg[iarg], "dump") == 0 && iarg + 1 < narg) {
@@ -138,6 +146,17 @@ int FixDseams::setmask() {
   mask |= FixConst::END_OF_STEP;
   return mask;
 }
+
+void FixDseams::init() {
+  if (!active_) {
+    return;
+  }
+  list_ = nullptr;
+  neighbor->add_request(this, NeighConst::REQ_FULL | NeighConst::REQ_OCCASIONAL)
+      ->set_cutoff(cutoff_);
+}
+
+void FixDseams::init_list(int, NeighList *ptr) { list_ = ptr; }
 
 void FixDseams::end_of_step() {
   if (!active_) {
@@ -232,6 +251,53 @@ void FixDseams::end_of_step() {
   frame.local_only = 0;
   frame.rank = 0;
   frame.nranks = nprocs;
+  // One rank owns every atom, so the full list is the whole cutoff shell.
+  // A split domain still gathers coordinates and builds the list itself.
+  // The shell is rebuilt only after an atom moves by half the 0.5 A skin.
+  bool stale = nprocs == 1 && list_ != nullptr && std::getenv("DSEAMS_NO_HOST") == nullptr;
+  if (stale && built_x_.size() == sorted_x.size()) {
+    stale = false;
+    constexpr double half = 0.25;
+    for (int i = 0; i < total; ++i) {
+      const double dx = sorted_x[static_cast<std::size_t>(3 * i)] - built_x_[static_cast<std::size_t>(3 * i)];
+      const double dy = sorted_x[static_cast<std::size_t>(3 * i + 1)] - built_x_[static_cast<std::size_t>(3 * i + 1)];
+      const double dz = sorted_x[static_cast<std::size_t>(3 * i + 2)] - built_x_[static_cast<std::size_t>(3 * i + 2)];
+      if (dx * dx + dy * dy + dz * dz > half * half) {
+        stale = true;
+        break;
+      }
+    }
+  }
+  if (stale) {
+    neighbor->build_one(list_);
+    std::vector<int> counts;
+    std::vector<int> flat;
+    counts.reserve(static_cast<std::size_t>(list_->inum));
+    const int nall = atom->nlocal + atom->nghost;
+    for (int ii = 0; ii < list_->inum; ++ii) {
+      const int i = list_->ilist[ii];
+      if (i < 0 || i >= atom->nlocal || (atom->mask[i] & groupbit) == 0) {
+        continue;
+      }
+      const int begin = static_cast<int>(flat.size());
+      flat.push_back(static_cast<int>(atom->tag[i]));
+      const int jnum = list_->numneigh[i];
+      int *jlist = list_->firstneigh[i];
+      for (int jj = 0; jj < jnum; ++jj) {
+        const int j = jlist[jj] & NEIGHMASK;
+        if (j < 0 || j >= nall || (atom->mask[j] & groupbit) == 0) {
+          continue;
+        }
+        flat.push_back(static_cast<int>(atom->tag[j]));
+      }
+      counts.push_back(static_cast<int>(flat.size()) - begin);
+    }
+    if (!counts.empty()) {
+      seams_insitu_set_neighbours(eng_, static_cast<int>(counts.size()), counts.data(),
+                                  flat.data());
+      built_x_ = sorted_x;
+    }
+  }
   const char *dump = dump_.empty() ? nullptr : dump_.c_str();
   const int rc = seams_insitu_observe(eng_, &frame, dump);
   (void)rc;

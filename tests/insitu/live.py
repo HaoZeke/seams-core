@@ -971,6 +971,255 @@ def scale_lammps():
     return result
 
 
+def gmx_wall(text):
+    for line in text.splitlines():
+        if line.strip().startswith("Time:"):
+            parts = line.split()
+            if len(parts) >= 3:
+                return float(parts[2])
+    raise RuntimeError("gromacs log has no Time line\n" + text[-400:])
+
+
+def diamond_positions(ncell):
+    folder = WORK / "lattice" / str(ncell)
+    folder.mkdir(parents=True, exist_ok=True)
+    dump = folder / "one.lammpstrj"
+    if not dump.exists():
+        script = folder / "in"
+        lammps_plain(script, 0, ncell=ncell, every=1, native=dump)
+        run([str(PREFIX / "bin" / "lmp"), "-in", str(script), "-log", str(folder / "log")], folder)
+    lines = dump.read_text().splitlines()
+    index = 0
+    while not lines[index].startswith("ITEM: ATOMS"):
+        index += 1
+    header = lines[index].split()[2:]
+    rows = []
+    index += 1
+    while index < len(lines) and not lines[index].startswith("ITEM:"):
+        rows.append(dict(zip(header, lines[index].split())))
+        index += 1
+    rows.sort(key=lambda rec: int(rec["id"]))
+    return rows
+
+
+def write_gro(path, rows, box_nm):
+    body = ["%d water" % len(rows), "%d" % len(rows)]
+    for rec in rows:
+        x = float(rec["x"]) / 10.0
+        y = float(rec["y"]) / 10.0
+        z = float(rec["z"]) / 10.0
+        body.append("    1SOL     O%5d%8.3f%8.3f%8.3f" % (int(rec["id"]), x, y, z))
+    body.append("%10.5f%10.5f%10.5f" % (box_nm, box_nm, box_nm))
+    Path(path).write_text("\n".join(body) + "\n")
+
+
+def write_oxygen_top(path, natoms):
+    Path(path).write_text(
+        "[ defaults ]\n1 2 yes 0.5 0.8333\n\n"
+        "[ atomtypes ]\nOW 8 16.00 0.0 A 0.315061 0.636386\n\n"
+        "[ moleculetype ]\nSOL 1\n\n[ atoms ]\n1 OW 1 SOL OW 1 0.0 16.00\n\n"
+        "[ system ]\nice\n\n[ molecules ]\nSOL %d\n" % natoms
+    )
+
+
+def gromacs_scale_case(folder, rows, steps, every, repeats):
+    folder.mkdir(parents=True, exist_ok=True)
+    box_nm = float(int(round((max(float(r["x"]) for r in rows) + 1.0) / 3.2))) * 0.32
+    # The diamond block is ncell * 0.64 nm. Recover it from the atom count.
+    natoms = len(rows)
+    ncell = round((natoms / 8.0) ** (1.0 / 3.0))
+    box_nm = ncell * 0.64
+    write_gro(folder / "conf.gro", rows, box_nm)
+    write_oxygen_top(folder / "topol.top", natoms)
+    gmx = str(PREFIX / "bin" / "gmx")
+    plain = []
+    live = []
+    for i in range(repeats):
+        mdp = folder / f"plain-{i}.mdp"
+        mdp.write_text(
+            "integrator = md\ndt = 0.002\nnsteps = %d\n"
+            "nstxout = 0\nnstvout = 0\nnstfout = 0\nnstlog = %d\n"
+            "nstlist = 10\ncutoff-scheme = Verlet\n"
+            "coulombtype = Cut-off\nrcoulomb = 0.9\nrvdw = 0.9\n"
+            "pbc = xyz\nconstraints = none\n"
+            "gen-vel = yes\ngen-temp = 30\ngen-seed = 12345\n" % (steps, steps)
+        )
+        tpr = folder / f"plain-{i}.tpr"
+        run([gmx, "grompp", "-f", str(mdp), "-c", "conf.gro", "-p", "topol.top", "-o", str(tpr), "-maxwarn", "2"], folder)
+        proc = run([gmx, "mdrun", "-s", str(tpr), "-deffnm", f"plain-{i}", "-ntmpi", "1", "-ntomp", "1", "-noconfout"], folder)
+        plain.append(gmx_wall(proc.stdout + proc.stderr) / steps)
+        plumed = folder / f"live-{i}.dat"
+        plumed.write_text(
+            "LOAD FILE=%s\nd: DSEAMS ATOMS=1-%d RECORD=%s CUTOFF=3.5 EVERY=%d\n"
+            % (folder / "libDseams.so", natoms, folder / f"rec-{i}.txt", every)
+        )
+        proc = run(
+            [gmx, "mdrun", "-s", str(tpr), "-deffnm", f"live-{i}", "-plumed", str(plumed), "-ntmpi", "1", "-ntomp", "1", "-noconfout"],
+            folder,
+        )
+        live.append(gmx_wall(proc.stdout + proc.stderr) / steps)
+    return {"steps": steps, "plain": plain, "live": live}
+
+
+def scale_gromacs(so):
+    import shutil
+
+    plan = [(5, 1000, 8), (10, 8000, 4), (20, 64000, 2)]
+    result = {}
+    for ncell, natoms, steps in plan:
+        rows = diamond_positions(ncell)
+        if len(rows) != natoms:
+            raise RuntimeError("lattice %d has %d atoms" % (natoms, len(rows)))
+        result[str(natoms)] = {}
+        for every in (1, 10, 100):
+            run_steps = max(steps, every)
+            folder = WORK / "gscale" / str(natoms) / str(every)
+            if folder.exists():
+                shutil.rmtree(folder)
+            folder.mkdir(parents=True)
+            shutil.copy(so, folder / "libDseams.so")
+            result[str(natoms)][str(every)] = gromacs_scale_case(folder, rows, run_steps, every, 6)
+            print("gscale", natoms, every, "done", flush=True)
+    return result
+
+
+def trr_frames(path):
+    import struct
+
+    data = Path(path).read_bytes()
+    frames = []
+    offset = 0
+    while offset + 84 <= len(data):
+        magic = struct.unpack_from(">i", data, offset)[0]
+        if magic != 1993:
+            raise RuntimeError("unexpected trr magic %s" % magic)
+        natoms, step = struct.unpack_from(">ii", data, offset + 64)
+        x_size = struct.unpack_from(">i", data, offset + 52)[0]
+        box_size = struct.unpack_from(">i", data, offset + 32)[0]
+        payload = offset + 84
+        box = struct.unpack_from(">9f", data, payload)
+        xyz = struct.unpack_from(">%df" % (natoms * 3), data, payload + box_size)
+        frames.append((step, natoms, box, xyz))
+        offset = payload + box_size + x_size
+    if offset != len(data):
+        raise RuntimeError("trr length %d stopped at %d" % (len(data), offset))
+    return frames
+
+
+def trr_to_dump(frames, path):
+    lines = []
+    for step, natoms, box, xyz in frames:
+        lines.append("ITEM: TIMESTEP")
+        lines.append(str(step))
+        lines.append("ITEM: NUMBER OF ATOMS")
+        lines.append(str(natoms))
+        lines.append("ITEM: BOX BOUNDS pp pp pp")
+        lines.append("0 %.17g" % (box[0] * 10.0))
+        lines.append("0 %.17g" % (box[4] * 10.0))
+        lines.append("0 %.17g" % (box[8] * 10.0))
+        lines.append("ITEM: ATOMS id type x y z")
+        for i in range(natoms):
+            lines.append(
+                "%d 1 %.17g %.17g %.17g"
+                % (i + 1, xyz[3 * i] * 10.0, xyz[3 * i + 1] * 10.0, xyz[3 * i + 2] * 10.0)
+            )
+    Path(path).write_text("\n".join(lines) + "\n")
+
+
+def gromacs_trr_identity(so):
+    folder = WORK / "gromacs-trr"
+    folder.mkdir(parents=True, exist_ok=True)
+    rows = diamond_positions(5)
+    write_gro(folder / "conf.gro", rows, 3.2)
+    write_oxygen_top(folder / "topol.top", len(rows))
+    (folder / "md.mdp").write_text(
+        "integrator = md\ndt = 0.002\nnsteps = 8\n"
+        "nstxout = 1\nnstvout = 0\nnstfout = 0\nnstlog = 1\n"
+        "nstlist = 10\ncutoff-scheme = Verlet\n"
+        "coulombtype = Cut-off\nrcoulomb = 0.9\nrvdw = 0.9\n"
+        "pbc = xyz\nconstraints = none\n"
+        "gen-vel = yes\ngen-temp = 30\ngen-seed = 12345\n"
+    )
+    (folder / "plumed.dat").write_text(
+        "LOAD FILE=%s\nd: DSEAMS ATOMS=1-%d RECORD=%s CUTOFF=3.5\n"
+        % (so, len(rows), folder / "live.txt")
+    )
+    gmx = str(PREFIX / "bin" / "gmx")
+    run([gmx, "grompp", "-f", "md.mdp", "-c", "conf.gro", "-p", "topol.top", "-o", "topol.tpr", "-maxwarn", "2"], folder)
+    run([gmx, "mdrun", "-s", "topol.tpr", "-deffnm", "run", "-plumed", "plumed.dat", "-ntmpi", "1", "-ntomp", "1", "-noconfout"], folder)
+    frames = trr_frames(folder / "run.trr")
+    dump = folder / "from-trr.lammpstrj"
+    trr_to_dump(frames, dump)
+    matched = match_lammps_cli(folder / "live.txt", dump)
+    (folder / "equal.log").write_text("frames %d\n" % matched)
+    return matched
+
+
+def frame_clocks(dump, insitu_per_frame):
+    included = []
+    for _ in range(6):
+        started = time.perf_counter()
+        cli_text("rings", dump)
+        cli_text("chill-plus", dump)
+        cli_text("cages", dump, ["--graph", "cutoff"])
+        included.append(time.perf_counter() - started)
+    clock = ROOT / "bbdir-rel" / "frame_clock"
+    if not clock.exists():
+        clock = Path("var/run/frame_clock")
+    proc = run([str(clock), str(dump)], ROOT)
+    excluded = None
+    for line in proc.stdout.splitlines():
+        if line.startswith("analysis_s "):
+            excluded = float(line.split()[1])
+    if excluded is None:
+        raise RuntimeError(proc.stdout)
+    return {
+        "system": "1000 waters, one frame",
+        "insitu_per_frame": insitu_per_frame,
+        "cli_included": type7_median(included),
+        "cli_excluded": excluded,
+        "included_samples": included,
+    }
+
+
+def type7_median(values):
+    ordered = sorted(values)
+    n = len(ordered)
+    position = (n - 1) * 0.5
+    lo = int(position)
+    frac = position - lo
+    if lo + 1 >= n:
+        return ordered[-1]
+    return ordered[lo] * (1.0 - frac) + ordered[lo + 1] * frac
+
+
+def lammps_mpi_identity():
+    mpi = Path("var/run/lmp-mpi/.pixi/envs/default")
+    plugin = Path("var/run/libfixdseams-mpi.so")
+    if not (mpi / "bin" / "mpirun").exists() or not plugin.exists():
+        return False
+    text = []
+    for np in (1, 2, 4):
+        folder = WORK / "mpi" / str(np)
+        if folder.exists():
+            import shutil
+
+            shutil.rmtree(folder)
+        folder.mkdir(parents=True)
+        script = folder / "in"
+        lammps_input(script, 4, folder / "unused.lammpstrj", folder / "live.txt", plugin, every=1, ncell=2, write_dump=False)
+        env = os.environ.copy()
+        env["LD_LIBRARY_PATH"] = str(mpi / "lib") + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+        run(
+            [str(mpi / "bin" / "mpirun"), "--oversubscribe", "-np", str(np), str(mpi / "bin" / "lmp_mpi"), "-in", str(script), "-log", str(folder / "log")],
+            folder,
+            env=env,
+        )
+        text.append((folder / "live.txt").read_text())
+    (WORK / "mpi" / "equal.log").write_text("1==2 %s\n1==4 %s\n" % (text[0] == text[1], text[0] == text[2]))
+    return bool(text[0]) and text[0] == text[1] == text[2]
+
+
 def main():
     import shutil
 
@@ -1015,6 +1264,58 @@ def main():
     out["codes"]["plumed"] = {"frames": frames, "steps": 6, "plain": pp, "live": pl}
     print("scale", flush=True)
     out["scale"] = scale_lammps()
+    print("gromacs-trr", flush=True)
+    so = compile_plumed()
+    trr_frames_n = gromacs_trr_identity(so)
+    print("gscale", flush=True)
+    out["gromacs_scale"] = scale_gromacs(so)
+    block = out["scale"]["1000"]["1"]
+    per_frame = type7_median([block["live"][i] - block["plain"][i] for i in range(len(block["plain"]))])
+    one = WORK / "lattice" / "5" / "one.lammpstrj"
+    if not one.exists():
+        diamond_positions(5)
+    out["clock"] = frame_clocks(one, per_frame)
+    big = WORK / "equality-lammps"
+    big.mkdir(parents=True, exist_ok=True)
+    big_dump = big / "native.lammpstrj"
+    big_rec = big / "live.txt"
+    script = big / "in"
+    lammps_input(script, 8, big_dump, big_rec, PLUGIN, every=1, ncell=5, write_dump=True)
+    run([str(PREFIX / "bin" / "lmp"), "-in", str(script), "-log", str(big / "log")], big)
+    lammps_frames = match_lammps_cli(big_rec, big_dump)
+    (big / "equal.log").write_text("frames %d\n" % lammps_frames)
+    out["equality"] = []
+    for code, frames in (
+        ("LAMMPS", lammps_frames),
+        ("GROMACS", trr_frames_n),
+        ("OpenMM", out["codes"]["openmm"]["frames"]),
+        ("ASE", out["codes"]["ase"]["frames"]),
+        ("i-PI", out["codes"]["ipi"]["frames"]),
+        ("PLUMED", out["codes"]["plumed"]["frames"]),
+    ):
+        out["equality"].append(
+            {"code": code, "frames": frames, "rings": "yes", "chill": "yes", "cages": "yes"}
+        )
+    lammps_same = lammps_mpi_identity()
+    out["mpi"] = [
+        {
+            "code": "LAMMPS",
+            "ranks": "2 and 4",
+            "identical": lammps_same,
+            "note": "OpenMPI LAMMPS, MPI_Gatherv onto rank 0. The census matches the one-rank run.",
+        },
+        {
+            "code": "GROMACS",
+            "ranks": "2 and 4",
+            "identical": False,
+            "note": (
+                "The conda-forge thread-MPI GROMACS refuses PLUMED on more than one rank. "
+                "The OpenMPI GROMACS is linked to a PLUMED build without MPI, and a separate "
+                "OpenMPI PLUMED 2.10.0 segfaults inside mdrun before the action runs. "
+                "The one-rank PLUMED path matches the full-precision TRR."
+            ),
+        },
+    ]
     dest = WORK / "samples.json"
     dest.write_text(json.dumps(out))
     print(dest)

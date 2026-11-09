@@ -3,6 +3,7 @@
 #include <bop.hpp>
 #include <cage_affiliation.hpp>
 #include <franzblau.hpp>
+#include <generic.hpp>
 #include <mol_sys.hpp>
 #include <neighbours.hpp>
 #include <seams_input.hpp>
@@ -16,6 +17,7 @@
 #include <cstring>
 #include <exception>
 #include <fstream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -49,6 +51,20 @@ struct Engine {
   std::string text;
   seams_insitu_result result;
   bool have_result;
+  // Reused when the next frame's bonds are almost the previous frame's.
+  std::unique_ptr<primitive::RingUpdater> rings_up;
+  std::unique_ptr<ring::AffiliationUpdater> cages_up;
+  int rings_depth = -1;
+  // Neighbours out to cutoff + skin. A later frame filters this list
+  // while every atom has moved less than half the skin.
+  std::vector<std::vector<int>> wide;
+  std::vector<double> built_xyz;
+  double built_lx = 0;
+  double built_ly = 0;
+  double built_lz = 0;
+  std::vector<int> host_counts;
+  std::vector<int> host_flat;
+  bool host_fresh = false;
 };
 
 enum class Gate { Proceed, Done };
@@ -190,6 +206,91 @@ void clear_counts(Engine *eng) {
   eng->cages.clear();
 }
 
+// Pairs in a wide id-list whose current minimum image is inside the cutoff.
+// The comparison matches neighListO: a distance equal to the cutoff is out.
+std::vector<std::vector<int>> filter_cutoff(const Cloud &cloud,
+                                            const std::vector<std::vector<int>> &wide,
+                                            double cutoff, int water) {
+  const double limit = cutoff * cutoff;
+  const gen::FracBox box = gen::makeFracBox(cloud);
+  int maxId = 0;
+  for (int i = 0; i < cloud.nop; ++i) {
+    maxId = std::max(maxId, cloud.pts[static_cast<std::size_t>(i)].atomID);
+  }
+  std::vector<int> at(static_cast<std::size_t>(maxId) + 1, -1);
+  for (int i = 0; i < cloud.nop; ++i) {
+    const int id = cloud.pts[static_cast<std::size_t>(i)].atomID;
+    if (id >= 0) {
+      at[static_cast<std::size_t>(id)] = i;
+    }
+  }
+  const auto indexOf = [&](int id) {
+    return (id >= 0 && id <= maxId) ? at[static_cast<std::size_t>(id)] : -1;
+  };
+  std::vector<std::vector<int>> out(static_cast<std::size_t>(cloud.nop));
+  for (int i = 0; i < cloud.nop; ++i) {
+    out[static_cast<std::size_t>(i)].push_back(cloud.pts[static_cast<std::size_t>(i)].atomID);
+  }
+  for (const auto &row : wide) {
+    if (row.empty()) {
+      continue;
+    }
+    const int iatom = indexOf(row[0]);
+    if (iatom < 0 || cloud.pts[static_cast<std::size_t>(iatom)].type != water) {
+      continue;
+    }
+    auto &dest = out[static_cast<std::size_t>(iatom)];
+    for (std::size_t k = 1; k < row.size(); ++k) {
+      const int jatom = indexOf(row[k]);
+      if (jatom < 0 || jatom == iatom ||
+          cloud.pts[static_cast<std::size_t>(jatom)].type != water) {
+        continue;
+      }
+      if (gen::periodicDistSq(box, cloud, iatom, jatom) >= limit) {
+        continue;
+      }
+      dest.push_back(row[k]);
+    }
+  }
+  return out;
+}
+
+std::vector<std::vector<int>> rows_from_flat(const Cloud &cloud, const std::vector<int> &counts,
+                                            const std::vector<int> &flat) {
+  std::vector<std::vector<int>> rows(static_cast<std::size_t>(cloud.nop));
+  std::size_t cursor = 0;
+  for (const int count : counts) {
+    if (count < 1 || cursor >= flat.size()) {
+      break;
+    }
+    const int self = flat[cursor];
+    const auto at = cloud.idIndexMap.find(self);
+    if (at != cloud.idIndexMap.end()) {
+      auto &row = rows[static_cast<std::size_t>(at->second)];
+      row.clear();
+      const std::size_t n = std::min(static_cast<std::size_t>(count), flat.size() - cursor);
+      row.insert(row.end(), flat.begin() + static_cast<std::ptrdiff_t>(cursor),
+                 flat.begin() + static_cast<std::ptrdiff_t>(cursor + n));
+    }
+    cursor += static_cast<std::size_t>(count);
+  }
+  return rows;
+}
+
+void remember_build(Engine *eng, const Cloud &cloud, std::vector<std::vector<int>> wide) {
+  eng->wide = std::move(wide);
+  eng->built_xyz.resize(static_cast<std::size_t>(cloud.nop) * 3);
+  for (int i = 0; i < cloud.nop; ++i) {
+    const auto &p = cloud.pts[static_cast<std::size_t>(i)];
+    eng->built_xyz[static_cast<std::size_t>(3 * i)] = p.x;
+    eng->built_xyz[static_cast<std::size_t>(3 * i + 1)] = p.y;
+    eng->built_xyz[static_cast<std::size_t>(3 * i + 2)] = p.z;
+  }
+  eng->built_lx = cloud.box.size() > 0 ? cloud.box[0] : 0;
+  eng->built_ly = cloud.box.size() > 1 ? cloud.box[1] : 0;
+  eng->built_lz = cloud.box.size() > 2 ? cloud.box[2] : 0;
+}
+
 int analyze_cloud(Engine *eng, Cloud &cloud, int step, bool do_sink) {
   eng->step = step;
   eng->n = cloud.nop;
@@ -197,9 +298,47 @@ int analyze_cloud(Engine *eng, Cloud &cloud, int step, bool do_sink) {
   const int water = water_type_of(eng, cloud);
   if (cloud.nop > 0) {
     try {
-      const auto nList = nneigh::neighListO(eng->opt.cutoff, cloud, water);
-      const auto idx = nneigh::neighbourListByIndex(cloud, nList);
-      const auto rings = primitive::ringNetwork(idx, eng->opt.ring_depth);
+      std::vector<std::vector<int>> nList;
+      const double skin = 0.5;
+      const double half = skin * 0.5;
+      bool keep = cloud.box.size() >= 3 &&
+                  eng->wide.size() == static_cast<std::size_t>(cloud.nop) &&
+                  eng->built_xyz.size() == static_cast<std::size_t>(cloud.nop) * 3 &&
+                  eng->built_lx == cloud.box[0] && eng->built_ly == cloud.box[1] &&
+                  eng->built_lz == cloud.box[2];
+      if (keep) {
+        for (int i = 0; i < cloud.nop; ++i) {
+          const auto &p = cloud.pts[static_cast<std::size_t>(i)];
+          const double dx = p.x - eng->built_xyz[static_cast<std::size_t>(3 * i)];
+          const double dy = p.y - eng->built_xyz[static_cast<std::size_t>(3 * i + 1)];
+          const double dz = p.z - eng->built_xyz[static_cast<std::size_t>(3 * i + 2)];
+          if (dx * dx + dy * dy + dz * dz > half * half) {
+            keep = false;
+            break;
+          }
+        }
+      }
+      if (keep) {
+        nList = filter_cutoff(cloud, eng->wide, eng->opt.cutoff, water);
+        eng->host_fresh = false;
+      } else if (eng->host_fresh) {
+        const auto shell = filter_cutoff(
+            cloud, rows_from_flat(cloud, eng->host_counts, eng->host_flat),
+            eng->opt.cutoff + skin, water);
+        nList = filter_cutoff(cloud, shell, eng->opt.cutoff, water);
+        eng->host_fresh = false;
+        remember_build(eng, cloud, shell);
+      } else {
+        auto wide = nneigh::neighListO(eng->opt.cutoff + skin, cloud, water);
+        nList = filter_cutoff(cloud, wide, eng->opt.cutoff, water);
+        remember_build(eng, cloud, std::move(wide));
+      }
+      auto idx = nneigh::neighbourListByIndex(cloud, nList);
+      if (eng->rings_up == nullptr || eng->rings_depth != eng->opt.ring_depth) {
+        eng->rings_up = std::make_unique<primitive::RingUpdater>(eng->opt.ring_depth);
+        eng->rings_depth = eng->opt.ring_depth;
+      }
+      const auto &rings = eng->rings_up->update(idx);
       for (const auto &ring : rings) {
         const int size = static_cast<int>(ring.size());
         if (size >= 0 && size <= SEAMS_INSITU_RING_MAX) {
@@ -214,7 +353,10 @@ int analyze_cloud(Engine *eng, Cloud &cloud, int step, bool do_sink) {
         }
       }
       const auto faces = ring::contractibleRings(six, cloud);
-      const auto aff = ring::cageAffiliation(faces, idx);
+      if (eng->cages_up == nullptr) {
+        eng->cages_up = std::make_unique<ring::AffiliationUpdater>();
+      }
+      const auto &aff = eng->cages_up->update(faces, idx);
       std::vector<int> hc(static_cast<std::size_t>(cloud.nop), 0);
       std::vector<int> ddc(static_cast<std::size_t>(cloud.nop), 0);
       for (std::size_t r = 0; r < faces.size(); ++r) {
@@ -549,6 +691,36 @@ int seams_insitu_append_dump(const seams_insitu_frame *frame, const char *path) 
   if (!write_frame(out, frame, box, boxLow)) {
     return SEAMS_INSITU_ERR_IO;
   }
+  return SEAMS_INSITU_OK;
+}
+
+int seams_insitu_set_neighbours(seams_insitu_engine *eng, int n, const int *counts,
+                                const int *flat) {
+  auto *impl = reinterpret_cast<Engine *>(eng);
+  if (impl == nullptr || n < 0) {
+    return SEAMS_INSITU_ERR;
+  }
+  if (n == 0) {
+    impl->host_counts.clear();
+    impl->host_flat.clear();
+    impl->host_fresh = false;
+    impl->wide.clear();
+    impl->built_xyz.clear();
+    return SEAMS_INSITU_OK;
+  }
+  if (counts == nullptr || flat == nullptr) {
+    return SEAMS_INSITU_ERR;
+  }
+  std::size_t total = 0;
+  for (int i = 0; i < n; ++i) {
+    if (counts[i] < 1) {
+      return SEAMS_INSITU_ERR;
+    }
+    total += static_cast<std::size_t>(counts[i]);
+  }
+  impl->host_counts.assign(counts, counts + n);
+  impl->host_flat.assign(flat, flat + total);
+  impl->host_fresh = true;
   return SEAMS_INSITU_OK;
 }
 

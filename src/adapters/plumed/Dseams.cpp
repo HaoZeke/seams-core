@@ -8,10 +8,12 @@
 #include "core/ActionPilot.h"
 #include "core/ActionRegister.h"
 
+#include "tools/NeighborList.h"
 #include "tools/Pbc.h"
 
 #include <seams_insitu.h>
 
+#include <memory>
 #include <vector>
 
 namespace PLMD {
@@ -29,6 +31,8 @@ class Dseams : public ActionAtomistic, public ActionPilot {
   std::string dump_;
   std::string record_;
   seams_insitu_engine *eng_;
+  std::vector<AtomNumber> atoms_;
+  std::unique_ptr<NeighborList> nlist_;
 };
 
 PLUMED_REGISTER_ACTION(Dseams, "DSEAMS")
@@ -41,6 +45,7 @@ void Dseams::registerKeywords(Keywords &keys) {
   keys.add("compulsory", "DUMP", "dseams.lammpstrj", "trajectory written for the replay");
   keys.add("compulsory", "RECORD", "dseams.txt", "census written on each analysed step");
   keys.add("compulsory", "CUTOFF", "3.5", "neighbour cutoff in angstrom");
+  keys.add("compulsory", "EVERY", "1", "analyse one frame every this many steps");
 }
 
 Dseams::Dseams(const ActionOptions &ao) :
@@ -50,11 +55,15 @@ Dseams::Dseams(const ActionOptions &ao) :
   parse("DUMP", dump_);
   parse("RECORD", record_);
   parse("CUTOFF", cutoff_);
+  int every = 1;
+  parse("EVERY", every);
   checkRead();
-  setStride(1);
   if (atoms.empty()) error("DSEAMS needs ATOMS");
   if (!(cutoff_ > 0.0)) error("DSEAMS cutoff must be positive");
+  if (every < 1) error("DSEAMS EVERY must be positive");
+  setStride(every);
   requestAtoms(atoms);
+  atoms_ = atoms;
   seams_insitu_options opt;
   seams_insitu_options_default(&opt);
   opt.cutoff = cutoff_;
@@ -103,6 +112,31 @@ void Dseams::calculate() {
   frame.xz = xz;
   frame.yz = yz;
   frame.gathered = 1;
+  if (nlist_ == nullptr) {
+    nlist_ = std::make_unique<NeighborList>(atoms_, true, true, getPbc(), comm,
+                                            (cutoff_ + 0.5) / 10.0, 1);
+  }
+  std::vector<Vector> pos(n);
+  for (unsigned i = 0; i < n; ++i) {
+    pos[i] = getPosition(static_cast<int>(i));
+  }
+  nlist_->update(pos);
+  std::vector<int> counts(n, 1);
+  std::vector<int> flat;
+  flat.reserve(static_cast<std::size_t>(n) * 5);
+  for (unsigned i = 0; i < n; ++i) {
+    const auto neigh = nlist_->getNeighbors(i);
+    counts[i] = static_cast<int>(neigh.size()) + 1;
+    flat.push_back(static_cast<int>(i) + 1);
+    for (const unsigned j : neigh) {
+      if (j != i && j < n) {
+        flat.push_back(static_cast<int>(j) + 1);
+      } else {
+        counts[i] -= 1;
+      }
+    }
+  }
+  seams_insitu_set_neighbours(eng_, static_cast<int>(n), counts.data(), flat.data());
   const int rc = seams_insitu_observe(eng_, &frame, nullptr);
   if (rc != SEAMS_INSITU_OK && rc != SEAMS_INSITU_SKIP) error("DSEAMS observe failed");
 }

@@ -116,6 +116,13 @@ int seams_insitu_due(const seams_insitu_cadence *cadence, int step);
 
 int seams_insitu_step(seams_insitu_engine *eng, const seams_insitu_frame *frame);
 
+/* The next analysed frame uses this neighbour list instead of building
+ * one. n rows, counts[i] long, concatenated in flat. Each row starts
+ * with that atom's id. A wider host list is filtered to the cutoff.
+ * n == 0 clears the override. */
+int seams_insitu_set_neighbours(seams_insitu_engine *eng, int n,
+                                const int *counts, const int *flat);
+
 /* Analyses the borrowed frame. When debug_dump is set and dump_path is
  * not empty, the same frame is appended to that file after the analysis.
  * The dump is not read back. A null or empty path never writes. */

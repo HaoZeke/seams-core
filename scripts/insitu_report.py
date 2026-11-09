@@ -127,6 +127,72 @@ def main():
                 for value in block["post_wall"]:
                     lines.append(fmt(value))
                 lines.append("")
+    if "gromacs_scale" in data:
+        lines.append("# GROMACS PLUMED size and cadence")
+        lines.append("")
+        lines.append("The same diamond lattices as the LAMMPS table, one site per water.")
+        lines.append("Plain is mdrun. Live is mdrun -plumed with the DSEAMS action.")
+        lines.append("Both times are the mdrun wall time divided by the number of steps.")
+        lines.append("The installed thread-MPI GROMACS runs this path on one rank.")
+        lines.append("Its PLUMED build refuses more than one thread-MPI rank.")
+        lines.append("")
+        lines.append("| Waters | Cadence | Steps | Median absolute | Median ratio |")
+        lines.append("| --- | --- | --- | --- | --- |")
+        for natoms, cadences in data["gromacs_scale"].items():
+            for every, block in cadences.items():
+                plain = block["plain"]
+                live = block["live"]
+                delta = [live[i] - plain[i] for i in range(len(plain))]
+                ratios = [live[i] / plain[i] for i in range(len(plain))]
+                lines.append(
+                    "| %s | %s | %s | %s | %s |"
+                    % (natoms, every, block["steps"], fmt(type7(delta, 0.5)), fmt(type7(ratios, 0.5)))
+                )
+        lines.append("")
+    if "clock" in data:
+        clock = data["clock"]
+        lines.append("# Analysis time against the command line")
+        lines.append("")
+        lines.append("The in-situ column is the extra loop time of one analysed frame.")
+        lines.append("The command line included column is the wall time of seams rings, chill-plus and cages, process start and file reading included.")
+        lines.append("The excluded column is those three censuses after the dump is already in memory.")
+        lines.append("")
+        lines.append("| System | In-situ per frame | CLI included | CLI excluded |")
+        lines.append("| --- | --- | --- | --- |")
+        lines.append(
+            "| %s | %s | %s | %s |"
+            % (
+                clock.get("system", ""),
+                fmt(clock["insitu_per_frame"]),
+                fmt(clock["cli_included"]),
+                fmt(clock["cli_excluded"]),
+            )
+        )
+        lines.append("")
+    if "equality" in data:
+        lines.append("# Equality against each code's own file")
+        lines.append("")
+        lines.append("A frame matches when its ring line, its CHILL+ counts and its cage counts are identical.")
+        lines.append("")
+        lines.append("| Code | Frames | Rings | CHILL+ | Cages |")
+        lines.append("| --- | --- | --- | --- | --- |")
+        for row in data["equality"]:
+            lines.append(
+                "| %s | %s | %s | %s | %s |"
+                % (row["code"], row["frames"], row["rings"], row["chill"], row["cages"])
+            )
+        lines.append("")
+    if "mpi" in data:
+        lines.append("# Ranks")
+        lines.append("")
+        for row in data["mpi"]:
+            lines.append(
+                "%s ranks %s identical to serial: %s."
+                % (row["code"], row["ranks"], "yes" if row["identical"] else "no")
+            )
+            if row.get("note"):
+                lines.append(row["note"])
+        lines.append("")
     for name, block in data["codes"].items():
         plain = block.get("plain") or []
         live = block.get("live") or []

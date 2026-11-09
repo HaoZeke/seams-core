@@ -519,6 +519,52 @@ TEST_CASE("pack, gather, scale, box rows, and cage tally", "[insitu]") {
   REQUIRE(water == 0);
 }
 
+TEST_CASE("a host neighbour list is the cutoff graph for one frame", "[insitu]") {
+  REQUIRE(seams_insitu_set_neighbours(nullptr, 0, nullptr, nullptr) == SEAMS_INSITU_ERR);
+  seams_insitu_options opt;
+  seams_insitu_options_default(&opt);
+  opt.type = 0;
+  auto *eng = seams_insitu_create(&opt);
+  REQUIRE(eng != nullptr);
+  REQUIRE(seams_insitu_set_neighbours(eng, -1, nullptr, nullptr) == SEAMS_INSITU_ERR);
+  REQUIRE(seams_insitu_set_neighbours(eng, 1, nullptr, nullptr) == SEAMS_INSITU_ERR);
+  const int zeroCount[1] = {0};
+  const int oneId[1] = {1};
+  REQUIRE(seams_insitu_set_neighbours(eng, 1, zeroCount, oneId) == SEAMS_INSITU_ERR);
+  const double hex[18] = {2.5, 0, 0, 1.25, 2.165, 0, -1.25, 2.165, 0,
+                          -2.5, 0, 0, -1.25, -2.165, 0, 1.25, -2.165, 0};
+  const int alone[6] = {1, 1, 1, 1, 1, 1};
+  const int ids[6] = {1, 2, 3, 4, 5, 6};
+  REQUIRE(seams_insitu_set_neighbours(eng, 6, alone, ids) == SEAMS_INSITU_OK);
+  auto frame = ortho(1, 6, hex);
+  REQUIRE(seams_insitu_step(eng, &frame) == SEAMS_INSITU_OK);
+  REQUIRE(mustLast(eng)->n_rings == 0);
+  REQUIRE(seams_insitu_set_neighbours(eng, 0, nullptr, nullptr) == SEAMS_INSITU_OK);
+  frame.step = 2;
+  REQUIRE(seams_insitu_step(eng, &frame) == SEAMS_INSITU_OK);
+  const int built = mustLast(eng)->n_rings;
+  REQUIRE(built >= 1);
+  double moved[18];
+  for (int i = 0; i < 18; ++i) {
+    moved[i] = hex[i] + ((i % 3) == 0 ? 0.02 : 0.0);
+  }
+  auto *fresh = seams_insitu_create(&opt);
+  auto movedFrame = ortho(1, 6, moved);
+  REQUIRE(seams_insitu_step(fresh, &movedFrame) == SEAMS_INSITU_OK);
+  const std::string freshText(mustLast(fresh)->text);
+  frame.step = 3;
+  frame.xyz = moved;
+  REQUIRE(seams_insitu_step(eng, &frame) == SEAMS_INSITU_OK);
+  const std::string kept(mustLast(eng)->text);
+  const auto body = [](const std::string &text) {
+    const auto nl = text.find('\n');
+    return nl == std::string::npos ? text : text.substr(nl);
+  };
+  REQUIRE(body(kept) == body(freshText));
+  seams_insitu_destroy(fresh);
+  seams_insitu_destroy(eng);
+}
+
 namespace {
 
 int listen_port(int *fd) {
