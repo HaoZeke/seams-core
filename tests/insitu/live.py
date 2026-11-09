@@ -21,7 +21,9 @@ os.environ["SEAMS_LIB"] = LIB
 os.environ["PATH"] = str(PREFIX / "bin") + os.pathsep + os.environ.get("PATH", "")
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 
+from dseams_insitu.ase import DseamsMDObserver
 from dseams_insitu.engine import Engine, load
+from dseams_insitu.ipi import IpiClient
 from dseams_insitu.openmm import DseamsReporter
 
 

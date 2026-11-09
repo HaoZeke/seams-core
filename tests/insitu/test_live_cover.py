@@ -243,6 +243,20 @@ def main():
     os.environ["SEAMS_INSITU_EXE"] = ""
     os.environ["SEAMS_GRO_IMD_EXE"] = ""
     check(live.acceptance() is None)
+    for name in (
+        "run_lammps",
+        "ase_identity",
+        "run_ipi",
+        "gromacs_trr_identity",
+        "lammps_mpi_identity",
+        "gromacs_mpi_identity",
+        "openmm_identity",
+    ):
+        try:
+            getattr(live, name)()
+            print(name, "ran", flush=True)
+        except Exception as exc:
+            print(name, "not run:", type(exc).__name__, str(exc).splitlines()[0], flush=True)
     print("cover ok")
 
 
