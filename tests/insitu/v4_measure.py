@@ -40,8 +40,7 @@ GMX_MPIRUN = need("DSEAMS_GMX_MPIRUN")
 SEAMS = os.environ["SEAMS_CLI"]
 LIBS = ":".join(
     [
-        "var/run/dseams-md/.pixi/envs/default/lib",
-        "var/run/lmp-mpi/.pixi/envs/default/lib",
+        os.environ.get("DSEAMS_EXTRA_LIBS", ""),
         str(Path(os.environ["SEAMS_LIB"]).parent),
         str(ROOT / "bbdir-rel" / "subprojects" / "readcon-core"),
         str(ROOT / "bbdir-rel" / "subprojects" / "readcon-db"),
