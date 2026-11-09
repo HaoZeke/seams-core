@@ -715,16 +715,6 @@ bool ddcFourteen(const std::vector<std::vector<int>> &rings,
     stamp[static_cast<size_t>(atom)] = eqMark;
   }
   const int ids[6] = {e.r[0], e.r[1], e.r[2], o.r[0], o.r[1], o.r[2]};
-  for (const int ri : ids) {
-    const auto &cycle = rings[static_cast<size_t>(ri)];
-    int share = 0;
-    for (const int atom : cycle) {
-      share += stamp[static_cast<size_t>(atom)] == eqMark ? 1 : 0;
-    }
-    if (share != 3) {
-      return false;
-    }
-  }
   const int allMark = fresh();
   int unique = 0;
   auto take = [&](const std::vector<int> &cycle) {
