@@ -9,6 +9,7 @@
 #include <cage_affiliation.hpp>
 #include <cage_enum.hpp>
 #include <franzblau.hpp>
+#include <ira_sofi.hpp>
 #include <mol_sys.hpp>
 #include <generic.hpp>
 #include <neighbours.hpp>
@@ -1149,8 +1150,6 @@ int cmdChill(std::ostream &os, Cloud &cloud, double cutoff, int typeI,
   auto nList = chillGraph(cloud, cutoff, typ, graphName, waterTypes);
   chill::getCorrel(cloud, nList, false);
   chill::getIceTypeNoPrint(cloud, nList, false);
-  auto q6 = chill::getq6(cloud, nList, false);
-  chill::reclassifyWater(cloud, q6);
   chill::clearIceTypesExcept(cloud, waterTypes);
   printCounts(os, cloud, waterTypes);
   return 0;
@@ -1226,6 +1225,17 @@ int cmdCages(std::ostream &os, FrameCarry &carry, Cloud &cloud, double cutoff,
              const std::string &perAtomPath = {}, bool inside = false,
              bool incomplete = false, const std::vector<int> &waterTypes = {},
              bool shape = false, const std::string &cageEdge = "2.65,3.15") {
+#ifndef SEAMS_HAS_IRA
+  // libira is not linked, so no cage here can resolve to a point group.
+  // tests/test_bop.cpp locks that CHILL does not leave unclassified, and
+  // the shape tests lock this rejection.
+  if (shape) {
+    std::cerr << colorizer.error(
+                     "point groups need libira; this build has IRA/SOFI off")
+              << "\n";
+    return 2;
+  }
+#endif
   if (cloud.nop == 0) {
     if (!signatureSpec.empty()) {
       for (const auto &sig : parseSignatures(signatureSpec)) {
@@ -1334,6 +1344,7 @@ int cmdCages(std::ostream &os, FrameCarry &carry, Cloud &cloud, double cutoff,
             os << " " << k << ":" << occ.occupancyHistogram[k];
           }
         }
+#ifdef SEAMS_HAS_IRA
         if (shape) {
           std::vector<std::array<double, 3>> all(static_cast<std::size_t>(cloud.nop));
           for (int i = 0; i < cloud.nop; ++i) {
@@ -1348,6 +1359,7 @@ int cmdCages(std::ostream &os, FrameCarry &carry, Cloud &cloud, double cutoff,
                << (sh.status == 0 ? sh.pointGroup : "off");
           }
         }
+#endif
         os << "\n";
       }
       return 0;

@@ -214,9 +214,11 @@ TEST_CASE("getIceTypeNoPrint classifies atoms after correlation", "[bop]") {
          t == molSys::atom_state_type::interfacial ||
          t == molSys::atom_state_type::clathrate ||
          t == molSys::atom_state_type::interClathrate ||
-         t == molSys::atom_state_type::unclassified ||
          t == molSys::atom_state_type::reCubic ||
          t == molSys::atom_state_type::reHex);
+    // getIceTypeNoPrint assigns unclassified, then replaces it
+    // before returning. The printer treats that arm as unreachable.
+    REQUIRE(t != molSys::atom_state_type::unclassified);
     REQUIRE(validType);
   }
 }
