@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <netinet/in.h>
 #include <sstream>
@@ -28,8 +29,9 @@ std::string readFile(const std::string &path) {
 }
 
 std::string scratch(const std::string &name) {
-  return std::string("var/run/seams-insitu-") + std::to_string(static_cast<long long>(::getpid())) +
-         "-" + name;
+  const auto dir = std::filesystem::temp_directory_path() / "seams-insitu";
+  std::filesystem::create_directories(dir);
+  return (dir / (std::to_string(static_cast<long long>(::getpid())) + "-" + name)).string();
 }
 
 int run(const std::string &cmd) {
@@ -868,20 +870,24 @@ TEST_CASE("interactive molecular dynamics client round trip", "[insitu]") {
   char port_text[16];
   std::snprintf(port_text, sizeof(port_text), "%d", main_port);
   char arg_host[] = "127.0.0.1";
-  char arg_dump[] = "var/run/seams-imd-main.lammpstrj";
-  char arg_rec[] = "var/run/seams-imd-main.txt";
+  const std::string dump_path = scratch("imd-main.lammpstrj");
+  const std::string rec_path = scratch("imd-main.txt");
+  std::vector<char> arg_dump(dump_path.begin(), dump_path.end());
+  arg_dump.push_back('\0');
+  std::vector<char> arg_rec(rec_path.begin(), rec_path.end());
+  arg_rec.push_back('\0');
   char a0[] = "0";
   char a20[] = "20";
   char a1[] = "1";
-  char *imd_argv[] = {arg_host, arg_host, port_text, arg_dump, arg_rec, a0, a0, a0,
+  char *imd_argv[] = {arg_host, arg_host, port_text, arg_dump.data(), arg_rec.data(), a0, a0, a0,
                       a20, a20, a20, a0, a0, a0, a1};
   REQUIRE(seams_insitu_imd_main(15, imd_argv) == 0);
   main_srv.join();
   char bad_num[] = "zz";
-  char *bad_box_argv[] = {arg_host, arg_host, port_text, arg_dump, arg_rec, bad_num, a0, a0,
+  char *bad_box_argv[] = {arg_host, arg_host, port_text, arg_dump.data(), arg_rec.data(), bad_num, a0, a0,
                           a20, a20, a20, a0, a0, a0, a1};
   REQUIRE(seams_insitu_imd_main(15, bad_box_argv) == 2);
-  char *bad_max_argv[] = {arg_host, arg_host, port_text, arg_dump, arg_rec, a0, a0, a0,
+  char *bad_max_argv[] = {arg_host, arg_host, port_text, arg_dump.data(), arg_rec.data(), a0, a0, a0,
                           a20, a20, a20, a0, a0, a0, bad_num};
   REQUIRE(seams_insitu_imd_main(15, bad_max_argv) == 2);
   seams_insitu_destroy(eng);
