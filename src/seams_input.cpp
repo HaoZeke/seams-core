@@ -650,7 +650,6 @@ void parseLammpsFrameBody(
   bool sawMol = false;
   int nextSyntheticId = 1;
   bool isTriclinic = false;
-  int nKept = 0;
   molSys::Point<double> iPoint;
 
   while (true) {
@@ -745,7 +744,6 @@ void parseLammpsFrameBody(
         if (keep != LammpsKeep::All && iPoint.type != typeFilter) {
           continue;
         }
-        nKept++;
         yCloud.pts.push_back(iPoint);
         mapAtomIdToIndex(yCloud);
       }
@@ -785,9 +783,6 @@ void parseLammpsFrameBody(
   // the warning goes to stderr, which every rank of a frame split keeps
   if (keep != LammpsKeep::All) {
     yCloud.nop = static_cast<int>(yCloud.pts.size());
-    if (yCloud.pts.size() != static_cast<std::size_t>(nKept)) {
-      std::cerr << "Atoms didn't get filled in properly.\n";
-    }
   } else if (yCloud.pts.size() !=
              static_cast<std::size_t>(yCloud.nop < 0 ? 0 : yCloud.nop)) {
     // A count that does not fit in int leaves nop unset. The atoms that
