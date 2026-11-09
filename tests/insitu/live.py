@@ -72,9 +72,31 @@ def sha256(path):
     return digest.hexdigest()
 
 
+def lammps_bin(script, log, cwd, env=None):
+    """Run lmp with absolute input and log paths.
+
+    The process cwd is the run folder. A relative -log is then looked up
+    inside that folder and LAMMPS cannot open the universe log.
+    """
+    return run(
+        [
+            str((PREFIX / "bin" / "lmp").resolve()),
+            "-in",
+            str(Path(script).resolve()),
+            "-log",
+            str(Path(log).resolve()),
+        ],
+        cwd,
+        env=env,
+    )
+
+
 def lammps_input(path, steps, native, record, plugin, every=1, ncell=1, write_dump=True):
+    record = Path(record).resolve()
+    plugin = str(Path(plugin).resolve()) if plugin else plugin
     dump_lines = ""
     if write_dump:
+        native = Path(native).resolve()
         dump_lines = (
             f"            dump native all custom {every} {native} id type x y z\n"
             "            dump_modify native sort id format float %.17g\n"
@@ -107,6 +129,7 @@ def lammps_input(path, steps, native, record, plugin, every=1, ncell=1, write_du
 def lammps_plain(path, steps, ncell=1, every=0, native=None):
     dump = ""
     if every and native is not None:
+        native = Path(native).resolve()
         dump = (
             f"            dump native all custom {every} {native} id type x y z\n"
             "            dump_modify native sort id format float %.17g\n"
@@ -518,7 +541,7 @@ def diamond_positions(ncell):
     if not dump.exists():
         script = folder / "in"
         lammps_plain(script, 0, ncell=ncell, every=1, native=dump)
-        run([str(PREFIX / "bin" / "lmp"), "-in", str(script), "-log", str(folder / "log")], folder)
+        lammps_bin(script, folder / "log", folder)
     lines = dump.read_text().splitlines()
     index = 0
     while not lines[index].startswith("ITEM: ATOMS"):
@@ -745,7 +768,7 @@ def time_lammps(kind, steps, repeats, plugin):
             )
         else:
             lammps_plain(script, steps)
-        proc = run([str(PREFIX / "bin" / "lmp"), "-in", str(script), "-log", str(log)], folder)
+        proc = lammps_bin(script, log, folder)
         samples.append(loop_time(proc.stdout + Path(log).read_text()) / steps)
     return samples
 
@@ -777,7 +800,7 @@ def run_lammps():
     record.unlink(missing_ok=True)
     script = folder / "in.live"
     lammps_input(script, 6, dump, record, PLUGIN)
-    run([str(PREFIX / "bin" / "lmp"), "-in", str(script), "-log", str(folder / "log")], folder)
+    lammps_bin(script, folder / "log", folder)
     frames = match_lammps_cli(record, dump)
     # rejected fix arguments must leave the run alive
     bad = folder / "in.bad"
@@ -787,7 +810,7 @@ def run_lammps():
         "pair_coeff * * 0.1 2.5\nplugin load " + str(PLUGIN) + "\n"
         "fix sea all dseams dump\nrun 1\n"
     )
-    run([str(PREFIX / "bin" / "lmp"), "-in", str(bad), "-log", str(folder / "bad.log")], folder)
+    lammps_bin(bad, folder / "bad.log", folder)
     return {"frames": frames, "steps": 40}
 
 def gromacs_box(gro):
@@ -1079,7 +1102,7 @@ def scale_lammps():
                 pin = folder / f"plain-{i}.in"
                 plog = folder / f"plain-{i}.log"
                 lammps_plain(pin, run_steps, ncell=ncell)
-                proc = run([str(PREFIX / "bin" / "lmp"), "-in", str(pin), "-log", str(plog)], folder)
+                proc = lammps_bin(pin, plog, folder)
                 sample = loop_time(proc.stdout + plog.read_text()) / run_steps
                 if i == 0:
                     warmup_plain = sample
@@ -1097,7 +1120,7 @@ def scale_lammps():
                     ncell=ncell,
                     write_dump=False,
                 )
-                proc = run([str(PREFIX / "bin" / "lmp"), "-in", str(lin), "-log", str(llog)], folder)
+                proc = lammps_bin(lin, llog, folder)
                 sample = loop_time(proc.stdout + llog.read_text()) / run_steps
                 if i == 0:
                     warmup_live = sample
@@ -1106,7 +1129,7 @@ def scale_lammps():
             dump = folder / "native.lammpstrj"
             pin = folder / "post.in"
             lammps_plain(pin, 1, ncell=ncell, every=1, native=dump)
-            run([str(PREFIX / "bin" / "lmp"), "-in", str(pin), "-log", str(folder / "post.log")], folder)
+            lammps_bin(pin, folder / "post.log", folder)
             post = []
             for _ in range(6):
                 started = time.perf_counter()
@@ -1307,7 +1330,7 @@ def lammps_mpi_identity():
         env = os.environ.copy()
         env["LD_LIBRARY_PATH"] = str(mpi / "lib") + os.pathsep + env.get("LD_LIBRARY_PATH", "")
         run(
-            [str(mpi / "bin" / "mpirun"), "--oversubscribe", "-np", str(np), str(mpi / "bin" / "lmp_mpi"), "-in", str(script), "-log", str(folder / "log")],
+            [str(mpi / "bin" / "mpirun"), "--oversubscribe", "-np", str(np), str(mpi / "bin" / "lmp_mpi"), "-in", str(script.resolve()), "-log", str((folder / "log").resolve())],
             folder,
             env=env,
         )
@@ -1436,7 +1459,7 @@ def seal_tail(out, trr_frames_n):
     big_rec = big / "live.txt"
     script = big / "in"
     lammps_input(script, 8, big_dump, big_rec, PLUGIN, every=1, ncell=5, write_dump=True)
-    run([str(PREFIX / "bin" / "lmp"), "-in", str(script), "-log", str(big / "log")], big)
+    lammps_bin(script, big / "log", big)
     lammps_frames = match_lammps_cli(big_rec, big_dump)
     (big / "equal.log").write_text("frames %d\n" % lammps_frames)
     out["equality"] = []
@@ -1474,7 +1497,7 @@ def seal_tail(out, trr_frames_n):
         dump = folder / "native.lammpstrj"
         script = folder / "in"
         lammps_plain(script, 40, ncell=ncell, every=10, native=dump)
-        run([str(PREFIX / "bin" / "lmp"), "-in", str(script), "-log", str(folder / "log")], folder)
+        lammps_bin(script, folder / "log", folder)
         out["ladder"].append(thread_ladder(dump, natoms))
     dest = WORK / "samples.json"
     dest.write_text(json.dumps(out))
