@@ -492,7 +492,7 @@ if get_option('openmm').enabled()
   message('OpenMM in-situ adapter requested')
 endif
 if get_option('plumed').enabled()
-  message('PLUMED in-situ adapter requested')
+  error('Live analysis does not use PLUMED. -Dplumed=enabled is an error.')
 endif
 
 summary({

@@ -154,5 +154,5 @@ if not get_option('lammps').disabled()
 endif
 
 if get_option('plumed').enabled()
-  error('Live analysis does not use PLUMED. The neighbour-index fix stays in its own tree.')
+  error('Live analysis does not use PLUMED. -Dplumed=enabled is an error.')
 endif
