@@ -7,7 +7,7 @@
  * SPDX-License-Identifier: GPL-2.0-only
  */
 
-#include "fix.h"
+#include "fix_dseams.h"
 
 #include "atom.h"
 #include "comm.h"
@@ -56,27 +56,6 @@ double parse_positive_double(const char *text, int *bad) {
 }
 
 } // namespace
-
-class FixDseams : public Fix {
- public:
-  FixDseams(LAMMPS *lmp, int narg, char **arg);
-  ~FixDseams() override;
-  int setmask() override;
-  void init() override;
-  void init_list(int id, NeighList *ptr) override;
-  void end_of_step() override;
-
- private:
-  int active_;
-  int every_;
-  int depth_;
-  double cutoff_;
-  std::string dump_;
-  std::string record_;
-  seams_insitu_engine *eng_;
-  NeighList *list_;
-  std::vector<double> built_x_;
-};
 
 FixDseams::FixDseams(LAMMPS *lmp, int narg, char **arg) :
     Fix(lmp, narg, arg), active_(0), every_(1), depth_(8), cutoff_(3.5), eng_(nullptr),
@@ -330,6 +309,7 @@ void FixDseams::end_of_step() {
   (void)rc;
 }
 
+#ifdef DSEAMS_LAMMPS_PLUGIN
 static Fix *dseams_creator(LAMMPS *lmp, int narg, char **arg) {
   return new FixDseams(lmp, narg, arg);
 }
@@ -346,3 +326,4 @@ extern "C" void lammpsplugin_init(void *lmp, void *handle, void *regfunc) {
   plugin.handle = handle;
   (*register_plugin)(&plugin, lmp);
 }
+#endif
