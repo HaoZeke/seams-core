@@ -2,6 +2,8 @@
 
 import importlib.util
 import json
+import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -139,6 +141,49 @@ def main():
         code, text = run(module, root, note)
         need(code == 1 and "0 0 0.000000" in text, "plain text was accepted")
         outside.unlink()
+        repo = root / "repo"
+        repo.mkdir()
+        env = os.environ.copy()
+        env.update({
+            "GIT_AUTHOR_NAME": "Rohit Goswami",
+            "GIT_AUTHOR_EMAIL": "rgoswami@ieee.org",
+            "GIT_COMMITTER_NAME": "Rohit Goswami",
+            "GIT_COMMITTER_EMAIL": "rgoswami@ieee.org",
+        })
+        subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+        keep = repo / "keep.py"
+        keep.write_text("x = 1\n")
+        subprocess.run(["git", "add", "keep.py"], cwd=repo, check=True)
+        first = subprocess.run(
+            ["git", "-c", "core.hooksPath=/dev/null", "commit", "-m", "base"],
+            cwd=repo, check=True, capture_output=True, text=True, env=env,
+        )
+        base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+        (repo / "gap.py").write_text("y = 1\n")
+        keep.write_text("x = 2\n")
+        subprocess.run(["git", "add", "keep.py", "gap.py"], cwd=repo, check=True)
+        subprocess.run(
+            ["git", "-c", "core.hooksPath=/dev/null", "commit", "-m", "change"],
+            cwd=repo, check=True, capture_output=True, env=env,
+        )
+        present = {"files": {str(keep): {"executed_lines": [1], "missing_lines": []}}}
+        js = repo / "cov.json"
+        js.write_text(json.dumps(present))
+        saved = os.environ.get("DSEAMS_COVERAGE_BASE")
+        os.environ["DSEAMS_COVERAGE_BASE"] = base
+        try:
+            code, text = run(module, repo, js)
+            need(code == 1 and "gap.py 0 0 0.000000" in text, "a changed file with no row passed")
+            present["files"][str(repo / "gap.py")] = {"executed_lines": [1], "missing_lines": []}
+            js.write_text(json.dumps(present))
+            code, text = run(module, repo, js)
+            need(code == 0 and "gap.py 1 1 1.000000" in text, "a changed file with a row failed")
+        finally:
+            if saved is None:
+                os.environ.pop("DSEAMS_COVERAGE_BASE", None)
+            else:
+                os.environ["DSEAMS_COVERAGE_BASE"] = saved
+        del first
     print("coverage scorer ok")
     return 0
 

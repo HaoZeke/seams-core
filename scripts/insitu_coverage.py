@@ -11,9 +11,14 @@ row, and a path outside the root is a failed row.
 """
 
 import json
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
+
+# Public history. A Python file changed since this commit must have a row.
+PUBLIC_BASE = "7f310225"
 
 
 def _python_code(line, quote):
@@ -148,6 +153,19 @@ def fail_row(name):
     return (str(name), 0, 0, 0.0)
 
 
+def changed_python(root, base):
+    """Python paths changed between base and HEAD. An empty list means no git history."""
+    proc = subprocess.run(
+        ["git", "diff", "--name-only", base, "HEAD", "--", "*.py"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        return []
+    return [line for line in proc.stdout.splitlines() if line.endswith(".py")]
+
+
 def main():
     root = Path(sys.argv[1])
     rows = []
@@ -207,6 +225,11 @@ def main():
                 rows.append((str(rel), len(statements), len(hit), len(hit) / len(statements)))
         else:
             rows.append(fail_row(src))
+    seen = {name for name, _denom, _num, _frac in rows}
+    base = os.environ.get("DSEAMS_COVERAGE_BASE", PUBLIC_BASE)
+    for rel in changed_python(root, base):
+        if rel not in seen:
+            rows.append(fail_row(rel))
     print("file executable covered fraction")
     worst = 1.0
     for name, denom, num, frac in rows:
