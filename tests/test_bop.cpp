@@ -1954,3 +1954,124 @@ TEST_CASE("ice labels, the reprint, and the water reclassification", "[bop]") {
   chill::getIceTypePlus(cloud, rows, dir.string() + "/", 1, true, "plus.txt");
   std::filesystem::remove_all(dir);
 }
+
+TEST_CASE("frac box and triclinic image cover the rejected cells", "[bop]") {
+  using Cloud = molSys::PointCloud<molSys::Point<double>, double>;
+  auto cloud = [](std::vector<double> box, std::vector<double> low) {
+    Cloud out;
+    out.box = std::move(box);
+    out.boxLow = std::move(low);
+    molSys::Point<double> a;
+    a.x = 0.2;
+    a.y = 0.2;
+    a.z = 0.2;
+    molSys::Point<double> b;
+    b.x = 9.6;
+    b.y = 0.3;
+    b.z = 0.2;
+    out.pts = {a, b};
+    out.nop = 2;
+    return out;
+  };
+  Cloud bare = cloud({10.0, 10.0}, {});
+  REQUIRE_FALSE(gen::makeFracBox(bare).ok);
+  Cloud zero = cloud({0.0, 10.0, 10.0}, {1.0});
+  REQUIRE_FALSE(gen::makeFracBox(zero).ok);
+  Cloud ortho = cloud({10.0, 10.0, 10.0}, {});
+  ortho.pts[0].x = 0.0;
+  ortho.pts[0].y = 0.0;
+  ortho.pts[0].z = 0.0;
+  ortho.pts[1].x = 9.5;
+  ortho.pts[1].y = 0.0;
+  ortho.pts[1].z = 0.0;
+  auto frame = gen::makeFracBox(ortho);
+  REQUIRE(frame.ok);
+  REQUIRE(gen::smithInside(frame, 1.0));
+  REQUIRE_THAT(gen::periodicDistSq(frame, ortho, 0, 1),
+               Catch::Matchers::WithinAbs(0.25, 1e-9));
+  Cloud neg = ortho;
+  neg.box = {-10.0, 10.0, 10.0};
+  neg.pts[0].x = neg.pts[0].y = neg.pts[0].z = 0.0;
+  neg.pts[1].x = 0.0;
+  neg.pts[1].y = -6.0;
+  neg.pts[1].z = 0.0;
+  auto negFrame = gen::makeFracBox(neg);
+  REQUIRE_FALSE(negFrame.ok);
+  REQUIRE(gen::periodicDistSq(negFrame, neg, 0, 1) > 0.0);
+  const auto rel = gen::relDistFromPoint(negFrame, neg, 0, 9.5, 0.0, 0.0);
+  REQUIRE(rel[0] < 0.0);
+  const auto down = gen::relDistFromPoint(negFrame, neg, 0, 0.0, -6.0, 0.0);
+  REQUIRE(down[1] < 5.0);
+  Cloud tilt = cloud({12.0, 10.0, 10.0, 2.0, 0.0, 0.0}, {0.5});
+  auto tri = gen::makeFracBox(tilt);
+  REQUIRE(tri.ok);
+  REQUIRE(tri.triclinic);
+  REQUIRE_FALSE(gen::smithInside(tri, 1.0e6));
+  const auto near = gen::triclinicMinImage(tilt, 0.2, 0.2, 0.2, 0.4, 0.2, 0.2);
+  REQUIRE_THAT(near[0], Catch::Matchers::WithinAbs(-0.2, 1e-8));
+  REQUIRE(gen::periodicDistSq(tri, tilt, 0, 1) < 25.0);
+  Cloud broken = tilt;
+  broken.box = {0.0, 10.0, 10.0, 1.0, 0.0, 0.0};
+  broken.boxLow = {1.0, 2.0};
+  REQUIRE_FALSE(gen::makeFracBox(broken).ok);
+  REQUIRE(std::isfinite(
+      gen::triclinicMinImage(broken, 0.2, 0.2, 0.2, 1.2, 0.2, 0.2)[0]));
+  REQUIRE(std::isfinite(gen::periodicDistSq(gen::makeFracBox(broken), broken, 0, 1)));
+  REQUIRE(std::isfinite(gen::relDistFromPoint(gen::makeFracBox(broken), broken, 0,
+                                              9.0, 0.0, 0.0)[0]));
+  gen::FracBox dead;
+  REQUIRE_FALSE(gen::smithInside(dead, 1.0));
+  dead.ok = true;
+  REQUIRE(gen::smithInside(dead, 1.0e9));
+#ifdef SEAMS_HAS_MINIMAGE
+  mi_cell cell{};
+  Cloud cellCloud = ortho;
+  cellCloud.boxLow.clear();
+  REQUIRE(gen::pointCloudCell(cellCloud, &cell));
+  cellCloud.boxLow = {1.0};
+  REQUIRE(gen::pointCloudCell(cellCloud, &cell));
+  cellCloud.boxLow = {1.0, 2.0};
+  REQUIRE(gen::pointCloudCell(cellCloud, &cell));
+  cellCloud.boxLow = {1.0, 2.0, 3.0};
+  REQUIRE(gen::pointCloudCell(cellCloud, &cell));
+  REQUIRE_THAT(cell.oz, Catch::Matchers::WithinAbs(3.0, 1e-12));
+  cellCloud.box = {10.0, 10.0, 10.0, 1.0, 0.0, 0.0};
+  REQUIRE(gen::pointCloudCell(cellCloud, &cell));
+  cellCloud.box = {0.0, 10.0, 10.0};
+  REQUIRE_FALSE(gen::pointCloudCell(cellCloud, &cell));
+  cellCloud.box = {-1.0, 10.0, 10.0};
+  REQUIRE_FALSE(gen::pointCloudCell(cellCloud, &cell));
+  cellCloud.box = {10.0, 0.0, 10.0};
+  REQUIRE_FALSE(gen::pointCloudCell(cellCloud, &cell));
+  cellCloud.box = {10.0, 10.0, 0.0};
+  REQUIRE_FALSE(gen::pointCloudCell(cellCloud, &cell));
+  cellCloud.box = {10.0, 10.0};
+  REQUIRE_FALSE(gen::pointCloudCell(cellCloud, &cell));
+  double ed[3] = {1.0, 1.0, 1.0};
+  REQUIRE_FALSE(
+      gen::euclideanDelta(cellCloud, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, ed));
+#endif
+  int one = 1;
+  double slot = -1.0;
+  gen::batchPeriodicDistSq(ortho, 0, &one, 0, &slot);
+  REQUIRE_THAT(slot, Catch::Matchers::WithinAbs(-1.0, 1e-15));
+  gen::batchPeriodicDistSq(ortho, 0, &one, 1, &slot);
+  REQUIRE_THAT(slot, Catch::Matchers::WithinAbs(0.25, 1e-8));
+  gen::batchPeriodicDistSq(tilt, 0, &one, 1, &slot);
+  REQUIRE(std::isfinite(slot));
+  Cloud skew = cloud({20.0, 20.0, 20.0, 18.0, 0.0, 0.0}, {0.0, 0.0, 0.0});
+  skew.pts[0].x = skew.pts[0].y = skew.pts[0].z = 0.0;
+  skew.pts[1].x = 0.0;
+  skew.pts[1].y = 6.0;
+  skew.pts[1].z = 0.0;
+  auto skewFrame = gen::makeFracBox(skew);
+  REQUIRE(skewFrame.triclinic);
+  const auto skewDr = gen::fracDelta(skewFrame, 0.0, 0.0, 0.0, 0.0, 6.0, 0.0);
+  const double skewR2 =
+      skewDr[0] * skewDr[0] + skewDr[1] * skewDr[1] + skewDr[2] * skewDr[2];
+  REQUIRE_FALSE(gen::smithInside(skewFrame, skewR2));
+  REQUIRE(std::isfinite(
+      gen::triclinicMinImage(skew, 0.0, 0.0, 0.0, 0.0, 6.0, 0.0)[1]));
+  REQUIRE(gen::periodicDistSq(skewFrame, skew, 0, 1) > 0.0);
+  REQUIRE(std::isfinite(gen::relDistFromPoint(skewFrame, skew, 0, 0.0, 6.0, 0.0)[1]));
+}

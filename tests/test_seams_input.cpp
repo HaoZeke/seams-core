@@ -1280,6 +1280,47 @@ TEST_CASE("a point below the slice misses the z comparison", "[seams_input]") {
   REQUIRE(sinp::atomInSlice(0.5, 0.5, 0.5, low, high) == true);
 }
 
+TEST_CASE("dump helpers reject a bad edge and a flat cell", "[seams_input]") {
+  double H[3][3] = {};
+  double origin[3] = {};
+  nneigh::dumpBoundsToH({}, {}, H, origin);
+  REQUIRE_THAT(H[0][0], Catch::Matchers::WithinAbs(0.0, 1e-15));
+  nneigh::dumpBoundsToH({4.0}, {1.0}, H, origin);
+  REQUIRE_THAT(origin[0], Catch::Matchers::WithinAbs(1.0, 1e-15));
+  REQUIRE_THAT(nneigh::dumpVolume({-2.0, 3.0, 4.0}, {}),
+               Catch::Matchers::WithinAbs(24.0, 1e-12));
+  std::vector<double> box;
+  std::vector<double> boxLow;
+  REQUIRE_FALSE(nneigh::setBoxFromLammpsEdges(box, boxLow, 0, 0, 0, 0, 1, 1, 0,
+                                             0, 0));
+  REQUIRE(box.empty());
+  REQUIRE_FALSE(nneigh::setBoxFromLammpsEdges(box, boxLow, 0, 0, 0, 1, -1, 1, 0,
+                                             0, 0));
+  REQUIRE_FALSE(
+      nneigh::setBoxFromLammpsEdges(box, boxLow, 0, 0, 0, 1, 1, 0, 0, 0, 0));
+  REQUIRE(nneigh::setBoxFromLammpsEdges(box, boxLow, 1, 2, 3, 4, 5, 6, 0, 0, 0.5));
+  REQUIRE(box.size() == 6);
+  REQUIRE(nneigh::setBoxFromLammpsEdges(box, boxLow, 0, 0, 0, 4, 5, 6, 0, 0.5, 0));
+  REQUIRE_THAT(box[4], Catch::Matchers::WithinAbs(0.5, 1e-12));
+  REQUIRE_FALSE(
+      nneigh::setBoxFromLengthsAngles(box, boxLow, 0, 1, 1, 90, 90, 90));
+  REQUIRE_FALSE(
+      nneigh::setBoxFromLengthsAngles(box, boxLow, 1, 0, 1, 90, 90, 90));
+  REQUIRE_FALSE(
+      nneigh::setBoxFromLengthsAngles(box, boxLow, 1, 1, 0, 90, 90, 90));
+  REQUIRE_FALSE(
+      nneigh::setBoxFromLengthsAngles(box, boxLow, 1, 1, 1, 90, 90, 0));
+  REQUIRE_FALSE(
+      nneigh::setBoxFromLengthsAngles(box, boxLow, 1, 1, 1, 90, 0, 90));
+  REQUIRE(nneigh::setBoxFromLengthsAngles(box, boxLow, 10, 10, 10, 90, 90, 90));
+  REQUIRE(box.size() == 3);
+  REQUIRE(nneigh::setBoxFromLengthsAngles(box, boxLow, 10, 10, 10, 80, 90, 90));
+  REQUIRE(box.size() == 6);
+  REQUIRE_FALSE(
+      nneigh::setBoxFromLengthsAngles(box, boxLow, 10, 10, 10, 90, 90, 190));
+  REQUIRE(box.empty());
+}
+
 TEST_CASE("a short xyz names the missing atoms", "[seams_input]") {
   const auto path = fs::temp_directory_path() / "dseams_short.xyz";
   {
