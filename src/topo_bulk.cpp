@@ -582,9 +582,6 @@ void markDdcLive(const std::vector<DdcChain> &self,
     }
     count.lists(ids, other);
     for (const int i : slow) {
-      if (live[static_cast<size_t>(i)] != 0) {
-        continue;
-      }
       const auto &chain = self[static_cast<size_t>(i)];
       if (count.hasDisjoint(chain.r[0], chain.r[1], chain.r[2])) {
         live[static_cast<size_t>(i)] = 1;
