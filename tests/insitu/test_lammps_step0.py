@@ -60,3 +60,7 @@ def run():
     test_a_record_without_step_zero_fails()
     test_timestep_zero_is_analysed_once()
     test_a_later_run_does_not_repeat_the_boundary_step()
+
+
+def test_run_covers_both_records():
+    run()
