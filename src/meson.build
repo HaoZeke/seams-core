@@ -141,10 +141,11 @@ if not get_option('lammps').disabled()
     name: 'LAMMPS plugin header')
   if _lammps_ok
     lammps_adapter = true
+    _lammps_mpi = dependency('mpi', required: false)
     shared_module(
       'fixdseams',
       'adapters/lammps/fix_dseams.cpp',
-      dependencies: [yds_dep],
+      dependencies: [yds_dep, _lammps_mpi],
       include_directories: _lammps_inc,
       name_prefix: 'lib',
       install: true)
@@ -155,4 +156,16 @@ endif
 
 if get_option('plumed').enabled()
   error('Live analysis does not use PLUMED. -Dplumed=enabled is an error.')
+endif
+# The source stays in the tree. -Dplumed=enabled remains an error.
+# The action is compiled when the headers are named for a coverage build.
+if get_option('plumed_include') != ''
+  shared_module(
+    'dseams_plumed',
+    'adapters/plumed/Dseams.cpp',
+    dependencies: [yds_dep],
+    include_directories: include_directories(get_option('plumed_include')),
+    cpp_args: ['-DPLUMED_VERSION_MINOR=10'],
+    name_prefix: 'lib',
+    install: false)
 endif

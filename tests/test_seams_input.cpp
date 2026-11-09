@@ -1217,3 +1217,10 @@ TEST_CASE("a corpus directory vanishes before the second open", "[seams_input]")
 }
 
 #endif
+
+TEST_CASE("a point below the slice misses the z comparison", "[seams_input]") {
+  const std::array<double, 3> low{0.0, 0.0, 0.0};
+  const std::array<double, 3> high{1.0, 1.0, 1.0};
+  REQUIRE(sinp::atomInSlice(0.5, 0.5, -1.0, low, high) == false);
+  REQUIRE(sinp::atomInSlice(0.5, 0.5, 0.5, low, high) == true);
+}

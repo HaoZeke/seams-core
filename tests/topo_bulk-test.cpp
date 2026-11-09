@@ -1963,3 +1963,10 @@ TEST_CASE("a side partner reaches the two-middle chain the triple misses",
   rank[0] = 0;
   (void)ring::equatorialConditions(rings, 0, index, nullptr, &chosen, &rank, &raw);
 }
+
+TEST_CASE("an equator id past the inline six reads the overflow", "[topo_bulk]") {
+  ring::EquatorChoice choice;
+  choice.put(6, 9);
+  REQUIRE(choice.idAt(0) == 0);
+  REQUIRE(choice.idAt(6) == 9);
+}

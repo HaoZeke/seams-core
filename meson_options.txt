@@ -31,6 +31,8 @@ option('openmm', type: 'feature', value: 'auto',
   description: 'Record an OpenMM request. The reporter is Python and is not compiled by Meson')
 option('plumed', type: 'feature', value: 'disabled',
   description: 'Build the PLUMED action when PLUMED is found')
+option('plumed_include', type: 'string', value: '',
+  description: 'PLUMED src directory used to compile the action')
 option('with_chemfiles', type: 'feature', value: 'auto',
   description: 'Trajectory I/O via chemfiles (on when the library is found or can be fetched)')
 option('with_linkcell', type: 'feature', value: 'auto', description: 'Periodic linked-cell neighbour search')
