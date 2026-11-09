@@ -1,5 +1,5 @@
 # Copyright (c) d-SEAMS developers
-"""Run seams on real trajectories and check the printed values.
+"""Run seams on real trajectories and check a printed count or token.
 
 usage: cli_commands.py SEAMS ROOT
 """
@@ -70,7 +70,8 @@ def main():
     expect(["hbonds", str(tiny), *one, "--type", "1", "--htype", "1", "--donors"], 0, out_has="hbonds ")
     expect(["rings", str(xyz), "--frame", "1", "--last", "1", "--jobs", "1"], 0, out_has="rings ")
 
-    two = Path(tempfile.mkdtemp()) / "two.lammpstrj"
+    _cleanup = tempfile.TemporaryDirectory()
+    two = Path(_cleanup.name) / "two.lammpstrj"
     body = tiny.read_text()
     two.write_text(body + "\n" + body.replace("TIMESTEP\n0\n", "TIMESTEP\n1\n", 1))
     expect(["cages", str(two), "--frame", "1", "--last", "2", "--jobs", "1",

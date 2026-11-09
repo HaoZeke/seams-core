@@ -4,6 +4,7 @@
 usage: cli_ranges.py SEAMS ROOT
 """
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -39,7 +40,8 @@ def expect(args, code, out_has=None, err_line=None):
 
 def main():
     body = tiny.read_text()
-    work = Path(tempfile.mkdtemp())
+    _cleanup = tempfile.TemporaryDirectory()
+    work = Path(_cleanup.name)
     two = work / "two.lammpstrj"
     two.write_text(body + body.replace("TIMESTEP\n0\n", "TIMESTEP\n1\n", 1))
     expect(["rings", str(two), "--frame", "1", "--last", "2", "--jobs", "1"],
@@ -88,15 +90,16 @@ def main():
             "--subset", "tail"], 0, out_has="subset ")
     expect(["cn", str(water), "--ions", "--site", "1=cationHead,2=anion",
             "--cutoff", "6"], 0, out_has="nCation ")
-    locked = work / "locked.xyz"
-    locked.write_text("1\ncomment\nO 0 0 0\n")
-    locked.chmod(0)
-    expect(["rings", str(locked), "--frame", "1", "--last", "2"], 0, out_has="rings ")
-    expect(["rings", str(locked), "--frame", "2", "--last", "2"], 0, out_has="rings ")
-    locked_pdb = work / "locked.pdb"
-    locked_pdb.write_text("END\n")
-    locked_pdb.chmod(0)
-    expect(["read", str(locked_pdb), "--frame", "1", "--last", "3"], 0)
+    if os.geteuid() != 0:
+        locked = work / "locked.xyz"
+        locked.write_text("1\ncomment\nO 0 0 0\n")
+        locked.chmod(0)
+        expect(["rings", str(locked), "--frame", "1", "--last", "2"], 0, out_has="rings ")
+        expect(["rings", str(locked), "--frame", "2", "--last", "2"], 0, out_has="rings ")
+        locked_pdb = work / "locked.pdb"
+        locked_pdb.write_text("END\n")
+        locked_pdb.chmod(0)
+        expect(["read", str(locked_pdb), "--frame", "1", "--last", "3"], 0)
     empty_dump = work / "empty.lammpstrj"
     empty_dump.write_text(
         "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n0\n"

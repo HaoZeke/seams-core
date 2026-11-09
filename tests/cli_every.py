@@ -27,6 +27,10 @@ one = ["--frame", "1", "--last", "1", "--cutoff", "3.5"]
 
 
 def run(args, expect=0):
+    global skipped_con
+    if no_readcon and any(str(arg).endswith(".con") for arg in args):
+        skipped_con = True
+        return True
     proc = subprocess.run([seams, *args], capture_output=True, text=True)
     if proc.returncode != expect:
         sys.stderr.write("fail " + " ".join(args) + " rc " + str(proc.returncode) + "\n")
@@ -34,6 +38,19 @@ def run(args, expect=0):
         return False
     return True
 
+
+def readcon_absent():
+    probe = root / "input" / "con" / "tiny_multi_cuh2.con"
+    if not probe.is_file():
+        return True
+    proc = subprocess.run(
+        [seams, "read", str(probe), "--frame", "1", "--last", "1"],
+        capture_output=True, text=True)
+    return "readcon-core is not in this build" in proc.stderr
+
+
+no_readcon = readcon_absent()
+skipped_con = False
 
 ok = run(["rings", str(water), "--select", "type 2", "--frame", "1", "--last", "2"])
 with tempfile.TemporaryDirectory() as tmp:
@@ -246,4 +263,9 @@ with tempfile.TemporaryDirectory() as tmp:
     for args in rejected:
         ok = run(args, expect=2) and ok
 
-sys.exit(0 if ok else 1)
+if not ok:
+    sys.exit(1)
+if skipped_con:
+    sys.stderr.write("skip: readcon-core is not in this build\n")
+    sys.exit(77)
+sys.exit(0)

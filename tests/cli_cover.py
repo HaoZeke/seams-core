@@ -49,7 +49,8 @@ def dump(path, n, rows, step=0):
 
 
 def main():
-    work = Path(tempfile.mkdtemp())
+    _cleanup = tempfile.TemporaryDirectory()
+    work = Path(_cleanup.name)
     one = ["--frame", "1", "--last", "1", "--jobs", "1"]
 
     empty = work / "empty.lammpstrj"
@@ -81,10 +82,12 @@ def main():
 
     xyz_dir = work / "fallback.xyz"
     xyz_dir.mkdir()
-    expect(["rings", str(xyz_dir), "--frame", "2", "--last", "3"], 0)
+    expect(["rings", str(xyz_dir), "--frame", "2", "--last", "3"], 2,
+           err_line="XYZ read failed: the file has no frames")
     pdb_dir = work / "fallback.pdb"
     pdb_dir.mkdir()
-    expect(["read", str(pdb_dir), "--frame", "1", "--last", "2"], 0, out_has="nop ")
+    expect(["read", str(pdb_dir), "--frame", "1", "--last", "2"], 0,
+           out_has="nop 0", err_line="chemfiles cannot read " + str(pdb_dir))
 
     expect(["hbonds", str(water), *one, "--type", "2", "--htype", "1",
             "--cutoff", "3.5"], 0, out_has="hbonds ")
@@ -186,13 +189,37 @@ def main():
     )
     expect(["hbonds", str(dimer), *one, "--type", "2", "--htype", "1",
             "--cutoff", "3.5", "--hdist", "2.5", "--hangle", "30"],
-           0, out_has="hbonds 0")
+           0, out_has="hbonds 1")
     expect(["f4", str(dimer), *one, "--type", "2", "--htype", "1", "--cutoff", "3.5"],
-           0, out_has="f4 nan")
+           0, out_has="f4 1")
 
     expect(["fingerprint", str(mw), *one, "--cutoff", "3.0", "--hops", "2",
             "--type", "1", "--library", str(path_a) + "," + str(path_b)],
-           0, out_has="depth ")
+           0, out_has="depth")
+    stray = work / "stray.lammpstrj"
+    dump(stray, 2, "1 1 1 1 1\n2 1 4 1 1\n")
+    expect(["fingerprint", str(stray), *one, "--cutoff", "3.5", "--hops", "2",
+            "--type", "1", "--library", str(path_a) + "," + str(path_b)],
+           0, out_has="depth")
+
+    zero = work / "zero-box.lammpstrj"
+    zero.write_text(
+        "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n2\n"
+        "ITEM: BOX BOUNDS pp pp pp\n0 0\n0 0\n0 0\n"
+        "ITEM: ATOMS id mol type x y z\n"
+        "1 1 1 0 0 0\n2 2 2 0 0 0\n"
+    )
+    expect(["cn", str(zero), "--ions", "--site", "1=cationHead,2=anion",
+            "--cutoff", "6", *one], 0, out_has="degree 0",
+           err_line="The point cloud has no simulation box; cannot build a neighbour list.")
+
+    short = work / "short-box.lammpstrj"
+    short.write_text(
+        "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+        "ITEM: BOX BOUNDS pp pp pp\n0 10\n"
+        "ITEM: ATOMS id type x y z\n1 1 1 1 1\n"
+    )
+    expect(["density-z", str(short), *one, "--bins", "0"], 0, out_has="# z rho")
 
     nodot = work / "nodot"
     nodot.write_text(tiny.read_text())
