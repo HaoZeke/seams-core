@@ -1879,3 +1879,87 @@ TEST_CASE("mixed ring lengths and a negative atom stay inside the cage search",
     (void)ring::findHC(ddcRings, ddcTypes, ddcBy, ddcCages, ddcIndex);
   }
 }
+
+TEST_CASE("bonded coplanar rings fail the shape match and use the strict basal test",
+          "[topo_bulk]") {
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  cloud.box = {200, 200, 200};
+  cloud.boxLow = {0, 0, 0};
+  cloud.currentFrame = 1;
+  // Three atoms of the second ring sit over the square and one sits
+  // far away, so the scaled block stays beyond the prism RMSD. Every
+  // atom of the first ring is still bonded to every atom of the second.
+  const double coords[8][3] = {{0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0},
+                               {0, 0, 1}, {1, 0, 1}, {1, 1, 1}, {80, 0, 1}};
+  for (int i = 0; i < 8; ++i) {
+    molSys::Point<double> pt;
+    pt.type = 1;
+    pt.atomID = i;
+    pt.x = coords[i][0];
+    pt.y = coords[i][1];
+    pt.z = coords[i][2];
+    cloud.pts.push_back(pt);
+    cloud.idIndexMap[i] = i;
+  }
+  cloud.nop = 8;
+  std::vector<std::vector<int>> nList(8);
+  for (int i = 0; i < 8; ++i) {
+    nList[static_cast<std::size_t>(i)] = {i};
+  }
+  for (int i = 0; i < 4; ++i) {
+    for (int j = 4; j < 8; ++j) {
+      nList[static_cast<std::size_t>(i)].push_back(j);
+      nList[static_cast<std::size_t>(j)].push_back(i);
+    }
+  }
+  std::vector<int> basal1 = {0, 1, 2, 3};
+  std::vector<int> basal2 = {4, 5, 6, 7};
+  REQUIRE(prism3::basalPrismConditions(nList, basal1, basal2));
+  const std::vector<std::vector<int>> rings = {basal1, basal2};
+  std::vector<ring::strucType> ringType(2, ring::strucType::unclassified);
+  std::vector<double> rmsd(8, -1.0);
+  REQUIRE(prism3::findBulkPrisms(rings, ringType, nList, cloud, rmsd, 50.0) == 0);
+  REQUIRE(ringType[0] == ring::strucType::Prism);
+  REQUIRE(ringType[1] == ring::strucType::Prism);
+}
+
+// A kept hex has three equator atoms and three others. Pairing needs two of
+// those others, so the seven rings of a chain cannot pass 14 molecules.
+// The search still has to see a B-C partner that is not an A-C partner.
+TEST_CASE("a side partner reaches the two-middle chain the triple misses",
+          "[topo_bulk]") {
+  std::vector<std::vector<int>> rings;
+  rings.push_back({0, 1, 2, 3, 4, 5});
+  auto add = [&](std::vector<int> ring) { rings.push_back(std::move(ring)); };
+  for (int k : {0, 2, 4}) {
+    for (int i = 0; i < 7; ++i) {
+      const int base = 100 + k * 20 + i * 3;
+      add({k % 6, (k + 1) % 6, (k + 2) % 6, base, base + 1, base + 2});
+    }
+  }
+  for (int k : {1, 3, 5}) {
+    const int base = 300 + k * 3;
+    add({k % 6, (k + 1) % 6, (k + 2) % 6, base, base + 1, base + 2});
+  }
+  add({0, 1, 2, 10, 11, 12});
+  add({2, 3, 4, 10, 11, 13});
+  add({4, 5, 0, 10, 11, 14});
+  add({4, 5, 0, 10, 13, 15});
+  add({2, 3, 4, 10, 14, 19});
+  add({1, 2, 3, 20, 21, 22});
+  add({3, 4, 5, 20, 21, 23});
+  add({5, 0, 1, 20, 21, 24});
+  add({5, 0, 1, 20, 23, 25});
+  const auto index = ring::buildRingSearchIndex(rings, 400);
+  (void)ring::equatorialConditions(rings, 0, index, nullptr);
+  std::vector<int> peripheral;
+  (void)ring::equatorialConditions(rings, 0, index, &peripheral);
+  std::vector<int> chosen;
+  std::vector<int> rank(rings.size());
+  std::iota(rank.begin(), rank.end(), 0);
+  ring::EquatorChoice raw;
+  (void)ring::equatorialConditions(rings, 0, index, &peripheral, &chosen, &rank,
+                                   &raw);
+  rank[0] = 0;
+  (void)ring::equatorialConditions(rings, 0, index, nullptr, &chosen, &rank, &raw);
+}
