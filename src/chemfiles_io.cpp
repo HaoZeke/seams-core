@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -231,9 +232,14 @@ sinp::readChemfiles(std::string filename,
       }
       molSys::Point<double> point;
       point.type = species;
+      // Chemfiles places a LAMMPS atom at the index of its id, so the
+      // row index plus one is that id. The mol column is a custom
+      // property on the atom. A residue id covers formats that have one.
       point.atomID = static_cast<int>(i) + 1;
       point.molID = point.atomID;
-      if (const auto residue = topology.residue_for_atom(i)) {
+      if (const auto mol = topology[i].get<chemfiles::Property::DOUBLE>("mol")) {
+        point.molID = static_cast<int>(std::lround(*mol));
+      } else if (const auto residue = topology.residue_for_atom(i)) {
         if (const auto residueId = residue->id()) {
           point.molID = static_cast<int>(*residueId);
         }

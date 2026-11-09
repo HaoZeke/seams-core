@@ -629,6 +629,16 @@ if get_option('with_cli')
     depends: [seams_exe],
     timeout: 60)
   test(
+    'seams_mol_column_matches_native',
+    python3,
+    args: [
+      files('tests/mol_column_cli.py'),
+      seams_exe.full_path(),
+      meson.project_source_root() / 'input' / 'traj' / 'exampleTraj.lammpstrj',
+    ],
+    depends: [seams_exe],
+    timeout: 120)
+  test(
     'seams_hbonds_reports_selected_atoms',
     python3,
     args: [

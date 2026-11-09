@@ -181,3 +181,20 @@ TEST_CASE("the native LAMMPS reader keeps exampleTraj molecule ids", "[molid]") 
   REQUIRE(cloud.pts[0].atomID == 1);
   REQUIRE(cloud.pts[1].molID == cloud.pts[0].molID);
 }
+
+TEST_CASE("openFrame keeps the LAMMPS mol column", "[molid]") {
+  Cloud native;
+  native = sinp::readLammpsTrj("traj/exampleTraj.lammpstrj", 1, native);
+  Cloud via = sinp::openFrame("traj/exampleTraj.lammpstrj", 1, -1);
+  REQUIRE(via.nop == native.nop);
+  REQUIRE(via.nop == 750);
+  for (int i = 0; i < native.nop; ++i) {
+    REQUIRE(via.pts[static_cast<std::size_t>(i)].atomID ==
+            native.pts[static_cast<std::size_t>(i)].atomID);
+    REQUIRE(via.pts[static_cast<std::size_t>(i)].molID ==
+            native.pts[static_cast<std::size_t>(i)].molID);
+  }
+  REQUIRE(via.pts[0].molID == 1);
+  REQUIRE(via.pts[1].molID == 1);
+  REQUIRE(via.pts[3].molID == 2);
+}
