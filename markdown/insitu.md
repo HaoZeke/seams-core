@@ -13,8 +13,14 @@ Build seams-core 2.13.0 with Meson.
 Chemfiles reads every postprocess format except con.
 The Meson build includes Chemfiles.
 
-Run meson setup for bbdir-rel with optimization 2, then meson compile.
-The build writes `libyodaLib.so`.
+The Meson command follows.
+
+```
+meson setup bbdir-rel --optimization=2
+meson compile -C bbdir-rel
+```
+
+The build writes `bbdir-rel/src/libyodaLib.so`.
 A caller creates an engine, passes one frame, and destroys the engine.
 
     seams_insitu_options opt;
@@ -45,6 +51,16 @@ That call prints `observe 0`.
 Set `coord_scale` to 10 when the engine stores nanometres.
 Read the arguments from `seams_insitu.h`.
 `tests/insitu/observe_example.c` is that program.
+The observe_example compile line follows.
+
+    g++ -O2 -std=c++17 -fopenmp -o observe_example tests/insitu/observe_example.c \
+      -I src/include/internal \
+      -L bbdir-rel/src -L bbdir-rel/subprojects/readcon-core \
+      -lyodaLib -lreadcon_core \
+      -Wl,-rpath,bbdir-rel/src \
+      -Wl,-rpath,bbdir-rel/subprojects/readcon-core
+
+Run `./observe_example` in the repository root.
 
 ## Python
 
@@ -58,7 +74,7 @@ positions = [[0.0, 0.0, 0.0], [2.8, 0.0, 0.0],
              [0.0, 2.8, 0.0], [1.4, 1.4, 2.0]]
 box = [0.0, 0.0, 0.0, 20.0, 20.0, 20.0, 0.0, 0.0, 0.0]
 types = [1, 1, 1, 1]
-with Engine("bbdir-rel/src/libyodaLib.so", "census.txt") as eng:
+with Engine("bbdir-rel/src/libyodaLib.so", "census.txt", debug=True) as eng:
     status = eng.observe(0, positions, box, "frame.lammpstrj", types)
 if status != 0:
     raise SystemExit(status)
@@ -66,6 +82,8 @@ if status != 0:
 
 The Engine call reads each row of `positions` as x, y, z in Ångström.
 `box` lists the origin, then the edge lengths, then the tilt.
+`debug=True` writes `frame.lammpstrj`.
+The default leaves that file unwritten.
 `status` is 0 after the checked call.
 
 ## Command
@@ -89,7 +107,7 @@ The checked binary is LAMMPS (22 Jul 2025 - Update 6).
 Compile `libdseams_lammps.so` against that source tree and against
 `libyodaLib`.
 
-    cmake -S plugin -B plugin-build \
+    cmake -S src/adapters/lammps -B plugin-build \
       -DLAMMPS_SRC=lammps/src \
       -DSEAMS_INCLUDE=seams-core/src/include/internal \
       -DSEAMS_LIBRARY=bbdir-rel/src/libyodaLib.so
@@ -134,9 +152,20 @@ The clean binary records the module tip in its version line.
 The pin is that tip.
 Configure leaves the module out when either path is empty.
 
-The GROMACS configure line sets `GMX_MPI` to ON.
-It passes the same include directory and the same library path.
-Compile that build directory next.
+The configure line is:
+
+    cmake -S . -B build \
+      -DGMX_MPI=ON \
+      -DGMX_GPU=off \
+      -DBUILD_TESTING=off \
+      -DGMX_BUILD_OWN_FFTW=ON \
+      -DSEAMS_INCLUDE=seams-core/src/include/internal \
+      -DSEAMS_LIBRARY=bbdir-rel/src/libyodaLib.so
+
+Compile with `cmake --build build`.
+The acceptance invocation is one rank:
+
+    mpirun -np 1 gmx_mpi mdrun -s topol.tpr -deffnm run -ntomp 1 -noconfout
 
 `gmx_mpi --version` on the checked build prints
 `2027.0-dev-20261108-bdf53dcf3c`.

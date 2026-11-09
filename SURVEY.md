@@ -483,10 +483,11 @@ The results are the overhead quartiles and the census counts.
 We implement the core.
 The pieces this run builds follow.
 The pieces are the replay tool and the LAMMPS plugin.
-They include the GROMACS client, the OpenMM reporter, and the PLUMED
-action.
-They include the i-PI client and the Atomic Simulation Environment
-observer.
+They include the GROMACS client and the OpenMM reporter.
+This run builds no PLUMED action.
+The i-PI client and the Atomic Simulation Environment observer stay in
+the Python package.
+This run does not time those two adapters.
 Analysis reads the borrowed frame.
 A debug dump stays off unless requested.
 Reading that dump back is not part of the run.
@@ -533,6 +534,9 @@ Its third quartile is 0.00091758624999999994 seconds per step.
 The package first quartile is 0.0008864700000000001 seconds per step.
 Its third quartile is 0.00089840625000000001 seconds per step.
 The package third quartile is below the plugin first quartile.
+The raw pair is the six plugin samples and the six package samples.
+The library digest for that pair is
+675190fd08612b2fc4da59085d3a66abcad3459f4b09476e31b74cfd92360f7e.
 The GROMACS census comes from a d-SEAMS module inside mdrun.
 The parameter keys are dseams-active, dseams-input-group,
 dseams-nstcalc, dseams-cutoff and dseams-output.

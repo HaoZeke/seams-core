@@ -1,4 +1,4 @@
-"""Build the LAMMPS and PLUMED adapters with coverage and exercise them.
+"""Build the LAMMPS adapter with coverage and exercise it.
 
 Tool paths come from the environment. Sources are taken from this repo.
 """

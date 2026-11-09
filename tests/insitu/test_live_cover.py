@@ -87,6 +87,32 @@ def main():
     short = folder / "short.dcd"
     short.write_bytes(b"1234")
     check(expect_error(lambda: live.native_frame_count(short)))
+    check(expect_error(lambda: live.dcd_schedule(short)))
+    import struct
+    shifted = folder / "shifted.dcd"
+    shifted.write_bytes(struct.pack("<i4siiii", 84, b"CORD", 2, 10, 5, 15) + b"\0" * 64)
+    record.write_text("step 5\nrings 3:0\nstep 10\nrings 3:0\n")
+    shifted_error = False
+    try:
+        live.match_native_cli(record, shifted, type_filter=8)
+    except RuntimeError as exc:
+        shifted_error = "DCD step list differs" in str(exc)
+    check(shifted_error)
+    matched = folder / "matched.dcd"
+    matched.write_bytes(struct.pack("<i4siiii", 84, b"CORD", 2, 5, 5, 10) + b"\0" * 64)
+    check(live.dcd_schedule(matched) == [5, 10])
+    one = folder / "one.dcd"
+    one.write_bytes(struct.pack("<i4siiii", 84, b"CORD", 1, 5, 5, 5) + b"\0" * 64)
+    record.write_text("step 1\nrings 3:0\n")
+    one_error = False
+    try:
+        live.match_native_cli(record, one, type_filter=8)
+    except RuntimeError as exc:
+        one_error = "DCD step list differs" in str(exc)
+    check(one_error)
+    bad_stride = folder / "bad-stride.dcd"
+    bad_stride.write_bytes(struct.pack("<i4siiii", 84, b"CORD", 2, 5, 0, 10) + b"\0" * 64)
+    check(expect_error(lambda: live.dcd_schedule(bad_stride)))
     check(live.native_frame_count(dump) == 1)
 
     bad_trr = folder / "bad.trr"

@@ -156,6 +156,21 @@ def census_blocks(text):
     return blocks
 
 
+def dcd_schedule(path):
+    """Frame steps from the DCD header: start, then start plus the stride."""
+    import struct
+
+    data = Path(path).read_bytes()
+    if len(data) < 20:
+        raise RuntimeError("short dcd %s" % path)
+    nframes, istart, stride = struct.unpack_from("<iii", data, 8)
+    if nframes < 1 or stride < 1 or istart < 0:
+        raise RuntimeError(
+            "bad dcd schedule frames %d start %d stride %d" % (nframes, istart, stride)
+        )
+    return [istart + index * stride for index in range(nframes)]
+
+
 def native_frame_count(path):
     path = Path(path)
     if path.suffix == ".trr":
@@ -255,6 +270,14 @@ def match_native_cli(record, native, type_filter=1):
     live_steps = [block["step"] for block in live]
     if len(live_steps) != len(set(live_steps)):
         raise RuntimeError("duplicate live steps %s" % live_steps)
+    if Path(native).suffix == ".dcd":
+        header_steps = dcd_schedule(native)
+        if live_steps != header_steps:
+            raise RuntimeError(
+                "DCD step list differs\nstart %d stride %d\nlive %s\nheader %s"
+                % (header_steps[0], header_steps[1] - header_steps[0] if len(header_steps) > 1 else 0,
+                   live_steps, header_steps)
+            )
     rings_text = cli_text("rings", native, type_filter=type_filter)
     ice_text = cli_text("chill-plus", native, type_filter=type_filter)
     cage_text = cli_text("cages", native, ["--graph", "cutoff"], type_filter=type_filter)
@@ -418,9 +441,15 @@ def openmm_identity():
     # The native DCD is read by seams, which uses chemfiles.
     # A mismatch fails the run.
     dcd_steps = dump_steps(native)
+    header_steps = dcd_schedule(dcd_path)
+    require_equal(
+        header_steps,
+        dcd_steps,
+        "DCD header steps differ from the saved steps",
+    )
     require_equal(
         native_frame_count(dcd_path),
-        len(dcd_steps),
+        len(header_steps),
         "DCD frame count does not match the saved steps",
     )
     dcd_native = folder / "from-dcd.lammpstrj"
@@ -441,7 +470,7 @@ def openmm_identity():
         len(dcd_steps),
         "DCD parsed %d frames, live saved %d" % (len(parsed), len(dcd_steps)),
     )
-    for step, (_ignored, xyz) in zip(dcd_steps, parsed):
+    for step, (_ignored, xyz) in zip(header_steps, parsed):
         rewritten.append((step, xyz))
     write_lammps(dcd_native, rewritten, [0, 0, 0, 20, 20, 20], types)
     match_lammps_cli(record, dcd_native)

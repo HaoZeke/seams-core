@@ -1,4 +1,14 @@
-"""Unique physical line coverage from gcov and coverage.py JSON."""
+"""Physical line coverage from gcov text and coverage.py JSON.
+
+Arguments are the source root, then one path per input.
+Each input is a gcov file or a coverage.py JSON file.
+A directory, a missing path, or any other file is a failed row.
+A gcov row counts only when the source text embedded in the gcov
+matches the file under the root. The same basename in another
+directory is not a match.
+A JSON row names each measured file. A missing path is a failed
+row, and a path outside the root is a failed row.
+"""
 
 import json
 import re
@@ -50,24 +60,64 @@ def gcov_counts(path):
     return counts
 
 
+def embedded_source(path):
+    """Source text stored on each gcov line, keyed by source line number."""
+    lines = {}
+    for line in Path(path).read_text(errors="replace").splitlines():
+        match = re.match(r"\s*[-0-9#=*]+:\s*(\d+):(.*)$", line)
+        if not match:
+            continue
+        number = int(match.group(1))
+        if number == 0:
+            continue
+        lines[number] = match.group(2)
+    return lines
+
+
+def source_matches(candidate, embedded):
+    if not embedded:
+        return False
+    file_lines = candidate.read_text(errors="replace").splitlines()
+    for number, text in embedded.items():
+        if number < 1 or number > len(file_lines):
+            return False
+        if file_lines[number - 1] != text:
+            return False
+    return True
+
+
+def matching_source(root, gcov_path, source_name):
+    embedded = embedded_source(gcov_path)
+    for candidate in root.rglob(source_name):
+        if not candidate.is_file() or "bbdir" in candidate.parts:
+            continue
+        if source_matches(candidate, embedded):
+            return candidate
+    return None
+
+
+def fail_row(name):
+    return (str(name), 0, 0, 0.0)
+
+
 def main():
     root = Path(sys.argv[1])
     rows = []
     for src in sys.argv[2:]:
         path = Path(src)
+        if not path.is_file():
+            rows.append(fail_row(path))
+            continue
         if path.suffix == ".gcov":
             source = path.name
             if source.endswith(".gcov"):
                 source = source[: -len(".gcov")]
-            text = None
-            for candidate in root.rglob(source):
-                if candidate.is_file() and "bbdir" not in candidate.parts:
-                    text = candidate.read_text(errors="replace")
-                    rel = candidate.relative_to(root)
-                    break
-            if text is None:
-                rows.append((source, 0, 0, 0.0))
+            candidate = matching_source(root, path, source)
+            if candidate is None:
+                rows.append(fail_row(source))
                 continue
+            text = candidate.read_text(errors="replace")
+            rel = candidate.relative_to(root)
             code = physical(text)
             counts = gcov_counts(path)
             covered = {n for n in code if counts.get(n, 0) > 0}
@@ -91,10 +141,12 @@ def main():
             for name, info in data.get("files", {}).items():
                 source = Path(name)
                 if not source.is_file():
+                    rows.append(fail_row(name))
                     continue
                 try:
                     rel = source.resolve().relative_to(root.resolve())
                 except ValueError:
+                    rows.append(fail_row(name))
                     continue
                 executed = set(info.get("executed_lines", []))
                 missing = set(info.get("missing_lines", []))
@@ -106,7 +158,7 @@ def main():
                 hit = statements & executed
                 rows.append((str(rel), len(statements), len(hit), len(hit) / len(statements)))
         else:
-            rows.append((src, 0, 0, 1.0))
+            rows.append(fail_row(src))
     print("file executable covered fraction")
     worst = 1.0
     for name, denom, num, frac in rows:
