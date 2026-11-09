@@ -431,6 +431,34 @@ TEST_CASE("cif and mmcif round trip with an explicit format", "[chemfiles]") {
   }
 }
 
+TEST_CASE("an empty xyz range and a con path name the failure", "[chemfiles]") {
+  const auto empty = fs::temp_directory_path() / "dseams_empty_range.xyz";
+  {
+    std::ofstream out(empty);
+    out << "";
+  }
+  int seen = 0;
+  try {
+    sinp::forEachChemfilesFrame(empty.string(), 1, 3, -1, "", 0, 1,
+                                [&](int, molSys::PointCloud<molSys::Point<double>, double> &) {
+                                  seen += 1;
+                                });
+    FAIL("an empty xyz range must fail");
+  } catch (const std::runtime_error &err) {
+    REQUIRE(std::string(err.what()) == "XYZ read failed: the file has no frames");
+  }
+  REQUIRE(seen == 0);
+  fs::remove(empty);
+#ifndef SEAMS_HAS_READCON
+  try {
+    sinp::openFrame((fs::temp_directory_path() / "missing.con").string(), 1, -1);
+    FAIL("a con path must fail in this build");
+  } catch (const std::runtime_error &err) {
+    REQUIRE(std::string(err.what()).find("readcon-core") != std::string::npos);
+  }
+#endif
+}
+
 TEST_CASE("the ice XXI cif is one cell of 152 oxygens", "[chemfiles]") {
   std::string path;
   for (const char *candidate :
