@@ -266,6 +266,10 @@ def cmd_gcov(args):
         if log_path.exists():
             log_path.unlink()
         code = stamp_run(["meson", "test", "-C", str(build), "--no-rebuild"], log_path, root)
+    bench = build / "tests" / "bench_chemfiles_read"
+    dump = root / "input" / "traj" / "agi_water_tiny.lammpstrj"
+    if bench.exists() and dump.exists():
+        stamp_run([str(bench), str(dump)], log_path, root)
     changed = git(root, "diff", "--name-only", PUBLIC_BASE + "..HEAD").split()
     gcov_bin = args.gcov
     rows = []
@@ -273,7 +277,7 @@ def cmd_gcov(args):
         if not rel.endswith((".cpp", ".cc", ".cxx", ".h", ".hpp")):
             continue
         name = Path(rel).name
-        notes = list(build.rglob(name + ".gcno"))
+        notes = list(build.rglob("*" + name + ".gcno"))
         if not notes:
             rows.append((rel, "no gcov notes"))
             continue
