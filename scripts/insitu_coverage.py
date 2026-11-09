@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Physical line coverage from gcov text and coverage.py JSON.
 
 Arguments are the source root, then one path per input.

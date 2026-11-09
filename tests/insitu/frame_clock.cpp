@@ -1,3 +1,4 @@
+// Copyright (c) d-SEAMS developers
 /* Time one dump frame the way the command line does, after the read.
  * Prints read_s and analysis_s at full precision. The analysis is the
  * neighbour list, the primitive rings, CHILL+ and the cage census.

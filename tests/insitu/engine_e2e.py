@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Run each engine and compare the live census with postprocessing.
 
 The binaries and the library come from the environment.

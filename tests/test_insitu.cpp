@@ -1,3 +1,4 @@
+// Copyright (c) d-SEAMS developers
 #include <catch2/catch_test_macros.hpp>
 #include <seams_c_api.h>
 #include <seams_insitu.h>

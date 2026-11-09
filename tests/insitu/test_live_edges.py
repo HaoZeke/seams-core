@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Edges of the live driver that a passing engine run does not take."""
 
 import os

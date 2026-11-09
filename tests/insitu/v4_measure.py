@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Cadence, postprocess and OpenMP samples for the v4 kit.
 
 LAMMPS live samples are the plugin route already measured at one rank.

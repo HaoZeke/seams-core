@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Run every seams command on a one-frame trajectory.
 
 The process must exit 0. That is the coverage of the command bodies.

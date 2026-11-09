@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Build the LAMMPS adapter with coverage and exercise it.
 
 Tool paths come from the environment. Sources are taken from this repo.

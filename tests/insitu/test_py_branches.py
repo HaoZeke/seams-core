@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Branch coverage for the in-situ Python adapters, scripts, and drivers.
 
 Engines are not started. Subprocess entry points are replaced and the

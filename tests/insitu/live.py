@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Live water and ice runs. The in-situ record must match a replay of the dump."""
 
 import json

@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """ctypes binding of the in-situ C core."""
 
 import ctypes

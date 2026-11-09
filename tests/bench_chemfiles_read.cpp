@@ -1,3 +1,4 @@
+// Copyright (c) d-SEAMS developers
 #include <seams_input.hpp>
 
 #include <algorithm>

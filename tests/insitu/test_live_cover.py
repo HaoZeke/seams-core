@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Cover the acceptance helpers and the error branches around them."""
 
 import os

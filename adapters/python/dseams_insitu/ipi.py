@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """i-PI socket client. Positions on the wire are bohr. The cell is angstrom."""
 
 import socket

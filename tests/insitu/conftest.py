@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Give the in-situ tests a library path and a stand-in OpenMM unit."""
 
 import os

@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Molecular dynamics observer. Optimizers are refused."""
 
 _OPTIMIZERS = {

@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Timestep 0 is analysed once, including across two run commands."""
 
 import live
