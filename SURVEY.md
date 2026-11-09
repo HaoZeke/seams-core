@@ -529,10 +529,10 @@ process may use.
 Both LAMMPS routes stay.
 On 1000 waters, one rank, stride 10, and 40 steps, six samples follow
 one warmup.
-The plugin first quartile is 0.00089994312499999999 seconds per step.
-Its third quartile is 0.00090602374999999987 seconds per step.
-The package first quartile is 0.00088810500000000004 seconds per step.
-Its third quartile is 0.00090000750000000015 seconds per step.
+The plugin first quartile is 0.00090078874999999995 seconds per step.
+Its third quartile is 0.00090431124999999996 seconds per step.
+The package first quartile is 0.00089381187499999986 seconds per step.
+Its third quartile is 0.00090311437500000002 seconds per step.
 The two quartile ranges overlap.
 The raw pair is the six plugin samples and the six package samples.
 The library digest for that pair is
