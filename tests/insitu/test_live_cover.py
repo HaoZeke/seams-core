@@ -262,7 +262,10 @@ def main():
         "gromacs_mpi_identity",
         "openmm_identity",
     ):
-        getattr(live, name)()
+        result = getattr(live, name)()
+        ok = result[0] if isinstance(result, tuple) else result
+        if ok is False:
+            raise SystemExit(name + " failed")
         print(name, "passed", flush=True)
     check(live.ipi_elapsed(False) > 0)
     check(live.ipi_elapsed(True) > 0)

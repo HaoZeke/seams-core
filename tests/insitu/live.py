@@ -1325,7 +1325,7 @@ def lammps_mpi_identity():
     mpi = Path(os.environ.get("DSEAMS_LMP_MPI_PREFIX", "var/run/lmp-mpi/.pixi/envs/default")).resolve()
     plugin = Path(os.environ.get("DSEAMS_LMP_MPI_PLUGIN", "var/run/libfixdseams-mpi.so")).resolve()
     if not (mpi / "bin" / "mpirun").exists() or not plugin.exists():
-        return False
+        return False, "not run: mpirun or the plugin is absent"
     text = []
     for np in (1, 2, 4):
         folder = WORK / "mpi" / str(np)
@@ -1345,7 +1345,10 @@ def lammps_mpi_identity():
         )
         text.append((folder / "live.txt").read_text())
     (WORK / "mpi" / "equal.log").write_text("1==2 %s\n1==4 %s\n" % (text[0] == text[1], text[0] == text[2]))
-    return bool(text[0]) and text[0] == text[1] == text[2]
+    same = bool(text[0]) and text[0] == text[1] == text[2]
+    if same:
+        return True, "The census matches the one-rank run."
+    return False, "The census does not match the one-rank run."
 
 def gromacs_mpi_identity():
     gmx = Path(os.environ.get("DSEAMS_GMX", "")).resolve() if os.environ.get("DSEAMS_GMX") else Path()
@@ -1401,7 +1404,9 @@ def gromacs_mpi_identity():
             raise RuntimeError("rank %d matched %d of %d" % (np, native, len(frames)))
     same = bool(texts[0]) and texts[0] == texts[1] == texts[2]
     (folder / "equal.log").write_text("1==2 %s\n1==4 %s\nframes %d\n" % (texts[0] == texts[1], texts[0] == texts[2], texts[0].count("\nstep ") + 1))
-    return same, "The native module on one, two and four ranks matches the trajectory."
+    if same:
+        return True, "The native module on one, two and four ranks matches the trajectory."
+    return False, "The native module on one, two and four ranks does not match."
 
 def repeats(fn, count):
     return [fn() for _ in range(count)]
@@ -1507,14 +1512,14 @@ def seal_tail(out, trr_frames_n):
         out["equality"].append(
             {"code": code, "frames": frames, "rings": "yes", "chill": "yes", "cages": "yes"}
         )
-    lammps_same = lammps_mpi_identity()
+    lammps_same, lammps_note = lammps_mpi_identity()
     gromacs_same, gromacs_note = gromacs_mpi_identity()
     out["mpi"] = [
         {
             "code": "LAMMPS",
             "ranks": "2 and 4",
             "identical": lammps_same,
-            "note": "OpenMPI LAMMPS gathers positions and the neighbour rows onto rank 0. The census matches the one-rank run.",
+            "note": lammps_note,
         },
         {
             "code": "GROMACS",
@@ -1523,6 +1528,10 @@ def seal_tail(out, trr_frames_n):
             "note": gromacs_note,
         },
     ]
+    if not lammps_same or not gromacs_same:
+        dest = WORK / "samples.json"
+        dest.write_text(json.dumps(out))
+        raise RuntimeError(lammps_note + " " + gromacs_note)
     print("ladder", flush=True)
     out["ladder"] = []
     sizes = ((1, 8),) if os.environ.get("DSEAMS_SCALE_TINY") == "1" else ((5, 1000), (20, 64000))
