@@ -62,6 +62,7 @@ int main(int argc, char **argv) {
   std::printf("warmup_chemfiles %.17g\n", warmChem);
   std::printf("native_q1 %.17g\nnative_q3 %.17g\n", type7(native, 0.25),
               type7(native, 0.75));
+  std::printf("native_ends %.17g %.17g\n", type7(native, 0.0), type7(native, 1.0));
   std::printf("chemfiles_q1 %.17g\nchemfiles_q3 %.17g\n", type7(chem, 0.25),
               type7(chem, 0.75));
   std::printf("native_samples");
