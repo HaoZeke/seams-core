@@ -31,6 +31,12 @@ def check(cond):
         raise SystemExit("check failed")
 
 
+def require_engine_ok(ok, name):
+    # Only True is a pass. None, False, 0 and an empty string are not.
+    if ok is not True:
+        raise SystemExit(name + " failed")
+
+
 def write_dump(path, step=1):
     path.write_text(
         "ITEM: TIMESTEP\n%d\nITEM: NUMBER OF ATOMS\n1\n"
@@ -51,6 +57,14 @@ def real_lines(dump):
 
 
 def main():
+    require_engine_ok(True, "true")
+    for bad in (None, False, 0, ""):
+        try:
+            require_engine_ok(bad, "bad")
+        except SystemExit as err:
+            check(str(err) == "bad failed")
+        else:
+            raise SystemExit("a result that is not True passed")
     work = Path(os.environ["DSEAMS_LIVE_WORK"])
     work.mkdir(parents=True, exist_ok=True)
     live.WORK = work
@@ -265,8 +279,7 @@ def main():
     ):
         result = getattr(live, name)()
         ok = result[0] if isinstance(result, tuple) else result
-        if ok is not True:
-            raise SystemExit(name + " failed")
+        require_engine_ok(ok, name)
         print(name, "passed", flush=True)
     check(live.ipi_elapsed(False) > 0)
     check(live.ipi_elapsed(True) > 0)
