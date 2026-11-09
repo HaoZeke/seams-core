@@ -170,13 +170,12 @@ sinp::readChemfiles(std::string filename,
       throw std::runtime_error("XYZ read failed: the file has no frames");
     }
     if (extensionOf(filename) == "dcd") {
+      // The suffix check already found a dot.
       const auto dot = filename.find_last_of('.');
-      if (dot != std::string::npos) {
-        const auto pdb = filename.substr(0, dot) + ".pdb";
-        std::ifstream probe(pdb);
-        if (probe) {
-          trajectory.set_topology(pdb);
-        }
+      const auto pdb = filename.substr(0, dot) + ".pdb";
+      std::ifstream probe(pdb);
+      if (probe) {
+        trajectory.set_topology(pdb);
       }
     }
     if (static_cast<std::size_t>(request.frame) > trajectory.nsteps()) {
@@ -359,12 +358,7 @@ sinp::openFrame(const std::string &filename, int frame, int typeI,
     const auto ext = extensionOf(filename);
     if (ext == "xyz") {
       // Chemfiles rejected the file. The native reader is the fallback.
-      // A short or empty frame still throws from that reader.
-      try {
-        return readXYZ(filename);
-      } catch (const std::runtime_error &) {
-        throw;
-      }
+      return readXYZ(filename);
     }
     if (ext == "lammpstrj" || ext == "dump") {
       if (typeI < 0) {
