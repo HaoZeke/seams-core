@@ -74,7 +74,6 @@ struct FrameContext {
   ring::RingSearchIndex index;
   std::vector<std::vector<int>> sortedRings;
   mutable   std::vector<std::vector<int>> basalCand;
-  mutable std::vector<char> basalReady;
   mutable std::vector<std::vector<int>> adjRings;
   mutable std::vector<char> adjReady;
   ring::NeighBond bonds;
@@ -144,7 +143,6 @@ struct FrameContext {
     basalCand.resize(static_cast<std::size_t>(nR));
     adjRings.resize(static_cast<std::size_t>(nR));
     adjReady.assign(static_cast<std::size_t>(nR), 0);
-    basalReady.assign(static_cast<std::size_t>(nR), 0);
     bits64 = false;
     ringMask.clear();
     atomAdj.clear();
@@ -187,7 +185,6 @@ struct FrameContext {
         for (int i = 0; i < nR; i++) {
           basalCand[static_cast<std::size_t>(i)] =
               collectBasalCandidates(i, scratch);
-          basalReady[static_cast<std::size_t>(i)] = 1;
         }
       }
     }
@@ -296,13 +293,7 @@ struct FrameContext {
         seen.assign(static_cast<size_t>(nRings), 0);
       }
     }
-    int next(int &tick, std::vector<int> &stamp) {
-      if (++tick <= 0) {
-        std::fill(stamp.begin(), stamp.end(), 0);
-        tick = 1;
-      }
-      return tick;
-    }
+    int next(int &tick, std::vector<int> &) { return ++tick; }
   };
 
   [[nodiscard]] std::vector<int> collectBasalCandidates(int i,
@@ -405,7 +396,9 @@ struct FrameContext {
               hit2 = hit2 || scratch.arm2[static_cast<size_t>(atom)] == tick2;
             }
           } else {
-            for (const int atom : (*rings)[static_cast<size_t>(candidate)]) {
+            const auto &candidateRing = (*rings)[static_cast<size_t>(candidate)];
+            for (std::size_t t = 0; t < candidateRing.size(); ++t) {
+              const int atom = candidateRing[t];
               if (atom < 0 || atom >= nAtoms) {
                 continue;
               }
@@ -428,17 +421,10 @@ struct FrameContext {
     return out;
   }
 
-  mutable BasalScratch lazyScratch;
-
   [[nodiscard]] const std::vector<int> &basalCandidates(int i) {
     static const std::vector<int> empty;
     if (i < 0 || i >= static_cast<int>(basalCand.size())) {
       return empty;
-    }
-    if (!basalReady[static_cast<std::size_t>(i)]) {
-      basalCand[static_cast<std::size_t>(i)] =
-          collectBasalCandidates(i, lazyScratch);
-      basalReady[static_cast<std::size_t>(i)] = 1;
     }
     return basalCand[static_cast<std::size_t>(i)];
   }
@@ -1045,11 +1031,6 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
     st.batchHot = true;
     return st.current;
   }
-  if (!st.answersValid) {
-    st.batch(rings, nList, rows, nullptr);
-    st.answersValid = true;
-    return st.current;
-  }
 
   const std::vector<int> prevOf = st.matchRings(rings);
   const std::size_t nPrev = st.prevOffset.size() - 1;
@@ -1301,10 +1282,8 @@ ring::SeededAtomLabels ring::seededCageAffiliation(
       while (!stack.empty()) {
         const int u = stack.back();
         stack.pop_back();
-        if (u < 0 || static_cast<size_t>(u) >= permissiveNList.size()) {
-          continue;
-        }
-        for (size_t m = 1; m < permissiveNList[u].size(); m++) {
+        for (size_t m = 1; m < permissiveNList[static_cast<size_t>(u)].size();
+             m++) {
           const int v = permissiveNList[u][m];
           if (v >= 0 && v < nAtoms && affiliated[v] && !kept[v]) {
             kept[v] = true;
@@ -1389,7 +1368,8 @@ ring::ringAdjacentCompletion(const SeededAtomLabels &labels,
       if (nMissing != 1) {
         continue;
       }
-      flag[static_cast<std::size_t>(missing)] = true;
+      auto bit = flag[static_cast<std::size_t>(missing)];
+      bit = true;
       for (const int s : ringsOf[static_cast<std::size_t>(missing)]) {
         if (!queued[static_cast<std::size_t>(s)]) {
           queued[static_cast<std::size_t>(s)] = 1;
@@ -1398,7 +1378,8 @@ ring::ringAdjacentCompletion(const SeededAtomLabels &labels,
       }
     }
   };
-  complete(out.hc);
-  complete(out.ddc);
+  std::vector<bool> *const which[2] = {&out.hc, &out.ddc};
+  complete(*which[0]);
+  complete(*which[1]);
   return out;
 }

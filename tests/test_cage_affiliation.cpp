@@ -910,3 +910,97 @@ TEST_CASE("a pentagon and a vacancy exercise the general cage walks",
   REQUIRE(filled.hc[5]);
   REQUIRE(filled.ddc[5]);
 }
+
+TEST_CASE("empty cycles, a dropped basal and an out-of-range atom",
+          "[cage_affiliation]") {
+  const auto none = ring::stackingPlanes({}, {});
+  REQUIRE(none.basal.empty());
+  REQUIRE(none.equatorial.empty());
+
+  std::vector<std::vector<int>> nList(8);
+  for (int i = 0; i < 8; ++i) {
+    nList[static_cast<std::size_t>(i)] = {i, (i + 1) % 8, (i + 7) % 8};
+  }
+  std::vector<std::vector<int>> rings = {{1, 0, 2, 3, 4, 5}, {}, {}};
+  ring::AffiliationUpdater updater;
+  updater.setBatchFraction(1.0);
+  REQUIRE(updater.update(rings, nList).hc.size() == 3);
+  rings = {{}, {5, 4, 3, 2, 0, 1}, {}};
+  REQUIRE(updater.update(rings, nList).hc.size() == 3);
+
+  auto cloud = hcCloud();
+  auto wide = nneigh::neighListO(3.5, cloud, 1);
+  auto idx = nneigh::neighbourListByIndex(cloud, wide);
+  auto six = sixMembered(primitive::ringNetwork(idx, 7));
+  REQUIRE(six.size() > 2);
+  const auto planes = ring::stackingPlanes(six, idx);
+  int keep = -1;
+  int drop = -1;
+  for (int i = 0; i < static_cast<int>(six.size()); ++i) {
+    if (!planes.basal[static_cast<std::size_t>(i)]) {
+      continue;
+    }
+    if (keep < 0) {
+      keep = i;
+    } else {
+      drop = i;
+    }
+  }
+  REQUIRE(keep >= 0);
+  REQUIRE(drop >= 0);
+  std::vector<std::vector<int>> padded = six;
+  for (int i = 0; i < 24; ++i) {
+    padded.push_back({20 + i, 21 + i, 22 + i});
+  }
+  std::vector<std::vector<int>> rows = idx;
+  while (rows.size() < 50) {
+    rows.push_back({static_cast<int>(rows.size())});
+  }
+  ring::AffiliationUpdater cages;
+  cages.setBatchFraction(1.0);
+  REQUIRE(cages.update(padded, rows).hc.size() == padded.size());
+  auto lost = padded;
+  lost.erase(lost.begin() + drop);
+  lost.push_back({99, 98, 97, 96, 95, 94});
+  rows[static_cast<std::size_t>(rows.size() - 1)].push_back(0);
+  const auto &again = cages.update(lost, rows);
+  REQUIRE(again.hc.size() == lost.size());
+  const auto batch = ring::cageAffiliation(lost, rows);
+  REQUIRE(again.hc == batch.hc);
+  REQUIRE(again.ddc == batch.ddc);
+
+  std::vector<std::vector<int>> withHole = {{0, 1, 2, 3, 4, 99}, {0, 1, 2}};
+  const auto seeded =
+      ring::seededCageAffiliation(withHole, rows, withHole, rows);
+  REQUIRE(seeded.hc.size() == rows.size());
+
+  std::vector<std::vector<int>> far(6);
+  for (int i = 0; i < 6; ++i) {
+    far[static_cast<std::size_t>(i)] = {i, (i + 1) % 6};
+  }
+  const std::vector<std::vector<int>> withFar = {{0, 1, 2, 3, 4, 5},
+                                                  {0, 1, 2, 3, 4, 99}};
+  REQUIRE(ring::cageAffiliation(withFar, far).hc.size() == 2);
+  std::vector<std::vector<int>> off(11);
+  for (int i = 0; i < 11; ++i) {
+    off[static_cast<std::size_t>(i)] = {i};
+  }
+  for (int i = 0; i < 6; ++i) {
+    off[static_cast<std::size_t>(i)].push_back(6);
+  }
+  const std::vector<std::vector<int>> hexFar = {{0, 1, 2, 3, 4, 5},
+                                                 {6, 7, 8, 9, 10, 99}};
+  REQUIRE(ring::cageAffiliation(hexFar, off).hc.size() == 2);
+  const std::vector<std::vector<int>> pentFar = {{0, 1, 2, 3, 4, 5},
+                                                  {6, 7, 8, 9, 10, 99},
+                                                  {0, 1, 2, 3, 4}};
+  REQUIRE(ring::stackingPlanes(pentFar, off).basal.size() == 3);
+
+  std::vector<std::vector<int>> mixed = {
+      {0, 1, 2, 3, 4, 5},
+      {1, 2, 3, 4, 5, 6},
+      {0, 1, 2, 3, 4},
+  };
+  const auto mixedPlanes = ring::stackingPlanes(mixed, nList);
+  REQUIRE(mixedPlanes.basal.size() == mixed.size());
+}

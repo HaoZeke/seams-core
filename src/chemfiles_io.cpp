@@ -110,6 +110,10 @@ void applyCell(molSys::PointCloud<molSys::Point<double>, double> &cloud,
 
 #ifdef SEAMS_HAS_CHEMFILES
 
+// Set when chemfiles rejects the file, so openFrame can try the native reader.
+// A selection that keeps no atoms does not set it.
+thread_local bool chemfilesUnreadable = false;
+
 int sinp::chemfilesSteps(const std::string &filename) {
   try {
     chemfiles::Trajectory trajectory(filename);
@@ -133,6 +137,7 @@ molSys::PointCloud<molSys::Point<double>, double>
 sinp::readChemfiles(std::string filename,
                     molSys::PointCloud<molSys::Point<double>, double> &yCloud,
                     const ChemfilesRead &request) {
+  chemfilesUnreadable = false;
   yCloud = molSys::clearPointCloud(yCloud);
   if (request.frame < 1) {
     return yCloud;
@@ -230,9 +235,8 @@ sinp::readChemfiles(std::string filename,
               << "\n";
     yCloud = molSys::clearPointCloud(yCloud);
     return yCloud;
-  } catch (const chemfiles::Error &error) {
-    std::cerr << "chemfiles cannot read " << filename << ": " << error.what()
-              << "\n";
+  } catch (const chemfiles::Error &) {
+    chemfilesUnreadable = true;
     yCloud = molSys::clearPointCloud(yCloud);
     return yCloud;
   }
@@ -298,7 +302,32 @@ sinp::openFrame(const std::string &filename, int frame, int typeI,
   } else {
     request.guessOxygen = true;
   }
-  return readChemfiles(filename, cloud, request);
+  cloud = readChemfiles(filename, cloud, request);
+  if (!chemfilesUnreadable) {
+    return cloud;
+  }
+  {
+    const auto ext = extensionOf(filename);
+    if (ext == "xyz") {
+      return readXYZ(filename);
+    }
+    if (ext == "lammpstrj" || ext == "dump") {
+      if (typeI < 0) {
+        return readLammpsTrj(filename, frame, cloud);
+      }
+      if (typeI > 0) {
+        return readLammpsTrjO(filename, frame, cloud, typeI);
+      }
+      cloud = readLammpsTrjO(filename, frame, cloud, 2);
+      if (cloud.nop == 0) {
+        molSys::PointCloud<molSys::Point<double>, double> again;
+        cloud = readLammpsTrjO(filename, frame, again, 1);
+      }
+      return cloud;
+    }
+    std::cerr << "chemfiles cannot read " << filename << "\n";
+    return molSys::clearPointCloud(cloud);
+  }
 #else
   (void)selection;
   const auto ext = extensionOf(filename);

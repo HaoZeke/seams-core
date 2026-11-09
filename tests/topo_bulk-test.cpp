@@ -1252,3 +1252,131 @@ TEST_CASE("constructed rings hit the bulk type and neighbour branches", "[topo]"
   (void)ring::findDDC(unequal, unequalType, unequalHC, unequalCages);
   (void)ring::findHC(unequal, unequalType, rows, unequalCages);
 }
+
+TEST_CASE("basal bonds, a non-hex atom type and a failed prism match",
+          "[topo_bulk]") {
+  std::vector<std::vector<int>> nList(12);
+  for (int i = 0; i < 12; ++i) {
+    nList[static_cast<std::size_t>(i)] = {i};
+  }
+  nList[0].push_back(6);
+  nList[2].push_back(8);
+  nList[4].push_back(10);
+  const std::vector<int> basal1 = {0, 1, 2, 3, 4, 5};
+  const std::vector<int> basal2 = {6, 7, 8, 9, 10, 11};
+  REQUIRE(ring::basalConditions(nList, basal1, basal2));
+  ring::NeighBond bonds;
+  bonds.build(nList);
+  REQUIRE(ring::basalConditions(bonds, basal1, basal2));
+  REQUIRE_FALSE(ring::basalConditions(nList, basal1, basal1));
+
+  std::vector<std::vector<int>> neigh = {{0, 2}, {1}, {2}, {3, 1}};
+  std::vector<int> triplet = {9, 1, 2};
+  REQUIRE(ring::basalNeighbours(neigh, triplet, 0, 3));
+  triplet = {9, 1, 8};
+  REQUIRE_FALSE(ring::basalNeighbours(neigh, triplet, 0, 3));
+
+  std::vector<std::vector<int>> quads = {{0, 1, 2, 3}};
+  std::vector<ring::strucType> quadType = {ring::strucType::Prism};
+  std::vector<cage::iceType> atoms(4, cage::iceType::dummy);
+  REQUIRE(ring::getAtomTypesTopoBulk(quads, quadType, atoms) == 0);
+  REQUIRE(atoms[0] == cage::iceType::pnc);
+
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  cloud.box = {40, 10, 20};
+  cloud.boxLow = {0, 0, 0};
+  cloud.currentFrame = 1;
+  double coords[8][3] = {{0, 0, 0},       {20, 0, 0},      {20, 1, 0},
+                         {0, 1, 0},       {0, 0, 2.5},     {2.5, 0, 2.5},
+                         {2.5, 2.5, 2.5}, {0, 2.5, 2.5}};
+  for (int i = 0; i < 8; ++i) {
+    molSys::Point<double> pt;
+    pt.type = 1;
+    pt.atomID = i;
+    pt.x = coords[i][0];
+    pt.y = coords[i][1];
+    pt.z = coords[i][2];
+    cloud.pts.push_back(pt);
+    cloud.idIndexMap[i] = i;
+  }
+  cloud.nop = 8;
+  std::vector<std::vector<int>> faces = {{0, 1, 2, 3}, {4, 5, 6, 7}};
+  std::vector<std::vector<int>> faceRows(8);
+  for (int i = 0; i < 8; ++i) {
+    faceRows[static_cast<std::size_t>(i)] = {i};
+  }
+  std::vector<ring::strucType> faceType(2, ring::strucType::unclassified);
+  std::vector<double> rmsd(8, -1.0);
+  REQUIRE(prism3::findBulkPrisms(faces, faceType, faceRows, cloud, rmsd, 8.0) ==
+          0);
+}
+
+TEST_CASE("repeated triplets exercise the large equatorial search",
+          "[topo_bulk]") {
+  constexpr int copies = 7;
+  std::vector<std::vector<int>> rings;
+  rings.push_back({0, 1, 2, 0, 1, 2});
+  for (int i = 0; i < copies; ++i) {
+    rings.push_back({0, 1, 2, 10 + i, 30 + i, 50 + i});
+  }
+  const int nAtoms = 60;
+  const auto index = ring::buildRingSearchIndex(rings, nAtoms);
+  std::vector<int> peripheral;
+  std::vector<int> chosen;
+  std::vector<int> rank(rings.size());
+  std::iota(rank.begin(), rank.end(), 0);
+  ring::EquatorChoice raw;
+  (void)ring::equatorialConditions(rings, 0, index, &peripheral, &chosen, &rank,
+                                   &raw);
+
+  molSys::PointCloud<molSys::Point<double>, double> yCloud;
+  buildHCCloud(yCloud);
+  auto listed = nneigh::neighListO(3.5, yCloud, 1);
+  auto byIndex = nneigh::neighbourListByIndex(yCloud, listed);
+  auto six = ring::getSingleRingSize(primitive::ringNetwork(byIndex, 6), 6);
+  REQUIRE_FALSE(six.empty());
+  std::vector<ring::strucType> typed(six.size(), ring::strucType::DDC);
+  std::vector<cage::Cage> cages;
+  const auto hc = ring::findHC(six, typed, byIndex, cages);
+  REQUIRE_FALSE(hc.empty());
+  REQUIRE(std::find(typed.begin(), typed.end(), ring::strucType::bothBasal) !=
+          typed.end());
+
+  const auto outDir = fs::temp_directory_path() / "dseams_topo_penta";
+  fs::create_directories(outDir);
+  auto pentagons = six;
+  if (!pentagons.empty()) {
+    pentagons.push_back({0, 1, 2, 3, 4});
+  }
+  REQUIRE(ring::topoBulkAnalysis(outDir.string(), pentagons, byIndex, yCloud, 1,
+                                 false) == 0);
+  fs::remove_all(outDir);
+
+  molSys::PointCloud<molSys::Point<double>, double> prism;
+  prism.box = {10, 10, 10};
+  prism.boxLow = {0, 0, 0};
+  prism.currentFrame = 1;
+  double xyz[8][3] = {{0, 0, 0}, {2.75, 0, 0}, {2.75, 2.75, 0}, {0, 2.75, 0},
+                      {0, 0, 2.75}, {2.75, 0, 2.75}, {2.75, 2.75, 2.75},
+                      {0, 2.75, 2.75}};
+  for (int i = 0; i < 8; ++i) {
+    molSys::Point<double> pt;
+    pt.type = 1;
+    pt.atomID = i;
+    pt.x = xyz[i][0];
+    pt.y = xyz[i][1];
+    pt.z = xyz[i][2];
+    prism.pts.push_back(pt);
+    prism.idIndexMap[i] = i;
+  }
+  prism.nop = 8;
+  std::vector<std::vector<int>> squares = {{0, 1, 2, 3}, {4, 5, 6, 7}};
+  std::vector<std::vector<int>> squareRows(8);
+  for (int i = 0; i < 8; ++i) {
+    squareRows[static_cast<std::size_t>(i)] = {i, (i + 1) % 4 + (i < 4 ? 0 : 4)};
+  }
+  std::vector<ring::strucType> squareType(2, ring::strucType::unclassified);
+  std::vector<double> squareRmsd(8, -1.0);
+  REQUIRE(prism3::findBulkPrisms(squares, squareType, squareRows, prism,
+                                 squareRmsd, 8.0) == 0);
+}

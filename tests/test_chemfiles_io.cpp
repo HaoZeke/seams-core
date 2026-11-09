@@ -256,6 +256,20 @@ TEST_CASE("a numeric dump guesses type 2 and then type 1", "[chemfiles]") {
 
   Cloud missing = sinp::openFrame("no/such/trajectory.lammpstrj", 1, -1);
   REQUIRE(missing.nop == 0);
+  const auto junkDump = fs::temp_directory_path() / "dseams_chem_junk.lammpstrj";
+  const auto junkXyz = fs::temp_directory_path() / "dseams_chem_junk.xyz";
+  {
+    std::ofstream out(junkDump);
+    out << "this is not a dump\n";
+    std::ofstream xyz(junkXyz);
+    xyz << "not an xyz either\n";
+  }
+  REQUIRE(sinp::openFrame(junkDump.string(), 1, -1).nop == 0);
+  REQUIRE(sinp::openFrame(junkDump.string(), 1, 2).nop == 0);
+  REQUIRE(sinp::openFrame(junkDump.string(), 1, 0).nop == 0);
+  REQUIRE(sinp::openFrame(junkXyz.string(), 1, -1).nop == 0);
+  fs::remove(junkDump);
+  fs::remove(junkXyz);
   REQUIRE(sinp::chemfilesSteps("no/such/trajectory.lammpstrj") == -1);
   REQUIRE_FALSE(sinp::forEachChemfilesFrame(
       "no/such/trajectory.lammpstrj", 1, 1, -1, "", 0, 1,
