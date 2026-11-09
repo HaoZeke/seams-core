@@ -169,6 +169,23 @@ def main():
             )
         )
         lines.append("")
+        lines.append("The in-situ number is the median extra loop time of an 8-step every-step run, so it includes the first frame.")
+        if "steady" in data:
+            steady = data["steady"]
+            delta = [steady["live"][i] - steady["plain"][i] for i in range(len(steady["plain"]))]
+            ratios = [steady["live"][i] / steady["plain"][i] for i in range(len(steady["plain"]))]
+            lines.append(
+                "A %s-step run at cadence %s on 1000 waters adds %s seconds per step (median ratio %s), which is %s seconds for each analysed frame."
+                % (
+                    steady["steps"],
+                    steady["every"],
+                    fmt(type7(delta, 0.5)),
+                    fmt(type7(ratios, 0.5)),
+                    fmt(type7(delta, 0.5) * steady["every"]),
+                )
+            )
+        lines.append("The command line excluded time is one frame. Its included time is one process per census.")
+        lines.append("")
     if "equality" in data:
         lines.append("# Equality against each code's own file")
         lines.append("")
