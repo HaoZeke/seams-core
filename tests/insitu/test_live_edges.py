@@ -144,6 +144,7 @@ def test_an_imd_client_that_fails(monkeypatch, tmp_path):
     )
     gmx.chmod(gmx.stat().st_mode | stat.S_IEXEC)
     monkeypatch.setattr(live, "PREFIX", root)
+    monkeypatch.setattr(live, "IMD", "/bin/false")
     monkeypatch.setenv("SEAMS_GRO_IMD_EXE", "/bin/false")
     folder = tmp_path / "gro"
     folder.mkdir()

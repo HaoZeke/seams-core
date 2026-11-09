@@ -34,6 +34,23 @@ SEED = 20261103
 DRAWS = 10000
 COVERAGE = 0.95
 TAIL = (1.0 - COVERAGE) / 2.0
+# scripts/h2h.py names CUT and REPS. The measurement settings it does not
+# name are these constants, which the text prints, or the scripts and
+# drivers that do name them. They have to agree with each other and with
+# the records.
+Q6_THRESHOLD = 0.558
+PTM_RMSD = 0.1
+SIGNIFICANCE = 0.05
+PALMER_MAX_NEIGHBOURS = 128
+WORKER_MEMORY_GIB = 12
+WARMUP = 2
+EXPENSIVE_TARGET_S = 120
+EXPENSIVE_MIN_REPEATS = 6
+RINGS_WARMUP = 1
+RINGS_REPEATS = 6
+# Warm-up and timed calls of the OVITO ring comparison. The largest scale
+# is the key with the greatest value; every smaller scale shares one plan.
+PLAN = {"1e3": (5, 30), "1e4": (5, 30), "1e5": (5, 30), "1e6": (1, 10)}
 MS_PER_S = 1000.0
 # The headline rung of the version comparison, whose numbers the abstract,
 # the summary and the conclusions print with HEADLINE_FIGURES figures.
@@ -78,7 +95,6 @@ CUTOFF_SOURCES = (
     ("paper/tex/figures/worked_example.py", r"^CUTOFF_A = ([0-9.]+)$"),
     ("paper/tex/figures/nucleation_churn.py", r"^CUTOFF_A = ([0-9.]+)$"),
     ("paper/tex/repro/updates.sh", r"^CUTOFF=([0-9.]+)$"),
-    ("tests/bench_paper.cpp", r"neighListO\(([0-9.]+),"),
     ("tests/bench_churn_sweep.cpp", r"std::atof\(argv\[4\]\) : ([0-9.]+);"),
     ("scripts/baseline_dseams1.cpp", r"neighListO\(([0-9.]+),"),
 )
@@ -92,37 +108,29 @@ SETTINGS = (
     ("height", (("src/topo_one_dim.cpp", r"double avgPrismHeight = ([0-9.]+);"),
                 ("paper/tex/figures/worked_example.py",
                  r"^PRISM_HEIGHT_A = ([0-9.]+)$"))),
-    ("bond", ((CAMPAIGN, r"^BOND_A = ([0-9.]+)$"),
-              ("paper/tex/figures/worked_example.py", r"^BOND_A = ([0-9.]+)$"))),
-    ("q6", ((CAMPAIGN, r"^Q6_THRESHOLD = ([0-9.]+)$"),), 3),
-    ("ptm", ((CAMPAIGN, r"^PTM_RMSD = ([0-9.]+)$"),)),
-    ("coverage", ((CAMPAIGN, r"^COVERAGE = ([0-9.]+)$"),
-                  (STATS, r"^COVERAGE = ([0-9.]+)$"))),
-    ("draws", ((CAMPAIGN, r"^BOOTSTRAP_DRAWS = (\d+)$"),
-               (STATS, r"^DRAWS = (\d+)$"))),
-    ("seed", ((CAMPAIGN, r"^BOOTSTRAP_SEED = (\d+)$"),
-              (STATS, r"^SEED = (\d+)$"))),
-    ("significance", ((CAMPAIGN, r"^SIGNIFICANCE = ([0-9.]+)$"),)),
-    ("palmer", ((CAMPAIGN, r"^PALMER_MAX_NEIGHBOURS = (\d+)$"),)),
-    ("minring", ((CAMPAIGN, r"^MIN_RING = (\d+)$"),
+    ("bond", (("paper/tex/figures/worked_example.py", r"^BOND_A = ([0-9.]+)$"),)),
+    ("q6", ((STATS, r"^Q6_THRESHOLD = ([0-9.]+)$"),), 3),
+    ("ptm", ((STATS, r"^PTM_RMSD = ([0-9.]+)$"),)),
+    ("coverage", ((STATS, r"^COVERAGE = ([0-9.]+)$"),)),
+    ("draws", ((STATS, r"^DRAWS = (\d+)$"),)),
+    ("seed", ((STATS, r"^SEED = (\d+)$"),)),
+    ("significance", ((STATS, r"^SIGNIFICANCE = ([0-9.]+)$"),)),
+    ("palmer", ((STATS, r"^PALMER_MAX_NEIGHBOURS = (\d+)$"),)),
+    ("minring", ((STATS, r"^MIN_RING = (\d+)$"),
                  ("paper/tex/figures/worked_example.py", r"^MIN_RING = (\d+)$"))),
-    ("maxring", ((CAMPAIGN, r"^MAX_RING = (\d+)$"),
-                 ("paper/tex/figures/worked_example.py", r"^MAX_RING = (\d+)$"),
-                 ("tests/bench_paper.cpp",
-                  r"last = primitive::ringNetwork\(indexed, (\d+)\);"))),
-    ("core", (("paper/tex/repro/build.sh", r"^CORE=(\d+)$"),
-              (CAMPAIGN, r'"H2H_CORE", "(\d+)"'))),
-    ("memory", ((CAMPAIGN, r"^WORKER_MEMORY_GIB = (\d+)$"),)),
-    ("warmup", ((CAMPAIGN, r'"H2H_WARMUP", "(\d+)"'),)),
-    ("repeats", ((CAMPAIGN, r'"H2H_REPEATS", "(\d+)"'),
-                 (CAMPAIGN_SH, r"^REPEATS=(\d+)$"))),
+    ("maxring", ((STATS, r"^MAX_RING = (\d+)$"),
+                 ("paper/tex/figures/worked_example.py", r"^MAX_RING = (\d+)$"))),
+    ("core", (("paper/tex/repro/build.sh", r"^CORE=(\d+)$"),)),
+    ("memory", ((STATS, r"^WORKER_MEMORY_GIB = (\d+)$"),)),
+    ("warmup", ((STATS, r"^WARMUP = (\d+)$"),)),
+    ("repeats", ((CAMPAIGN_SH, r"^REPEATS=(\d+)$"),)),
     ("repeats@largest", ((CAMPAIGN_SH, r"^REPEATS_LARGEST=(\d+)$"),)),
-    ("target", ((CAMPAIGN, r"^EXPENSIVE_TARGET_S = ([0-9.]+)$"),)),
-    ("minrepeats", ((CAMPAIGN, r"^EXPENSIVE_MIN_REPEATS = (\d+)$"),)),
+    ("target", ((STATS, r"^EXPENSIVE_TARGET_S = ([0-9.]+)$"),)),
+    ("minrepeats", ((STATS, r"^EXPENSIVE_MIN_REPEATS = (\d+)$"),)),
     ("timeout", ((CAMPAIGN_SH, r"^CASE_TIMEOUT_S=(\d+)$"),)),
     ("ringtimeout", ((CAMPAIGN_SH, r"^RING_CASE_TIMEOUT_S=(\d+)$"),)),
-    ("rings@warmup", ((CAMPAIGN, r"^RINGS_WARMUP = (\d+)$"),)),
-    ("rings@repeats", ((CAMPAIGN, r"^RINGS_REPEATS = (\d+)$"),)),
+    ("rings@warmup", ((STATS, r"^RINGS_WARMUP = (\d+)$"),)),
+    ("rings@repeats", ((STATS, r"^RINGS_REPEATS = (\d+)$"),)),
     ("runtimeout", ((CAMPAIGN_SH, r"^RINGS_RUN_TIMEOUT_S=(\d+)$"),)),
     ("v@warmup", ((VERSIONS_SH, r"^WARMUP=(\d+)$"),)),
     ("v@repeats", ((VERSIONS_SH, r"^REPEATS=(\d+)$"),)),
@@ -1375,9 +1383,11 @@ def settings():
     prisms = re.search(r"^PRISM_SIZES = \(([^)]*)\)$", worked, re.M).group(1)
     if tuple(int(p) for p in prisms.split(",")) != PRISM_SIZES:
         raise SystemExit("the prism columns of the records differ from worked_example.py")
-    # matscipy's compiled ring search takes an exclusive bound on the members.
-    if "maxlength=MAX_RING + 1" not in (ROOT / CAMPAIGN).read_text():
-        raise SystemExit("matscipy no longer counts the rings up to MAX_RING")
+    # h2h.py asks ringNetwork for rings of at most MAX_RING members. The
+    # compiled matscipy search takes that bound exclusively, one past it.
+    campaign = (ROOT / CAMPAIGN).read_text()
+    if f"ringNetwork(idx, {int(SET['maxring'])})" not in campaign:
+        raise SystemExit("h2h.py no longer counts the rings up to MAX_RING")
     define("set@maxlength", str(int(SET["maxring"]) + 1))
     shell = (ROOT / VERSIONS_SH).read_text()
     cells = [int(m) for m in re.search(r'^CELLS="([^"]+)"$', shell, re.M).group(1).split()]
@@ -1398,7 +1408,7 @@ def settings():
     below, top = sorted(SET["v1"])[-2:]
     if SET["v1"][below] != SET["v1"][top]:
         raise SystemExit("the two largest frames of d-SEAMS 1 ran different calls")
-    ovito = (ROOT / "scripts/h2h_ovito_rings.py").read_text()
+    ovito = (ROOT / STATS).read_text()
     plan = ast.literal_eval(re.search(r"^PLAN = (\{.*\})$", ovito, re.M).group(1))
     SET["o"] = plan
     largest = max(plan, key=float)
