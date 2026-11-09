@@ -1,4 +1,4 @@
-"""i-PI socket client. Positions on the wire are bohr."""
+"""i-PI socket client. Positions on the wire are bohr. The cell is angstrom."""
 
 import socket
 
@@ -111,7 +111,8 @@ class IpiClient:
         read_array(sock, np.float64, 9)
         self.nat = int(read_array(sock, np.int32, 1)[0])
         pos = read_array(sock, np.float64, self.nat * 3).reshape(self.nat, 3)
-        cell_a = cell * BOHR_A
+        # This i-PI build sends positions in bohr and the cell in angstrom.
+        cell_a = cell
         pos_a = pos * BOHR_A
         on_frame(frames, pos_a, cell_a)
         energy_ev, force_ev_a = lj_forces(pos_a, cell_a)
