@@ -101,6 +101,8 @@ class Engine:
     """
 
     def __init__(self, lib, record, cutoff=3.5, depth=8, every=1, water_type=1, debug=False):
+        if isinstance(lib, (str, os.PathLike)):
+            lib = load(os.fspath(lib))
         self.lib = lib
         opt = Options()
         lib.seams_insitu_options_default(ctypes.byref(opt))
