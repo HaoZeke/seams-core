@@ -40,6 +40,7 @@ test_sources = {
   'cage_affiliation': 'test_cage_affiliation.cpp',
   'cage_enum': 'test_cage_enum.cpp',
   'c_api': 'test_c_api.cpp',
+  'insitu': 'test_insitu.cpp',
   'chill_offload': 'test_chill_offload.cpp',
   'gpu_residency': 'test_gpu_residency.cpp',
   'config': 'test_config.cpp',
@@ -60,6 +61,9 @@ endif
 #   3. Setting build_rpath so the binary also works when run outside meson test.
 _test_env = environment()
 _test_env.prepend('LD_LIBRARY_PATH', meson.project_build_root() / 'src')
+_test_env.set('SEAMS_INSITU_EXE', seams_insitu_exe.full_path())
+_test_env.set('SEAMS_GRO_IMD_EXE', seams_gromacs_imd_exe.full_path())
+_test_env.set('LC_ALL', 'C')
 # Coverage arc counters share a cache line. Several cores bounce that
 # line and the timed tests exceed their limit. One thread keeps the
 # counters and the tests inside the limit.

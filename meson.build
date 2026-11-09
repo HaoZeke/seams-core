@@ -439,6 +439,19 @@ endif
 # uses the in-tree cell list, and without a reader the corresponding
 # formats are simply absent from the library, with nothing at run time
 # to say so.
+if get_option('lammps').enabled()
+  message('LAMMPS in-situ adapter requested')
+endif
+if get_option('gromacs').enabled()
+  message('GROMACS in-situ adapter requested')
+endif
+if get_option('openmm').enabled()
+  message('OpenMM in-situ adapter requested')
+endif
+if get_option('plumed').enabled()
+  message('PLUMED in-situ adapter requested')
+endif
+
 summary({
   'BLAS/LAPACK': blas_backend,
   'SIMD distance kernel (hwy)': hwy_dep.found(),
@@ -471,8 +484,31 @@ _incdirs += include_directories([
   'src/include/external',
 ])
 
-# Library
+# Library. The LAMMPS and PLUMED adapters are decided at the end of src.
 subdir('src')
+message('LAMMPS fix plugin: ' + (lammps_adapter ? 'built' : 'not built'))
+message('PLUMED action: ' + (plumed_adapter ? 'built' : 'not built'))
+
+seams_insitu_link = _link_args
+if host_machine.system() == 'linux'
+  seams_insitu_link += ['-Wl,--enable-new-dtags']
+endif
+seams_insitu_exe = executable(
+  'seams-insitu',
+  files('src/insitu_cli.cpp'),
+  dependencies: [yds_dep],
+  include_directories: _incdirs,
+  link_args: seams_insitu_link,
+  build_rpath: meson.current_build_dir() / 'src',
+  install: true)
+seams_gromacs_imd_exe = executable(
+  'seams-gromacs-imd',
+  files('src/insitu_gromacs_cli.cpp'),
+  dependencies: [yds_dep],
+  include_directories: _incdirs,
+  link_args: seams_insitu_link,
+  build_rpath: meson.current_build_dir() / 'src',
+  install: true)
 
 # Tests
 if get_option('with_tests')
