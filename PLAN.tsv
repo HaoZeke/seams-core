@@ -1,0 +1,53 @@
+file	gap	tests	shard
+bindings/cxx/seams_lang.cpp	lines at bar; 94 throw-excluded branches (0.8294)	Hit the untaken switch and error returns with a rejected graph, a short buffer, and a failed pipe.	lang
+bindings/cxx/test_lang.cpp	lines at bar; 277 throw-excluded branches (0.6576)	Hit the untaken switch and error returns with a rejected graph, a short buffer, and a failed pipe.	lang
+src/absOrientation.cpp	18 lines (0.8548); 26 throw-excluded branches (0.7920)	Drive the zero-norm, empty-cloud, and index-miss branches with a two-point cloud and a short neighbour row.	orient
+src/adapters/lammps/fix_dseams.cpp	no gcov notes	Build fix_dseams.cpp with the LAMMPS headers under coverage and step one dump.	lammps
+src/adapters/lammps/fix_dseams.h	no gcov notes	Build fix_dseams.cpp with the LAMMPS headers under coverage and step one dump.	lammps
+src/bond.cpp	10 lines (0.9398); 15 throw-excluded branches (0.8864)	Pass a ring shorter than 3 and a zero bond length into the order and bond helpers.	mol
+src/bop.cpp	lines at bar; 30 throw-excluded branches (0.9482)	Call the empty-ring, zero-height, and k>=6 equator paths on a six-ring and a one-atom cloud.	ice
+src/bulkTUM.cpp	25 lines (0.9129); 25 throw-excluded branches (0.8768)	Call the empty-ring, zero-height, and k>=6 equator paths on a six-ring and a one-atom cloud.	ice
+src/cage_affiliation.cpp	16 lines (0.9795); 54 throw-excluded branches (0.9264)	Call the empty-ring, zero-height, and k>=6 equator paths on a six-ring and a one-atom cloud.	ice
+src/chemfiles_io.cpp	lines at bar; 17 throw-excluded branches (0.9399)	Read a dump with a mol column, a slice that misses z, and an output path with an empty selection.	io
+src/cluster.cpp	20 lines (0.9134); 30 throw-excluded branches (0.8148)	Exercise the negative-index, empty-list, and short-ring returns on a three-atom cloud.	graph
+src/franzblau.cpp	22 lines (0.9716); 105 throw-excluded branches (0.8700)	Exercise the negative-index, empty-list, and short-ring returns on a three-atom cloud.	graph
+src/generic.cpp	9 lines (0.8861); 10 throw-excluded branches (0.8387)	Exercise the negative-index, empty-list, and short-ring returns on a three-atom cloud.	graph
+src/include/internal/generic.hpp	85 lines (0.5430); 58 throw-excluded branches (0.3763)	Exercise the negative-index, empty-list, and short-ring returns on a three-atom cloud.	graph
+src/include/internal/neighbours.hpp	9 lines (0.8861); 21 throw-excluded branches (0.6379)	Exercise the negative-index, empty-list, and short-ring returns on a three-atom cloud.	graph
+src/include/internal/seams_input.hpp	lines at bar; 1 throw-excluded branches (0.9615)	Read a dump with a mol column, a slice that misses z, and an output path with an empty selection.	io
+src/include/internal/seams_output.hpp	7 lines (0.0000); 10 throw-excluded branches (0.0000)	Read a dump with a mol column, a slice that misses z, and an output path with an empty selection.	io
+src/include/internal/topo_bulk.hpp	lines at bar; 1 throw-excluded branches (0.5000)	Call the empty-ring, zero-height, and k>=6 equator paths on a six-ring and a one-atom cloud.	ice
+src/insitu.cpp	16 lines (0.9768); 86 throw-excluded branches (0.8724)	Pass a null record, a zero cutoff, and an empty coordinate frame.	insitu
+src/insitu_imd.cpp	lines at bar; 12 throw-excluded branches (0.8835)	Pass a null record, a zero cutoff, and an empty coordinate frame.	insitu
+src/ira_sofi.cpp	12 lines (0.4783); 5 throw-excluded branches (0.3750)	Drive the zero-norm, empty-cloud, and index-miss branches with a two-point cloud and a short neighbour row.	orient
+src/mol_sys.cpp	3 lines (0.9388); branches at bar	Read a dump with a mol column, a slice that misses z, and an output path with an empty selection.	io
+src/neighbours.cpp	283 lines (0.7255); 377 throw-excluded branches (0.6336)	Exercise the negative-index, empty-list, and short-ring returns on a three-atom cloud.	graph
+src/order_parameter.cpp	35 lines (0.8910); 73 throw-excluded branches (0.7365)	Pass a ring shorter than 3 and a zero bond length into the order and bond helpers.	mol
+src/pntCorrespondence.cpp	56 lines (0.8753); 75 throw-excluded branches (0.7754)	Drive the zero-norm, empty-cloud, and index-miss branches with a two-point cloud and a short neighbour row.	orient
+src/rdf.cpp	14 lines (0.8898); 26 throw-excluded branches (0.7833)	Call the zero-bin and empty-cloud RDF entries.	rdf
+src/rdf2d.cpp	lines at bar; 16 throw-excluded branches (0.8491)	Call the zero-bin and empty-cloud RDF entries.	rdf
+src/ring.cpp	25 lines (0.6479); 27 throw-excluded branches (0.5091)	Exercise the negative-index, empty-list, and short-ring returns on a three-atom cloud.	graph
+src/seams_cli.cpp	lines at bar; 136 throw-excluded branches (0.9346)	Run the unused switch arms with one frame of each rejected flag.	cli
+src/seams_input.cpp	lines at bar; 63 throw-excluded branches (0.9181)	Read a dump with a mol column, a slice that misses z, and an output path with an empty selection.	io
+src/seams_output.cpp	169 lines (0.8086); 177 throw-excluded branches (0.8160)	Read a dump with a mol column, a slice that misses z, and an output path with an empty selection.	io
+src/selection.cpp	5 lines (0.9438); 5 throw-excluded branches (0.9138)	Read a dump with a mol column, a slice that misses z, and an output path with an empty selection.	io
+src/shapeMatch.cpp	26 lines (0.7699); 29 throw-excluded branches (0.6506)	Drive the zero-norm, empty-cloud, and index-miss branches with a two-point cloud and a short neighbour row.	orient
+src/steinhardt_parallel.cpp	44 lines (0.7864); 38 throw-excluded branches (0.6667)	Call the parallel Steinhardt path with one thread and an empty type.	other
+src/topo_bulk.cpp	lines at bar; 99 throw-excluded branches (0.9400)	Call the empty-ring, zero-height, and k>=6 equator paths on a six-ring and a one-atom cloud.	ice
+src/topo_one_dim.cpp	53 lines (0.8172); 82 throw-excluded branches (0.5920)	Call the empty-ring, zero-height, and k>=6 equator paths on a six-ring and a one-atom cloud.	ice
+src/tum_offload.cpp	4 lines (0.9774); 8 throw-excluded branches (0.9292)	Call the empty-ring, zero-height, and k>=6 equator paths on a six-ring and a one-atom cloud.	ice
+src/voronoi_qlm.cpp	5 lines (0.9673); 11 throw-excluded branches (0.9091)	Call the empty-ring, zero-height, and k>=6 equator paths on a six-ring and a one-atom cloud.	ice
+tests/bench_chemfiles_read.cpp	3 lines (0.9444); 6 throw-excluded branches (0.8929)	Run the bench and the clock on a tiny dump and on a missing path. Assertion-failure fallthroughs stay untaken in a passing run.	tests
+tests/bench_churn_sweep.cpp	130 lines (0.0000); 137 throw-excluded branches (0.0000)	Run the bench and the clock on a tiny dump and on a missing path. Assertion-failure fallthroughs stay untaken in a passing run.	tests
+tests/insitu/frame_clock.cpp	2 lines (0.9394); 5 throw-excluded branches (0.8214)	Run the bench and the clock on a tiny dump and on a missing path. Assertion-failure fallthroughs stay untaken in a passing run.	tests
+tests/insitu/plumed_neighborlist_overflow.cpp	lines at bar; 2 throw-excluded branches (0.8000)	Run the bench and the clock on a tiny dump and on a missing path. Assertion-failure fallthroughs stay untaken in a passing run.	tests
+tests/test_bop.cpp	lines at bar; 519 throw-excluded branches (0.7735)	Run the bench and the clock on a tiny dump and on a missing path. Assertion-failure fallthroughs stay untaken in a passing run.	tests
+tests/test_cage_affiliation.cpp	lines at bar; 359 throw-excluded branches (0.7657)	Run the bench and the clock on a tiny dump and on a missing path. Assertion-failure fallthroughs stay untaken in a passing run.	tests
+tests/test_chemfiles_io.cpp	lines at bar; 142 throw-excluded branches (0.8097)	Run the bench and the clock on a tiny dump and on a missing path. Assertion-failure fallthroughs stay untaken in a passing run.	tests
+tests/test_franzblau_extra.cpp	lines at bar; 144 throw-excluded branches (0.8083)	Run the bench and the clock on a tiny dump and on a missing path. Assertion-failure fallthroughs stay untaken in a passing run.	tests
+tests/test_insitu.cpp	lines at bar; 491 throw-excluded branches (0.7763)	Run the bench and the clock on a tiny dump and on a missing path. Assertion-failure fallthroughs stay untaken in a passing run.	tests
+tests/test_molid_values.cpp	5 lines (0.9638); 38 throw-excluded branches (0.8319)	Run the bench and the clock on a tiny dump and on a missing path. Assertion-failure fallthroughs stay untaken in a passing run.	tests
+tests/test_seams_input.cpp	lines at bar; 408 throw-excluded branches (0.8206)	Run the bench and the clock on a tiny dump and on a missing path. Assertion-failure fallthroughs stay untaken in a passing run.	tests
+tests/topo_bulk-test.cpp	lines at bar; 437 throw-excluded branches (0.7970)	Run the bench and the clock on a tiny dump and on a missing path. Assertion-failure fallthroughs stay untaken in a passing run.	tests
+tests/insitu/live.py	statements 0.6033; branches 0.7049	Run the engine acceptance with both executables set and assert the census lines.	python
+paper/tex/figures/stats.py	statements 0.0933; branches 0.0062	Stop requiring scripts/h2h_campaign.py and execute main on the shipped data directory.	python
