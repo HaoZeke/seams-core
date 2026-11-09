@@ -21,7 +21,7 @@ PLUGIN = Path(os.environ.get("SEAMS_LAMMPS_PLUGIN", "var/run/libfixdseams.so"))
 WORK = Path(os.environ.get("DSEAMS_LIVE_WORK", "var/run/dseams-live"))
 os.environ["SEAMS_LIB"] = LIB
 os.environ["PATH"] = str(PREFIX / "bin") + os.pathsep + os.environ.get("PATH", "")
-os.environ["OMP_NUM_THREADS"] = "1"
+os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ["PLUMED_KERNEL"] = str(PREFIX / "lib" / "libplumedKernel.so")
 
 from dseams_insitu.ase import DseamsMDObserver
@@ -929,12 +929,18 @@ def scale_lammps():
             folder.mkdir(parents=True, exist_ok=True)
             plain = []
             live = []
-            for i in range(6):
+            warmup_plain = None
+            warmup_live = None
+            for i in range(7):
                 pin = folder / f"plain-{i}.in"
                 plog = folder / f"plain-{i}.log"
                 lammps_plain(pin, run_steps, ncell=ncell)
                 proc = run([str(PREFIX / "bin" / "lmp"), "-in", str(pin), "-log", str(plog)], folder)
-                plain.append(loop_time(proc.stdout + plog.read_text()) / run_steps)
+                sample = loop_time(proc.stdout + plog.read_text()) / run_steps
+                if i == 0:
+                    warmup_plain = sample
+                else:
+                    plain.append(sample)
                 lin = folder / f"live-{i}.in"
                 llog = folder / f"live-{i}.log"
                 lammps_input(
@@ -948,7 +954,11 @@ def scale_lammps():
                     write_dump=False,
                 )
                 proc = run([str(PREFIX / "bin" / "lmp"), "-in", str(lin), "-log", str(llog)], folder)
-                live.append(loop_time(proc.stdout + llog.read_text()) / run_steps)
+                sample = loop_time(proc.stdout + llog.read_text()) / run_steps
+                if i == 0:
+                    warmup_live = sample
+                else:
+                    live.append(sample)
             dump = folder / "native.lammpstrj"
             pin = folder / "post.in"
             lammps_plain(pin, 1, ncell=ncell, every=1, native=dump)
@@ -964,6 +974,8 @@ def scale_lammps():
                 "steps": run_steps,
                 "plain": plain,
                 "live": live,
+                "warmup_plain": warmup_plain,
+                "warmup_live": warmup_live,
                 "post_wall": post,
                 "dump_bytes": dump.stat().st_size,
             }
@@ -1031,10 +1043,33 @@ def gromacs_scale_case(folder, rows, steps, every, repeats):
     box_nm = ncell * 0.64
     write_gro(folder / "conf.gro", rows, box_nm)
     write_oxygen_top(folder / "topol.top", natoms)
-    gmx = str(PREFIX / "bin" / "gmx")
+    ompi = Path("var/run/gmx-ompi/bin/gmx")
+    mpirun = PREFIX / "bin" / "mpirun"
+    if ompi.exists() and mpirun.exists():
+        grompp = [str(ompi)]
+        mdrun = [str(mpirun), "--oversubscribe", "-np", "1", str(ompi)]
+        kernel = "var/run/plumed-ompi/lib/libplumedKernel.so"
+        libs = ":".join(
+            [
+                str(PREFIX / "lib"),
+                "var/run/plumed-ompi/lib",
+                "var/run/gmx-ompi/lib",
+                str(Path(LIB).parent),
+                str(Path(LIB).parent.parent / "subprojects" / "readcon-core"),
+                str(Path(LIB).parent.parent / "subprojects" / "readcon-db"),
+            ]
+        )
+    else:
+        grompp = [str(PREFIX / "bin" / "gmx")]
+        mdrun = grompp + ["mdrun"]
+        # The conda binary takes -ntmpi. The branch below appends mdrun itself.
+        kernel = str(PREFIX / "lib" / "libplumedKernel.so")
+        libs = None
     plain = []
     live = []
-    for i in range(repeats):
+    warmup_plain = None
+    warmup_live = None
+    for i in range(repeats + 1):
         mdp = folder / f"plain-{i}.mdp"
         mdp.write_text(
             "integrator = md\ndt = 0.002\nnsteps = %d\n"
@@ -1045,20 +1080,48 @@ def gromacs_scale_case(folder, rows, steps, every, repeats):
             "gen-vel = yes\ngen-temp = 30\ngen-seed = 12345\n" % (steps, steps)
         )
         tpr = folder / f"plain-{i}.tpr"
-        run([gmx, "grompp", "-f", str(mdp), "-c", "conf.gro", "-p", "topol.top", "-o", str(tpr), "-maxwarn", "2"], folder)
-        proc = run([gmx, "mdrun", "-s", str(tpr), "-deffnm", f"plain-{i}", "-ntmpi", "1", "-ntomp", "1", "-noconfout"], folder)
-        plain.append(gmx_wall(proc.stdout + proc.stderr) / steps)
+        gro_env = {"PLUMED_KERNEL": kernel}
+        if libs:
+            gro_env["LD_LIBRARY_PATH"] = libs
+        run(grompp + ["grompp", "-f", str(mdp), "-c", "conf.gro", "-p", "topol.top", "-o", str(tpr), "-maxwarn", "2"], folder, env=gro_env)
+        if libs:
+            proc = run(mdrun + ["mdrun", "-s", str(tpr), "-deffnm", f"plain-{i}", "-ntomp", "1", "-noconfout"], folder, env=gro_env)
+        else:
+            proc = run(grompp + ["mdrun", "-s", str(tpr), "-deffnm", f"plain-{i}", "-ntmpi", "1", "-ntomp", "1", "-noconfout"], folder, env=gro_env)
+        sample = gmx_wall(proc.stdout + proc.stderr) / steps
+        if i == 0:
+            warmup_plain = sample
+        else:
+            plain.append(sample)
         plumed = folder / f"live-{i}.dat"
         plumed.write_text(
             "LOAD FILE=%s\nd: DSEAMS ATOMS=1-%d RECORD=%s CUTOFF=3.5 EVERY=%d\n"
             % (folder / "libDseams.so", natoms, folder / f"rec-{i}.txt", every)
         )
-        proc = run(
-            [gmx, "mdrun", "-s", str(tpr), "-deffnm", f"live-{i}", "-plumed", str(plumed), "-ntmpi", "1", "-ntomp", "1", "-noconfout"],
-            folder,
-        )
-        live.append(gmx_wall(proc.stdout + proc.stderr) / steps)
-    return {"steps": steps, "plain": plain, "live": live}
+        if libs:
+            proc = run(
+                mdrun + ["mdrun", "-s", str(tpr), "-deffnm", f"live-{i}", "-plumed", str(plumed), "-ntomp", "1", "-noconfout"],
+                folder,
+                env=gro_env,
+            )
+        else:
+            proc = run(
+                grompp + ["mdrun", "-s", str(tpr), "-deffnm", f"live-{i}", "-plumed", str(plumed), "-ntmpi", "1", "-ntomp", "1", "-noconfout"],
+                folder,
+                env=gro_env,
+            )
+        sample = gmx_wall(proc.stdout + proc.stderr) / steps
+        if i == 0:
+            warmup_live = sample
+        else:
+            live.append(sample)
+    return {
+        "steps": steps,
+        "plain": plain,
+        "live": live,
+        "warmup_plain": warmup_plain,
+        "warmup_live": warmup_live,
+    }
 
 
 def scale_gromacs(so):
@@ -1077,7 +1140,9 @@ def scale_gromacs(so):
             if folder.exists():
                 shutil.rmtree(folder)
             folder.mkdir(parents=True)
-            shutil.copy(so, folder / "libDseams.so")
+            ompi_so = Path("var/run/libDseams-ompi.so")
+            plugin = ompi_so if ompi_so.exists() and Path("var/run/gmx-ompi/bin/gmx").exists() else Path(so)
+            shutil.copy(plugin, folder / "libDseams.so")
             result[str(natoms)][str(every)] = gromacs_scale_case(folder, rows, run_steps, every, 6)
             print("gscale", natoms, every, "done", flush=True)
     return result
@@ -1220,6 +1285,157 @@ def lammps_mpi_identity():
     return bool(text[0]) and text[0] == text[1] == text[2]
 
 
+def gromacs_mpi_identity():
+    gmx = Path("var/run/gmx-ompi/bin/gmx")
+    mpirun = PREFIX / "bin" / "mpirun"
+    plugin = Path("var/run/libDseams-ompi.so")
+    kernel = Path("var/run/plumed-ompi/lib/libplumedKernel.so")
+    if not (gmx.exists() and mpirun.exists() and plugin.exists() and kernel.exists()):
+        return False, "the matched OpenMPI GROMACS or PLUMED kernel is absent"
+    folder = WORK / "gromacs-mpi"
+    if folder.exists():
+        import shutil
+
+        shutil.rmtree(folder)
+    folder.mkdir(parents=True)
+    rows = diamond_positions(5)
+    write_gro(folder / "conf.gro", rows, 3.2)
+    write_oxygen_top(folder / "topol.top", len(rows))
+    (folder / "md.mdp").write_text(
+        "integrator = md\ndt = 0.002\nnsteps = 8\n"
+        "nstxout = 1\nnstvout = 0\nnstfout = 0\nnstlog = 1\n"
+        "nstlist = 10\ncutoff-scheme = Verlet\n"
+        "coulombtype = Cut-off\nrcoulomb = 0.9\nrvdw = 0.9\n"
+        "pbc = xyz\nconstraints = none\n"
+        "gen-vel = yes\ngen-temp = 30\ngen-seed = 12345\n"
+    )
+    env = {
+        "PLUMED_KERNEL": str(kernel),
+        "LD_LIBRARY_PATH": ":".join(
+            [
+                str(PREFIX / "lib"),
+                str(kernel.parent),
+                "var/run/gmx-ompi/lib",
+                str(Path(LIB).parent),
+                str(Path(LIB).parent.parent / "subprojects" / "readcon-core"),
+                str(Path(LIB).parent.parent / "subprojects" / "readcon-db"),
+            ]
+        ),
+        "OMP_NUM_THREADS": "1",
+    }
+    run([str(gmx), "grompp", "-f", "md.mdp", "-c", "conf.gro", "-p", "topol.top", "-o", "topol.tpr", "-maxwarn", "2"], folder, env=env)
+    texts = []
+    for np in (1, 2, 4):
+        (folder / ("plumed-%d.dat" % np)).write_text(
+            "LOAD FILE=%s\nd: DSEAMS ATOMS=1-%d RECORD=%s CUTOFF=3.5\n"
+            % (plugin, len(rows), folder / ("live-%d.txt" % np))
+        )
+        run(
+            [str(mpirun), "--oversubscribe", "-np", str(np), str(gmx), "mdrun", "-s", "topol.tpr", "-deffnm", "run-%d" % np, "-plumed", "plumed-%d.dat" % np, "-ntomp", "1", "-noconfout"],
+            folder,
+            env=env,
+        )
+        texts.append((folder / ("live-%d.txt" % np)).read_text())
+        frames = trr_frames(folder / ("run-%d.trr" % np))
+        dump = folder / ("from-trr-%d.lammpstrj" % np)
+        trr_to_dump(frames, dump)
+        matched = match_lammps_cli(folder / ("live-%d.txt" % np), dump)
+        if matched != len(frames):
+            raise RuntimeError("rank %d matched %d of %d" % (np, matched, len(frames)))
+    same = bool(texts[0]) and texts[0] == texts[1] == texts[2]
+    (folder / "equal.log").write_text("1==2 %s\n1==4 %s\nframes %d\n" % (texts[0] == texts[1], texts[0] == texts[2], texts[0].count("\nstep ") + 1))
+    return same, "OpenMPI GROMACS and PLUMED share one MPI library. Each rank's census matches its trajectory dump."
+
+
+def parse_dump(path):
+    frames = []
+    step = None
+    box = None
+    xyz = []
+    mode = None
+    for line in Path(path).read_text().splitlines():
+        if line.startswith("ITEM: TIMESTEP"):
+            if step is not None and xyz:
+                frames.append((step, box, xyz))
+            mode = "step"
+            xyz = []
+            continue
+        if line.startswith("ITEM: NUMBER"):
+            mode = "n"
+            continue
+        if line.startswith("ITEM: BOX"):
+            mode = "box"
+            box = []
+            continue
+        if line.startswith("ITEM: ATOMS"):
+            mode = "atoms"
+            continue
+        if mode == "step":
+            step = int(line.split()[0])
+        elif mode == "box":
+            lo, hi = line.split()[:2]
+            box.append(float(hi) - float(lo))
+        elif mode == "atoms":
+            parts = line.split()
+            xyz.append((float(parts[-3]), float(parts[-2]), float(parts[-1])))
+    if step is not None and xyz:
+        frames.append((step, box, xyz))
+    return frames
+
+
+def ladder_worker(dump):
+    import numpy as np
+
+    from dseams_insitu.engine import Engine, load
+
+    frames = parse_dump(dump)
+    lib = load()
+    record = str(Path(dump).with_suffix(".ladder.txt"))
+    eng = Engine(lib, record)
+    def once():
+        started = time.perf_counter()
+        for step, box, xyz in frames:
+            edge = [0.0, 0.0, 0.0, box[0], box[1], box[2], 0.0, 0.0, 0.0]
+            eng.observe(step, np.asarray(xyz), edge, None)
+        return (time.perf_counter() - started) / len(frames)
+    print("%.17g" % once())
+    for _ in range(6):
+        print("%.17g" % once())
+    eng.close()
+
+
+def thread_ladder(dump, natoms):
+    frames = Path(dump).read_text().count("ITEM: TIMESTEP")
+    if frames < 1:
+        raise RuntimeError("empty dump " + str(dump))
+    online = len(os.sched_getaffinity(0))
+    threads = []
+    n = 1
+    while n <= online:
+        threads.append(n)
+        n *= 2
+    out = {"waters": natoms, "frames": frames, "threads": {}}
+    for count in threads:
+        env = os.environ.copy()
+        env["OMP_NUM_THREADS"] = str(count)
+        env["SEAMS_LIB"] = LIB
+        env["LD_LIBRARY_PATH"] = ":".join(
+            [
+                str(Path(LIB).parent),
+                str(Path(LIB).parent.parent / "subprojects" / "readcon-core"),
+                str(Path(LIB).parent.parent / "subprojects" / "readcon-db"),
+                env.get("LD_LIBRARY_PATH", ""),
+            ]
+        )
+        proc = run([sys.executable, str(Path(__file__).resolve()), "--ladder-worker", str(dump)], WORK, env=env)
+        values = [float(line) for line in proc.stdout.splitlines() if line.strip()]
+        if len(values) != 7:
+            raise RuntimeError(proc.stdout + proc.stderr)
+        out["threads"][str(count)] = {"warmup": values[0], "samples": values[1:]}
+        print("ladder", natoms, count, "done", flush=True)
+    return out
+
+
 def main():
     import shutil
 
@@ -1297,29 +1513,38 @@ def main():
             {"code": code, "frames": frames, "rings": "yes", "chill": "yes", "cages": "yes"}
         )
     lammps_same = lammps_mpi_identity()
+    gromacs_same, gromacs_note = gromacs_mpi_identity()
     out["mpi"] = [
         {
             "code": "LAMMPS",
             "ranks": "2 and 4",
             "identical": lammps_same,
-            "note": "OpenMPI LAMMPS, MPI_Gatherv onto rank 0. The census matches the one-rank run.",
+            "note": "OpenMPI LAMMPS gathers positions and the neighbour rows onto rank 0. The census matches the one-rank run.",
         },
         {
             "code": "GROMACS",
             "ranks": "2 and 4",
-            "identical": False,
-            "note": (
-                "The conda-forge thread-MPI GROMACS refuses PLUMED on more than one rank. "
-                "The OpenMPI GROMACS is linked to a PLUMED build without MPI, and a separate "
-                "OpenMPI PLUMED 2.10.0 segfaults inside mdrun before the action runs. "
-                "The one-rank PLUMED path matches the full-precision TRR."
-            ),
+            "identical": gromacs_same,
+            "note": gromacs_note,
         },
     ]
+    print("ladder", flush=True)
+    out["ladder"] = []
+    for ncell, natoms in ((5, 1000), (20, 64000)):
+        folder = WORK / "ladder-dump" / str(natoms)
+        folder.mkdir(parents=True, exist_ok=True)
+        dump = folder / "native.lammpstrj"
+        script = folder / "in"
+        lammps_plain(script, 40, ncell=ncell, every=10, native=dump)
+        run([str(PREFIX / "bin" / "lmp"), "-in", str(script), "-log", str(folder / "log")], folder)
+        out["ladder"].append(thread_ladder(dump, natoms))
     dest = WORK / "samples.json"
     dest.write_text(json.dumps(out))
     print(dest)
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 2 and sys.argv[1] == "--ladder-worker":
+        ladder_worker(sys.argv[2])
+    else:
+        main()

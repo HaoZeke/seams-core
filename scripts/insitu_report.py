@@ -87,8 +87,8 @@ def main():
         lines.append("The postprocess column is the wall time of the seams rings, chill-plus and cages commands on one native dump frame, repeated six times.")
         lines.append("The in-situ run does not write a dump. The byte count is the native dump of one frame.")
         lines.append("")
-        lines.append("| Waters | Cadence | Steps | Median absolute | Median ratio | Median postprocess | Dump bytes |")
-        lines.append("| --- | --- | --- | --- | --- | --- | --- |")
+        lines.append("| Waters | Cadence | Steps | Median absolute | Median ratio | Per analysed frame | Median postprocess | Dump bytes |")
+        lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
         for natoms, cadences in data["scale"].items():
             for every, block in cadences.items():
                 plain = block["plain"]
@@ -96,13 +96,14 @@ def main():
                 delta = [live[i] - plain[i] for i in range(len(plain))]
                 ratios = [live[i] / plain[i] for i in range(len(plain))]
                 lines.append(
-                    "| %s | %s | %s | %s | %s | %s | %d |"
+                    "| %s | %s | %s | %s | %s | %s | %s | %d |"
                     % (
                         natoms,
                         every,
                         block["steps"],
                         fmt(type7(delta, 0.5)),
                         fmt(type7(ratios, 0.5)),
+                        fmt(type7(delta, 0.5) * int(every)),
                         fmt(type7(block["post_wall"], 0.5)),
                         block["dump_bytes"],
                     )
@@ -133,11 +134,11 @@ def main():
         lines.append("The same diamond lattices as the LAMMPS table, one site per water.")
         lines.append("Plain is mdrun. Live is mdrun -plumed with the DSEAMS action.")
         lines.append("Both times are the mdrun wall time divided by the number of steps.")
-        lines.append("The installed thread-MPI GROMACS runs this path on one rank.")
-        lines.append("Its PLUMED build refuses more than one thread-MPI rank.")
+        lines.append("The run uses the OpenMPI GROMACS when that binary is present, on one rank and one thread.")
+        lines.append("The analysed-frame column is the median extra seconds per step multiplied by the cadence.")
         lines.append("")
-        lines.append("| Waters | Cadence | Steps | Median absolute | Median ratio |")
-        lines.append("| --- | --- | --- | --- | --- |")
+        lines.append("| Waters | Cadence | Steps | Median absolute | Median ratio | Per analysed frame |")
+        lines.append("| --- | --- | --- | --- | --- | --- |")
         for natoms, cadences in data["gromacs_scale"].items():
             for every, block in cadences.items():
                 plain = block["plain"]
@@ -145,8 +146,15 @@ def main():
                 delta = [live[i] - plain[i] for i in range(len(plain))]
                 ratios = [live[i] / plain[i] for i in range(len(plain))]
                 lines.append(
-                    "| %s | %s | %s | %s | %s |"
-                    % (natoms, every, block["steps"], fmt(type7(delta, 0.5)), fmt(type7(ratios, 0.5)))
+                    "| %s | %s | %s | %s | %s | %s |"
+                    % (
+                        natoms,
+                        every,
+                        block["steps"],
+                        fmt(type7(delta, 0.5)),
+                        fmt(type7(ratios, 0.5)),
+                        fmt(type7(delta, 0.5) * int(every)),
+                    )
                 )
         lines.append("")
     if "clock" in data:
@@ -198,6 +206,28 @@ def main():
                 "| %s | %s | %s | %s | %s |"
                 % (row["code"], row["frames"], row["rings"], row["chill"], row["cages"])
             )
+        lines.append("")
+    if "ladder" in data:
+        lines.append("# OpenMP threads")
+        lines.append("")
+        lines.append("Each sample is the analysis of the dumped frames divided by the frame count, after one warmup.")
+        lines.append("The thread counts are the powers of two up to the processors the process may use.")
+        lines.append("A larger count scales when its third quartile is below the smaller count's first quartile.")
+        lines.append("")
+        lines.append("| Waters | Threads | Q1 | Median | Q3 |")
+        lines.append("| --- | --- | --- | --- | --- |")
+        previous = {}
+        for block in data["ladder"]:
+            waters = block["waters"]
+            for count, row in block["threads"].items():
+                samples = row["samples"]
+                q1 = type7(samples, 0.25)
+                med = type7(samples, 0.5)
+                q3 = type7(samples, 0.75)
+                lines.append("| %s | %s | %s | %s | %s |" % (waters, count, fmt(q1), fmt(med), fmt(q3)))
+                if waters in previous and not (q3 < previous[waters]):
+                    raise SystemExit("thread scaling failed for %s waters at %s threads" % (waters, count))
+                previous[waters] = q1
         lines.append("")
     if "mpi" in data:
         lines.append("# Ranks")
