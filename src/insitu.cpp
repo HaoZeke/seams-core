@@ -249,6 +249,10 @@ std::vector<std::vector<int>> filter_cutoff(const Cloud &cloud,
       if (gen::periodicDistSq(box, cloud, iatom, jatom) >= limit) {
         continue;
       }
+      // A host list can name one atom through several periodic images.
+      if (std::find(dest.begin() + 1, dest.end(), row[k]) != dest.end()) {
+        continue;
+      }
       dest.push_back(row[k]);
     }
   }
