@@ -289,7 +289,7 @@ def cmd_gcov(args):
             text=True,
         )
         produced = build / (name + ".gcov")
-        wanted = {Path(item).name: item for item in changed}
+        wanted = {Path(item).name + ".gcov": item for item in changed}
         for extra in list(build.glob("*.gcov")):
             matched = wanted.get(extra.name)
             if matched is None:
