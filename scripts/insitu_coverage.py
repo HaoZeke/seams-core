@@ -154,7 +154,21 @@ def fail_row(name):
 
 
 def changed_python(root, base):
-    """Python paths changed between base and HEAD. An empty list means no git history."""
+    """Changed Python paths, or one failed row when the base cannot be resolved.
+
+    A missing repository, a shallow history, or a base that git cannot
+    resolve is a failed row. An empty override is not a base.
+    """
+    if base is None or not str(base).strip():
+        return [fail_row("changed-files")]
+    verify = subprocess.run(
+        ["git", "rev-parse", "--verify", "%s^{commit}" % base],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+    if verify.returncode != 0:
+        return [fail_row("changed-files " + str(base))]
     proc = subprocess.run(
         ["git", "diff", "--name-only", base, "HEAD", "--", "*.py"],
         cwd=root,
@@ -162,7 +176,7 @@ def changed_python(root, base):
         text=True,
     )
     if proc.returncode != 0:
-        return []
+        return [fail_row("changed-files " + str(base))]
     return [line for line in proc.stdout.splitlines() if line.endswith(".py")]
 
 
@@ -227,9 +241,15 @@ def main():
             rows.append(fail_row(src))
     seen = {name for name, _denom, _num, _frac in rows}
     base = os.environ.get("DSEAMS_COVERAGE_BASE", PUBLIC_BASE)
-    for rel in changed_python(root, base):
-        if rel not in seen:
-            rows.append(fail_row(rel))
+    changed = changed_python(root, base)
+    if changed and isinstance(changed[0], tuple):
+        for rel in changed:
+            if rel[0] not in seen:
+                rows.append(rel)
+    else:
+        for rel in changed:
+            if rel not in seen:
+                rows.append(fail_row(rel))
     print("file executable covered fraction")
     worst = 1.0
     for name, denom, num, frac in rows:

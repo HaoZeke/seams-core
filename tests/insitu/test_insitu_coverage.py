@@ -65,6 +65,23 @@ def main():
     need(module.physical(quoted, ".py") == {1, 2, 3}, "a python triple quote opened a c comment")
     with tempfile.TemporaryDirectory() as raw:
         root = Path(raw)
+        git_env = os.environ.copy()
+        git_env.update({
+            "GIT_AUTHOR_NAME": "Rohit Goswami",
+            "GIT_AUTHOR_EMAIL": "rgoswami@ieee.org",
+            "GIT_COMMITTER_NAME": "Rohit Goswami",
+            "GIT_COMMITTER_EMAIL": "rgoswami@ieee.org",
+        })
+        subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True)
+        (root / "anchor.txt").write_text("anchor\n")
+        subprocess.run(["git", "add", "anchor.txt"], cwd=root, check=True)
+        subprocess.run(
+            ["git", "-c", "core.hooksPath=/dev/null", "commit", "-m", "anchor"],
+            cwd=root, check=True, capture_output=True, env=git_env,
+        )
+        anchor = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+        saved_base = os.environ.get("DSEAMS_COVERAGE_BASE")
+        os.environ["DSEAMS_COVERAGE_BASE"] = anchor
         folder = root / "notes"
         folder.mkdir()
         code, text = run(module, root, folder)
@@ -180,10 +197,31 @@ def main():
             need(code == 0 and "gap.py 1 1 1.000000" in text, "a changed file with a row failed")
         finally:
             if saved is None:
-                os.environ.pop("DSEAMS_COVERAGE_BASE", None)
+                os.environ["DSEAMS_COVERAGE_BASE"] = anchor
             else:
                 os.environ["DSEAMS_COVERAGE_BASE"] = saved
         del first
+        bare = Path(tempfile.mkdtemp())
+        seen_py = bare / "seen.py"
+        seen_py.write_text("x = 1\n")
+        bare_js = bare / "cov.json"
+        bare_js.write_text(json.dumps({"files": {str(seen_py): {"executed_lines": [1], "missing_lines": []}}}))
+        os.environ.pop("DSEAMS_COVERAGE_BASE", None)
+        code, text = run(module, bare, bare_js)
+        need(code == 1 and "changed-files 7f310225 0 0 0.000000" in text, "a non-repository root passed")
+        os.environ["DSEAMS_COVERAGE_BASE"] = "0123456789abcdef0123456789abcdef01234567"
+        code, text = run(module, root, js)
+        need(
+            code == 1 and "changed-files 0123456789abcdef0123456789abcdef01234567 0 0 0.000000" in text,
+            "an unknown base passed",
+        )
+        os.environ["DSEAMS_COVERAGE_BASE"] = ""
+        code, text = run(module, root, js)
+        need(code == 1 and "changed-files 0 0 0.000000" in text, "an empty base passed")
+        if saved_base is None:
+            os.environ.pop("DSEAMS_COVERAGE_BASE", None)
+        else:
+            os.environ["DSEAMS_COVERAGE_BASE"] = saved_base
     print("coverage scorer ok")
     return 0
 
