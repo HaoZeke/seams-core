@@ -47,10 +47,10 @@ RingSplitTimes gRingSplit;
 struct WorkerPlacement {
   WorkerPlacement() {
 #ifdef SEAMS_HAS_OPENMP
-    // The runtime reads the placement variables as it starts, which has
-    // already happened by the time this library's constructors run. Pin
-    // the pool directly so a later barrier is not waiting on a migrated
-    // thread.
+    // Pinning is opt-in. The calling thread keeps the placement it had.
+    if (std::getenv("DSEAMS_PIN") == nullptr) {
+      return;
+    }
     cpu_set_t allowed;
     CPU_ZERO(&allowed);
     if (sched_getaffinity(0, sizeof(allowed), &allowed) == 0) {
@@ -64,13 +64,15 @@ struct WorkerPlacement {
       if (ncores > 0) {
 #pragma omp parallel
         {
-          cpu_set_t set;
-          CPU_ZERO(&set);
           const int me = omp_get_thread_num();
-          const int team = omp_get_num_threads();
-          const int slot = team > 0 ? (me * ncores) / team : me;
-          CPU_SET(cores[slot % ncores], &set);
-          pthread_setaffinity_np(pthread_self(), sizeof(set), &set);
+          if (me != 0) {
+            cpu_set_t set;
+            CPU_ZERO(&set);
+            const int team = omp_get_num_threads();
+            const int slot = team > 0 ? (me * ncores) / team : me;
+            CPU_SET(cores[slot % ncores], &set);
+            pthread_setaffinity_np(pthread_self(), sizeof(set), &set);
+          }
         }
       }
     }
