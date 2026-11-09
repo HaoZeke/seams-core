@@ -357,3 +357,29 @@ TEST_CASE("a triclinic cell is stored with three tilt factors", "[chemfiles]") {
   REQUIRE(residue.pts[0].molID == 7);
   fs::remove(pdb);
 }
+
+TEST_CASE("a dcd uses the sibling pdb names", "[chemfiles]") {
+  const auto root = fs::temp_directory_path();
+  const auto dcd = root / "dseams_chem_names.dcd";
+  const auto pdb = root / "dseams_chem_names.pdb";
+  {
+    chemfiles::Frame frame;
+    frame.set_cell(chemfiles::UnitCell(chemfiles::Vector3D(20, 20, 20)));
+    frame.add_atom(chemfiles::Atom("X"), chemfiles::Vector3D(1, 1, 1));
+    frame.add_atom(chemfiles::Atom("X"), chemfiles::Vector3D(2, 1, 1));
+    chemfiles::Trajectory out(dcd.string(), 'w', "DCD");
+    out.write(frame);
+  }
+  {
+    std::ofstream out(pdb);
+    out << "CRYST1   20.000   20.000   20.000  90.00  90.00  90.00 P 1           1\n"
+        << "ATOM      1  O   HOH A   1       1.000   1.000   1.000  1.00  0.00           O\n"
+        << "ATOM      2  H1  HOH A   1       2.000   1.000   1.000  1.00  0.00           H\n"
+        << "END\n";
+  }
+  Cloud oxygen = sinp::openFrame(dcd.string(), 1, 8);
+  REQUIRE(oxygen.nop == 1);
+  REQUIRE(oxygen.pts[0].type == 8);
+  fs::remove(dcd);
+  fs::remove(pdb);
+}

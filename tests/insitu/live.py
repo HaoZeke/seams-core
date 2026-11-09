@@ -654,7 +654,12 @@ def openmm_identity():
         rewritten.append((step, xyz))
     write_lammps(dcd_native, rewritten, [0, 0, 0, 20, 20, 20], types)
     match_lammps_cli(record, dcd_native)
-    native_frames = match_native_cli(record, dcd_path, type_filter=1)
+    # The DCD has no names. The PDB written with the system supplies them,
+    # and oxygen is atomic number 8.
+    import shutil
+
+    shutil.copy(folder / "water.pdb", folder / "native.pdb")
+    native_frames = match_native_cli(record, dcd_path, type_filter=8)
     if native_frames != frames:
         raise RuntimeError("seams on the DCD matched %d of %d" % (native_frames, frames))
     (folder / "dcd-equal.log").write_text("frames %d native %d\n" % (frames, native_frames))

@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -144,6 +145,18 @@ sinp::readChemfiles(std::string filename,
   }
   try {
     chemfiles::Trajectory trajectory(filename);
+    // A DCD has coordinates and a cell, not atom names. A sibling PDB
+    // carries the names the host used to choose the analysed species.
+    if (extensionOf(filename) == "dcd") {
+      const auto dot = filename.find_last_of('.');
+      if (dot != std::string::npos) {
+        const auto pdb = filename.substr(0, dot) + ".pdb";
+        std::ifstream probe(pdb);
+        if (probe) {
+          trajectory.set_topology(pdb);
+        }
+      }
+    }
     if (static_cast<std::size_t>(request.frame) > trajectory.nsteps()) {
       std::cerr << "Frame " << request.frame << " does not exist in "
                 << filename << " (has " << trajectory.nsteps() << " frames).\n";
