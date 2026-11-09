@@ -477,3 +477,54 @@ TEST_CASE("the ice XXI cif is one cell of 152 oxygens", "[chemfiles]") {
   REQUIRE_THAT(cloud.box[1], Catch::Matchers::WithinAbs(20.1966, 1e-3));
   REQUIRE_THAT(cloud.box[2], Catch::Matchers::WithinAbs(7.8912, 1e-3));
 }
+
+TEST_CASE("water names and a rejected dump use the matching reader", "[chemfiles]") {
+  const auto pdb = fs::temp_directory_path() / "dseams_names.pdb";
+  {
+    std::ofstream out(pdb);
+    out << "ATOM      1  OW  SOL A   1       1.000   2.000   3.000  1.00  0.00           O\n"
+        << "ATOM      2  HW  SOL A   1       1.100   2.000   3.000  1.00  0.00           H\n"
+        << "ATOM      3  OH  MOL A   2       4.000   5.000   6.000  1.00  0.00           O\n"
+        << "ATOM      4  HO  MOL A   2       4.100   5.000   6.000  1.00  0.00           H\n"
+        << "END\n";
+  }
+  Cloud named = sinp::openFrame(pdb.string(), 1, -1);
+  REQUIRE(named.nop == 4);
+  REQUIRE(named.pts[0].type == 8);
+  REQUIRE(named.pts[1].type == 1);
+  fs::remove(pdb);
+
+  const auto junk = fs::temp_directory_path() / "dseams_not_a_dump.lammpstrj";
+  {
+    std::ofstream out(junk);
+    out << "this is not a dump\n";
+  }
+  Cloud recovered = sinp::openFrame(junk.string(), 1, -1);
+  REQUIRE(recovered.nop == 0);
+  fs::remove(junk);
+
+  const auto xyz = fs::temp_directory_path() / "dseams_one.xyz";
+  {
+    std::ofstream out(xyz);
+    out << "1\ncomment\nO 1 1 1\n";
+  }
+  int seen = 0;
+  sinp::forEachChemfilesFrame(xyz.string(), 1, 0, -1, "", -1, 1,
+                              [&](int, molSys::PointCloud<molSys::Point<double>, double> &) {
+                                seen += 1;
+                              });
+  REQUIRE(seen == 0);
+  fs::remove(xyz);
+
+  const auto gro = fs::temp_directory_path() / "dseams_empty.gro";
+  {
+    std::ofstream out(gro);
+    out << "";
+  }
+  int groFrames = 0;
+  const bool walked = sinp::forEachChemfilesFrame(
+      gro.string(), 1, 2, -1, "", 0, 1,
+      [&](int, molSys::PointCloud<molSys::Point<double>, double> &) { groFrames += 1; });
+  REQUIRE(walked == false || groFrames == 0);
+  fs::remove(gro);
+}
