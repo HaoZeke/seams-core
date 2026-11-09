@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) d-SEAMS developers
 """Build the in-situ v30 receipt directory from the current checkout.
 
 The script writes every log. Paths named by --src and --build are
@@ -299,7 +300,7 @@ def branch_score(gcov_text, source_name):
             line_no = int(src.group(2))
             continue
         branch = re.match(
-            r"branch\s+(\d+)\s+taken\s+(\d+(?:\.\d+)?)%?(.*)", raw.strip()
+            r"branch\s+(\d+)\s+taken\s+(-?\d+(?:\.\d+)?)(%?)(.*)", raw.strip()
         )
         if not branch:
             never = re.match(r"branch\s+(\d+)\s+never executed(.*)", raw.strip())
@@ -316,10 +317,10 @@ def branch_score(gcov_text, source_name):
         if not line_no:
             continue
         number = int(branch.group(1))
-        percent = float(branch.group(2))
-        note = branch.group(3)
+        amount = float(branch.group(2))
+        note = branch.group(4)
         total += 1
-        hit = percent > 0.0
+        hit = amount > 0.0
         if hit:
             taken += 1
         if "throw" in note:
@@ -368,7 +369,7 @@ def cmd_gcov(args):
             continue
         dest = gcov_dir / (rel.replace("/", "__") + ".gcov")
         proc = subprocess.run(
-            [gcov_bin, "-b", str(notes[0])],
+            [gcov_bin, "-b", "-c", str(notes[0])],
             cwd=str(build),
             capture_output=True,
             text=True,
@@ -408,13 +409,48 @@ def cmd_gcov(args):
     rows = rescored
     report = out / "COVERAGE_CPP.txt"
     excluded_lines = []
+
+    def test_source(rel):
+        name = Path(rel).name
+        return rel.startswith("tests/") or name.startswith("test_") or name.startswith("bench_")
+
     with report.open("w", encoding="utf-8") as handle:
         handle.write(
             "file lines_hit lines_total line_frac "
             "branch_taken branch_total branch_raw "
             "branch_ex_taken branch_ex_total branch_ex\n"
         )
+        handle.write("section production\n")
+        deferred = []
         for rel, result in rows:
+            if test_source(rel):
+                deferred.append((rel, result))
+                continue
+            saved = gcov_dir / (rel.replace("/", "__") + ".gcov")
+            if not saved.exists():
+                handle.write("%s %s\n" % (rel, result))
+                continue
+            text = saved.read_text(errors="replace")
+            scored = gcov_score(text, Path(rel).name)
+            if scored is None:
+                handle.write("%s %s\n" % (rel, result))
+                continue
+            hits, total_lines = scored
+            taken, total_br, ex_taken, ex_total, excluded = branch_score(text, Path(rel).name)
+            line_frac = hits / total_lines if total_lines else 0.0
+            raw = taken / total_br if total_br else 1.0
+            ex = ex_taken / ex_total if ex_total else 1.0
+            handle.write(
+                "%s %d %d %.6f %d %d %.6f %d %d %.6f\n"
+                % (rel, hits, total_lines, line_frac, taken, total_br, raw, ex_taken, ex_total, ex)
+            )
+            for line_no, number, percent in excluded:
+                excluded_lines.append("%s %d %d %s" % (rel, line_no, number, percent))
+        handle.write("section excluded-tests\n")
+        handle.write(
+            "Test sources are listed with their raw figures and are not in the bar.\n"
+        )
+        for rel, result in deferred:
             saved = gcov_dir / (rel.replace("/", "__") + ".gcov")
             if not saved.exists():
                 handle.write("%s %s\n" % (rel, result))
