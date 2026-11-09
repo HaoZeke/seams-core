@@ -1,5 +1,5 @@
 #+TITLE: d-SEAMS
-#+AUTHOR: [[https://dseams.info][d-SEAMS core team]]
+#+AUTHOR: [[https://dseams.info][d-SEAMS developers]]
 #+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
 
 #+begin_export rst
@@ -7,7 +7,7 @@
 ``d-SEAMS``
 ===========
 
-:Author: `d-SEAMS core team <https://dseams.info>`_
+:Author: `d-SEAMS developers <https://dseams.info>`_
 
 .. raw:: html
 

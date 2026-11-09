@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------------
 // d-SEAMS - Deferred Structural Elucidation Analysis for Molecular Simulations
 //
-// Copyright (c) 2018--present d-SEAMS core team
+// Copyright (c) d-SEAMS developers
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published by

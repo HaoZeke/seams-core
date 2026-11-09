@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.abspath("../../subprojects/doxyrest/sphinx"))
 
 # -- Project information -----------------------------------------------------
 project = "d-SEAMS"
-copyright = "2019-2026, d-SEAMS core team"
+copyright = "2019-2026, d-SEAMS developers"
 author = "Rohit Goswami, Amrita Goswami, Ruhila S"
 
 # -- General configuration ---------------------------------------------------
