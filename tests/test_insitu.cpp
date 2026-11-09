@@ -563,6 +563,29 @@ TEST_CASE("a host neighbour list is the cutoff graph for one frame", "[insitu]")
   REQUIRE(body(kept) == body(freshText));
   seams_insitu_destroy(fresh);
   seams_insitu_destroy(eng);
+  char arg0[] = "seams-insitu";
+  char arg1[] = "nope";
+  char arg2[] = "a";
+  char arg3[] = "b";
+  char *argv[] = {arg0, arg1, arg2, arg3};
+  REQUIRE(seams_insitu_main(4, argv) == 2);
+  // Unknown ids, a repeated image and a non-water neighbour are ignored.
+  const int counts[6] = {4, 1, 1, 1, 1, 1};
+  const int mixed[9] = {1, 99, 2, 2, 2, 3, 4, 5, 6};
+  int types[6] = {1, 2, 1, 1, 1, 1};
+  auto *mixedEng = seams_insitu_create(&opt);
+  REQUIRE(seams_insitu_set_neighbours(mixedEng, 6, counts, mixed) == SEAMS_INSITU_OK);
+  auto mixedFrame = ortho(1, 6, hex);
+  mixedFrame.types = types;
+  REQUIRE(seams_insitu_step(mixedEng, &mixedFrame) == SEAMS_INSITU_OK);
+  seams_insitu_destroy(mixedEng);
+  int dupIds[2] = {1, 1};
+  const double two[6] = {0, 0, 0, 1, 0, 0};
+  auto *dup = seams_insitu_create(&opt);
+  auto dupFrame = ortho(1, 2, two);
+  dupFrame.ids = dupIds;
+  REQUIRE(seams_insitu_step(dup, &dupFrame) == SEAMS_INSITU_ERR);
+  seams_insitu_destroy(dup);
 }
 
 namespace {
