@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "config/version.h"
 #include "core/ActionAtomistic.h"
+#include "tools/Communicator.h"
 #include "core/ActionPilot.h"
 #include "core/ActionRegister.h"
 
@@ -23,6 +25,9 @@ class Dseams : public ActionAtomistic, public ActionPilot {
   ~Dseams() override;
   void calculate() override;
   void apply() override;
+#if PLUMED_VERSION_MINOR >= 10
+  bool actionHasForces() override { return false; }
+#endif
 
  private:
   double cutoff_;
@@ -75,14 +80,12 @@ void Dseams::apply() {}
 
 void Dseams::calculate() {
   if (!onStep() || eng_ == nullptr) return;
+  if (comm.Get_rank() != 0) return;
   const unsigned n = getNumberOfAtoms();
-  std::vector<double> xyz(3 * static_cast<std::size_t>(n));
-  for (unsigned i = 0; i < n; ++i) {
-    const Vector &p = getPosition(static_cast<int>(i));
-    xyz[3 * i] = p[0] * 10.0;
-    xyz[3 * i + 1] = p[1] * 10.0;
-    xyz[3 * i + 2] = p[2] * 10.0;
-  }
+  // Positions stay in the PLUMED array. Vector is three contiguous doubles,
+  // so the array is one xyz buffer in nanometres. The engine scales it.
+  const std::vector<Vector> &pos = getPositions();
+  static_assert(sizeof(Vector) == 3 * sizeof(double), "PLUMED Vector is not packed xyz");
   const Tensor box = getPbc().getBox();
   double rows[9] = {box(0, 0) * 10.0, box(1, 0) * 10.0, box(2, 0) * 10.0,
                     box(0, 1) * 10.0, box(1, 1) * 10.0, box(2, 1) * 10.0,
@@ -96,7 +99,8 @@ void Dseams::calculate() {
   seams_insitu_frame frame{};
   frame.step = static_cast<int>(getStep());
   frame.n = static_cast<int>(n);
-  frame.xyz = xyz.data();
+  frame.xyz = n > 0 ? &pos[0][0] : nullptr;
+  frame.coord_scale = 10.0;
   frame.xlo = xlo;
   frame.ylo = ylo;
   frame.zlo = zlo;
@@ -107,8 +111,10 @@ void Dseams::calculate() {
   frame.xz = xz;
   frame.yz = yz;
   frame.gathered = 1;
-  // PLUMED's NeighborList::update faults inside its parallel minimum-image
-  // loop on a 64000-atom cell. The engine builds the same cutoff shell.
+  // NeighborList is an all-pairs table. getIndexPair multiplies the pair
+  // index by 8 in a 32-bit unsigned (NeighborList.cpp, the K formula), which
+  // wraps past about 33 000 atoms and then reads off the position array.
+  // The engine builds the cutoff shell with a cell list instead.
   const int rc = seams_insitu_observe(eng_, &frame, nullptr);
   if (rc != SEAMS_INSITU_OK && rc != SEAMS_INSITU_SKIP) error("DSEAMS observe failed");
 }

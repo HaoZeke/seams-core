@@ -45,6 +45,7 @@ class Frame(ctypes.Structure):
         ("gpu_device", ctypes.c_int),
         ("rank", ctypes.c_int),
         ("nranks", ctypes.c_int),
+        ("coord_scale", ctypes.c_double),
     ]
 
 

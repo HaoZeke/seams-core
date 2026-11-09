@@ -94,12 +94,14 @@ struct FrameContext {
   FrameContext() = default;
 
   FrameContext(const std::vector<std::vector<int>> &rings_,
-               const std::vector<std::vector<int>> &nList_) {
-    prepare(rings_, nList_);
+               const std::vector<std::vector<int>> &nList_,
+               bool fillBasal = true) {
+    prepare(rings_, nList_, fillBasal);
   }
 
   void prepare(const std::vector<std::vector<int>> &rings_,
-               const std::vector<std::vector<int>> &nList_) {
+               const std::vector<std::vector<int>> &nList_,
+               bool fillBasal = true) {
     rings = &rings_;
     nList = &nList_;
     int maxAtom = 0;
@@ -173,18 +175,20 @@ struct FrameContext {
         atomAdj[static_cast<std::size_t>(atom)] = bits;
       }
     }
+    if (fillBasal) {
 #if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
 #pragma omp parallel if (!omp_in_parallel())
 #endif
-    {
-      BasalScratch scratch;
+      {
+        BasalScratch scratch;
 #if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
 #pragma omp for schedule(static)
 #endif
-      for (int i = 0; i < nR; i++) {
-        basalCand[static_cast<std::size_t>(i)] =
-            collectBasalCandidates(i, scratch);
-        basalReady[static_cast<std::size_t>(i)] = 1;
+        for (int i = 0; i < nR; i++) {
+          basalCand[static_cast<std::size_t>(i)] =
+              collectBasalCandidates(i, scratch);
+          basalReady[static_cast<std::size_t>(i)] = 1;
+        }
       }
     }
   }
@@ -697,29 +701,6 @@ struct ring::AffiliationUpdater::Impl {
   CageAffiliation current;
   int lastReclassified = 0;
   double batchFraction = 0.25;
-  // The back-off of RingUpdater: after a frame that went to batch on churn,
-  // the next `skip` frames run cageAffiliation with no diff state, the wait
-  // doubling from 1 to kMaxBackoff while frames keep going to batch
-  int backoff = 0;
-  int skip = 0;
-  static constexpr int kMaxBackoff = 8;
-
-  void fellBack() {
-    backoff = std::min(std::max(1, 2 * backoff), kMaxBackoff);
-    skip = backoff;
-  }
-
-  void release() {
-    std::vector<std::vector<int>>().swap(prevSortedRows);
-    std::vector<int>().swap(prevAtoms);
-    std::vector<std::size_t>().swap(prevOffset);
-    std::vector<int>().swap(pairData);
-    std::vector<std::size_t>().swap(pairOffset);
-    std::vector<signed char>().swap(eq);
-    std::vector<int>().swap(periData);
-    std::vector<std::size_t>().swap(periOffset);
-    primed = false;
-  }
 
   // Filled in place. The outer vector and each row keep their buffers.
   void fillSorted(const std::vector<std::vector<int>> &nList,
@@ -1010,17 +991,6 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
     st.answersValid = false;
     return st.current;
   }
-  if (st.skip > 0) {
-    // A plain affiliation, keeping the sorted-row buffers for the next diff.
-    st.skip--;
-    st.current = ring::cageAffiliation(rings, nList);
-    st.lastReclassified = static_cast<int>(rings.size());
-    st.answersValid = false;
-    st.batchHot = false;
-    st.fillSorted(nList, st.incoming);
-    st.prevSortedRows.swap(st.incoming);
-    return st.current;
-  }
   if (st.batchHot && st.warm && st.primed &&
       st.prevSortedRows.size() == nList.size()) {
     st.fastAffiliation(rings, nList);
@@ -1097,7 +1067,6 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
     }
     if (same) {
       st.lastReclassified = 0;
-      st.backoff = 0;
       return st.current;
     }
   }
@@ -1144,16 +1113,6 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
         pairs = true;
         continue;
       }
-      if (!pairs) {
-        const auto &row = nList[static_cast<std::size_t>(a)];
-        for (std::size_t m = 1; m < row.size(); m++) {
-          const int b = row[m];
-          if (b >= 0 && b < nAtoms && moved[static_cast<std::size_t>(b)]) {
-            pairs = true;
-            break;
-          }
-        }
-      }
     }
     if (pairs) {
       dirtyPairs.push_back(i);
@@ -1161,13 +1120,13 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
     }
     dirtyEq[static_cast<std::size_t>(i)] = equatorial ? 1 : 0;
   }
-  if (dirtyPairs.size() > batchLimit) {
+  // A full sweep wins once most rings are dirty. Below that, the rings
+  // that touch a moved atom are the ones that are classified again.
+  if (dirtyPairs.size() * 2 > rings.size()) {
     st.fastAffiliation(rings, nList);
     st.prevSortedRows.swap(st.incoming);
     st.answersValid = false;
     st.batchHot = true;
-    return st.current;
-    st.fellBack();
     return st.current;
   }
 
@@ -1209,7 +1168,9 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
     std::sort(dirtyPairs.begin(), dirtyPairs.end());
   }
 
-  const FrameContext ctx(rings, nList);
+  // Basal candidates are collected for the dirty rings only. Filling them
+  // for every ring repeats the search the subset is about to run.
+  const FrameContext ctx(rings, nList, false);
   const auto fresh = Impl::evaluatePairs(ctx, dirtyPairs);
   {
     // Merge the fresh runs of the dirty rings into ring order
@@ -1272,7 +1233,6 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
   st.lastReclassified = static_cast<int>(touched);
   st.remember(rings, rows);
   st.answersValid = true;
-  st.backoff = 0;
   return st.current;
 }
 

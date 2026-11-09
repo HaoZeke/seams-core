@@ -211,6 +211,77 @@ void FixDseams::end_of_step() {
   MPI_Gatherv(kept > 0 ? kept_i.data() : &ipad, kept, MPI_INT,
               all_i.empty() ? &ipad : all_i.data(), counts.data(), displs.data(), MPI_INT, 0,
               lmp->world);
+  // Every rank contributes its full neighbour rows. Ghost images keep the
+  // real atom tag, and the engine drops repeated images inside the cutoff.
+  int want = (list_ != nullptr && std::getenv("DSEAMS_NO_HOST") == nullptr) ? 1 : 0;
+  int local_stale = want;
+  if (want && built_x_.size() == static_cast<std::size_t>(kept) * 3) {
+    local_stale = 0;
+    constexpr double half = 0.25;
+    for (int i = 0; i < kept; ++i) {
+      const double dx = kept_x[static_cast<std::size_t>(3 * i)] - built_x_[static_cast<std::size_t>(3 * i)];
+      const double dy = kept_x[static_cast<std::size_t>(3 * i + 1)] - built_x_[static_cast<std::size_t>(3 * i + 1)];
+      const double dz = kept_x[static_cast<std::size_t>(3 * i + 2)] - built_x_[static_cast<std::size_t>(3 * i + 2)];
+      if (dx * dx + dy * dy + dz * dz > half * half) {
+        local_stale = 1;
+        break;
+      }
+    }
+  }
+  int stale = 0;
+  MPI_Allreduce(&local_stale, &stale, 1, MPI_INT, MPI_MAX, lmp->world);
+  std::vector<int> nrow_counts(static_cast<std::size_t>(nprocs));
+  std::vector<int> nrow_displs(static_cast<std::size_t>(nprocs));
+  std::vector<int> nflat_counts(static_cast<std::size_t>(nprocs));
+  std::vector<int> nflat_displs(static_cast<std::size_t>(nprocs));
+  std::vector<int> all_counts;
+  std::vector<int> all_flat;
+  int nrows = 0;
+  int nflat = 0;
+  if (stale) {
+    std::vector<int> row_counts;
+    std::vector<int> flat;
+    if (want) {
+    neighbor->build_one(list_);
+    const int nall = atom->nlocal + atom->nghost;
+    for (int ii = 0; ii < list_->inum; ++ii) {
+      const int i = list_->ilist[ii];
+      if (i < 0 || i >= atom->nlocal || (atom->mask[i] & groupbit) == 0) {
+        continue;
+      }
+      const int begin = static_cast<int>(flat.size());
+      flat.push_back(static_cast<int>(atom->tag[i]));
+      int *jlist = list_->firstneigh[i];
+      for (int jj = 0; jj < list_->numneigh[i]; ++jj) {
+        const int j = jlist[jj] & NEIGHMASK;
+        if (j < 0 || j >= nall || (atom->mask[j] & groupbit) == 0) {
+          continue;
+        }
+        flat.push_back(static_cast<int>(atom->tag[j]));
+      }
+      if (static_cast<int>(flat.size()) > begin) {
+        row_counts.push_back(static_cast<int>(flat.size()) - begin);
+      }
+    }
+    }
+    int local_rows = static_cast<int>(row_counts.size());
+    int local_flat = static_cast<int>(flat.size());
+    MPI_Allgather(&local_rows, 1, MPI_INT, nrow_counts.data(), 1, MPI_INT, lmp->world);
+    MPI_Allgather(&local_flat, 1, MPI_INT, nflat_counts.data(), 1, MPI_INT, lmp->world);
+    if (seams_insitu_gather_displs(nprocs, nrow_counts.data(), nrow_displs.data(), &nrows) != 0) {
+      return;
+    }
+    if (seams_insitu_gather_displs(nprocs, nflat_counts.data(), nflat_displs.data(), &nflat) != 0) {
+      return;
+    }
+    all_counts.resize(static_cast<std::size_t>(std::max(nrows, 1)));
+    all_flat.resize(static_cast<std::size_t>(std::max(nflat, 1)));
+    MPI_Gatherv(row_counts.empty() ? &ipad : row_counts.data(), local_rows, MPI_INT,
+                all_counts.data(), nrow_counts.data(), nrow_displs.data(), MPI_INT, 0, lmp->world);
+    MPI_Gatherv(flat.empty() ? &ipad : flat.data(), local_flat, MPI_INT, all_flat.data(),
+                nflat_counts.data(), nflat_displs.data(), MPI_INT, 0, lmp->world);
+    built_x_.assign(kept_x.begin(), kept_x.begin() + static_cast<std::ptrdiff_t>(kept) * 3);
+  }
   if (comm->me != 0 || eng_ == nullptr) {
     return;
   }
@@ -251,52 +322,8 @@ void FixDseams::end_of_step() {
   frame.local_only = 0;
   frame.rank = 0;
   frame.nranks = nprocs;
-  // One rank owns every atom, so the full list is the whole cutoff shell.
-  // A split domain still gathers coordinates and builds the list itself.
-  // The shell is rebuilt only after an atom moves by half the 0.5 A skin.
-  bool stale = nprocs == 1 && list_ != nullptr && std::getenv("DSEAMS_NO_HOST") == nullptr;
-  if (stale && built_x_.size() == sorted_x.size()) {
-    stale = false;
-    constexpr double half = 0.25;
-    for (int i = 0; i < total; ++i) {
-      const double dx = sorted_x[static_cast<std::size_t>(3 * i)] - built_x_[static_cast<std::size_t>(3 * i)];
-      const double dy = sorted_x[static_cast<std::size_t>(3 * i + 1)] - built_x_[static_cast<std::size_t>(3 * i + 1)];
-      const double dz = sorted_x[static_cast<std::size_t>(3 * i + 2)] - built_x_[static_cast<std::size_t>(3 * i + 2)];
-      if (dx * dx + dy * dy + dz * dz > half * half) {
-        stale = true;
-        break;
-      }
-    }
-  }
-  if (stale) {
-    neighbor->build_one(list_);
-    std::vector<int> counts;
-    std::vector<int> flat;
-    counts.reserve(static_cast<std::size_t>(list_->inum));
-    const int nall = atom->nlocal + atom->nghost;
-    for (int ii = 0; ii < list_->inum; ++ii) {
-      const int i = list_->ilist[ii];
-      if (i < 0 || i >= atom->nlocal || (atom->mask[i] & groupbit) == 0) {
-        continue;
-      }
-      const int begin = static_cast<int>(flat.size());
-      flat.push_back(static_cast<int>(atom->tag[i]));
-      const int jnum = list_->numneigh[i];
-      int *jlist = list_->firstneigh[i];
-      for (int jj = 0; jj < jnum; ++jj) {
-        const int j = jlist[jj] & NEIGHMASK;
-        if (j < 0 || j >= nall || (atom->mask[j] & groupbit) == 0) {
-          continue;
-        }
-        flat.push_back(static_cast<int>(atom->tag[j]));
-      }
-      counts.push_back(static_cast<int>(flat.size()) - begin);
-    }
-    if (!counts.empty()) {
-      seams_insitu_set_neighbours(eng_, static_cast<int>(counts.size()), counts.data(),
-                                  flat.data());
-      built_x_ = sorted_x;
-    }
+  if (stale && want && nrows > 0 && nflat > 0) {
+    seams_insitu_set_neighbours(eng_, nrows, all_counts.data(), all_flat.data());
   }
   const char *dump = dump_.empty() ? nullptr : dump_.c_str();
   const int rc = seams_insitu_observe(eng_, &frame, dump);

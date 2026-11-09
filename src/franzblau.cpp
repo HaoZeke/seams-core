@@ -1478,31 +1478,50 @@ struct primitive::RingUpdater::Impl {
   ringsMeeting(const Graph &adj, const std::vector<int> &T,
                const std::vector<char> &inT) {
     const int n = static_cast<int>(T.size());
-    std::vector<std::vector<std::vector<int>>> fresh(T.size());
+    const int nVertices = static_cast<int>(adj.size());
+    if (static_cast<int>(bySource.size()) < nVertices) {
+      bySource.resize(static_cast<std::size_t>(nVertices));
+    }
+    int nThreads = 1;
+#ifdef SEAMS_HAS_OPENMP
+    if (!omp_in_parallel()) {
+      nThreads = omp_get_max_threads();
+    }
+#endif
+    if (static_cast<int>(scratches.size()) < nThreads) {
+      scratches.resize(static_cast<std::size_t>(nThreads));
+    }
 #ifdef SEAMS_HAS_OPENMP
 #pragma omp parallel if (!omp_in_parallel())
 #endif
     {
-      RingScratch scratch;
 #ifdef SEAMS_HAS_OPENMP
+      RingScratch &scratch =
+          scratches[static_cast<std::size_t>(omp_get_thread_num())];
 #pragma omp for schedule(guided)
+#else
+      RingScratch &scratch = scratches[0];
 #endif
       for (int k = 0; k < n; k++) {
-        enumerateFromSource(adj, balls, T[static_cast<std::size_t>(k)],
-                            maxDepth, maxLvl, scratch,
-                            fresh[static_cast<std::size_t>(k)], &inT);
+        const int src = T[static_cast<std::size_t>(k)];
+        bySource[static_cast<std::size_t>(src)].reset();
+        enumerateFromSource(adj, balls, src, maxDepth, maxLvl, scratch,
+                            bySource[static_cast<std::size_t>(src)], &inT);
       }
     }
     std::size_t total = 0;
-    for (const auto &f : fresh) {
-      total += f.size();
+    for (const int src : T) {
+      total += bySource[static_cast<std::size_t>(src)].size();
     }
     std::vector<std::vector<int>> out;
     out.reserve(total);
-    for (auto &f : fresh) {
-      for (auto &r : f) {
-        out.push_back(std::move(r));
+    for (const int src : T) {
+      RingPool &pool = bySource[static_cast<std::size_t>(src)];
+      for (std::size_t k = 0; k < pool.n; k++) {
+        out.push_back(std::move(pool.storage[k]));
+        pool.storage[k].clear();
       }
+      pool.n = 0;
     }
     std::sort(out.begin(), out.end());
     return out;
@@ -1720,8 +1739,11 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
   }
 
   // Each source in T is enumerated once. A full pass enumerates n sources.
-  // Those counts meet when T is the whole vertex set, and only then.
-  if (static_cast<int>(T.size()) == nVertices) {
+  // Past the requested fraction the masked search visits more of the ball
+  // than a full pass, so the full pass is the quicker exact result.
+  if (static_cast<int>(T.size()) == nVertices ||
+      (st.useVertexFraction && st.fullPassFraction < 1.0 &&
+       T.size() > static_cast<std::size_t>(st.fullPassFraction * nVertices))) {
     st.which = slot;
     st.fastEnumerate(st.graph[st.which]);
     return st.flattened;

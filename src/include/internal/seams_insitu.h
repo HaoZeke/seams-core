@@ -56,6 +56,8 @@ typedef struct seams_insitu_frame {
   int gpu_device;
   int rank;
   int nranks;
+  /* Positive values scale xyz into angstrom. Zero leaves xyz unchanged. */
+  double coord_scale;
 } seams_insitu_frame;
 
 typedef struct seams_insitu_cadence {

@@ -340,6 +340,7 @@ int analyze_cloud(Engine *eng, Cloud &cloud, int step, bool do_sink) {
       auto idx = nneigh::neighbourListByIndex(cloud, nList);
       if (eng->rings_up == nullptr || eng->rings_depth != eng->opt.ring_depth) {
         eng->rings_up = std::make_unique<primitive::RingUpdater>(eng->opt.ring_depth);
+        eng->rings_up->setFullPassFraction(0.15);
         eng->rings_depth = eng->opt.ring_depth;
       }
       const auto &rings = eng->rings_up->update(idx);
@@ -359,6 +360,7 @@ int analyze_cloud(Engine *eng, Cloud &cloud, int step, bool do_sink) {
       const auto faces = ring::contractibleRings(six, cloud);
       if (eng->cages_up == nullptr) {
         eng->cages_up = std::make_unique<ring::AffiliationUpdater>();
+        eng->cages_up->setBatchFraction(0.5);
       }
       const auto &aff = eng->cages_up->update(faces, idx);
       std::vector<int> hc(static_cast<std::size_t>(cloud.nop), 0);
@@ -412,11 +414,12 @@ int build_cloud(const Engine *eng, const seams_insitu_frame *frame, Cloud &cloud
   cloud.nop = frame->n;
   cloud.currentFrame = frame->step;
   cloud.pts.resize(static_cast<std::size_t>(frame->n));
+  const double scale = frame->coord_scale > 0.0 ? frame->coord_scale : 1.0;
   for (int i = 0; i < frame->n; ++i) {
     auto &point = cloud.pts[static_cast<std::size_t>(i)];
-    point.x = frame->xyz[3 * i];
-    point.y = frame->xyz[3 * i + 1];
-    point.z = frame->xyz[3 * i + 2];
+    point.x = frame->xyz[3 * i] * scale;
+    point.y = frame->xyz[3 * i + 1] * scale;
+    point.z = frame->xyz[3 * i + 2] * scale;
     point.type = frame->types != nullptr ? frame->types[i] : 1;
     point.atomID = frame->ids != nullptr ? frame->ids[i] : i + 1;
     point.molID = point.atomID;
