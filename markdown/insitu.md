@@ -18,20 +18,33 @@ The build writes `libyodaLib.so`.
 A caller creates an engine, passes one frame, and destroys the engine.
 
     seams_insitu_options opt;
+    seams_insitu_frame frame;
     seams_insitu_options_default(&opt);
+    opt.cutoff = 3.5;
+    opt.type = 1;
+    opt.debug_dump = 1;
     seams_insitu_engine *eng = seams_insitu_create(&opt);
-    seams_insitu_frame frame = {};
+    if (eng == NULL) return 1;
+    if (seams_insitu_open_record(eng, "census.txt") != 0) return 2;
+    memset(&frame, 0, sizeof frame);
     frame.step = 0;
-    frame.n = natoms;
+    frame.n = 4;
     frame.xyz = xyz;
     frame.types = types;
+    frame.lx = frame.ly = frame.lz = 20.0;
+    frame.gathered = 1;
     frame.coord_scale = 1.0;
-    seams_insitu_observe(eng, &frame, nullptr);
+    int rc = seams_insitu_observe(eng, &frame, "frame.lammpstrj");
+    seams_insitu_close_record(eng);
     seams_insitu_destroy(eng);
+    if (rc != SEAMS_INSITU_OK) return 3;
 
-Pass positions in Ångström.
+After the caller creates the engine, the example places four points in
+`xyz`, in Ångström, inside a box of edge 20.
+That call prints `observe 0`.
 Set `coord_scale` to 10 when the engine stores nanometres.
-The header is `seams_insitu.h`.
+Read the arguments from `seams_insitu.h`.
+`tests/insitu/observe_example.c` is that program.
 
 ## Python
 
@@ -39,21 +52,36 @@ The package is `adapters/python`.
 Put that directory on `PYTHONPATH`.
 Point `SEAMS_LIB` at `libyodaLib.so`.
 
-    from dseams_insitu import Engine
-    with Engine("bbdir-rel/src/libyodaLib.so", "census.txt") as eng:
-        eng.observe(step, positions, box)
+```
+from dseams_insitu import Engine
+positions = [[0.0, 0.0, 0.0], [2.8, 0.0, 0.0],
+             [0.0, 2.8, 0.0], [1.4, 1.4, 2.0]]
+box = [0.0, 0.0, 0.0, 20.0, 20.0, 20.0, 0.0, 0.0, 0.0]
+types = [1, 1, 1, 1]
+with Engine("bbdir-rel/src/libyodaLib.so", "census.txt") as eng:
+    status = eng.observe(0, positions, box, "frame.lammpstrj", types)
+if status != 0:
+    raise SystemExit(status)
+```
 
-`positions` is an array of x, y, z in Ångström.
-`box` is the origin, the edge lengths, and the tilt.
+The Engine call reads each row of `positions` as x, y, z in Ångström.
+`box` lists the origin, then the edge lengths, then the tilt.
+`status` is 0 after the checked call.
 
 ## Command
 
-Postprocess the dump with one thread.
-`seams rings` takes the dump, cutoff 3.5, type 1, frame 1, and the last
-frame.
-`seams chill-plus` takes the same arguments.
-`seams cages` adds the cutoff graph.
-The last frame is the number of frames in the dump.
+Postprocess the dump the library wrote.
+One thread is enough for the four-point frame.
+
+```
+seams rings frame.lammpstrj --cutoff 3.5 --type 1 --frame 1 --last 1 --jobs 1
+seams chill-plus frame.lammpstrj --cutoff 3.5 --type 1 --frame 1 --last 1 --jobs 1
+seams cages frame.lammpstrj --cutoff 3.5 --type 1 --frame 1 --last 1 --jobs 1 --graph cutoff
+```
+
+That rings line reads `rings 3:2 4:0 5:0 6:0 7:0 8:0`.
+The ice command writes one `nop` record.
+Cages name the cutoff graph.
 
 ## LAMMPS plugin
 
@@ -63,6 +91,7 @@ Compile `libdseams_lammps.so` against that source tree and against
 
     cmake -S plugin -B plugin-build \
       -DLAMMPS_SRC=lammps/src \
+      -DSEAMS_INCLUDE=seams-core/src/include/internal \
       -DSEAMS_LIBRARY=bbdir-rel/src/libyodaLib.so
 Compile `plugin-build` after that configure line.
 
@@ -83,7 +112,7 @@ The package sources are `src/DSEAMS`.
       -DPKG_DSEAMS=yes \
       -DSEAMS_INCLUDE=seams-core/src/include/internal \
       -DSEAMS_LIBRARY=bbdir-rel/src/libyodaLib.so
-Compile `lammps-build` after that configure line.
+The package binary is the `lmp` produced by compiling `lammps-build`.
 
 The input omits `plugin load`.
 The fix line is the one above.
@@ -104,7 +133,8 @@ It passes the same include directory and the same library path.
 Compile that build directory next.
 
 `gmx_mpi --version` on the checked build prints
-`2027.0-dev-20261108-d067d3f691`.
+`2027.0-dev-20261108-bdf53dcf3c`.
+The git hash in that line is `bdf53dcf3ca265a62600e1e3d5345476d666c6d0`.
 Add these lines to the mdp file:
 
     dseams-active = yes
@@ -127,7 +157,7 @@ The reporter is `dseams_insitu.DseamsReporter`.
 
     from dseams_insitu import DseamsReporter, Engine
     with Engine(library, "census.txt") as eng:
-        sim.reporters.append(DseamsReporter(eng, None, 1))
+        sim.reporters.append(DseamsReporter(eng, "frame.lammpstrj", 1, types))
         sim.step(6)
 
 The reporter reads host positions from the context.
