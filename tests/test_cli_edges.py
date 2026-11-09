@@ -38,7 +38,7 @@ def main():
     expect(["pairs", traj], 2, "pairs needs --site")
     expect(["domains", traj], 2, "domains needs --site")
     expect(["cn", "--ions", traj], 2, "cn --ions needs --site")
-    expect(["--subset", "sideways", "domains", "--site", "1", traj], 2, "bad --subset")
+    expect(["--subset", "sideways", "--site", "1=polar", "domains", traj], 2, "bad --subset")
     expect(["--cutoff", "not-a-number", "rings", traj], 2, "")
     expect(["--frame", "1", "--last", "3", "read", traj + ".missing-suffix"], 2, "")
     with tempfile.TemporaryDirectory() as tmp:

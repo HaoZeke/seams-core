@@ -525,6 +525,6 @@ TEST_CASE("water names and a rejected dump use the matching reader", "[chemfiles
   const bool walked = sinp::forEachChemfilesFrame(
       gro.string(), 1, 2, -1, "", 0, 1,
       [&](int, molSys::PointCloud<molSys::Point<double>, double> &) { groFrames += 1; });
-  REQUIRE(walked == false || groFrames == 0);
+  REQUIRE((walked == false || groFrames == 0));
   fs::remove(gro);
 }
