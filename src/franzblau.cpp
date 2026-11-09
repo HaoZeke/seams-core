@@ -24,6 +24,8 @@
 
 #ifdef SEAMS_HAS_OPENMP
 #include <omp.h>
+#include <pthread.h>
+#include <sched.h>
 #endif
 
 namespace {
@@ -39,6 +41,44 @@ struct RingSplitTimes {
 
 RingSplitTimes gRingSplit;
 
+// Pinned workers that sleep between short frames pay a wake-up that is
+// larger than the frame, and the wake-up time jumps from sample to sample.
+// Spinning on the pinned core does not take the worker's core.
+struct WorkerPlacement {
+  WorkerPlacement() {
+#ifdef SEAMS_HAS_OPENMP
+    // The runtime reads the placement variables as it starts, which has
+    // already happened by the time this library's constructors run. Pin
+    // the pool directly so a later barrier is not waiting on a migrated
+    // thread.
+    cpu_set_t allowed;
+    CPU_ZERO(&allowed);
+    if (sched_getaffinity(0, sizeof(allowed), &allowed) == 0) {
+      int cores[CPU_SETSIZE];
+      int ncores = 0;
+      for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu) {
+        if (CPU_ISSET(cpu, &allowed)) {
+          cores[ncores++] = cpu;
+        }
+      }
+      if (ncores > 0) {
+#pragma omp parallel
+        {
+          cpu_set_t set;
+          CPU_ZERO(&set);
+          const int me = omp_get_thread_num();
+          const int team = omp_get_num_threads();
+          const int slot = team > 0 ? (me * ncores) / team : me;
+          CPU_SET(cores[slot % ncores], &set);
+          pthread_setaffinity_np(pthread_self(), sizeof(set), &set);
+        }
+      }
+    }
+#endif
+  }
+};
+
+WorkerPlacement gWorkerPlacement;
 
 double millisSince(std::chrono::steady_clock::time_point start) {
   return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
@@ -143,7 +183,9 @@ struct BoundedBalls {
       return;
     }
 #ifdef SEAMS_HAS_OPENMP
-    const bool parallel = !omp_in_parallel() && omp_get_max_threads() > 1;
+    // A short ball table is cheaper to fill on the calling thread.
+    const bool parallel =
+        nWhich >= 8192 && !omp_in_parallel() && omp_get_max_threads() > 1;
 #else
     const bool parallel = false;
 #endif
@@ -661,7 +703,9 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
   const int nVertices = static_cast<int>(nList.size());
   std::vector<std::vector<int>> uniq(static_cast<std::size_t>(nVertices));
 #ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) if (!omp_in_parallel())
+  // The row tidy is a few stores per vertex. Forking it is slower than
+  // the loop until the cloud is large.
+#pragma omp parallel for schedule(static) if (nVertices >= 8192 && !omp_in_parallel())
 #endif
   for (int i = 0; i < nVertices; i++) {
     if (nList[static_cast<std::size_t>(i)].size() <= 1) {
@@ -688,7 +732,7 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
   }
   adjacency.cols.resize(adjacency.first[nVertices]);
 #ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) if (!omp_in_parallel())
+#pragma omp parallel for schedule(static) if (nVertices >= 8192 && !omp_in_parallel())
 #endif
   for (int i = 0; i < nVertices; i++) {
     const auto &row = uniq[static_cast<std::size_t>(i)];
@@ -772,16 +816,13 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
           perSource[static_cast<std::size_t>(k)].size();
     }
     rings.resize(offset[static_cast<std::size_t>(nFrom)]);
-#pragma omp parallel
-    {
-#pragma omp for schedule(static) nowait
-      for (int k = 0; k < nFrom; k++) {
-        auto &pool = perSource[static_cast<std::size_t>(k)];
-        std::move(pool.begin(), pool.end(),
-                  rings.begin() +
-                      static_cast<std::ptrdiff_t>(offset[static_cast<std::size_t>(k)]));
-        pool.release();
-      }
+    // Moving each ring is a pointer swap. A second team costs more than
+    // the swaps, at every thread count measured on this host.
+    for (int k = 0; k < nFrom; k++) {
+      auto &pool = perSource[static_cast<std::size_t>(k)];
+      std::move(pool.begin(), pool.end(),
+                rings.begin() +
+                    static_cast<std::ptrdiff_t>(offset[static_cast<std::size_t>(k)]));
     }
     balls.clear();
     std::vector<std::vector<int>>().swap(uniq);
@@ -1407,9 +1448,6 @@ struct primitive::RingUpdater::Impl {
     if (flattened.size() < total) {
       flattened.resize(total);
     }
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) if (!omp_in_parallel())
-#endif
     for (int src = 0; src < nVertices; src++) {
       RingPool &pool = bySource[static_cast<std::size_t>(src)];
       std::size_t at = offset[static_cast<std::size_t>(src)];

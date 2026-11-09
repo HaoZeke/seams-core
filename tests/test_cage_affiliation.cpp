@@ -876,3 +876,37 @@ TEST_CASE("AffiliationUpdater sweeps again after a hot frame", "[cage_affiliatio
   rings[0] = {0, 1, 2};
   REQUIRE(updater.update(rings, moved).hc.size() == rings.size());
 }
+
+TEST_CASE("a pentagon and a vacancy exercise the general cage walks",
+          "[cage_affiliation]") {
+  std::vector<std::vector<int>> nList(12);
+  for (int i = 0; i < 12; ++i) {
+    nList[static_cast<std::size_t>(i)].push_back(i);
+    for (int j = 0; j < 12; ++j) {
+      if (j != i) {
+        nList[static_cast<std::size_t>(i)].push_back(j);
+      }
+    }
+  }
+  std::vector<std::vector<int>> rings = {
+      {0, 1, 2, 3, 4, 5}, {1, 2, 3, 4, 5, 6}, {2, 3, 4, 5, 6, 7},
+      {0, 1, 2, 3, 4},    {8, 9, 10, 11, 0, 1},
+  };
+  const auto aff = ring::cageAffiliation(rings, nList);
+  REQUIRE(aff.hc.size() == rings.size());
+  ring::AffiliationUpdater updater;
+  REQUIRE(updater.update(rings, nList).ddc.size() == rings.size());
+  ring::SeededAtomLabels labels;
+  labels.hc.assign(9, true);
+  labels.ddc.assign(9, true);
+  labels.hc[5] = false;
+  labels.ddc[5] = false;
+  const std::vector<std::vector<int>> holes = {
+      {0, 1, 2, 3, 4, 5},
+      {0, 1, 2, 3, 4, 99},
+      {0, 1, 2, 3, 4, -1},
+  };
+  const auto filled = ring::ringAdjacentCompletion(labels, holes);
+  REQUIRE(filled.hc[5]);
+  REQUIRE(filled.ddc[5]);
+}

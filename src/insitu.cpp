@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -227,6 +228,9 @@ std::vector<std::vector<int>> filter_cutoff(const Cloud &cloud,
   const auto indexOf = [&](int id) {
     return (id >= 0 && id <= maxId) ? at[static_cast<std::size_t>(id)] : -1;
   };
+  static const bool phase = std::getenv("DSEAMS_PHASE") != nullptr;
+  const auto filtT = phase ? std::chrono::steady_clock::now()
+                           : std::chrono::steady_clock::time_point{};
   std::vector<std::vector<int>> out(static_cast<std::size_t>(cloud.nop));
   for (int i = 0; i < cloud.nop; ++i) {
     out[static_cast<std::size_t>(i)].push_back(cloud.pts[static_cast<std::size_t>(i)].atomID);
@@ -255,6 +259,12 @@ std::vector<std::vector<int>> filter_cutoff(const Cloud &cloud,
       }
       dest.push_back(row[k]);
     }
+  }
+  if (phase) {
+    std::fprintf(stderr, "phase filt %.6f\n",
+                 std::chrono::duration<double, std::milli>(
+                     std::chrono::steady_clock::now() - filtT)
+                     .count());
   }
   return out;
 }
@@ -302,6 +312,18 @@ int analyze_cloud(Engine *eng, Cloud &cloud, int step, bool do_sink) {
   const int water = water_type_of(eng, cloud);
   if (cloud.nop > 0) {
     try {
+      static const bool phase = std::getenv("DSEAMS_PHASE") != nullptr;
+      const auto phaseStart = std::chrono::steady_clock::now();
+      auto stamp = phaseStart;
+      auto mark = [&](const char *name) {
+        if (!phase) {
+          return;
+        }
+        const auto now = std::chrono::steady_clock::now();
+        std::fprintf(stderr, "phase %s %.6f\n", name,
+                     std::chrono::duration<double, std::milli>(now - stamp).count());
+        stamp = now;
+      };
       std::vector<std::vector<int>> nList;
       const double skin = 0.5;
       const double half = skin * 0.5;
@@ -337,6 +359,7 @@ int analyze_cloud(Engine *eng, Cloud &cloud, int step, bool do_sink) {
         nList = filter_cutoff(cloud, wide, eng->opt.cutoff, water);
         remember_build(eng, cloud, std::move(wide));
       }
+      mark("neigh");
       auto idx = nneigh::neighbourListByIndex(cloud, nList);
       if (eng->rings_up == nullptr || eng->rings_depth != eng->opt.ring_depth) {
         eng->rings_up = std::make_unique<primitive::RingUpdater>(eng->opt.ring_depth);
@@ -344,6 +367,7 @@ int analyze_cloud(Engine *eng, Cloud &cloud, int step, bool do_sink) {
         eng->rings_depth = eng->opt.ring_depth;
       }
       const auto &rings = eng->rings_up->update(idx);
+      mark("rings");
       for (const auto &ring : rings) {
         const int size = static_cast<int>(ring.size());
         if (size >= 0 && size <= SEAMS_INSITU_RING_MAX) {
@@ -357,12 +381,15 @@ int analyze_cloud(Engine *eng, Cloud &cloud, int step, bool do_sink) {
           six.push_back(ring);
         }
       }
+      mark("six");
       const auto faces = ring::contractibleRings(six, cloud);
+      mark("contract");
       if (eng->cages_up == nullptr) {
         eng->cages_up = std::make_unique<ring::AffiliationUpdater>();
         eng->cages_up->setBatchFraction(0.5);
       }
       const auto &aff = eng->cages_up->update(faces, idx);
+      mark("affil");
       std::vector<int> hc(static_cast<std::size_t>(cloud.nop), 0);
       std::vector<int> ddc(static_cast<std::size_t>(cloud.nop), 0);
       for (std::size_t r = 0; r < faces.size(); ++r) {
@@ -376,9 +403,13 @@ int analyze_cloud(Engine *eng, Cloud &cloud, int step, bool do_sink) {
           }
         }
       }
+      mark("scatter");
       chill::getCorrelPlus(cloud, nList, false);
+      mark("correl");
       chill::getIceTypePlusNoPrint(cloud, nList, false);
+      mark("icetype");
       chill::clearIceTypesExcept(cloud, std::vector<int>{water});
+      mark("clear");
       eng->labels.resize(static_cast<std::size_t>(cloud.nop));
       eng->cages.assign(static_cast<std::size_t>(cloud.nop), 0);
       std::vector<int> types(static_cast<std::size_t>(cloud.nop));

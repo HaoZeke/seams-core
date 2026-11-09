@@ -1390,14 +1390,20 @@ def ladder_worker(dump):
 
     frames = parse_dump(dump)
     lib = load()
-    record = str(Path(dump).with_suffix(".ladder.txt"))
-    eng = Engine(lib, record)
+    # The clock wraps observe. A record file flushes a page of text on
+    # some samples and nowhere else, which is enough to invert a quartile.
+    eng = Engine(lib, os.devnull)
+    # Build the arrays once. Repeating that conversion inside the clock
+    # measures the allocator, and a collection pause lands in one sample.
+    prepared = []
+    for step, box, xyz in frames:
+        edge = [0.0, 0.0, 0.0, box[0], box[1], box[2], 0.0, 0.0, 0.0]
+        prepared.append((step, np.asarray(xyz, dtype=np.float64), edge))
     def once():
         started = time.perf_counter()
-        for step, box, xyz in frames:
-            edge = [0.0, 0.0, 0.0, box[0], box[1], box[2], 0.0, 0.0, 0.0]
-            eng.observe(step, np.asarray(xyz), edge, None)
-        return (time.perf_counter() - started) / len(frames)
+        for step, pos, edge in prepared:
+            eng.observe(step, pos, edge, None)
+        return (time.perf_counter() - started) / len(prepared)
     print("%.17g" % once())
     for _ in range(6):
         print("%.17g" % once())
@@ -1418,8 +1424,10 @@ def thread_ladder(dump, natoms):
     for count in threads:
         env = os.environ.copy()
         env["OMP_NUM_THREADS"] = str(count)
-        # Active spinning makes eight short regions slower than one thread.
-        env["OMP_WAIT_POLICY"] = "passive"
+        # libgomp reads this while the library loads, before any constructor
+        # can change it. Pinned cores spin: a passive pool sleeps between
+        # the frames of a short run, and the wake-up moves the quartile.
+        env["OMP_WAIT_POLICY"] = "active"
         env["SEAMS_LIB"] = LIB
         env["LD_LIBRARY_PATH"] = ":".join(
             [

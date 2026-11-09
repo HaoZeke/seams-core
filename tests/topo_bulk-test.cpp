@@ -1047,6 +1047,14 @@ TEST_CASE("a wide parity product searches the large equator", "[topo]") {
           any;
     any = ring::equatorialConditions(rings, iring, index, nullptr) || any;
   }
+  // Equal ranks make the first live even chain the pivot, so the even
+  // side of the pair search runs as well as the odd side.
+  std::fill(rank.begin(), rank.end(), 0);
+  for (int iring = 0; iring < base; ++iring) {
+    any = ring::equatorialConditions(rings, iring, index, &peripheral, &chosen,
+                                     &rank, &raw) ||
+          any;
+  }
   std::vector<ring::strucType> ringType(rings.size(), ring::strucType::unclassified);
   std::vector<int> listHC;
   std::vector<cage::Cage> cages;
