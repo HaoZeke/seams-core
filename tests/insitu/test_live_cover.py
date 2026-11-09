@@ -234,6 +234,15 @@ def main():
                     [0.0, 0.0, 0.0, 20.0, 20.0, 20.0, 0.0, 0.0, 0.0], None, [1, 1, 1, 1])
     os.environ["DSEAMS_E2E_WORK"] = str(work)
     engine_e2e.main()
+    check(live.type7_median([1.0, 3.0]) == 2.0)
+    gro = folder / "box.gro"
+    gro.write_text("title\n1\n    1SOL     OW    1   0.1   0.1   0.1\n   2.0   2.0   2.0\n")
+    check(live.gromacs_box(gro)[3] == 20.0)
+    check(live.free_port() > 0)
+    check(len(live.ice_positions()) == 8)
+    os.environ["SEAMS_INSITU_EXE"] = ""
+    os.environ["SEAMS_GRO_IMD_EXE"] = ""
+    check(live.acceptance() is None)
     print("cover ok")
 
 

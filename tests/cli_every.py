@@ -206,6 +206,7 @@ with tempfile.TemporaryDirectory() as tmp:
     ok = run(["fingerprint", str(tiny), *one, "--library", str(Path(tmp) / "missing-lib.txt")], expect=2) and ok
     ver = subprocess.run([seams, "--version"], capture_output=True, text=True)
     ok = ver.returncode == 0 and "seams" in ver.stdout and ok
+    ok = run(["rings", str(water), "--cutoff", "not-a-number"], expect=0) is False and ok
     off = os.environ.get("SEAMS_OFFLOAD")
     os.environ["SEAMS_OFFLOAD"] = "1"
     try:

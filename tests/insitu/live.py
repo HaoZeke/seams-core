@@ -1369,6 +1369,14 @@ def gromacs_mpi_identity():
     (folder / "equal.log").write_text("1==2 %s\n1==4 %s\nframes %d\n" % (texts[0] == texts[1], texts[0] == texts[2], texts[0].count("\nstep ") + 1))
     return same, "The native module on one, two and four ranks matches the trajectory."
 
+def repeats(fn, count):
+    return [fn() for _ in range(count)]
+
+
+def ipi_elapsed(live_run):
+    raise RuntimeError("not run: the timed i-PI loop is not in the restored source")
+
+
 def main():
     import shutil
 
@@ -1471,18 +1479,14 @@ def seal_tail(out, trr_frames_n):
     print(dest)
 
 
-if __name__ == "__main__":
-    if len(sys.argv) > 2 and sys.argv[1] == "--ladder-worker":
-        ladder_worker(sys.argv[2])
-    else:
-        main()
-
 def module_entry(argv):
     if len(argv) > 2 and argv[1] == "--ladder-worker":
         ladder_worker(argv[2])
         return 0
-    acceptance()
-    return 0
+    if len(argv) > 1 and argv[1] == "--acceptance":
+        acceptance()
+        return 0
+    raise SystemExit("pass --ladder-worker and a dump, or --acceptance")
 
 
 if __name__ == "__main__":
