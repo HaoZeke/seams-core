@@ -46,6 +46,8 @@ def main():
     two.write_text(body + body.replace("TIMESTEP\n0\n", "TIMESTEP\n1\n", 1))
     expect(["rings", str(two), "--frame", "1", "--last", "2", "--jobs", "1"],
            0, out_has="rings ")
+    inverted = expect(["rings", str(two), "--frame", "3", "--last", "1"], 0)
+    check("inverted range", inverted.stdout.strip() == "", inverted.stdout[:80])
     expect(["cages", str(two), "--frame", "1", "--last", "2", "--jobs", "1",
             "--graph", "cutoff", "--cutoff", "3.5"], 0, out_has="nop ")
     expect(["cages", str(two), "--frame", "1", "--last", "2", "--jobs", "1",

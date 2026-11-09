@@ -1344,12 +1344,8 @@ int cmdCages(std::ostream &os, FrameCarry &carry, Cloud &cloud, double cutoff,
           for (const auto &c : found) {
             const auto xyz = cage::coordsOfVertices(all, c.vertices);
             const auto sh = cage::shapeOfVertices(xyz);
-            os << " " << sh.nVertices << ":";
-            if (sh.status == 0) {
-              os << sh.pointGroup;
-            } else {
-              os << "off";
-            }
+            os << " " << sh.nVertices << ":"
+               << (sh.status == 0 ? sh.pointGroup : "off");
           }
         }
         os << "\n";

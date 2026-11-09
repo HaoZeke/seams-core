@@ -512,11 +512,13 @@ sinp::openFrame(const std::string &filename, int frame, int typeI,
   }
   if (!chemfilesUnreadable) {
     if (dumpFile) {
-      for (auto &pt : cloud.pts) {
-        const auto found = ids.molOf.find(pt.atomID);
-        if (found != ids.molOf.end()) {
-          pt.molID = found->second;
-        }
+      // Ids are {1..N}, and chemfiles stored id k at index k-1.
+      // The written id is that LAMMPS id, not the file row.
+      for (int i = 0; i < cloud.nop; ++i) {
+        auto &pt = cloud.pts[static_cast<std::size_t>(i)];
+        const int id = i + 1;
+        pt.atomID = id;
+        pt.molID = ids.molOf[id];
       }
     }
     return cloud;
