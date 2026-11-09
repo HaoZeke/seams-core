@@ -530,10 +530,10 @@ process may use.
 Both LAMMPS routes stay.
 On 1000 waters, one rank, stride 10, and 40 steps, six samples follow
 one warmup.
-The plugin first quartile is 0.000901546875 seconds per step.
-Its third quartile is 0.00090798124999999996 seconds per step.
-The package first quartile is 0.00089052312499999988 seconds per step.
-Its third quartile is 0.00089222812500000005 seconds per step.
+The plugin first quartile is 0.00089856875000000002 seconds per step.
+Its third quartile is 0.00091758624999999994 seconds per step.
+The package first quartile is 0.0008864700000000001 seconds per step.
+Its third quartile is 0.00089840625000000001 seconds per step.
 The package third quartile is below the plugin first quartile.
 The GROMACS census comes from a d-SEAMS module inside mdrun.
 The parameter keys are dseams-active, dseams-input-group,
