@@ -1400,8 +1400,30 @@ def repeats(fn, count):
     return [fn() for _ in range(count)]
 
 
-def ipi_elapsed(live_run):
-    raise RuntimeError("not run: the timed i-PI loop is not in the restored source")
+def ipi_elapsed(analyse):
+    folder = WORK / "ipi-bench" / ("live" if analyse else "plain")
+    folder.mkdir(parents=True, exist_ok=True)
+    port, xml = write_ipi(folder)
+    proc = subprocess.Popen(
+        [str(PREFIX / "bin" / "i-pi"), str(xml)],
+        cwd=folder,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    time.sleep(1.0)
+    if proc.poll() is not None:
+        raise RuntimeError(proc.stdout.read())
+    lib = load(LIB)
+    started = time.perf_counter()
+    with Engine(lib, str(folder / "rec.txt")) as eng:
+        def on_frame(index, pos, cell):
+            if analyse:
+                eng.observe(index, pos, eng.box_from_rows(cell), str(folder / "dump.lammpstrj"))
+        IpiClient("127.0.0.1", port).run(on_frame)
+    elapsed = time.perf_counter() - started
+    proc.communicate(timeout=60)
+    return elapsed / 6
 
 
 def main():
