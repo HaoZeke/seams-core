@@ -700,6 +700,8 @@ TEST_CASE("DDC needs six distinct peripheral rings", "[cage_affiliation]") {
       for (const auto &r : rings) {
         nAtoms = std::max(nAtoms, *std::max_element(r.begin(), r.end()) + 1);
       }
+      const auto device = deviceDdc(rings, nAtoms);
+      REQUIRE(static_cast<int>(device.size()) == static_cast<int>(rings.size()));
       // No bonds: no basal pair, so no HC ring
       std::vector<std::vector<int>> nList(nAtoms);
       for (int a = 0; a < nAtoms; ++a) {
