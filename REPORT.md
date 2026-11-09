@@ -12,8 +12,7 @@ Overhead is the live sample minus the plain sample at the same index, in
 seconds per step.
 
 CPU `Intel(R) Xeon(R) Processor`.
-Measured commit `f3c648bf21a2c9fad084702f48605714e6e2881e`.
-Measured tree `548a9ca3284a98e53949ac9f72802991ecbd1845`.
+These overhead numbers were not measured on a commit in this history.
 libyodaLib SHA-256
 `de5b160bc827eceb53aea7c7393da5803d2517a0fd21c0e4abe316b4d32aa8c4`.
 LAMMPS SHA-256
@@ -383,10 +382,8 @@ GROMACS live and the coordinate file both use those 9 steps.
 
 # Timing head
 
-The size table and the clock were measured at
-f3c648bf21a2c9fad084702f48605714e6e2881e.
-No file under src changed between that commit and the tip.
-The library SHA-256 is the same at both commits.
+The size table and the clock were not measured on a commit in this history.
+The library SHA-256 at the top of this file is the binary that was timed.
 The live driver then split the ladder helper.
 The ladder above was measured again on that helper.
 A larger thread count passes when its third quartile is below the
