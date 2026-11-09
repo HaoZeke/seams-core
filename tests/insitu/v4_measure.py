@@ -159,6 +159,22 @@ def gromacs_case(folder, natoms, steps, every, live_run):
     return live.gmx_wall(proc.stdout + proc.stderr) / steps
 
 
+def plans():
+    full = {
+        "scale": [(5, 1000, 40), (20, 64000, 8)],
+        "cadence": (1, 10, 100),
+        "ladder": ((5, 1000), (20, 64000)),
+    }
+    short = {
+        "scale": [(5, 1000, 2)],
+        "cadence": (1,),
+        "ladder": ((5, 1000),),
+    }
+    if os.environ.get("DSEAMS_V4_TINY") == "1":
+        return short
+    return full
+
+
 def main():
     WORK.mkdir(parents=True, exist_ok=True)
     host = live.host_block()
@@ -175,11 +191,11 @@ def main():
     out["host"]["gmx_sha256"] = live.sha256(GMX)
     out["host"]["plugin_sha256"] = live.sha256(PLUGIN)
     out["host"]["cpu_online"] = len(os.sched_getaffinity(0))
-    plan = [(5, 1000, 40), (20, 64000, 8)]
-    for ncell, natoms, base in plan:
+    chosen = plans()
+    for ncell, natoms, base in chosen["scale"]:
         out["scale"][str(natoms)] = {}
         out["gromacs_scale"][str(natoms)] = {}
-        for every in (1, 10, 100):
+        for every in chosen["cadence"]:
             steps = max(base, every)
             key = "%d/%d/np1" % (natoms, every)
             slug = key.replace("/", "_")
@@ -231,7 +247,7 @@ def main():
                 }
             dest = WORK / "samples.json"
             dest.write_text(json.dumps(out))
-    for ncell, natoms in ((5, 1000), (20, 64000)):
+    for ncell, natoms in chosen["ladder"]:
         folder = WORK / "ladder-dump" / str(natoms)
         folder.mkdir(parents=True, exist_ok=True)
         dump = folder / "native.lammpstrj"
