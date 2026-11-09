@@ -446,9 +446,7 @@ void printCounts(std::ostream &os, const Cloud &cloud,
   }
   os << colorizer.heading("nop") << " " << scored;
   for (const auto &[name, n] : hist) {
-    if (n > 0) {
-      os << " " << iceColor(name) << " " << n;
-    }
+    os << " " << iceColor(name) << " " << n;
   }
   os << "\n";
 }
@@ -1151,6 +1149,8 @@ int cmdChill(std::ostream &os, Cloud &cloud, double cutoff, int typeI,
   auto nList = chillGraph(cloud, cutoff, typ, graphName, waterTypes);
   chill::getCorrel(cloud, nList, false);
   chill::getIceTypeNoPrint(cloud, nList, false);
+  auto q6 = chill::getq6(cloud, nList, false);
+  chill::reclassifyWater(cloud, q6);
   chill::clearIceTypesExcept(cloud, waterTypes);
   printCounts(os, cloud, waterTypes);
   return 0;
@@ -1383,8 +1383,7 @@ int cmdCages(std::ostream &os, FrameCarry &carry, Cloud &cloud, double cutoff,
     ih = ic = both = water = 0;
     const int n = static_cast<int>(hc.size());
     for (int i = 0; i < n; ++i) {
-      if (i < cloud.nop && !isWaterType(cloud.pts[static_cast<std::size_t>(i)].type,
-                                        waterTypes)) {
+      if (!isWaterType(cloud.pts[static_cast<std::size_t>(i)].type, waterTypes)) {
         continue;
       }
       const bool h = hc[static_cast<std::size_t>(i)];
@@ -1402,7 +1401,7 @@ int cmdCages(std::ostream &os, FrameCarry &carry, Cloud &cloud, double cutoff,
     if (!perAtomPath.empty()) {
       // 0 water, 1 hexagonal cage, 2 double-diamond cage, 3 both
       std::vector<int> values(static_cast<std::size_t>(cloud.nop), 0);
-      for (int i = 0; i < n && i < cloud.nop; ++i) {
+      for (int i = 0; i < n; ++i) {
         const bool h = hc[static_cast<std::size_t>(i)];
         const bool d = ddc[static_cast<std::size_t>(i)];
         values[static_cast<std::size_t>(i)] = h && d ? 3 : h ? 1 : d ? 2 : 0;
