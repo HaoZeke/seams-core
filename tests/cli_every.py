@@ -155,7 +155,21 @@ with tempfile.TemporaryDirectory() as tmp:
         ["cn", str(water), "--ions", "--site", "9=cationHead", "--cutoff", "6"],
         ["cn", str(ions), "--ions", "--site", "2=cationHead", "--cutoff", "6"],
         ["cn", str(zero), "--bins", "0", "--type", "1", "--frame", "1", "--last", "1"],
+        ["fingerprint", str(tiny), *one, "--per-atom", per],
+        ["fingerprint", str(tiny), *one, "--emit-library", "a\tb", "--format", "json"],
+        ["rings", str(tiny), *one, "--tpp", "2", "--block", "32", "--resident", "0.5",
+         "--cell", "3.2"],
+        ["f4", str(tiny), "--select", "type 99", "--frame", "1", "--last", "1"],
+        ["ions", str(tiny), "--select", "type 99", "--ion-types", "2", "--frame", "1", "--last", "1"],
+        ["cages", str(tiny), "--select", "type 99", "--frame", "1", "--last", "1"],
+        ["fingerprint", str(tiny), "--select", "name ZZ", "--frame", "1", "--last", "1"],
+        ["rings", str(empty), "--frame", "2", "--last", "2"],
+        ["hbonds", str(water), *one, "--type", "1", "--htype", "2", "--donors", "--hdist", "3.5"],
     ]
+    junk = Path(tmp) / "junk.lammpstrj"
+    junk.write_text("this is not a dump\n")
+    calls.append(["rings", str(junk), "--frame", "1", "--last", "1"])
+    calls.append(["rings", str(junk), "--select", "type 1", "--frame", "1", "--last", "1"])
     for args in calls:
         ok = run(args) and ok
     emitted = subprocess.run(
