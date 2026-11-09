@@ -21,6 +21,7 @@
 #include <cmath>
 #include <cstring>
 #include <exception>
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
@@ -205,8 +206,8 @@ seams_frame *seams_frame_from_arrays(const double *xyz, int n,
     return nullptr;
   }
   try {
-    auto *out = new seams_frame();
-    Cloud &cloud = out->cloud;
+    auto held = std::make_unique<seams_frame>();
+    Cloud &cloud = held->cloud;
     cloud.nop = n;
     cloud.currentFrame = 1;
     apply_box(cloud, box9);
@@ -221,8 +222,8 @@ seams_frame *seams_frame_from_arrays(const double *xyz, int n,
       point.molID = point.atomID;
       cloud.idIndexMap[point.atomID] = i;
     }
-    out->sync_arrays();
-    return out;
+    held->sync_arrays();
+    return held.release();
   } catch (const std::exception &ex) {
     set_error(ex.what());
     return nullptr;

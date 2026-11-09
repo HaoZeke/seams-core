@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include <sys/resource.h>
+
 namespace {
 
 int fail(const std::string &message) {
@@ -248,6 +250,69 @@ int main(int argc, char **argv) {
   if (seams_path_nframes(twoXyz.c_str()) != 2) return fail("xyz frame count");
   if (seams_path_nframes(oneGro.c_str()) != 1) return fail("gro frame count");
   if (seams_path_nframes(onePdb.c_str()) != 1) return fail("pdb frame count");
+  // A thrown error must come back as a status, not abort the host.
+  auto tighten = []() {
+    std::ifstream status("/proc/self/status");
+    std::string key;
+    long kb = 0;
+    while (status >> key) {
+      if (key == "VmSize:") {
+        status >> kb;
+        break;
+      }
+      status.ignore(1 << 20, '\n');
+    }
+    struct rlimit lim {};
+    getrlimit(RLIMIT_AS, &lim);
+    const rlim_t old = lim.rlim_cur;
+    lim.rlim_cur = static_cast<rlim_t>(kb) * 1024 + 8 * 1024 * 1024;
+    if (setrlimit(RLIMIT_AS, &lim) != 0) {
+      return old;
+    }
+    return old;
+  };
+  auto loosen = [](rlim_t old) {
+    struct rlimit lim {};
+    getrlimit(RLIMIT_AS, &lim);
+    lim.rlim_cur = old;
+    setrlimit(RLIMIT_AS, &lim);
+  };
+  const int many = 2000000;
+  std::vector<double> wide(static_cast<std::size_t>(many) * 3, 0.0);
+  double wideBox[9] = {0, 0, 0, 10, 10, 10, 0, 0, 0};
+  rlim_t cap = tighten();
+  seams_frame *over = seams_frame_from_arrays(wide.data(), many, wideBox, nullptr, nullptr);
+  loosen(cap);
+  if (over != nullptr || seams_last_error() == nullptr) return fail("array guard");
+  seams_frame_free(over);
+  std::vector<double> rr(static_cast<std::size_t>(many));
+  std::vector<double> gg(static_cast<std::size_t>(many));
+  std::vector<int> cc(static_cast<std::size_t>(many));
+  cap = tighten();
+  if (seams_frame_rdf(built, 10.0, many, 1, 1, rr.data(), gg.data(), cc.data(), nullptr) == 0 ||
+      seams_last_error() == nullptr) {
+    loosen(cap);
+    return fail("rdf guard");
+  }
+  loosen(cap);
+  cap = tighten();
+  if (seams_frame_rdf2d(built, 1.0e8, 0.05, nullptr, rr.data(), gg.data()) == 0 ||
+      seams_last_error() == nullptr) {
+    loosen(cap);
+    return fail("rdf2d guard");
+  }
+  loosen(cap);
+  seams_frame *crowd = seams_frame_from_arrays(wide.data(), many, wideBox, nullptr, nullptr);
+  if (crowd == nullptr) return fail("crowd frame");
+  cap = tighten();
+  if (seams_frame_steinhardt(crowd, 3.5, 1, 4, rr.data(), gg.data()) == 0 ||
+      seams_last_error() == nullptr) {
+    loosen(cap);
+    seams_frame_free(crowd);
+    return fail("steinhardt guard");
+  }
+  loosen(cap);
+  seams_frame_free(crowd);
   const std::string missingXyz = (std::filesystem::temp_directory_path() / "dseams-lang-missing.xyz").string();
   if (seams_frame_read(missingXyz.c_str(), 1, -1) != nullptr) return fail("missing xyz should fail");
   if (seams_frame_chill(tip, 3.5, 99, "cutoff", labels.data(), counts) != 0) return fail("chill type filter");
