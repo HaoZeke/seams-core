@@ -14,9 +14,13 @@ root = Path(sys.argv[2])
 water = root / "input" / "traj" / "exampleTraj.lammpstrj"
 ice = root / "input" / "traj" / "genice_sI.lammpstrj"
 tiny = root / "input" / "traj" / "agi_water_tiny.lammpstrj"
-mw = root / "input" / "traj" / "tiny-selectionTest.lammpstrj"
-if not mw.exists():
-    mw = tiny
+def resolve_dump(path):
+    if not path.is_file():
+        return tiny
+    return path
+
+
+mw = resolve_dump(root / "input" / "traj" / "tiny-selectionTest.lammpstrj")
 
 one = ["--frame", "1", "--last", "1", "--cutoff", "3.5"]
 
@@ -206,6 +210,7 @@ with tempfile.TemporaryDirectory() as tmp:
     ok = run(["fingerprint", str(tiny), *one, "--library", str(Path(tmp) / "missing-lib.txt")], expect=2) and ok
     ver = subprocess.run([seams, "--version"], capture_output=True, text=True)
     ok = ver.returncode == 0 and "seams" in ver.stdout and ok
+    ok = resolve_dump(root / "input" / "traj" / "not-deposited.lammpstrj") == tiny and ok
     ok = run(["rings", str(water), "--cutoff", "not-a-number"], expect=0) is False and ok
     off = os.environ.get("SEAMS_OFFLOAD")
     os.environ["SEAMS_OFFLOAD"] = "1"
