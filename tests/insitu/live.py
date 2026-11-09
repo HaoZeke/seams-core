@@ -982,7 +982,9 @@ def ase_identity():
         dyn.run(6)
         traj.close()
     images = read(str(traj_path), index=":")
-    frames = [(i + 1, image.get_positions()) for i, image in enumerate(images)]
+    # ASE calls observers at nsteps 0 and after every step. The image index
+    # is that counter. Adding one labelled a different step than the hook.
+    frames = [(i, image.get_positions()) for i, image in enumerate(images)]
     native = folder / "from-traj.lammpstrj"
     write_lammps(native, frames, [0, 0, 0, 6.4, 6.4, 6.4], [1] * 8)
     return match_lammps_cli(record, native)
