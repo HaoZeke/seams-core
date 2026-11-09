@@ -264,7 +264,7 @@ def main():
     ):
         result = getattr(live, name)()
         ok = result[0] if isinstance(result, tuple) else result
-        if ok is False:
+        if ok is not True:
             raise SystemExit(name + " failed")
         print(name, "passed", flush=True)
     check(live.ipi_elapsed(False) > 0)

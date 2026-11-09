@@ -143,6 +143,11 @@ class HookTests(unittest.TestCase):
             def close(self):
                 return None
 
+        drained = Sock(b"ab")
+        self.assertEqual(drained.recv(1), b"a")
+        self.assertEqual(drained.recv(1), b"b")
+        self.assertEqual(drained.recv(4), b"")
+
         real = ipi.socket.create_connection
         ipi.socket.create_connection = lambda addr: Sock(message("NOPE"))
         try:
@@ -192,6 +197,8 @@ class HookTests(unittest.TestCase):
 
             def __init__(self, box=False):
                 self.box = box
+
+        self.assertEqual(tuple(Qty().value_in_unit(None).shape), (2, 3))
 
         class State:
             def getPositions(self, asNumpy=True):
@@ -256,6 +263,8 @@ class HookTests(unittest.TestCase):
         dump = os.path.join(folder, "round.lammpstrj")
         live = os.path.join(folder, "live.txt")
         post = os.path.join(folder, "post.txt")
+        with open(dump, "w", encoding="ascii") as handle:
+            handle.write("stale\n")
         for path in (dump, live, post):
             if os.path.exists(path):
                 os.remove(path)
