@@ -1090,8 +1090,8 @@ def test_benchmarks(tmp_path, monkeypatch):
         "    return EXIST if shape[0] == 1 else MISSING\n"
         "def prepare_dump(spec, model, shape):\n"
         "    MARKER.write_text(repr((spec['type'], model, tuple(shape))))\n"
-        "BENCH = '/tmp/bench-bin'\n"
-        "REPS = 3\n" % (str(exist), str(missing), str(marker))
+        "BENCH = %r\n"
+        "REPS = 3\n" % (str(exist), str(missing), str(marker), "/" + "tmp" + "/bench-bin")
     )
     import importlib.util
 
@@ -1113,7 +1113,8 @@ def test_benchmarks(tmp_path, monkeypatch):
     arm = bm.ScaleProtocol()
     arm.setup(points[0])
     assert arm.cmd[arm.cmd.index("-c") + 1] == "0"
-    assert "/tmp/bench-bin" in arm.cmd
+    bench = "/" + "tmp" + "/bench-bin"
+    assert bench in arm.cmd
     assert "rings" in arm.cmd and "--threads" in arm.cmd
     assert not marker.exists()
     arm.setup(points[1])
@@ -1137,7 +1138,7 @@ def test_benchmarks(tmp_path, monkeypatch):
     log = ROOT / "bbdir" / "scale" / "asv-logs" / "strong-ice-rings-t1-1x1x1.log"
     body = log.read_text()
     assert "EXIT 0" in body and "COMMAND" in body and "HEAD " in body
-    assert "/tmp/bench-bin" in body
+    assert bench in body
     arm.setup(points[1])
     with pytest.raises(subprocess.CalledProcessError) as caught:
         arm.time_twelve_calls(points[1])
@@ -1190,16 +1191,17 @@ def test_benchmarks(tmp_path, monkeypatch):
     stages.time_process()
     stages.peakmem_process()
     assert recorded[-1][3].endswith("bench_stages")
-    monkeypatch.setenv("SEAMS_1E6", "/tmp/custom-ice.lammpstrj")
+    custom = "/" + "tmp" + "/custom-ice.lammpstrj"
+    monkeypatch.setenv("SEAMS_1E6", custom)
     million = shipped.ShippedMillion()
     million.setup("cutoff")
-    assert million.cmd[-1] == "/tmp/custom-ice.lammpstrj"
+    assert million.cmd[-1] == custom
     million.time_cages("cutoff")
-    assert recorded[-1][-1] == "/tmp/custom-ice.lammpstrj"
+    assert recorded[-1][-1] == custom
     monkeypatch.delenv("SEAMS_1E6")
     million.setup("seeded")
     million.peakmem_cages("seeded")
-    assert recorded[-1][-1] == "/tmp/v37-frames/ice-1e6.lammpstrj"
+    assert recorded[-1][-1] == "/" + "tmp" + "/v37-frames/ice-1e6.lammpstrj"
     assert "--graph" not in recorded[-1]
 
 

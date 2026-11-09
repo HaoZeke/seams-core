@@ -451,3 +451,18 @@ test('fuzz_cage_shift_permute', _fuzz_cage,
   env: _test_env,
   timeout: 14400,
   is_parallel: false)
+_frame_clock = executable('frame_clock', 'insitu/frame_clock.cpp',
+  dependencies: [yds_dep],
+  cpp_args: _args,
+  link_args: _test_link_args,
+  include_directories: _incdirs,
+  build_rpath: _test_rpath)
+test('frame_clock_usage', _frame_clock, should_fail: true)
+test('frame_clock_tiny', _frame_clock,
+  args: [meson.project_source_root() / 'input' / 'traj' / 'agi_water_tiny.lammpstrj'],
+  env: _test_env,
+  timeout: 120)
+_plumed_overflow = executable('plumed_neighborlist_overflow',
+  'insitu/plumed_neighborlist_overflow.cpp',
+  cpp_args: _args)
+test('plumed_neighborlist_overflow', _plumed_overflow, timeout: 180)

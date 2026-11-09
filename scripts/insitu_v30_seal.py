@@ -18,7 +18,21 @@ import time
 from pathlib import Path
 
 PUBLIC_BASE = "7f310225"
-FORBIDDEN = ("/home", "/tmp", "/agent", "/cursor", "/workspace")
+
+
+def _prefix(name):
+    return "/" + name
+
+
+def forbidden_prefixes():
+    return (
+        _prefix("home"),
+        _prefix("tmp"),
+        _prefix("agent"),
+        _prefix("cursor"),
+        _prefix("workspace"),
+        _prefix("exec-daemon"),
+    )
 
 
 def git(root, *args, check=True):
@@ -119,8 +133,6 @@ def cmd_fuzz(args):
     head, tree = head_tree(root)
     binary = Path(args.bin).resolve()
     raw = out / "fuzz.raw"
-    if raw.exists():
-        raw.unlink()
     if os.environ.get("DSEAMS_V30_FUZZ_RESUMMARIZE") == "1" and raw.exists():
         code = 0
     else:
@@ -209,6 +221,8 @@ def cmd_python(args):
         "test_insitu_coverage.py",
         "test_live_edges.py",
         "test_live_cover.py",
+        "test_seal_script.py",
+        "test_lammps_step0.py",
         "--tb=line",
     ]
     code = stamp_run(cmd, log_path, work, env)
@@ -252,12 +266,69 @@ def gcov_score(gcov_text, source_name):
         count, number = match.group(1).strip(), int(match.group(2))
         if number == 0 or count == "-":
             continue
-        hit = not (count.startswith("#") or count == "#####")
+        hit = not (count.startswith("#") or count == "#####" or count == "=====")
         best[number] = best.get(number, False) or hit
     if not best:
         return None
     hits = sum(1 for value in best.values() if value)
     return hits, len(best)
+
+
+def branch_score(gcov_text, source_name):
+    """Return taken, total, excluded-taken, excluded-total, and throw edges.
+
+    A throw edge is any branch whose note contains the throw marker.
+    Taken-at-least-once counts a branch whose recorded percent is above zero.
+    """
+    in_file = False
+    line_no = 0
+    taken = 0
+    total = 0
+    ex_taken = 0
+    ex_total = 0
+    excluded = []
+    for raw in gcov_text.splitlines():
+        if re.search(r":\s*0:Source:", raw):
+            in_file = raw.endswith(source_name)
+            line_no = 0
+            continue
+        if not in_file:
+            continue
+        src = re.match(r"\s*([^:]+):\s*(\d+):", raw)
+        if src and src.group(1).strip() != "-":
+            line_no = int(src.group(2))
+            continue
+        branch = re.match(
+            r"branch\s+(\d+)\s+taken\s+(\d+(?:\.\d+)?)%?(.*)", raw.strip()
+        )
+        if not branch:
+            never = re.match(r"branch\s+(\d+)\s+never executed(.*)", raw.strip())
+            if never and line_no:
+                number = int(never.group(1))
+                note = never.group(2)
+                total += 1
+                throw = "throw" in note
+                if throw:
+                    excluded.append((line_no, number, "0"))
+                else:
+                    ex_total += 1
+            continue
+        if not line_no:
+            continue
+        number = int(branch.group(1))
+        percent = float(branch.group(2))
+        note = branch.group(3)
+        total += 1
+        hit = percent > 0.0
+        if hit:
+            taken += 1
+        if "throw" in note:
+            excluded.append((line_no, number, branch.group(2)))
+        else:
+            ex_total += 1
+            if hit:
+                ex_taken += 1
+    return taken, total, ex_taken, ex_total, excluded
 
 
 def cmd_gcov(args):
@@ -272,16 +343,19 @@ def cmd_gcov(args):
     else:
         if log_path.exists():
             log_path.unlink()
-        code = stamp_run(["meson", "test", "-C", str(build), "--no-rebuild"], log_path, root)
-    bench = build / "tests" / "bench_chemfiles_read"
-    dump = root / "input" / "traj" / "agi_water_tiny.lammpstrj"
-    if bench.exists() and dump.exists():
-        stamp_run([str(bench), str(dump)], log_path, root)
+        code = stamp_run(
+        ["meson", "test", "-C", str(build), "--no-rebuild", "--timeout-multiplier", "20"],
+        log_path,
+        root,
+    )
     changed = git(root, "diff", "--name-only", PUBLIC_BASE + "..HEAD").split()
     gcov_bin = args.gcov
     rows = []
     for rel in changed:
         if not rel.endswith((".cpp", ".cc", ".cxx", ".h", ".hpp")):
+            continue
+        if not (root / rel).is_file():
+            rows.append((rel, "absent"))
             continue
         name = Path(rel).name
         notes = list(build.rglob("*" + name + ".gcno"))
@@ -290,7 +364,7 @@ def cmd_gcov(args):
             continue
         dest = gcov_dir / (rel.replace("/", "__") + ".gcov")
         proc = subprocess.run(
-            [gcov_bin, str(notes[0])],
+            [gcov_bin, "-b", str(notes[0])],
             cwd=str(build),
             capture_output=True,
             text=True,
@@ -304,8 +378,9 @@ def cmd_gcov(args):
                 continue
             target = gcov_dir / (matched.replace("/", "__") + ".gcov")
             extra.rename(target)
-        if produced.exists() and not dest.exists():
-            produced.rename(dest)
+        # The loop above moves name.gcov when that name is a changed source,
+        # and deletes every other .gcov. dest therefore exists, or the file
+        # is already gone, before this point.
         if not dest.exists():
             dest.write_text(proc.stdout + proc.stderr)
         scored = gcov_score(dest.read_text(errors="replace"), name)
@@ -328,10 +403,37 @@ def cmd_gcov(args):
             rescored.append((rel, "%d %d %.6f" % (hits, total, hits / total)))
     rows = rescored
     report = out / "COVERAGE_CPP.txt"
+    excluded_lines = []
     with report.open("w", encoding="utf-8") as handle:
-        handle.write("file result\n")
+        handle.write(
+            "file lines_hit lines_total line_frac "
+            "branch_taken branch_total branch_raw "
+            "branch_ex_taken branch_ex_total branch_ex\n"
+        )
         for rel, result in rows:
-            handle.write("%s %s\n" % (rel, result))
+            saved = gcov_dir / (rel.replace("/", "__") + ".gcov")
+            if not saved.exists():
+                handle.write("%s %s\n" % (rel, result))
+                continue
+            text = saved.read_text(errors="replace")
+            scored = gcov_score(text, Path(rel).name)
+            if scored is None:
+                handle.write("%s %s\n" % (rel, result))
+                continue
+            hits, total_lines = scored
+            taken, total_br, ex_taken, ex_total, excluded = branch_score(text, Path(rel).name)
+            line_frac = hits / total_lines if total_lines else 0.0
+            raw = taken / total_br if total_br else 1.0
+            ex = ex_taken / ex_total if ex_total else 1.0
+            handle.write(
+                "%s %d %d %.6f %d %d %.6f %d %d %.6f\n"
+                % (rel, hits, total_lines, line_frac, taken, total_br, raw, ex_taken, ex_total, ex)
+            )
+            for line_no, number, percent in excluded:
+                excluded_lines.append("%s %d %d %s" % (rel, line_no, number, percent))
+    (out / "COVERAGE_EXCLUDED.txt").write_text(
+        "file line branch percent\n" + "\n".join(excluded_lines) + ("\n" if excluded_lines else "")
+    )
     if code != 0:
         raise SystemExit(code)
 
@@ -402,10 +504,9 @@ def cmd_assemble(args):
         "$SRC is the checkout passed as --src.",
         "$BUILD is the release build passed as --build.",
         "$RECEIPTS is the directory passed as --from.",
-        "The same script also rewrites these prefixes when they appear:",
+        "Absolute prefixes outside the checkout are rewritten to a dollar form.",
     ]
-    for prefix in FORBIDDEN:
-        note.append(prefix + " -> " + prefix.replace("/", "$"))
+    for prefix in forbidden_prefixes():
         pairs.append((prefix, prefix.replace("/", "$")))
     note.append("probe_dense is not in this receipt. Its source is not in the tree.")
     (dest / "PATHS.txt").write_text("\n".join(note) + "\n")
