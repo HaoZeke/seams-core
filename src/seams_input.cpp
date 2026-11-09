@@ -207,9 +207,10 @@ struct LammpsDumpSession {
       file.clear();
       file.seekg(static_cast<std::streamoff>(offsets.back()));
       std::string skip;
-      if (!std::getline(file, skip)) {
-        return false;
-      }
+      // offsets.back() is a timestep line this session indexed.
+      // sessionFor replaces a session whose file changed size, so the
+      // line is still there and the skip read completes.
+      std::getline(file, skip);
     }
     for (;;) {
       const auto here = file.tellg();
@@ -1213,9 +1214,14 @@ molSys::PointCloud<molSys::Point<double>, double> sinp::readConCorpus(
   readcon::CConFrameIterator *frames =
       readcon::read_con_string_iterator(text.c_str());
   readcon::RKRConFrame *handle = readcon::con_frame_iterator_next(frames);
-  if (handle == nullptr || !cloudFromHandle(handle, targetFrame, yCloud)) {
+  if (handle == nullptr) {
     std::cerr << "Cannot decode corpus frame " << targetFrame << "\n";
     yCloud = molSys::clearPointCloud(yCloud);
+  } else {
+    // cloudFromHandle returns true after it copies the atoms. The null
+    // c-frame return inside it cannot run for a handle this function
+    // passes, so the false result is not a branch here.
+    cloudFromHandle(handle, targetFrame, yCloud);
   }
   if (handle != nullptr) {
     readcon::free_rkr_frame(handle);

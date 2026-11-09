@@ -966,16 +966,18 @@ TEST_CASE("a corpus that cannot be opened or holds a long frame",
             "63.546000\nCu\nCoordinates of Component 1\n");
   const auto bareCorpus = dir / "bare-corpus";
   fs::create_directories(bareCorpus);
-  if (sinp::ingestConCorpus(bareCorpus.string(), 1, bare.string()) > 0) {
-    cloud = sinp::readConCorpus(bareCorpus.string(), "", "", 1, cloud);
-  }
+  REQUIRE(sinp::ingestConCorpus(bareCorpus.string(), 1, bare.string()) > 0);
+  cloud = sinp::readConCorpus(bareCorpus.string(), "", "", 1, cloud);
+  REQUIRE(cloud.nop == 0);
   cloud = sinp::readCon(bare.string(), 1, cloud);
+  REQUIRE(cloud.nop == 0);
   const auto cut = dir / "cut.con";
   writeText(cut,
             "Random Number Seed\n{\"con_spec_version\":2}\n"
             "10.0\t10.0\t10.0\n90.0\t90.0\t90.0\n0 0\n218 0 1\n1\n1\n"
             "63.546000\nCu\nCoordinates of Component 1\n");
   cloud = sinp::readCon(cut.string(), 1, cloud);
+  REQUIRE(cloud.nop == 0);
   const auto nanCon = dir / "nan.con";
   writeText(nanCon,
             "Random Number Seed\n{\"con_spec_version\":2}\n"
@@ -984,6 +986,9 @@ TEST_CASE("a corpus that cannot be opened or holds a long frame",
             "   nan    2.0    3.0 1    0\n"
             "   nan    5.0    6.0 1    1\n");
   cloud = sinp::readCon(nanCon.string(), 1, cloud);
+  REQUIRE(cloud.nop == 2);
+  REQUIRE(std::isnan(cloud.pts[0].x));
+  REQUIRE(std::isnan(cloud.pts[1].x));
   fs::remove_all(dir);
 }
 #endif
