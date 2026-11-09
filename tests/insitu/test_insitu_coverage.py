@@ -218,6 +218,26 @@ def main():
         os.environ["DSEAMS_COVERAGE_BASE"] = ""
         code, text = run(module, root, js)
         need(code == 1 and "changed-files 0 0 0.000000" in text, "an empty base passed")
+        real_git = subprocess.check_output(["sh", "-c", "command -v git"], text=True).strip()
+        gitbin = root / "gitbin"
+        gitbin.mkdir()
+        wrapper = gitbin / "git"
+        wrapper.write_text(
+            "#!/bin/sh\n"
+            "if [ \"$1\" = diff ]; then\n"
+            "  exit 2\n"
+            "fi\n"
+            "exec %s \"$@\"\n" % real_git
+        )
+        wrapper.chmod(0o755)
+        saved_path = os.environ["PATH"]
+        os.environ["PATH"] = str(gitbin) + os.pathsep + saved_path
+        os.environ["DSEAMS_COVERAGE_BASE"] = anchor
+        try:
+            code, text = run(module, root, js)
+            need(code == 1 and ("changed-files " + anchor + " 0 0 0.000000") in text, "a git diff error passed")
+        finally:
+            os.environ["PATH"] = saved_path
         if saved_base is None:
             os.environ.pop("DSEAMS_COVERAGE_BASE", None)
         else:
