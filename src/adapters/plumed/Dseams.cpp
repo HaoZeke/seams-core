@@ -67,8 +67,7 @@ Dseams::Dseams(const ActionOptions &ao) :
   seams_insitu_options opt;
   seams_insitu_options_default(&opt);
   opt.cutoff = cutoff_;
-  eng_ = seams_insitu_create(&opt);
-  if (eng_ == nullptr) error("DSEAMS could not create the engine");
+  eng_ = seams_insitu_create(&opt); if (eng_ == nullptr) error("DSEAMS could not create the engine");
   if (seams_insitu_open_record(eng_, record_.c_str()) != SEAMS_INSITU_OK) error("DSEAMS could not open the record");
   log.printf("  d-SEAMS cutoff %f angstrom on %u atoms\n", cutoff_,
              static_cast<unsigned>(atoms.size()));

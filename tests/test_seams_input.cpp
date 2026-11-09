@@ -8,6 +8,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -637,3 +638,186 @@ TEST_CASE("readChemfiles reports unreadable files without terminating",
   REQUIRE(cloud.nop == 0);
 }
 #endif // SEAMS_HAS_CHEMFILES
+
+namespace {
+
+std::string oneDump(const std::string &atoms, int declared, const std::string &tail = "") {
+  return "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n" + std::to_string(declared) +
+         "\nITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\nITEM: ATOMS id type x y z\n" +
+         atoms + tail;
+}
+
+void writeText(const fs::path &path, const std::string &text) {
+  std::ofstream out(path);
+  out << text;
+}
+
+std::string conText(const char *cell, const char *angles, const char *ids) {
+  return std::string("Random Number Seed\n{\"con_spec_version\":2}\n") + cell +
+         "\n" + angles +
+         "\n0 0\n218 0 1\n1\n2\n63.546000\nCu\nCoordinates of Component 1\n" +
+         ids;
+}
+
+} // namespace
+
+TEST_CASE("dump and bond readers take the rejected inputs", "[seams_input]") {
+  const auto dir = fs::temp_directory_path() / "dseams-input-edges";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+
+  const auto dup = dir / "dup.lammpstrj";
+  writeText(dup, oneDump("1 1 0 0 0\n1 1 1 0 0\n", 2));
+  cloud = sinp::readLammpsTrj(dup.string(), 1, cloud);
+  REQUIRE(cloud.nop == 2);
+
+  const auto junk = dir / "junk.lammpstrj";
+  writeText(junk, oneDump("1 1 abc 0 0\n2 1 1 0 0\n", 2));
+  cloud = sinp::readLammpsTrj(junk.string(), 1, cloud);
+
+  const auto scaled = dir / "scaled.lammpstrj";
+  writeText(scaled,
+            "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+            "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+            "ITEM: ATOMS id type xu ys zs\n1 1 0.1 0.2 0.3\n");
+  cloud = sinp::readLammpsTrj(scaled.string(), 1, cloud);
+  REQUIRE(cloud.nop == 1);
+
+  int seen = 0;
+  sinp::forEachLammpsFrame(dup.string(), 0, 0, -1,
+                           [&](int, molSys::PointCloud<molSys::Point<double>, double> &) { seen++; });
+  REQUIRE(seen == 1);
+  sinp::forEachLammpsFrame(dup.string(), 4, 1, -1,
+                           [&](int, molSys::PointCloud<molSys::Point<double>, double> &) { seen++; });
+  REQUIRE(seen == 1);
+
+  const auto empty = dir / "empty.lammpstrj";
+  writeText(empty, "");
+  REQUIRE(sinp::nLammpsFrames(empty.string()) == 0);
+  const auto prose = dir / "prose.lammpstrj";
+  writeText(prose, "hello\n");
+  REQUIRE(sinp::nLammpsFrames(prose.string()) == 0);
+  cloud = sinp::readLammpsTrj(prose.string(), 0, cloud);
+  cloud = sinp::readLammpsTrj(prose.string(), 1, cloud);
+
+  const auto tail = dir / "tail.lammpstrj";
+  writeText(tail, oneDump("1 1 0 0 0\n", 1, "not a timestep\n"));
+  cloud = sinp::readLammpsTrj(tail.string(), 1, cloud);
+  cloud = sinp::readLammpsTrj(tail.string(), 2, cloud);
+
+  const auto grow = dir / "grow.lammpstrj";
+  writeText(grow, oneDump("1 1 0 0 0\n", 1));
+  cloud = sinp::readLammpsTrj(grow.string(), 1, cloud);
+  {
+    std::ofstream extra(grow, std::ios::app);
+    extra << "\n";
+  }
+  cloud = sinp::readLammpsTrj(grow.string(), 1, cloud);
+
+  const auto flipped = dir / "flip.lammpstrj";
+  writeText(flipped, oneDump("1 1 0 0 0\n", 1));
+  cloud = sinp::readLammpsTrj(flipped.string(), 1, cloud);
+  const auto stamp = fs::last_write_time(flipped);
+  {
+    std::fstream edit(flipped, std::ios::in | std::ios::out | std::ios::binary);
+    edit.seekp(0);
+    edit.write("JTEM: TIMESTEP", 14);
+  }
+  fs::last_write_time(flipped, stamp);
+  cloud = sinp::readLammpsTrj(flipped.string(), 1, cloud);
+
+  const auto asDir = dir / "subdir";
+  fs::create_directory(asDir);
+  cloud = sinp::readLammpsTrj(asDir.string(), 1, cloud);
+  REQUIRE(cloud.nop == 0);
+
+  const auto bonds = dir / "bonds.dat";
+  writeText(bonds, "3 Bonds\n1 2 abc\n1 2 3 0\n4 5 6 1\n");
+  const auto parsed = sinp::readBonds(bonds.string());
+  REQUIRE(parsed.size() == 2);
+
+  const auto xyz = dir / "odd.xyz";
+  writeText(xyz, "nope\ncomment\n");
+  cloud = sinp::readXYZ(xyz.string());
+  REQUIRE(cloud.nop == 0);
+  writeText(xyz, "-1\ncomment\n");
+  cloud = sinp::readXYZ(xyz.string());
+  REQUIRE(cloud.nop == 0);
+  writeText(xyz, "3\ncomment\n\n1 0 0 0\nO 1 0 0\n");
+  cloud = sinp::readXYZ(xyz.string());
+  REQUIRE(cloud.nop >= 1);
+  const auto tri = dir / "tri.lammpstrj";
+  writeText(tri,
+            "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+            "ITEM: BOX BOUNDS xy xz yz pp pp pp\n0 10 0.5\n0 10 0.2\n0 10 0.1\n"
+            "ITEM: ATOMS id type x y z\n1 1 1 2 3\n");
+  cloud = sinp::readLammpsTrj(tri.string(), 1, cloud);
+  REQUIRE(cloud.box.size() >= 6);
+
+  sinp::dropLammpsDumpIndex(dup.string());
+  fs::remove_all(dir);
+}
+
+#ifdef SEAMS_HAS_READCON
+TEST_CASE("con cells and the corpus errors", "[seams_input]") {
+  const auto dir = fs::temp_directory_path() / "dseams-con-edges";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  const char *atoms = "   1.0    2.0    3.0 1    0\n   4.0    5.0    6.0 1    1\n";
+  const auto good = dir / "good.con";
+  writeText(good, conText("10.0\t10.0\t10.0", "90.0\t90.0\t90.0", atoms));
+  cloud = sinp::readCon(good.string(), 0, cloud);
+  REQUIRE(cloud.nop == 0);
+  cloud = sinp::readCon(good.string(), 1, cloud);
+  REQUIRE(cloud.nop == 2);
+  cloud = sinp::readCon(good.string(), 9, cloud);
+  REQUIRE(cloud.nop == 0);
+  cloud = sinp::readCon((dir / "missing.con").string(), 1, cloud);
+  REQUIRE(cloud.nop == 0);
+  writeText(dir / "zero.con", conText("0.0\t0.0\t0.0", "90.0\t90.0\t90.0", atoms));
+  cloud = sinp::readCon((dir / "zero.con").string(), 1, cloud);
+  REQUIRE(cloud.nop == 2);
+  writeText(dir / "flat.con", conText("10.0\t10.0\t10.0", "90.0\t90.0\t0.0", atoms));
+  cloud = sinp::readCon((dir / "flat.con").string(), 1, cloud);
+  REQUIRE(cloud.nop == 2);
+  writeText(dir / "shear.con", conText("10.0\t10.0\t10.0", "90.0\t0.0\t90.0", atoms));
+  cloud = sinp::readCon((dir / "shear.con").string(), 1, cloud);
+  REQUIRE(cloud.nop == 2);
+  writeText(dir / "tilt.con", conText("10.0\t10.0\t10.0", "80.0\t75.0\t70.0", atoms));
+  cloud = sinp::readCon((dir / "tilt.con").string(), 1, cloud);
+  REQUIRE(cloud.box.size() >= 6);
+
+#ifdef SEAMS_HAS_READCON_DB
+  const auto corpus = dir / "corpus";
+  fs::create_directories(corpus);
+  REQUIRE(sinp::ingestConCorpus(corpus.string(), 1, good.string()) > 0);
+  REQUIRE(sinp::ingestConCorpus(corpus.string(), 2, good.string()) > 0);
+  cloud = sinp::readConCorpus(corpus.string(), "", "", 1, cloud);
+  REQUIRE(cloud.nop == 2);
+  cloud = sinp::readConCorpus(corpus.string(), "Cu", "", 2, cloud);
+  cloud = sinp::readConCorpus(corpus.string(), "", "", 9, cloud);
+  REQUIRE(cloud.nop == 0);
+  REQUIRE(sinp::ingestConCorpus(corpus.string(), 3, (dir / "missing.con").string()) < 0);
+  const auto blocker = dir / "not-a-dir";
+  writeText(blocker, "x");
+  REQUIRE(sinp::ingestConCorpus(blocker.string(), 1, good.string()) < 0);
+  cloud = sinp::readConCorpus(corpus.string(), "", "", 0, cloud);
+  cloud = sinp::readConCorpus(corpus.string(), "Cu", "", 1, cloud);
+  writeText(corpus / "shards.json", "{}\n");
+  cloud = sinp::readConCorpus(corpus.string(), "", "", 1, cloud);
+  writeText(corpus / "shards.json", "{\"n_shards\"}\n");
+  cloud = sinp::readConCorpus(corpus.string(), "", "", 1, cloud);
+  writeText(corpus / "shards.json", "{\"n_shards\": 0}\n");
+  cloud = sinp::readConCorpus(corpus.string(), "", "", 1, cloud);
+  writeText(corpus / "shards.json", "{\"n_shards\": 9000}\n");
+  cloud = sinp::readConCorpus(corpus.string(), "", "", 1, cloud);
+  writeText(corpus / "shards.json", "{\"n_shards\": 1}\n");
+  fs::create_directories(corpus / "shard_0000");
+  writeText(corpus / "shard_0000" / "data.mdb", "");
+  cloud = sinp::readConCorpus(corpus.string(), "", "H2", 4, cloud);
+#endif
+  fs::remove_all(dir);
+}
+#endif

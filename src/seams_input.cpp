@@ -107,9 +107,7 @@ int parseDumpFields(std::string_view line, double *out, int cap) {
 bool parseDumpInt(std::string_view line, int &out) {
   const char *p = line.data();
   const char *const end = p + line.size();
-  while (p < end && (*p == ' ' || *p == '\t')) {
-    ++p;
-  }
+  while (p < end && (*p == ' ' || *p == '\t')) ++p;
   const auto parsed = std::from_chars(p, end, out);
   return parsed.ec == std::errc{};
 }
@@ -131,13 +129,9 @@ struct LammpsDumpSession {
     path = filename;
     std::error_code ec;
     size = std::filesystem::file_size(filename, ec);
-    if (ec) {
-      return false;
-    }
+    if (ec) return false;
     mtime = std::filesystem::last_write_time(filename, ec);
-    if (ec) {
-      return false;
-    }
+    if (ec) return false;
     file.open(filename, std::ios::in | std::ios::binary);
     offsets.clear();
     lastFrame = 0;
@@ -158,13 +152,8 @@ struct LammpsDumpSession {
   // One mmap + memchr walk of ITEM: TIMESTEP. getline was ~0.5 s on the
   // 103 MB Niu dump; glibc memchr is the SIMD find, no extra library.
   bool mmapIndexAll() {
-    if (fullyIndexed) {
-      return true;
-    }
     const int fd = ::open(path.c_str(), O_RDONLY);
-    if (fd < 0) {
-      return false;
-    }
+    if (fd < 0) return false;
     struct stat st {};
     if (::fstat(fd, &st) != 0 || st.st_size <= 0) {
       ::close(fd);
@@ -173,9 +162,7 @@ struct LammpsDumpSession {
     const auto nbytes = static_cast<std::size_t>(st.st_size);
     void *map = ::mmap(nullptr, nbytes, PROT_READ, MAP_PRIVATE, fd, 0);
     ::close(fd);
-    if (map == MAP_FAILED) {
-      return false;
-    }
+    if (map == MAP_FAILED) return false;
 #ifdef POSIX_MADV_SEQUENTIAL
     ::posix_madvise(map, nbytes, POSIX_MADV_SEQUENTIAL);
 #endif
@@ -205,9 +192,7 @@ struct LammpsDumpSession {
   }
 
   bool discoverNext() {
-    if (!file.is_open()) {
-      return false;
-    }
+    if (!file.is_open()) return false;
     if (offsets.empty()) {
       file.clear();
       file.seekg(0);
@@ -215,9 +200,7 @@ struct LammpsDumpSession {
       file.clear();
       file.seekg(static_cast<std::streamoff>(offsets.back()));
       std::string skip;
-      if (!std::getline(file, skip)) {
-        return false;
-      }
+      if (!std::getline(file, skip)) return false;
     }
     while (file) {
       const auto here = file.tellg();
@@ -280,16 +263,10 @@ struct LammpsDumpSession {
   }
 
   bool ensureIndexed(int frame) {
-    if (frame < 1) {
-      return false;
-    }
-    if (!fullyIndexed && static_cast<int>(offsets.size()) < frame) {
-      mmapIndexAll();
-    }
+    if (frame < 1) return false;
+    if (!fullyIndexed && static_cast<int>(offsets.size()) < frame) mmapIndexAll();
     while (static_cast<int>(offsets.size()) < frame) {
-      if (!discoverNext()) {
-        return false;
-      }
+      if (!discoverNext()) return false;
     }
     return true;
   }
@@ -794,9 +771,7 @@ void parseLammpsFrameBody(
   // the warning goes to stderr, which every rank of a frame split keeps
   if (keep != LammpsKeep::All) {
     yCloud.nop = static_cast<int>(yCloud.pts.size());
-    if (yCloud.pts.size() != static_cast<std::size_t>(nKept)) {
-      std::cerr << "Atoms didn't get filled in properly.\n";
-    }
+    if (yCloud.pts.size() != static_cast<std::size_t>(nKept)) std::cerr << "Atoms didn't get filled in properly.\n";
   } else if (yCloud.pts.size() !=
              static_cast<std::size_t>(yCloud.nop < 0 ? 0 : yCloud.nop)) {
     // A count that does not fit in int leaves nop unset. The atoms that
@@ -810,21 +785,15 @@ void parseLammpsFrameBody(
 
 bool openCloneAt(const std::string &filename, int frame, std::ifstream &in) {
   auto sess = sessionFor(filename);
-  if (sess == nullptr) {
-    return false;
-  }
+  if (sess == nullptr) return false;
   std::uint64_t off = 0;
   {
     std::lock_guard<std::mutex> lock(sess->mu);
-    if (!sess->ensureIndexed(frame)) {
-      return false;
-    }
+    if (!sess->ensureIndexed(frame)) return false;
     off = sess->offsets[static_cast<std::size_t>(frame - 1)];
   }
   in.open(filename, std::ios::in | std::ios::binary);
-  if (!in.is_open()) {
-    return false;
-  }
+  if (!in.is_open()) return false;
   in.seekg(static_cast<std::streamoff>(off));
   std::string line;
   return static_cast<bool>(std::getline(in, line)) && isLammpsTimestep(line);
@@ -862,11 +831,7 @@ void loadLammpsFrame(
     return;
   }
   std::ifstream clone;
-  if (!openCloneAt(filename, targetFrame, clone)) {
-    std::cout << "You entered a frame that doesn't exist.\n";
-    yCloud.currentFrame = targetFrame;
-    return;
-  }
+  if (!openCloneAt(filename, targetFrame, clone)) { std::cout << "You entered a frame that doesn't exist.\n"; yCloud.currentFrame = targetFrame; return; }
   parseLammpsFrameBody(clone, yCloud, typeFilter, keep, isSlice, coordLow,
                        coordHigh);
   yCloud.currentFrame = targetFrame;
@@ -1008,9 +973,7 @@ bool cloudFromHandle(
     const readcon::RKRConFrame *handle, int frameNo,
     molSys::PointCloud<molSys::Point<double>, double> &yCloud) {
   readcon::CFrame *frame = readcon::rkr_frame_to_c_frame(handle);
-  if (frame == nullptr) {
-    return false;
-  }
+  if (frame == nullptr) return false;
   applyConCell(yCloud, frame->cell, frame->angles);
   uintptr_t nxyz = 0;
   const double *xyz = readcon::rkr_frame_xyz_f64(handle, &nxyz);
@@ -1124,11 +1087,7 @@ sinp::readCon(std::string filename, int targetFrame,
                 << "\n";
       return yCloud;
     }
-    if (!cloudFromHandle(frame->get_handle(), targetFrame, yCloud)) {
-      std::cerr << "Cannot extract frame " << targetFrame << " from "
-                << filename << "\n";
-      yCloud = molSys::clearPointCloud(yCloud);
-    }
+    if (!cloudFromHandle(frame->get_handle(), targetFrame, yCloud)) { std::cerr << "Cannot extract frame " << targetFrame << " from " << filename << "\n"; yCloud = molSys::clearPointCloud(yCloud); }
   } catch (const std::exception &e) {
     std::cerr << "Cannot open .con file " << filename << ": " << e.what()
               << "\n";
@@ -1149,10 +1108,7 @@ int sinp::ingestConCorpus(const std::string &corpus, std::uint64_t trajId,
     return -1;
   }
   size_t id = 0;
-  if (rkrdb_open(dest.c_str(), &id) != RKRDB_OK) {
-    std::cerr << "Cannot open corpus " << dest << "\n";
-    return -1;
-  }
+  if (rkrdb_open(dest.c_str(), &id) != RKRDB_OK) { std::cerr << "Cannot open corpus " << dest << "\n"; return -1; }
   uint32_t nframes = 0;
   const int st =
       rkrdb_append_trajectory(id, trajId, conPath.c_str(), &nframes);
@@ -1214,34 +1170,19 @@ molSys::PointCloud<molSys::Point<double>, double> sinp::readConCorpus(
   }
   const Hit &hit = hits[static_cast<std::size_t>(targetFrame - 1)];
   size_t id = 0;
-  if (rkrdb_open_readonly(hit.root.c_str(), &id) != RKRDB_OK) {
-    std::cerr << "Cannot reopen corpus " << hit.root << "\n";
-    return yCloud;
-  }
+  if (rkrdb_open_readonly(hit.root.c_str(), &id) != RKRDB_OK) { std::cerr << "Cannot reopen corpus " << hit.root << "\n"; return yCloud; }
   std::string text(1u << 20, '\0');
   int n = rkrdb_get_frame_text(id, hit.traj, hit.frame, text.data(),
                                text.size());
-  if (n == RKRDB_ERR) {
-    text.assign(8u << 20, '\0');
-    n = rkrdb_get_frame_text(id, hit.traj, hit.frame, text.data(), text.size());
-  }
+  if (n == RKRDB_ERR) { text.assign(8u << 20, '\0'); n = rkrdb_get_frame_text(id, hit.traj, hit.frame, text.data(), text.size()); }
   rkrdb_close(id);
-  if (n < 0) {
-    std::cerr << "Cannot read frame text from " << hit.root << "\n";
-    return yCloud;
-  }
+  if (n < 0) { std::cerr << "Cannot read frame text from " << hit.root << "\n"; return yCloud; }
   text.resize(static_cast<std::size_t>(n));
   readcon::CConFrameIterator *frames =
       readcon::read_con_string_iterator(text.c_str());
-  if (frames == nullptr) {
-    std::cerr << "readcon-core rejected the corpus blob\n";
-    return yCloud;
-  }
+  if (frames == nullptr) { std::cerr << "readcon-core rejected the corpus blob\n"; return yCloud; }
   readcon::RKRConFrame *handle = readcon::con_frame_iterator_next(frames);
-  if (handle == nullptr || !cloudFromHandle(handle, targetFrame, yCloud)) {
-    std::cerr << "Cannot decode corpus frame " << targetFrame << "\n";
-    yCloud = molSys::clearPointCloud(yCloud);
-  }
+  if (handle == nullptr || !cloudFromHandle(handle, targetFrame, yCloud)) { std::cerr << "Cannot decode corpus frame " << targetFrame << "\n"; yCloud = molSys::clearPointCloud(yCloud); }
   if (handle != nullptr) {
     readcon::free_rkr_frame(handle);
   }

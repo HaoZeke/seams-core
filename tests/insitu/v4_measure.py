@@ -13,23 +13,30 @@ import subprocess
 import sys
 from pathlib import Path
 
-os.environ.setdefault("SEAMS_LIB", "bbdir-rel/src/libyodaLib.so")
-os.environ.setdefault("SEAMS_INSITU_EXE", "var/run/none")
-os.environ.setdefault("SEAMS_GRO_IMD_EXE", "var/run/none")
-os.environ.setdefault("SEAMS_CLI", "bbdir-rel/seams")
-os.environ.setdefault("DSEAMS_LIVE_WORK", "var/run/dseams-v4-measure")
+ROOT = Path(__file__).resolve().parents[2]
+os.environ.setdefault("SEAMS_LIB", str(ROOT / "bbdir-rel" / "src" / "libyodaLib.so"))
+os.environ.setdefault("SEAMS_INSITU_EXE", str(ROOT / "bbdir-rel" / "seams-insitu"))
+os.environ.setdefault("SEAMS_GRO_IMD_EXE", str(ROOT / "bbdir-rel" / "seams-gromacs-imd"))
+os.environ.setdefault("SEAMS_CLI", str(ROOT / "bbdir-rel" / "seams"))
+os.environ.setdefault("DSEAMS_LIVE_WORK", str(ROOT / "build" / "insitu-measure"))
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import live  # noqa: E402
 
-ROOT = Path(__file__).resolve().parents[2]
-WORK = Path("var/run/dseams-v4-measure")
-LMP = "var/run/lmp-mpi/.pixi/envs/default/bin/lmp_mpi"
-MPIRUN = "var/run/lmp-mpi/.pixi/envs/default/bin/mpirun"
-PLUGIN = "var/run/plugin-mpi-rel/libdseams_lammps.so"
-PLUGIN_JSON = Path("plugin-o3.json")
-GMX = "var/run/gmx-dseams-b/bin/gmx_mpi"
-GMX_MPIRUN = "var/run/dseams-md/.pixi/envs/default/bin/mpirun"
+
+def need(name):
+    value = os.environ.get(name, "")
+    if not value:
+        raise SystemExit("set %s" % name)
+    return value
+
+
+WORK = Path(os.environ["DSEAMS_LIVE_WORK"])
+LMP = need("DSEAMS_LMP")
+MPIRUN = need("DSEAMS_MPIRUN")
+PLUGIN = need("DSEAMS_PLUGIN")
+GMX = need("DSEAMS_GMX")
+GMX_MPIRUN = need("DSEAMS_GMX_MPIRUN")
 SEAMS = os.environ["SEAMS_CLI"]
 LIBS = ":".join(
     [
@@ -47,6 +54,31 @@ def env():
     merged["OMP_NUM_THREADS"] = "1"
     merged["LD_LIBRARY_PATH"] = LIBS
     return merged
+
+
+def loop_time(folder, steps):
+    log = (folder / "log").read_text() if (folder / "log").exists() else ""
+    if "Loop time of " not in log:
+        raise RuntimeError(log[-800:])
+    for line in log.splitlines():
+        if line.startswith("Loop time of "):
+            return float(line.split()[3]) / steps
+    raise RuntimeError(log[-400:])
+
+
+def lammps_live_step(folder, steps, ncell, every):
+    folder.mkdir(parents=True, exist_ok=True)
+    live.lammps_input(
+        folder / "in", steps, folder / "unused.lammpstrj", folder / "record.txt",
+        PLUGIN, every=every, ncell=ncell, write_dump=False,
+    )
+    proc = subprocess.run(
+        [MPIRUN, "--oversubscribe", "-np", "1", LMP, "-in", "in", "-log", "log"],
+        cwd=folder, env=env(), text=True, capture_output=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError((proc.stdout + proc.stderr)[-800:])
+    return loop_time(folder, steps)
 
 
 def lammps_plain_step(folder, steps, ncell):
@@ -68,14 +100,9 @@ def lammps_plain_step(folder, steps, ncell):
         text=True,
         capture_output=True,
     )
-    log = (folder / "log").read_text() if (folder / "log").exists() else ""
-    blob = proc.stdout + proc.stderr + log
-    if proc.returncode != 0 or "Loop time of " not in blob:
-        raise RuntimeError(blob[-800:])
-    for line in blob.splitlines():
-        if line.startswith("Loop time of "):
-            return float(line.split()[3]) / steps
-    raise RuntimeError(blob[-400:])
+    if proc.returncode != 0:
+        raise RuntimeError((proc.stdout + proc.stderr)[-800:])
+    return loop_time(folder, steps)
 
 
 def postprocess(dump):
@@ -135,9 +162,11 @@ def gromacs_case(folder, natoms, steps, every, live_run):
 
 def main():
     WORK.mkdir(parents=True, exist_ok=True)
-    plugin = json.loads(PLUGIN_JSON.read_text())
+    host = live.host_block()
+    host.pop("hostname", None)
     out = {
-        "host": live.host_block(),
+        "host": host,
+        "codes": {},
         "scale": {},
         "gromacs_scale": {},
         "ladder": [],
@@ -154,11 +183,14 @@ def main():
         for every in (1, 10, 100):
             steps = max(base, every)
             key = "%d/%d/np1" % (natoms, every)
-            block = plugin["cases"][key]
+            slug = key.replace("/", "_")
             plain = []
-            warm = lammps_plain_step(WORK / "plain" / key.replace("/", "_") / "warm", steps, ncell)
+            live_samples = []
+            warm = lammps_plain_step(WORK / "plain" / slug / "warm", steps, ncell)
+            warm_live = lammps_live_step(WORK / "live" / slug / "warm", steps, ncell, every)
             for i in range(6):
-                plain.append(lammps_plain_step(WORK / "plain" / key.replace("/", "_") / str(i), steps, ncell))
+                plain.append(lammps_plain_step(WORK / "plain" / slug / str(i), steps, ncell))
+                live_samples.append(lammps_live_step(WORK / "live" / slug / str(i), steps, ncell, every))
             dump = WORK / "post" / str(natoms) / "native.lammpstrj"
             if not dump.exists():
                 dump.parent.mkdir(parents=True, exist_ok=True)
@@ -169,9 +201,9 @@ def main():
             out["scale"][str(natoms)][str(every)] = {
                 "steps": steps,
                 "plain": plain,
-                "live": block["samples"],
+                "live": live_samples,
                 "warmup_plain": warm,
-                "warmup_live": block["warmup"],
+                "warmup_live": warm_live,
                 "post_wall": post,
                 "dump_bytes": dump.stat().st_size,
             }
@@ -191,6 +223,13 @@ def main():
                 "warmup_live": gwarm_l,
             }
             print("gromacs", natoms, every, "done", flush=True)
+            if natoms == 1000 and every == 1:
+                out["codes"]["lammps"] = {
+                    "steps": steps, "frames": steps, "plain": plain, "live": live_samples,
+                }
+                out["codes"]["gromacs"] = {
+                    "steps": steps, "frames": steps, "plain": gplain, "live": glive,
+                }
             dest = WORK / "samples.json"
             dest.write_text(json.dumps(out))
     for ncell, natoms in ((5, 1000), (20, 64000)):
@@ -203,9 +242,9 @@ def main():
         out["ladder"].append(live.thread_ladder(dump, natoms))
         (WORK / "samples.json").write_text(json.dumps(out))
         print("ladder", natoms, "done", flush=True)
-    clock = Path("var/run/frame_clock")
+    clock = Path(os.environ["DSEAMS_FRAME_CLOCK"]) if os.environ.get("DSEAMS_FRAME_CLOCK") else None
     dump = WORK / "post" / "1000" / "native.lammpstrj"
-    if clock.exists() and dump.exists():
+    if clock is not None and clock.exists() and dump.exists():
         proc = subprocess.run([str(clock), str(dump)], cwd=ROOT, env=env(), text=True, capture_output=True)
         excluded = None
         for line in (proc.stdout + proc.stderr).splitlines():

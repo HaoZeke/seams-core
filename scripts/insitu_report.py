@@ -38,29 +38,24 @@ def main():
     lines.append("Six samples are kept. The quartiles are Hyndman-Fan type 7.")
     lines.append("Overhead is the live sample minus the plain sample at the same index, in seconds per step.")
     lines.append("")
-    lines.append("Host `%s`." % host["hostname"])
     lines.append("CPU `%s`." % host["cpu"])
-    lines.append("HEAD `%s`." % host["head"])
-    lines.append("Tree `%s`." % host["tree"])
     lines.append("libyodaLib SHA-256 `%s`." % host["lib_sha256"])
     lines.append("LAMMPS SHA-256 `%s`." % host["lmp_sha256"])
     lines.append("GROMACS SHA-256 `%s`." % host["gmx_sha256"])
     lines.append("Plugin SHA-256 `%s`." % host.get("plugin_sha256", ""))
     lines.append("")
-    lines.append("| Code | Steps | Frames | Q1 overhead | Median | Q3 | IQR | Median ratio |")
-    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
+    code_lines = []
     for name, block in data.get("codes", {}).items():
         plain = block.get("plain") or []
         live = block.get("live") or []
         if len(plain) != len(live) or not plain:
-            lines.append("| %s | %s | %s |  |  |  |  |" % (name, block.get("steps", ""), block.get("frames", "")))
             continue
         delta = [live[i] - plain[i] for i in range(len(plain))]
         q1 = type7(delta, 0.25)
         med = type7(delta, 0.5)
         q3 = type7(delta, 0.75)
         ratios = [live[i] / plain[i] for i in range(len(plain))]
-        lines.append(
+        code_lines.append(
             "| %s | %s | %s | %s | %s | %s | %s | %s |"
             % (
                 name,
@@ -73,6 +68,10 @@ def main():
                 fmt(type7(ratios, 0.5)),
             )
         )
+    if code_lines:
+        lines.append("| Code | Steps | Frames | Q1 overhead | Median | Q3 | IQR | Median ratio |")
+        lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
+        lines.extend(code_lines)
     lines.append("")
     lines.append("Overhead is seconds per step. The ratio is the live step time divided by the plain step time.")
     lines.append("The GROMACS row in the first table is whatever the samples file recorded for that code.")

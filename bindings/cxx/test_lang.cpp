@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -275,6 +276,185 @@ int main(int argc, char **argv) {
       return fail("abi disagrees with the cli");
     }
   }
+
+  if (seams_last_error() == nullptr) {
+    return fail("error pointer");
+  }
+  if (seams_path_nframes(nullptr) != -1 || seams_frame_read(nullptr, 1, -1) != nullptr) {
+    return fail("null path");
+  }
+  double box9[9] = {};
+  seams_frame_box(nullptr, box9);
+  seams_frame_box(tip, nullptr);
+  seams_frame_box(tip, box9);
+  if (seams_frame_index(nullptr) != 0 || seams_frame_nop(nullptr) != 0) {
+    return fail("null frame queries");
+  }
+  if (seams_frame_index(tip) < 1 || seams_frame_types(tip) == nullptr ||
+      seams_frame_ids(tip) == nullptr || seams_frame_types(nullptr) != nullptr ||
+      seams_frame_ids(nullptr) != nullptr || seams_frame_positions(nullptr) != nullptr) {
+    return fail("frame columns");
+  }
+  if (seams_frame_from_arrays(nullptr, 4, box9, nullptr, nullptr) != nullptr) {
+    return fail("null arrays");
+  }
+  const double builtXyz[12] = {0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, 0.4, 0.4, 1.2};
+  const double ortho[9] = {0, 0, 0, 8, 8, 8, 0, 0, 0};
+  const double sheared[9] = {0, 0, 0, 8, 8, 8, 1.5, 0, 0};
+  const int types4[4] = {1, 1, 1, 1};
+  seams_frame *built = seams_frame_from_arrays(builtXyz, 4, ortho, types4, nullptr);
+  seams_frame *tilted = seams_frame_from_arrays(builtXyz, 4, sheared, nullptr, nullptr);
+  if (built == nullptr || tilted == nullptr) {
+    return fail("from arrays");
+  }
+  int labels4[4] = {};
+  int counts9[9] = {};
+  if (seams_frame_chill(built, 3.5, 1, "cutoff", labels4, counts9) != 0 ||
+      seams_frame_chill(nullptr, 3.5, 1, "mutual", labels4, counts9) == 0 ||
+      seams_frame_chill(built, 3.5, 0, "nope", labels4, counts9) == 0) {
+    return fail("chill");
+  }
+  int ringCounts[9] = {};
+  if (seams_frame_rings(built, 3.0, 1, "knn-union", 6, ringCounts, 9) != 0 ||
+      seams_frame_rings(built, 3.0, 1, "cutoff", 6, ringCounts, 9) != 0 ||
+      seams_frame_rings(built, 3.0, 1, "knn", 6, ringCounts, 9) != 0 ||
+      seams_frame_rings(built, 3.0, 0, nullptr, 6, ringCounts, 9) != 0 ||
+      seams_frame_rings(nullptr, 3.0, 1, "mutual", 6, ringCounts, 9) == 0 ||
+      seams_frame_rings(built, 3.0, 1, "seeded", 6, ringCounts, 9) == 0 ||
+      seams_frame_rings(built, 3.0, 1, "nope", 6, ringCounts, 9) == 0) {
+    return fail("rings edges");
+  }
+  if (seams_frame_rdf_nbins(6.0, 0) < 1 || seams_frame_rdf2d_nbin(3.0, 0.0) < 1 ||
+      seams_frame_rdf2d_nbin(0.01, 1.0) < 1) {
+    return fail("bin counts");
+  }
+  double radius[8] = {};
+  double gram[8] = {};
+  int histEdge[8] = {};
+  double volumeEdge = 0.0;
+  if (seams_frame_rdf(built, 4.0, 0, 1, 0, radius, gram, histEdge, &volumeEdge) != 0 ||
+      seams_frame_rdf(nullptr, 4.0, 4, 1, 1, radius, gram, histEdge, nullptr) == 0) {
+    return fail("rdf edges");
+  }
+  const std::string outdir = "var/run/dseams-lang-out";
+  if (seams_frame_rdf2d(built, 3.0, 0.5, nullptr, radius, gram) != 0 ||
+      seams_frame_rdf2d(built, 3.0, 0.5, outdir.c_str(), radius, gram) != 0 ||
+      seams_frame_rdf2d(nullptr, 3.0, 0.5, nullptr, radius, gram) == 0) {
+    return fail("rdf2d");
+  }
+  int nrows = 0;
+  if (seams_frame_prisms(built, 3.0, 1, 6, nullptr, nullptr, &nrows) != 0 || nrows < 1) {
+    return fail("prism count");
+  }
+  std::vector<seams_prism_row> prows(static_cast<std::size_t>(nrows));
+  if (seams_frame_prisms(nullptr, 3.0, 1, 2, nullptr, nullptr, nullptr) == 0 ||
+      seams_frame_prisms(built, 3.0, 1, 6, outdir.c_str(), prows.data(), &nrows) != 0) {
+    return fail("prisms");
+  }
+  int mono[9] = {};
+  if (seams_frame_monolayer(built, 3.0, 1, 6, 10.0, nullptr, mono, 9) != 0 ||
+      seams_frame_monolayer(built, 3.0, 1, 6, 10.0, outdir.c_str(), mono, 9) != 0 ||
+      seams_frame_monolayer(nullptr, 3.0, 1, 6, 10.0, nullptr, mono, 9) == 0) {
+    return fail("monolayer");
+  }
+  int nHex = 0, nCub = 0, nWat = 0, nBoth = 0;
+  int perAtom[4] = {};
+  if (seams_frame_cages(built, 3.0, 1, 4, "cutoff", 1, perAtom, &nHex, &nCub, &nWat, &nBoth) != 0 ||
+      seams_frame_cages(nullptr, 3.0, 1, 4, "seeded", 0, nullptr, &nHex, &nCub, &nWat, &nBoth) == 0) {
+    return fail("cage edges");
+  }
+  double qlEdge[4] = {};
+  double qlbarEdge[4] = {};
+  if (seams_frame_steinhardt(nullptr, 3.0, 1, 4, qlEdge, qlbarEdge) == 0 ||
+      seams_frame_steinhardt(built, 3.0, 1, 4, nullptr, nullptr) != 0) {
+    return fail("steinhardt edges");
+  }
+  int nCages = 0, nAtoms = 0;
+  if (seams_frame_signature(nullptr, 3.0, 1, "cutoff", "512", &nCages, &nAtoms) == 0 ||
+      seams_frame_signature(built, 3.0, 1, "nope", "512", &nCages, &nAtoms) == 0) {
+    return fail("signature edges");
+  }
+  double tiltedBox[9] = {};
+  seams_frame_box(tilted, tiltedBox);
+  if (tiltedBox[6] == 0.0) {
+    return fail("shear was dropped");
+  }
+  if (seams_path_nframes("nodot") < 0 && seams_last_error() == nullptr) {
+    return fail("extension");
+  }
+  int guestHex = 0, guestCub = 0, guestWat = 0, guestBoth = 0;
+  if (seams_frame_cages(guest, 3.5, 1, 0, "cutoff", 0, nullptr, &guestHex,
+                        &guestCub, &guestWat, &guestBoth) != 0) {
+    return fail("guest cutoff cages");
+  }
+  setenv("SEAMS_OFFLOAD", "1", 1);
+  if (seams_frame_cages(guest, 3.5, 1, 4, "mutual", 0, nullptr, &guestHex,
+                        &guestCub, &guestWat, &guestBoth) != 0) {
+    return fail("guest offload cages");
+  }
+  unsetenv("SEAMS_OFFLOAD");
+  const std::string emptyDump = "var/run/dseams-lang-empty.lammpstrj";
+  {
+    std::ofstream out(emptyDump);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n0\n"
+           "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+           "ITEM: ATOMS id type x y z\n";
+  }
+  seams_frame *empty = seams_frame_read(emptyDump.c_str(), 1, -1);
+  if (empty == nullptr || seams_frame_cages(empty, 3.0, 0, 4, "cutoff", 0, nullptr,
+                                            &guestHex, &guestCub, &guestWat,
+                                            &guestBoth) != 0) {
+    return fail("empty cages");
+  }
+  const std::string tinyXyz = "var/run/dseams-lang-tiny.xyz";
+  {
+    std::ofstream out(tinyXyz);
+    out << "1\ncomment\nO 0 0 0\n";
+  }
+  seams_frame *fromXyz = seams_frame_read(tinyXyz.c_str(), 1, -1);
+  if (fromXyz == nullptr) {
+    return fail("xyz read");
+  }
+  if (seams_frame_read("var/run/dseams-lang-missing.xyz", 1, -1) != nullptr) {
+    return fail("missing xyz should fail");
+  }
+  if (seams_frame_chill(tip, 3.5, 99, "cutoff", labels.data(), counts) != 0) {
+    return fail("chill type filter");
+  }
+  if (seams_frame_cages(built, 3.0, 99, 4, "nope", 0, nullptr, &guestHex, &guestCub,
+                        &guestWat, &guestBoth) == 0) {
+    return fail("cages should reject the graph");
+  }
+  if (seams_frame_cages(built, 3.0, 99, 4, "cutoff", 0, nullptr, &guestHex, &guestCub,
+                        &guestWat, &guestBoth) != 0) {
+    return fail("cages type filter");
+  }
+  seams_prism_row oneRow{};
+  int shortRows = 1;
+  if (seams_frame_prisms(built, 3.0, 1, 6, nullptr, &oneRow, &shortRows) == 0) {
+    return fail("short prism buffer");
+  }
+  if (seams_frame_steinhardt(built, 3.0, 1, -1, qlEdge, qlbarEdge) != 0 &&
+      seams_last_error() == nullptr) {
+    return fail("steinhardt error");
+  }
+  if (seams_frame_rdf(built, -1.0, 4, 1, 1, radius, gram, histEdge, nullptr) != 0 &&
+      seams_last_error() == nullptr) {
+    return fail("rdf error");
+  }
+  if (seams_frame_rdf2d(built, -1.0, 0.1, nullptr, radius, gram) != 0 &&
+      seams_last_error() == nullptr) {
+    return fail("rdf2d error");
+  }
+  if (seams_frame_monolayer(built, -1.0, 1, 6, 1.0, nullptr, mono, 9) != 0 &&
+      seams_last_error() == nullptr) {
+    return fail("monolayer error");
+  }
+  seams_frame_free(fromXyz);
+  seams_frame_free(empty);
+  seams_frame_free(built);
+  seams_frame_free(tilted);
+  seams_frame_free(nullptr);
 
   seams_frame_free(molten);
   seams_frame_free(tip);

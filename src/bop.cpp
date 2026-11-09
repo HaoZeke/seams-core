@@ -132,8 +132,6 @@ double legendreAmplitude(int orderL, int absM, const AngularTerms &terms) {
       return s[2] * c[1];
     case 3:
       return s[3];
-    default:
-      return 0.0;
     }
   }
 
@@ -149,8 +147,6 @@ double legendreAmplitude(int orderL, int absM, const AngularTerms &terms) {
       return s[3] * c[1];
     case 4:
       return s[4];
-    default:
-      return 0.0;
     }
   }
 
@@ -170,8 +166,6 @@ double legendreAmplitude(int orderL, int absM, const AngularTerms &terms) {
       return s[5] * c[1];
     case 6:
       return s[6];
-    default:
-      return 0.0;
     }
   }
 
@@ -195,8 +189,6 @@ double legendreAmplitude(int orderL, int absM, const AngularTerms &terms) {
       return s[7] * c[1] * 2027025.0;
     case 8:
       return s[8] * 2027025.0;
-    default:
-      return 0.0;
     }
   }
 
@@ -284,9 +276,7 @@ std::vector<int> nearestNeighbourIndices(
 
 void associatedP(int L, double x, std::vector<double> &p) {
   p.assign(static_cast<std::size_t>(L) + 1, 0.0);
-  if (L < 0) {
-    return;
-  }
+  if (L < 0) return;
   const double s = std::sqrt(std::max(0.0, 1.0 - x * x));
   double pmm = 1.0;
   for (int m = 0; m <= L; m++) {
@@ -326,9 +316,7 @@ double nlmNorm(int l, int m) {
 void spheriHarmoGeneral(int orderL, std::array<double, 2> angles,
                         std::vector<std::complex<double>> &out) {
   out.assign(static_cast<std::size_t>(2 * orderL + 1), {0.0, 0.0});
-  if (orderL < 0) {
-    return;
-  }
+  if (orderL < 0) return;
   std::vector<double> p;
   associatedP(orderL, std::cos(angles[1]), p);
   const double phi = angles[0];
@@ -375,8 +363,7 @@ std::vector<std::complex<double>>
 sph::spheriHarmo(int orderL, std::array<double, 2> radialCoord) {
   std::vector<std::complex<double>> out;
   spheriHarmoInto(orderL, radialCoord, out);
-  return out;
-}
+  return out; }
 
 
 /**
@@ -394,8 +381,7 @@ sph::lookupTableQ8Vec(std::array<double, 2> angles) {
     result[8 - m] = negative;
     result[8 + m] = positive;
   }
-  return result;
-}
+  return result; }
 
 /**
  * @details Single order of @f$Q_8@f$.
@@ -448,8 +434,7 @@ sph::lookupTableQ3Vec(std::array<double, 2> angles) {
     result[3 + m] = positive;
   }
 
-  return result;
-}
+  return result; }
 
 /**
  *  @details Look-up hard-coded values for @f$Q_3@f$
@@ -492,8 +477,7 @@ sph::lookupTableQ4Vec(std::array<double, 2> angles) {
     result[4 + m] = positive;
   }
 
-  return result;
-}
+  return result; }
 
 /**
  * @details Single order of @f$Q_4@f$.
@@ -534,8 +518,7 @@ sph::lookupTableQ6Vec(std::array<double, 2> angles) {
     result[6 + m] = positive;
   }
 
-  return result;
-}
+  return result; }
 
 /**
  * @details Hard-coded calculations for determining @f$Q_6@f$.
@@ -714,9 +697,7 @@ static void classifyBondsLeftFp64(
 
   }
   if (bondPhase) {
-    bondPass1 = std::chrono::duration<double, std::milli>(
-                    std::chrono::steady_clock::now() - bondT0)
-                    .count();
+    bondPass1 = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - bondT0).count();
   }
   // Size every bond list on the calling thread. push_back inside the
   // correlation took the allocator lock once per atom.
@@ -788,9 +769,7 @@ static void classifyBondsLeftFp64(
       }
   }
   if (bondPhase) {
-    const double bondAll = std::chrono::duration<double, std::milli>(
-                               std::chrono::steady_clock::now() - bondT0)
-                               .count();
+    const double bondAll = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - bondT0).count();
     std::fprintf(stderr, "phase bond1 %.6f\nphase bond2 %.6f\n", bondPass1,
                  bondAll - bondPass1);
   }
@@ -957,8 +936,7 @@ std::vector<std::string> chill::bondClassifierNames() {
     names.push_back(entry.first);
   }
   std::sort(names.begin(), names.end());
-  return names;
-}
+  return names; }
 
 //! Gets c_ij according to the CHILL rule set
 void

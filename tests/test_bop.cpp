@@ -6,6 +6,7 @@
 #include <mol_sys.hpp>
 #include <neighbours.hpp>
 #include <order_parameter.hpp>
+#include <ozaki.hpp>
 #include <seams_input.hpp>
 #include <steinhardt_device.hpp>
 
@@ -25,6 +26,13 @@
 #ifdef SEAMS_HAS_OPENMP
 #include <omp.h>
 #endif
+
+namespace {
+struct ArmPhasePrints {
+  ArmPhasePrints() { setenv("DSEAMS_PHASE", "1", 0); }
+};
+const ArmPhasePrints armPhasePrints;
+} // namespace
 
 TEST_CASE("radialCoord converts Cartesian to spherical angles", "[bop]") {
   // Point along the z-axis: (0, 0, 1)
@@ -1713,3 +1721,234 @@ TEST_CASE("steinhardtQl offload matches serial and threaded bit for bit",
   }
 }
 #endif
+
+namespace {
+
+molSys::Result bondOf(molSys::bond_type kind, double value) {
+  molSys::Result bond;
+  bond.classifier = kind;
+  bond.c_value = value;
+  return bond;
+}
+
+molSys::PointCloud<molSys::Point<double>, double> fiveCloud(bool sparse) {
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  cloud.box = {20.0, 20.0, 20.0};
+  cloud.boxLow = {0.0, 0.0, 0.0};
+  cloud.currentFrame = 1;
+  const double coords[5][3] = {{10, 10, 10}, {11, 11, 11}, {11, 9, 9},
+                               {9, 11, 9}, {9, 9, 11}};
+  for (int i = 0; i < 5; i++) {
+    molSys::Point<double> pt;
+    pt.type = 1;
+    pt.atomID = sparse ? 1000 + i * 1000 : i;
+    pt.molID = pt.atomID;
+    pt.x = coords[i][0];
+    pt.y = coords[i][1];
+    pt.z = coords[i][2];
+    pt.inSlice = true;
+    cloud.pts.push_back(pt);
+    cloud.idIndexMap[pt.atomID] = i;
+  }
+  cloud.nop = 5;
+  return cloud;
+}
+
+std::vector<std::vector<int>> starList(const molSys::PointCloud<molSys::Point<double>, double> &cloud) {
+  std::vector<std::vector<int>> rows(static_cast<std::size_t>(cloud.nop));
+  for (int i = 0; i < cloud.nop; i++) {
+    rows[static_cast<std::size_t>(i)].push_back(cloud.pts[static_cast<std::size_t>(i)].atomID);
+    for (int j = 0; j < cloud.nop; j++) {
+      if (j != i) {
+        rows[static_cast<std::size_t>(i)].push_back(cloud.pts[static_cast<std::size_t>(j)].atomID);
+      }
+    }
+  }
+  return rows;
+}
+
+void stampBonds(molSys::PointCloud<molSys::Point<double>, double> &cloud, int atom,
+                std::initializer_list<molSys::Result> bonds) {
+  cloud.pts[static_cast<std::size_t>(atom)].c_ij.assign(bonds.begin(), bonds.end());
+}
+
+} // namespace
+
+TEST_CASE("harmonic tables cover the rejected orders and the general degree", "[bop]") {
+  std::vector<std::complex<double>> out;
+  sph::spheriHarmoInto(-1, {0.2, 0.4}, out);
+  REQUIRE(out.empty());
+  const auto general = sph::spheriHarmo(2, {0.3, 0.7});
+  REQUIRE(general.size() == 5);
+  const std::array<double, 2> angles = {0.4, 1.1};
+  REQUIRE(sph::lookupTableQ3(-1, angles) == std::complex<double>{0.0, 0.0});
+  REQUIRE(sph::lookupTableQ3(7, angles) == std::complex<double>{0.0, 0.0});
+  REQUIRE(sph::lookupTableQ4(-1, angles) == std::complex<double>{0.0, 0.0});
+  REQUIRE(sph::lookupTableQ4(9, angles) == std::complex<double>{0.0, 0.0});
+  REQUIRE(sph::lookupTableQ6(-1, angles) == std::complex<double>{0.0, 0.0});
+  REQUIRE(sph::lookupTableQ6(13, angles) == std::complex<double>{0.0, 0.0});
+  REQUIRE(sph::lookupTableQ8(-1, angles) == std::complex<double>{0.0, 0.0});
+  REQUIRE(sph::lookupTableQ8(17, angles) == std::complex<double>{0.0, 0.0});
+  REQUIRE(sph::lookupTableQ3Vec(angles).size() == 7);
+  REQUIRE(sph::lookupTableQ4Vec(angles).size() == 9);
+  REQUIRE(sph::lookupTableQ6Vec(angles).size() == 13);
+  REQUIRE(sph::lookupTableQ8Vec(angles).size() == 17);
+  REQUIRE(std::abs(sph::lookupTableQ6(6, angles)) > 0.0);
+  const auto origin = sph::radialCoord({0.0, 0.0, 0.0});
+  REQUIRE_THAT(origin[1], Catch::Matchers::WithinAbs(0.0, 1e-12));
+}
+
+TEST_CASE("bond classification keeps the other product reductions", "[bop]") {
+  struct RestoreProduct {
+    seams::product::Mode mode;
+    seams::product::Reduction reduction;
+    RestoreProduct() : mode(seams::product::mode()), reduction(seams::product::reduction()) {}
+    ~RestoreProduct() {
+      seams::product::setMode(mode);
+      seams::product::setReduction(reduction);
+    }
+  } restoreProduct;
+  {
+    auto sparse = fiveCloud(true);
+    sparse.pts[4].inSlice = false;
+    auto sparseRows = starList(sparse);
+    sparseRows[0].push_back(424242);
+    chill::getCorrel(sparse, sparseRows, true);
+    REQUIRE(sparse.pts[4].c_ij.empty());
+    REQUIRE_FALSE(sparse.pts[0].c_ij.empty());
+  }
+  auto cloud = fiveCloud(true);
+  cloud.pts[4].inSlice = false;
+  auto rows = starList(cloud);
+  rows[0].push_back(424242);
+  chill::BondClassifier rule = chill::chillRule();
+
+  seams::product::setReduction(seams::product::Reduction::Pairwise);
+  seams::product::setMode(seams::product::Mode::Fp64);
+  chill::classifyBonds(cloud, rows, rule, true);
+  REQUIRE_FALSE(cloud.pts[0].c_ij.empty());
+  REQUIRE(cloud.pts[4].c_ij.empty());
+
+  seams::product::setReduction(seams::product::Reduction::Left);
+  seams::product::setMode(seams::product::Mode::Dot2);
+  chill::classifyBonds(cloud, rows, rule, false);
+  REQUIRE_FALSE(cloud.pts[0].c_ij.empty());
+
+  seams::product::setReduction(seams::product::Reduction::Neumaier);
+  seams::product::setMode(seams::product::Mode::OzakiI);
+  rule.coordinationNumber = 0;
+  chill::classifyBonds(cloud, rows, rule, false);
+  REQUIRE_FALSE(cloud.pts[1].c_ij.empty());
+  rule.coordinationNumber = 4;
+  rule.staggeredMax = 1.0;
+  rule.eclipsedMin = 2.0;
+  rule.eclipsedMax = 3.0;
+  chill::classifyBonds(cloud, rows, rule, false);
+  bool sawStaggered = false;
+  for (const auto &bond : cloud.pts[0].c_ij) {
+    sawStaggered = sawStaggered || bond.classifier == molSys::bond_type::staggered;
+  }
+  REQUIRE(sawStaggered);
+  rule.staggeredMax = -2.0;
+  rule.eclipsedMin = -1.0;
+  rule.eclipsedMax = 1.0;
+  chill::classifyBonds(cloud, rows, rule, false);
+  bool sawEclipsed = false;
+  for (const auto &bond : cloud.pts[0].c_ij) {
+    sawEclipsed = sawEclipsed || bond.classifier == molSys::bond_type::eclipsed;
+  }
+  REQUIRE(sawEclipsed);
+  (void)restoreProduct;
+}
+
+TEST_CASE("ice labels, the reprint, and the water reclassification", "[bop]") {
+  auto cloud = fiveCloud(false);
+  auto rows = starList(cloud);
+  const auto staggered = bondOf(molSys::bond_type::staggered, -0.9);
+  const auto eclipsed = bondOf(molSys::bond_type::eclipsed, -0.1);
+  const auto other = bondOf(molSys::bond_type::out_of_range, 0.4);
+
+  stampBonds(cloud, 0, {staggered, staggered, staggered, staggered});
+  stampBonds(cloud, 1, {eclipsed, staggered, staggered, staggered});
+  stampBonds(cloud, 2, {staggered, staggered, other, other});
+  stampBonds(cloud, 3, {staggered, staggered, other, other});
+  stampBonds(cloud, 4, {staggered, staggered});
+  cloud.pts[2].inSlice = false;
+  chill::getIceTypeNoPrint(cloud, rows, true);
+  REQUIRE(cloud.pts[3].iceType == molSys::atom_state_type::interfacial);
+  REQUIRE(cloud.pts[0].iceType == molSys::atom_state_type::cubic);
+  REQUIRE(cloud.pts[1].iceType == molSys::atom_state_type::hexagonal);
+  REQUIRE(cloud.pts[4].iceType == molSys::atom_state_type::water);
+
+  stampBonds(cloud, 2, {staggered, staggered, staggered});
+  cloud.pts[2].inSlice = true;
+  const auto dir = std::filesystem::temp_directory_path() / "dseams-bop-ice";
+  std::filesystem::create_directories(dir);
+  chill::getIceType(cloud, rows, dir.string() + "/", cloud.currentFrame, false, "ice.txt");
+  cloud.currentFrame = 2;
+  cloud.pts[4].inSlice = false;
+  chill::getIceType(cloud, rows, dir.string() + "/", 1, true, "ice.txt");
+  REQUIRE(cloud.pts[3].iceType == molSys::atom_state_type::interfacial);
+
+  cloud.pts[0].iceType = molSys::atom_state_type::water;
+  cloud.pts[1].iceType = molSys::atom_state_type::water;
+  cloud.pts[2].iceType = molSys::atom_state_type::cubic;
+  stampBonds(cloud, 0, {bondOf(molSys::bond_type::staggered, -0.95),
+                        bondOf(molSys::bond_type::staggered, -0.95)});
+  stampBonds(cloud, 1, {bondOf(molSys::bond_type::staggered, -0.80),
+                        bondOf(molSys::bond_type::staggered, -0.80)});
+  std::vector<double> q6 = {0.7, 0.7, 0.1, 0.0, 0.0};
+  chill::reclassifyWater(cloud, q6);
+  REQUIRE(cloud.pts[0].iceType == molSys::atom_state_type::reCubic);
+  REQUIRE(cloud.pts[1].iceType == molSys::atom_state_type::reHex);
+
+  cloud.pts[0].iceType = molSys::atom_state_type::cubic;
+  cloud.pts[1].iceType = molSys::atom_state_type::hexagonal;
+  cloud.pts[2].iceType = molSys::atom_state_type::water;
+  cloud.pts[3].iceType = molSys::atom_state_type::interfacial;
+  cloud.pts[4].iceType = molSys::atom_state_type::clathrate;
+  cloud.pts[3].inSlice = false;
+  REQUIRE(chill::printIceType(cloud, dir.string() + "/", 1, false, "types.txt") == 0);
+  cloud.pts.push_back(cloud.pts[0]);
+  cloud.pts.back().iceType = molSys::atom_state_type::interClathrate;
+  cloud.pts.back().inSlice = true;
+  cloud.nop = 6;
+  cloud.pts[0].iceType = molSys::atom_state_type::unclassified;
+  REQUIRE(chill::printIceType(cloud, dir.string() + "/", 9, true, "types.txt") == 0);
+
+  cloud.pts.resize(5);
+  cloud.nop = 5;
+  for (auto &pt : cloud.pts) {
+    pt.inSlice = true;
+    pt.c_ij.clear();
+  }
+  stampBonds(cloud, 1, {staggered, staggered, staggered});
+  stampBonds(cloud, 0, {staggered, staggered});
+  REQUIRE(chill::isInterfacial(cloud, rows, 0, 2, 0, false));
+  stampBonds(cloud, 1, {staggered, staggered});
+  REQUIRE(chill::isInterfacial(cloud, rows, 0, 3, 0, false));
+  cloud.pts[4].inSlice = false;
+
+  cloud.pts[1].x = cloud.pts[0].x;
+  cloud.pts[1].y = cloud.pts[0].y;
+  cloud.pts[1].z = cloud.pts[0].z;
+  const auto q = chill::getq6(cloud, rows, false);
+  REQUIRE(q.size() == static_cast<std::size_t>(cloud.nop));
+
+  stampBonds(cloud, 0, {eclipsed, eclipsed, eclipsed, eclipsed});
+  stampBonds(cloud, 1, {eclipsed, eclipsed, eclipsed, other});
+  stampBonds(cloud, 2, {eclipsed, staggered, staggered, staggered});
+  for (auto &pt : cloud.pts) {
+    pt.inSlice = true;
+  }
+  cloud.pts[4].inSlice = false;
+  chill::getIceTypePlusNoPrint(cloud, rows, true);
+  REQUIRE(cloud.pts[0].iceType == molSys::atom_state_type::clathrate);
+  REQUIRE(cloud.pts[1].iceType == molSys::atom_state_type::interClathrate);
+  REQUIRE(cloud.pts[2].iceType == molSys::atom_state_type::hexagonal);
+  chill::clearIceTypesExcept(cloud, {});
+  chill::clearIceTypesExcept(cloud, {9});
+  REQUIRE(cloud.pts[0].iceType == molSys::atom_state_type::unclassified);
+  chill::getIceTypePlus(cloud, rows, dir.string() + "/", 1, true, "plus.txt");
+  std::filesystem::remove_all(dir);
+}

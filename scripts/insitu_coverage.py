@@ -39,7 +39,7 @@ def physical(text):
 def gcov_counts(path):
     counts = {}
     for line in Path(path).read_text(errors="replace").splitlines():
-        match = re.match(r"\s*([-0-9#=]+):\s*(\d+):", line)
+        match = re.match(r"\s*([-0-9#=]+)\*?:\s*(\d+):", line)
         if not match:
             continue
         mark, number = match.group(1), int(match.group(2))
