@@ -583,6 +583,9 @@ molSys::PointCloud<molSys::Point<double>, double> sinp::readXYZ(std::string file
     // Throw exception?
         throw std::runtime_error("Wrong filepath");
   }
+  if (!std::filesystem::is_regular_file(filename)) {
+    throw std::runtime_error("XYZ header is not an atom count.");
+  }
 
   // --------
   // Before filling up the PointCloud, if the vectors are filled
@@ -603,7 +606,7 @@ molSys::PointCloud<molSys::Point<double>, double> sinp::readXYZ(std::string file
     // The first line contains the number of atoms
     if (!std::getline((*xyzFile), line)) {
       xyzFile->close();
-      throw std::runtime_error("XYZ header is not an atom count.");
+      throw std::runtime_error("XYZ read failed: the file has no frames");
     }
     try {
       nop = std::stoi(line);

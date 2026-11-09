@@ -25,6 +25,7 @@
 #include <fstream>
 #include <iostream>
 #include <mutex>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -597,6 +598,10 @@ sinp::openFrame(const std::string &filename, int frame, int typeI,
           " is past the last frame in this file");
     }
     return readXYZ(filename);
+  }
+  if (ext != "lammpstrj" && ext != "dump") {
+    std::cerr << "chemfiles cannot read " << filename << "\n";
+    return molSys::clearPointCloud(cloud);
   }
   if (typeI < 0) {
     return readLammpsTrj(filename, frame, cloud);

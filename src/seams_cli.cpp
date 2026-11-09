@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -160,6 +161,14 @@ void forEachInputFrame(const std::string &path, int first, int last,
     return;
   }
 
+  if (std::filesystem::is_regular_file(path)) {
+    const int nframes = sinp::nLammpsFrames(path);
+    if (nframes > 0 && first > nframes && (last <= 0 || last >= first)) {
+      throw std::runtime_error(
+          "frame " + std::to_string(first) +
+          " is past the last frame in this file");
+    }
+  }
   sinp::forEachLammpsFrame(path, first, last, typeFilter,
                            std::forward<Fn>(fn), nThreads, part, parts);
 }

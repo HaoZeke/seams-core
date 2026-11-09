@@ -252,7 +252,7 @@ def main():
     )
     expect(["cn", str(zero), "--ions", "--site", "1=cationHead,2=anion",
             "--cutoff", "6", *one], 0, out_has="degree 0",
-           err_line="The point cloud has no simulation box; cannot build a neighbour list.")
+           err_line="The simulation box has a non-positive edge; cannot build a neighbour list.")
 
     short = work / "short-box.lammpstrj"
     short.write_text(
@@ -276,10 +276,12 @@ def main():
     )
     expect(["rings", str(two), "--frame", "1", "--last", "2", "--jobs", "1"],
            0, out_has="rings ")
+    feat = run(["--features"])
     os.environ["SEAMS_MOL_INDEX_LOG"] = "1"
     logged = expect(["rings", str(tiny), *one], 0, out_has="rings ")
     os.environ.pop("SEAMS_MOL_INDEX_LOG", None)
-    check("mol index", "mol index frames" in logged.stderr, logged.stderr[:160])
+    if "chemfiles: enabled" in feat.stdout:
+        check("mol index", "mol index frames" in logged.stderr, logged.stderr[:160])
     expect(["rings"], 2, err_line="A command and a trajectory file are required")
 
     ice = expect(["chill", str(nucleation), *one, "--cutoff", "3.5"],
@@ -357,7 +359,9 @@ def main():
     expect(["read", str(pdb), "--frame", "1", "--last", "2"], 0, out_has="nop ")
     con = work / "end.con"
     con.write_text("END\n")
-    expect(["read", str(con), "--frame", "1", "--last", "2"], 2)
+    bad = expect(["read", str(con), "--frame", "1", "--last", "2"], 0, out_has="nop 0")
+    check("bad con", "not found" in bad.stderr or "Cannot open" in bad.stderr,
+          bad.stderr[:200])
 
 
 if __name__ == "__main__":

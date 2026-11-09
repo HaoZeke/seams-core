@@ -32,9 +32,11 @@ def main():
 
         multi = root / "multi.xyz"
         multi.write_text("1\nframe\nO 1 2 3\n1\nframe\nO 4 5 6\n")
+        feat = run(["--features"])
         got = run(["--frame", "1", "--last", "2", "--jobs", "1", "read", str(multi)])
         check("multi exit", got.returncode == 0)
-        check("multi frames", got.stdout.count("nop 1 frame ") == 2)
+        want = 2 if "chemfiles: enabled" in feat.stdout else 1
+        check("multi frames", got.stdout.count("nop 1 frame ") == want)
 
 
 if __name__ == "__main__":

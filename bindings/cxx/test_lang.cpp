@@ -639,14 +639,30 @@ int main(int argc, char **argv) {
   }
     {
   auto arm68 = [&]() -> int {
+#ifdef SEAMS_HAS_CHEMFILES
     return check(!(seams_path_nframes(oneGro.c_str()) != 1), "gro frame count");
+#else
+    const int n = seams_path_nframes(oneGro.c_str());
+    const char *err = seams_last_error();
+    return check(!(n != -1 || err == nullptr ||
+                   std::string(err) != "unreadable trajectory"),
+                 "gro frame count");
+#endif
   };
   rc = rc != 0 ? rc : arm68();
 
   }
     {
   auto arm69 = [&]() -> int {
+#ifdef SEAMS_HAS_CHEMFILES
     return check(!(seams_path_nframes(onePdb.c_str()) != 1), "pdb frame count");
+#else
+    const int n = seams_path_nframes(onePdb.c_str());
+    const char *err = seams_last_error();
+    return check(!(n != -1 || err == nullptr ||
+                   std::string(err) != "unreadable trajectory"),
+                 "pdb frame count");
+#endif
   };
   rc = rc != 0 ? rc : arm69();
 

@@ -21,6 +21,7 @@
 #include <cmath>
 #include <cstring>
 #include <exception>
+#include <fstream>
 #include <memory>
 #include <set>
 #include <string>
@@ -37,6 +38,43 @@ using Cloud = molSys::PointCloud<molSys::Point<double>, double>;
 thread_local std::string g_error;
 
 void set_error(const std::string &message) { g_error = message; }
+
+int xyzFrames(const std::string &path) {
+  std::ifstream in(path);
+  if (!in) {
+    return -1;
+  }
+  int frames = 0;
+  std::string line;
+  while (std::getline(in, line)) {
+    if (line.empty()) {
+      continue;
+    }
+    int n = 0;
+    try {
+      std::size_t used = 0;
+      n = std::stoi(line, &used);
+      if (used == 0) {
+        return -1;
+      }
+    } catch (...) {
+      return -1;
+    }
+    if (n < 0) {
+      return -1;
+    }
+    if (!std::getline(in, line)) {
+      return -1;
+    }
+    for (int i = 0; i < n; ++i) {
+      if (!std::getline(in, line)) {
+        return -1;
+      }
+    }
+    frames += 1;
+  }
+  return frames;
+}
 
 void clear_error() { g_error.clear(); }
 
@@ -186,7 +224,12 @@ int seams_path_nframes(const char *path) {
     return -1;
 #else
     if (ext == "xyz") {
-      return 1;
+      const int frames = xyzFrames(path);
+      if (frames <= 0) {
+        set_error("unreadable trajectory");
+        return -1;
+      }
+      return frames;
     }
     set_error("unreadable trajectory");
     return -1;

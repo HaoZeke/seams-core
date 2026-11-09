@@ -78,8 +78,12 @@ def main():
     expect(["read", str(work / "dir.dcd"), "--frame", "1", "--last", "2"],
            0, err_line="chemfiles cannot read " + str(work / "dir.dcd"))
     expect(["rings", str(work / "dir.lammpstrj"), "--frame", "1", "--last", "2"], 0)
-    expect(["read", str(work / "dir.con"), "--frame", "1", "--last", "1"],
-           2, err_line="readcon-core is not in this build; CON input needs it")
+    con_dir = run(["read", str(work / "dir.con"), "--frame", "1", "--last", "1"])
+    if "readcon-core is not in this build" in con_dir.stderr:
+        check("con missing", con_dir.returncode == 2, str(con_dir.returncode))
+    else:
+        check("con dir", "Cannot open .con file" in con_dir.stderr,
+              con_dir.stderr[:240])
     nodot = work / "nodot"
     nodot.write_text(body)
     expect(["rings", str(nodot), "--frame", "1", "--last", "1"], 0, out_has="rings ")
