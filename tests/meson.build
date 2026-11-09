@@ -47,6 +47,9 @@ test_sources = {
   'site': 'test_site.cpp',
   'molid_values': 'test_molid_values.cpp',
   'cover_graph': 'cover_graph.cpp',
+  'cover_ice': 'cover_ice.cpp',
+  'cover_io': 'cover_io.cpp',
+  'cover_orient': 'cover_orient.cpp',
 }
 
 if readcon_dep.found()
@@ -77,7 +80,8 @@ _test_env.set('LC_ALL', 'C')
 # counters and the tests inside the limit.
 if get_option('b_coverage')
   _test_env.set('OMP_NUM_THREADS', '1')
-  # WorkerPlacement reads DSEAMS_PIN during static init.
+  # WorkerPlacement in franzblau.cpp reads DSEAMS_PIN during static init,
+  # before any Catch2 case can set the variable.
   _test_env.set('DSEAMS_PIN', '1')
 endif
 
