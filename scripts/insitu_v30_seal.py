@@ -297,13 +297,10 @@ def cmd_gcov(args):
                 continue
             target = gcov_dir / (matched.replace("/", "__") + ".gcov")
             extra.rename(target)
-        if produced.exists():
-            text = produced.read_text(errors="replace")
-            if not dest.exists():
-                produced.rename(dest)
-        else:
-            text = proc.stdout + proc.stderr
-            dest.write_text(text)
+        if produced.exists() and not dest.exists():
+            produced.rename(dest)
+        if not dest.exists():
+            dest.write_text(proc.stdout + proc.stderr)
         scored = gcov_score(dest.read_text(errors="replace"), name)
         if scored is None:
             rows.append((rel, "no executable lines"))
