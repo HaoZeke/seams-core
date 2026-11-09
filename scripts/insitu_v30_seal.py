@@ -348,6 +348,10 @@ def cmd_gcov(args):
         log_path,
         root,
     )
+    bench = build / "tests" / "bench_chemfiles_read"
+    dump = root / "input" / "traj" / "agi_water_tiny.lammpstrj"
+    if bench.exists() and dump.exists():
+        stamp_run([str(bench), str(dump)], log_path, root)
     changed = git(root, "diff", "--name-only", PUBLIC_BASE + "..HEAD").split()
     gcov_bin = args.gcov
     rows = []
