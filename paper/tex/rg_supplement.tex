@@ -512,21 +512,12 @@ The version DOI for that release is \DOIPENDING.
 We stored the neighbour membership of the affiliation pass as compressed
 sparse rows instead of a bit matrix over all pairs of molecules, so that
 a frame of \num{e6} molecules fits in memory.
-We used the library and the command-line program of the git tree
-\texttt{cb10f6d6} of the directory \texttt{src}.
-That is the tree \texttt{git rev-parse HEAD:src} prints in a checkout of
-that commit.
 We ran the workflow of Section~\ref{sec:s-repro} from the repository
 root.
-We took the drivers of the version comparison and of the update sweep
-from that commit.
-The update driver is the blob
-\texttt{c08b154df0a480bd1f1903fb98eef05ee13ccca4} of
-\texttt{tests/bench\_churn\_sweep.cpp}.
 We stored the SHA-256 sums of all binaries with the records.
-We recorded the commit and the tree of the comparator campaign, whose
-\texttt{src} tree is the same.
-Its benchmark driver has every mode that the campaign calls, and its
+The \texttt{src} tree and the update-driver blob of that measurement
+are not objects in this public history.
+The benchmark driver has every mode that the campaign calls, and its
 build files carry the version string 2.12.0.
 We built d-SEAMS~1.0.1 from the tag v1.0.1, commit 6e51956f, with the
 same compiler in C++17 at optimization level 2, against Boost and
@@ -1068,15 +1059,13 @@ Confined & \num{10000} & d-SEAMS & \kfour{confined@1e4@dseams-rings} \\
 \section{One-thread ring and neighbour records}
 \label{sec:s-ring-perf}
 
-The ring record \texttt{ring-head2head.json} is one thread on one core,
-twelve timed calls, and none are dropped.
+The one-thread ring medians in Table~\ref{tab:s-ring-perf} are type 7
+medians of twelve calls, and none are dropped.
 Each printed median is the type 7 median, and each bracket is the type 7
-first and third quartiles, from
-\texttt{paper/tex/figures/ring\_perf\_type7.py}.
+first and third quartiles.
 The hardware line of that record is \texttt{uname -m} \texttt{x86\_64},
 \texttt{nproc} 8, CPU model \texttt{Intel Xeon Processor}.
-The logs \texttt{bbdir/ring-h2h.log} and \texttt{bbdir/neigh-h2h.log}
-name the commit of the samples.
+The logs that named those sample commits are not in this public history.
 On the skewed cell of \num{512} molecules the mutual four-neighbour list
 takes \qty{\dsv{neigh@skew@dseams}}{\milli\second} for d-SEAMS,
 \qty{\dsv{neigh@skew@freud}}{\milli\second} for freud and
