@@ -67,7 +67,7 @@ def main():
     for name, block in data["codes"].items():
         plain = block.get("plain") or []
         live = block.get("live") or []
-        if not plain:
+        if len(plain) != len(live) or not plain:
             continue
         lines.append("## %s" % name)
         lines.append("")
