@@ -478,6 +478,39 @@ int main(int argc, char **argv) {
   if (seams_frame_monolayer(built, -1.0, 1, 6, 1.0, nullptr, mono, 9) != 0 && seams_last_error() == nullptr) {
     return fail("monolayer error");
   }
+  std::string longXyz(200000, 'q');
+  longXyz += ".lammpstrj";
+  (void)seams_path_nframes(longXyz.c_str());
+  const std::string oneAtom =
+      (std::filesystem::temp_directory_path() / "dseams-lang-one.xyz").string();
+  {
+    std::ofstream out(oneAtom);
+    out << "1\n\nO 0 0 0\n";
+  }
+  seams_frame *one = seams_frame_read(oneAtom.c_str(), 0, -1);
+  if (one != nullptr) {
+    double q = 0;
+    double qb = 0;
+    (void)seams_frame_steinhardt(one, 3.0, 1, 4, &q, &qb);
+    (void)seams_frame_steinhardt(one, 3.0, 1, 0, &q, &qb);
+    seams_frame_free(one);
+  }
+  std::filesystem::remove(oneAtom);
+  const auto blocker =
+      std::filesystem::temp_directory_path() / "dseams-lang-notdir";
+  {
+    std::ofstream out(blocker);
+    out << "x\n";
+  }
+  seams_prism_row prismRows[8]{};
+  int prismN = 8;
+  (void)seams_frame_prisms(built, 3.0, 1, 6, blocker.string().c_str(),
+                           prismRows, &prismN);
+  int monoCounts[8] = {};
+  (void)seams_frame_monolayer(built, 3.0, 1, 6, 1.0, blocker.string().c_str(),
+                              monoCounts, 8);
+  std::filesystem::remove(blocker);
+
   seams_frame_free(fromXyz);
   seams_frame_free(empty);
   seams_frame_free(built);

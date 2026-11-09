@@ -8,6 +8,9 @@
 #include <set>
 #include <utility>
 #include <vector>
+#ifdef SEAMS_HAS_OPENMP
+#include <omp.h>
+#endif
 #include <mol_sys.hpp>
 #include <neighbours.hpp>
 #include <ring.hpp>
@@ -507,4 +510,55 @@ TEST_CASE("a single changed bond refreshes the stored balls", "[franzblau]") {
   edited[6].push_back(0);
   const auto again = deep.update(edited);
   REQUIRE(again.size() == primitive::ringNetwork(edited, 8).size());
+}
+
+TEST_CASE("a second thread enumerates the same rings and the same edit",
+          "[franzblau]") {
+#ifdef SEAMS_HAS_OPENMP
+  struct RestoreThreads {
+    int before;
+    RestoreThreads() : before(omp_get_max_threads()) {}
+    ~RestoreThreads() { omp_set_num_threads(before); }
+  } restore;
+  const int n = 48;
+  std::vector<std::vector<int>> cycle(static_cast<std::size_t>(n));
+  for (int i = 0; i < n; ++i) {
+    cycle[static_cast<std::size_t>(i)] = {i, (i + 1) % n, (i + n - 1) % n};
+  }
+  omp_set_num_threads(1);
+  const auto serial = primitive::ringNetwork(cycle, 6);
+  omp_set_num_threads(2);
+  REQUIRE(primitive::ringNetwork(cycle, 6) == serial);
+
+  const int wide = 1200;
+  std::vector<std::vector<int>> path(static_cast<std::size_t>(wide));
+  for (int i = 0; i < wide; ++i) {
+    path[static_cast<std::size_t>(i)] = {i};
+    if (i > 0) {
+      path[static_cast<std::size_t>(i)].push_back(i - 1);
+    }
+    if (i + 1 < wide) {
+      path[static_cast<std::size_t>(i)].push_back(i + 1);
+    }
+  }
+  primitive::RingUpdater updater(8);
+  updater.setFullPassFraction(0.95);
+  const auto primed = updater.update(path);
+  REQUIRE(primed.size() == primitive::ringNetwork(path, 8).size());
+  path[0].push_back(600);
+  path[600].push_back(0);
+  const auto edited = updater.update(path);
+  REQUIRE(edited.size() == primitive::ringNetwork(path, 8).size());
+  omp_set_num_threads(1);
+#endif
+  primitive::Graph graph;
+  graph.pts.resize(4);
+  for (int i = 0; i < 4; ++i) {
+    graph.pts[static_cast<std::size_t>(i)].atomIndex = i;
+    graph.pts[static_cast<std::size_t>(i)].inGraph = true;
+    graph.pts[static_cast<std::size_t>(i)].neighListIndex = {(i + 1) % 4};
+  }
+  graph.rings.push_back({0, 1, -1, 9});
+  primitive::removeNonSPrings(graph);
+  REQUIRE(graph.pts.size() == 4);
 }

@@ -240,9 +240,19 @@ def main():
     check(live.gromacs_box(gro)[3] == 20.0)
     check(live.free_port() > 0)
     check(len(live.ice_positions()) == 8)
+    saved_exe = os.environ.get("SEAMS_INSITU_EXE")
+    saved_imd = os.environ.get("SEAMS_GRO_IMD_EXE")
     os.environ["SEAMS_INSITU_EXE"] = ""
     os.environ["SEAMS_GRO_IMD_EXE"] = ""
     check(live.acceptance() is None)
+    if saved_exe:
+        os.environ["SEAMS_INSITU_EXE"] = saved_exe
+    else:
+        os.environ.pop("SEAMS_INSITU_EXE", None)
+    if saved_imd:
+        os.environ["SEAMS_GRO_IMD_EXE"] = saved_imd
+    else:
+        os.environ.pop("SEAMS_GRO_IMD_EXE", None)
     for name in (
         "run_lammps",
         "ase_identity",
@@ -252,11 +262,56 @@ def main():
         "gromacs_mpi_identity",
         "openmm_identity",
     ):
-        try:
-            getattr(live, name)()
-            print(name, "ran", flush=True)
-        except Exception as exc:
-            print(name, "not run:", type(exc).__name__, str(exc).splitlines()[0], flush=True)
+        getattr(live, name)()
+        print(name, "passed", flush=True)
+    check(live.ipi_elapsed(False) > 0)
+    check(live.ipi_elapsed(True) > 0)
+    os.environ.pop("DSEAMS_SCALE_TINY", None)
+    check(live.scale_plan()[0][1] == 1000)
+    os.environ["DSEAMS_SCALE_TINY"] = "1"
+    dup = folder / "dup.txt"
+    dup.write_text("step 1\nrings 3:0\nstep 1\nrings 3:0\n")
+    check(expect_error(lambda: live.match_lammps_cli(dup, dump)))
+    same_a = folder / "same-a.txt"
+    same_b = folder / "same-b.txt"
+    same_a.write_text("step 1\nrings 3:0\n")
+    same_b.write_text(same_a.read_text())
+    check(live.same(same_a, same_b) >= 1)
+    differ = folder / "differ.txt"
+    differ.write_text("step 2\nrings 3:0\n")
+    check(expect_error(lambda: live.same(same_a, differ)))
+    empty = folder / "empty.txt"
+    empty.write_text("no census\n")
+    check(expect_error(lambda: live.same(empty, empty)))
+    check(expect_error(lambda: live.loop_time("no loop time here\n")))
+    blank_xyz = folder / "blank.xyz"
+    blank_xyz.write_text("\n1\ncomment\nO 0 0 0\n")
+    check(len(live.read_multi_xyz(blank_xyz)) == 1)
+    bad_gro = folder / "bad.gro"
+    bad_gro.write_text("title\n0\n1.0\n")
+    check(expect_error(lambda: live.gromacs_box(bad_gro)))
+    check(live.type7_median([4.0]) == 4.0)
+    saved_main = live.main
+    def boom():
+        raise RuntimeError("forced")
+    live.main = boom
+    os.environ["SEAMS_INSITU_EXE"] = saved_exe or "present"
+    os.environ["SEAMS_GRO_IMD_EXE"] = saved_imd or "present"
+    check(live.acceptance() is None)
+    live.main = saved_main
+    check(live.module_entry(["live.py", "--acceptance"]) == 0)
+    saved_gmx = os.environ.pop("DSEAMS_GMX", None)
+    note = live.gromacs_mpi_identity()
+    check(note[0] is False)
+    if saved_gmx is not None:
+        os.environ["DSEAMS_GMX"] = saved_gmx
+    check(live.loop_time("Loop time of 1.5 on 1 procs for 2 steps\n") == 1.5)
+    os.environ["DSEAMS_SCALE_TINY"] = "1"
+    live.time_lammps("plain", 2, 1, live.PLUGIN)
+    live.time_lammps("live", 2, 1, live.PLUGIN)
+    live.main()
+    import test_lammps_step0
+    test_lammps_step0.run()
     print("cover ok")
 
 

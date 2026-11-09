@@ -5,11 +5,13 @@
 #include <neighbours.hpp>
 #include <seams_input.hpp>
 
+#include <atomic>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -820,4 +822,163 @@ TEST_CASE("con cells and the corpus errors", "[seams_input]") {
 #endif
   fs::remove_all(dir);
 }
+#endif
+
+TEST_CASE("a dump without a timestep and a raced missing frame",
+          "[seams_input]") {
+  const auto dir = fs::temp_directory_path() / "dseams-dump-race";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  const auto blank = dir / "blank.lammpstrj";
+  writeText(blank, "this file has no timestep header\n");
+  cloud = sinp::readLammpsTrj(blank.string(), 1, cloud);
+  REQUIRE(cloud.nop == 0);
+  cloud = sinp::readLammpsTrj((dir / "as-dir").string(), 1, cloud);
+  fs::create_directories(dir / "as-dir");
+  cloud = sinp::readLammpsTrj((dir / "as-dir").string(), 1, cloud);
+  cloud = sinp::readLammpsTrj("/proc/self/mem", 1, cloud);
+  const auto empty = dir / "empty.lammpstrj";
+  writeText(empty, "");
+  cloud = sinp::readLammpsTrj(empty.string(), 1, cloud);
+
+  const auto dump = dir / "race.lammpstrj";
+  std::string body =
+      "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n3000\n"
+      "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+      "ITEM: ATOMS id type x y z\n";
+  body.reserve(body.size() + 3000 * 16);
+  for (int i = 0; i < 3000; ++i) {
+    body += std::to_string(i);
+    body += " 1 0 0 0\n";
+  }
+  writeText(dump, body);
+  std::atomic<bool> go{true};
+  std::thread worker([&] {
+    molSys::PointCloud<molSys::Point<double>, double> local;
+    while (go.load()) {
+      local = sinp::readLammpsTrj(dump.string(), 1, local);
+    }
+  });
+  for (int i = 0; i < 200; ++i) {
+    cloud = sinp::readLammpsTrj(dump.string(), 0, cloud);
+    cloud = sinp::readLammpsTrj(dump.string(), 9, cloud);
+  }
+  fs::remove(dump);
+  for (int i = 0; i < 50; ++i) {
+    cloud = sinp::readLammpsTrj(dump.string(), 1, cloud);
+  }
+  go.store(false);
+  worker.join();
+  REQUIRE(cloud.nop == 0);
+  const auto flicker = dir / "flicker.lammpstrj";
+  writeText(flicker, body);
+  std::atomic<bool> spin{true};
+  std::thread remover([&] {
+    while (spin.load()) {
+      fs::remove(flicker);
+      writeText(flicker, body);
+    }
+  });
+  for (int i = 0; i < 2000; ++i) {
+    cloud = sinp::readLammpsTrj(flicker.string(), 1, cloud);
+  }
+  spin.store(false);
+  remover.join();
+  std::atomic<bool> spinFrames{true};
+  std::thread frameRemover([&] {
+    while (spinFrames.load()) {
+      fs::remove(flicker);
+      writeText(flicker, body);
+    }
+  });
+  for (int i = 0; i < 2000; ++i) {
+    sinp::dropLammpsDumpIndex(flicker.string());
+    (void)sinp::nLammpsFrames(flicker.string());
+  }
+  spinFrames.store(false);
+  frameRemover.join();
+  (void)sinp::nLammpsFrames("/proc/kcore");
+  (void)sinp::nLammpsFrames("/proc/self/pagemap");
+  std::atomic<bool> hold{true};
+  std::thread holder([&] {
+    molSys::PointCloud<molSys::Point<double>, double> local;
+    while (hold.load()) {
+      local = sinp::readLammpsTrj(dump.string(), 1, local);
+    }
+  });
+  writeText(dump, body);
+  for (int i = 0; i < 4000; ++i) {
+    if (i == 50) {
+      fs::remove(dump);
+    }
+    cloud = sinp::readLammpsTrj(dump.string(), 9, cloud);
+  }
+  hold.store(false);
+  holder.join();
+  fs::remove_all(dir);
+}
+
+#ifdef SEAMS_HAS_READCON
+#ifdef SEAMS_HAS_READCON_DB
+TEST_CASE("a corpus that cannot be opened or holds a long frame",
+          "[seams_input]") {
+  const auto dir = fs::temp_directory_path() / "dseams-corpus-long";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  const auto locked = dir / "locked";
+  fs::create_directories(locked);
+  fs::permissions(locked, fs::perms::owner_read | fs::perms::owner_exec);
+  REQUIRE(sinp::ingestConCorpus(locked.string(), 1, "missing.con") < 0);
+  fs::permissions(locked, fs::perms::owner_all);
+
+  const int nAtoms = 50000;
+  std::string atoms;
+  atoms.reserve(static_cast<std::size_t>(nAtoms) * 32);
+  for (int i = 0; i < nAtoms; ++i) {
+    atoms += "   1.0    2.0    3.0 1    ";
+    atoms += std::to_string(i);
+    atoms += "\n";
+  }
+  const auto huge = dir / "huge.con";
+  std::string text = "Random Number Seed\n{\"con_spec_version\":2}\n"
+                     "10.0\t10.0\t10.0\n90.0\t90.0\t90.0\n0 0\n218 0 1\n1\n";
+  text += std::to_string(nAtoms);
+  text += "\n63.546000\nCu\nCoordinates of Component 1\n";
+  text += atoms;
+  writeText(huge, text);
+  const auto corpus = dir / "corpus";
+  fs::create_directories(corpus);
+  REQUIRE(sinp::ingestConCorpus(corpus.string(), 7, huge.string()) > 0);
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  cloud = sinp::readConCorpus(corpus.string(), "", "", 1, cloud);
+  REQUIRE(cloud.nop == nAtoms);
+  const auto bare = dir / "bare.con";
+  writeText(bare,
+            "Random Number Seed\n{\"con_spec_version\":2}\n"
+            "10.0\t10.0\t10.0\n90.0\t90.0\t90.0\n0 0\n218 0 1\n1\n0\n"
+            "63.546000\nCu\nCoordinates of Component 1\n");
+  const auto bareCorpus = dir / "bare-corpus";
+  fs::create_directories(bareCorpus);
+  if (sinp::ingestConCorpus(bareCorpus.string(), 1, bare.string()) > 0) {
+    cloud = sinp::readConCorpus(bareCorpus.string(), "", "", 1, cloud);
+  }
+  cloud = sinp::readCon(bare.string(), 1, cloud);
+  const auto cut = dir / "cut.con";
+  writeText(cut,
+            "Random Number Seed\n{\"con_spec_version\":2}\n"
+            "10.0\t10.0\t10.0\n90.0\t90.0\t90.0\n0 0\n218 0 1\n1\n1\n"
+            "63.546000\nCu\nCoordinates of Component 1\n");
+  cloud = sinp::readCon(cut.string(), 1, cloud);
+  const auto nanCon = dir / "nan.con";
+  writeText(nanCon,
+            "Random Number Seed\n{\"con_spec_version\":2}\n"
+            "10.0\t10.0\t10.0\n90.0\t90.0\t90.0\n0 0\n218 0 1\n1\n2\n"
+            "63.546000\nCu\nCoordinates of Component 1\n"
+            "   nan    2.0    3.0 1    0\n"
+            "   nan    5.0    6.0 1    1\n");
+  cloud = sinp::readCon(nanCon.string(), 1, cloud);
+  fs::remove_all(dir);
+}
+#endif
 #endif

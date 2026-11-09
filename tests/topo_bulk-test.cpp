@@ -1617,3 +1617,265 @@ TEST_CASE("small cages reach the live bulk search returns", "[topo_bulk]") {
   omp_set_num_threads(threadsBefore);
 #endif
 }
+
+TEST_CASE("wide equator skips a short ring and an HC basal also closes a DDC",
+          "[topo_bulk]") {
+  std::vector<std::vector<int>> rings;
+  rings.push_back({0, 1, 2, 3, 4, 5});
+  for (int i = 0; i < 8; ++i) {
+    rings.push_back({0, 1, 2, 10 + i, 30 + i, 50 + i});
+    rings.push_back({2, 3, 4, 70 + i, 90 + i, 110 + i});
+    rings.push_back({4, 5, 0, 130 + i, 150 + i, 170 + i});
+  }
+  rings.push_back({0, 1, 2, 3, 4});
+  rings.push_back({0, 1, 2, -1, 8, 9});
+  rings.push_back({0, 1, 2, 400, 401, 402});
+  const int nAtoms = 420;
+  const auto index = ring::buildRingSearchIndex(rings, nAtoms);
+  std::vector<int> peripheral;
+  std::vector<int> chosen;
+  std::vector<int> rank(rings.size());
+  std::iota(rank.begin(), rank.end(), 0);
+  ring::EquatorChoice raw;
+  (void)ring::equatorialConditions(rings, 0, index, &peripheral, &chosen, &rank,
+                                   &raw);
+
+  const double xyz[][3] = {
+      {25.4799996, 25.4799996, 19.1100006}, {25.4799996, 25.4799996, 25.4799996},
+      {25.4799996, 22.2950001, 22.2950001}, {25.4799996, 28.6650009, 22.2950001},
+      {22.2950001, 22.2950001, 25.4799996}, {22.2950001, 25.4799996, 22.2950001},
+      {28.6650009, 25.4799996, 22.2950001}, {23.8880006, 20.7029991, 23.8880006},
+      {23.8880006, 27.073, 23.8880006},     {27.073, 27.073, 20.7029991},
+      {20.7029991, 23.8880006, 23.8880006}, {27.073, 23.8880006, 23.8880006},
+      {23.8880006, 23.8880006, 20.7029991}, {23.8880006, 23.8880006, 27.073},
+  };
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  cloud.box = {40.0, 40.0, 40.0};
+  cloud.boxLow = {0.0, 0.0, 0.0};
+  molSys::Point<double> point;
+  point.type = 1;
+  for (int i = 0; i < 14; ++i) {
+    point.atomID = i;
+    point.x = xyz[i][0];
+    point.y = xyz[i][1];
+    point.z = xyz[i][2];
+    cloud.pts.push_back(point);
+    cloud.idIndexMap[i] = i;
+  }
+  cloud.nop = 14;
+  auto idRows = nneigh::neighListO(3.5, cloud, 1);
+  auto rows = nneigh::neighbourListByIndex(cloud, idRows);
+  auto ddcRings = primitive::ringNetwork(rows, 8);
+  REQUIRE(ddcRings.size() > 4);
+  auto ddcIndex = ring::buildRingSearchIndex(ddcRings, 14);
+  std::vector<ring::strucType> marked(ddcRings.size(), ring::strucType::HCbasal);
+  std::vector<int> listHC;
+  std::vector<cage::Cage> cages;
+  auto ddc = ring::findDDC(ddcRings, marked, listHC, cages, ddcIndex);
+  REQUIRE_FALSE(ddc.empty());
+  REQUIRE(std::find(marked.begin(), marked.end(), ring::strucType::bothBasal) !=
+          marked.end());
+
+  // Seven copies on the even triplets push the parity product into the
+  // wide search. A short ring, a negative atom and peripherals that do
+  // not share an apex are inputs that search refuses.
+  std::vector<std::vector<int>> wide;
+  wide.push_back({0, 1, 2, 3, 4, 5});
+  auto face = [](int a, int b, int c, int x, int y, int z) {
+    return std::vector<int>{a, b, c, x, y, z};
+  };
+  for (int i = 0; i < 7; ++i) {
+    wide.push_back(face(0, 1, 2, 10, 11, 12));
+    wide.push_back(face(2, 3, 4, 10, 11, 12));
+    wide.push_back(face(4, 5, 0, 10, 11, 12));
+    wide.push_back(face(1, 2, 3, 20, 21, 22));
+    wide.push_back(face(3, 4, 5, 20, 21, 22));
+    wide.push_back(face(5, 0, 1, 20, 21, 22));
+  }
+  wide.push_back(face(0, 1, 2, -1, 11, 12));
+  wide.push_back(face(2, 3, 4, -1, 11, 12));
+  wide.push_back(face(4, 5, 0, -1, 11, 12));
+  wide.push_back({0, 1, 2, 7, 8});
+  const auto wideIndex = ring::buildRingSearchIndex(wide, 800);
+  std::vector<int> widePeripheral;
+  std::vector<int> wideChosen;
+  std::vector<int> wideRank(wide.size());
+  std::iota(wideRank.begin(), wideRank.end(), 0);
+  ring::EquatorChoice wideRaw;
+  (void)ring::equatorialConditions(wide, 0, wideIndex, &widePeripheral,
+                                   &wideChosen, &wideRank, &wideRaw);
+
+  std::vector<std::vector<int>> oneEach = {
+      {0, 1, 2, 3, 4, 5}, {0, 1, 2, 50, 51, 52}, {1, 2, 3, 60, 61, 62},
+      {2, 3, 4, 50, 51, 52}, {3, 4, 5, 60, 61, 62}, {4, 5, 0, 50, 51, 52},
+      {5, 0, 1, 60, 61, 62},
+  };
+  const auto oneIndex = ring::buildRingSearchIndex(oneEach, 40);
+  std::vector<int> onePeripheral;
+  (void)ring::equatorialConditions(oneEach, 0, oneIndex, &onePeripheral);
+
+  std::vector<std::vector<int>> shifted = {{0, 1, 2, 3, 4, 5},
+                                           {0, 1, 2, 3, 4, 5}};
+  auto shiftIndex = ring::buildRingSearchIndex(shifted, 6);
+  shiftIndex.ringShift = {{0, 0, 0}, {1, 0, 0}};
+  std::vector<ring::strucType> shiftType(2, ring::strucType::unclassified);
+  std::vector<int> shiftHC;
+  std::vector<cage::Cage> shiftCages;
+  (void)ring::findDDC(shifted, shiftType, shiftHC, shiftCages, shiftIndex);
+
+  std::vector<std::vector<int>> oddRings = {{-1, 0, 1, 2, 3, 4},
+                                            {5, 6, 7, 8, 9, 10}};
+  std::vector<std::vector<int>> oddRows(11);
+  for (int i = 0; i < 11; ++i) {
+    oddRows[static_cast<std::size_t>(i)] = {i};
+  }
+  oddRows[0] = {0, 5, 6, 7};
+  oddRows[5] = {5, 0};
+  std::vector<ring::strucType> oddType(2, ring::strucType::unclassified);
+  std::vector<cage::Cage> oddCages;
+  (void)ring::findHC(oddRings, oddType, oddRows, oddCages);
+
+  std::vector<std::vector<int>> typed = {{0, 1, 2, 3, 4, 5}};
+  std::vector<ring::strucType> kinds = {static_cast<ring::strucType>(99)};
+  std::vector<cage::iceType> atoms(6, cage::iceType::dummy);
+  (void)ring::getAtomTypesTopoBulk(typed, kinds, atoms);
+
+  std::vector<std::vector<int>> prismRows(8);
+  for (int i = 0; i < 8; ++i) {
+    prismRows[static_cast<std::size_t>(i)] = {i};
+  }
+  prismRows[0] = {0, 4};
+  std::vector<int> basalA = {0, 1, 2, 3, 4, 5};
+  std::vector<int> basalB = {4, 5, 6, 7, 8, 9};
+  prismRows.resize(10);
+  for (int i = 8; i < 10; ++i) {
+    prismRows[static_cast<std::size_t>(i)] = {i};
+  }
+  REQUIRE_FALSE(prism3::basalPrismConditions(prismRows, basalA, basalB));
+
+  molSys::PointCloud<molSys::Point<double>, double> flat;
+  flat.box = {40, 40, 10};
+  flat.boxLow = {0, 0, 0};
+  flat.currentFrame = 1;
+  for (int i = 0; i < 12; ++i) {
+    molSys::Point<double> pt;
+    pt.type = 1;
+    pt.atomID = i;
+    const double ang = (i % 6) * 1.0471975512;
+    pt.x = 8.0 * (i / 6) + 2.0 * std::cos(ang);
+    pt.y = 2.0 * std::sin(ang);
+    pt.z = 0.0;
+    flat.pts.push_back(pt);
+    flat.idIndexMap[i] = i;
+  }
+  flat.nop = 12;
+  std::vector<std::vector<int>> flatRows(12);
+  for (int i = 0; i < 12; ++i) {
+    flatRows[static_cast<std::size_t>(i)] = {i};
+    for (int j = 0; j < 6; ++j) {
+      flatRows[static_cast<std::size_t>(i)].push_back((i < 6 ? 6 : 0) + j);
+    }
+  }
+  std::vector<std::vector<int>> flatRings = {{0, 1, 2, 3, 4, 5},
+                                             {6, 7, 8, 9, 10, 11}};
+  std::vector<ring::strucType> flatType(2, ring::strucType::unclassified);
+  std::vector<double> flatRmsd(12, -1.0);
+  (void)prism3::findBulkPrisms(flatRings, flatType, flatRows, flat, flatRmsd,
+                               50.0);
+}
+
+TEST_CASE("mixed ring lengths and a negative atom stay inside the cage search",
+          "[topo_bulk]") {
+  std::mt19937 rng(20261109);
+  std::uniform_int_distribution<int> atom(-1, 17);
+  std::uniform_int_distribution<int> length(3, 8);
+  for (int trial = 0; trial < 30; ++trial) {
+    const int nRings = 6 + trial % 8;
+    std::vector<std::vector<int>> rings;
+    rings.push_back({0, 1, 2, 3, 4, 5});
+    for (int r = 1; r < nRings; ++r) {
+      const int n = length(rng);
+      std::vector<int> ring(static_cast<std::size_t>(n));
+      for (int k = 0; k < n; ++k) {
+        ring[static_cast<std::size_t>(k)] = atom(rng);
+      }
+      rings.push_back(std::move(ring));
+    }
+    const auto index = ring::buildRingSearchIndex(rings, 18);
+    std::vector<int> peripheral;
+    std::vector<int> chosen;
+    std::vector<int> rank(rings.size());
+    std::iota(rank.begin(), rank.end(), 0);
+    ring::EquatorChoice raw;
+    (void)ring::equatorialConditions(rings, 0, index, &peripheral, &chosen,
+                                     &rank, &raw);
+    std::vector<ring::strucType> types(rings.size(), ring::strucType::unclassified);
+    std::vector<int> listHC;
+    std::vector<cage::Cage> cages;
+    (void)ring::findDDC(rings, types, listHC, cages, index);
+    std::vector<std::vector<int>> rows(18);
+    for (int a = 0; a < 18; ++a) {
+      rows[static_cast<std::size_t>(a)] = {a, (a + 1) % 18, (a + 3) % 18};
+    }
+    (void)ring::findHC(rings, types, rows, cages, index);
+  }
+  std::vector<std::vector<int>> neg = {{-1, -1, -1, -1, -1, -1},
+                                       {0, 1, 2, 3, 4, 5}};
+  std::vector<std::vector<int>> negRows(6);
+  for (int a = 0; a < 6; ++a) {
+    negRows[static_cast<std::size_t>(a)] = {a, (a + 1) % 6};
+  }
+  std::vector<ring::strucType> negType(2, ring::strucType::unclassified);
+  std::vector<cage::Cage> negCages;
+  (void)ring::findHC(neg, negType, negRows, negCages);
+
+  molSys::PointCloud<molSys::Point<double>, double> ddcCloud;
+  const double ddcXyz[][3] = {
+      {25.4799996, 25.4799996, 19.1100006}, {25.4799996, 25.4799996, 25.4799996},
+      {25.4799996, 22.2950001, 22.2950001}, {25.4799996, 28.6650009, 22.2950001},
+      {22.2950001, 22.2950001, 25.4799996}, {22.2950001, 25.4799996, 22.2950001},
+      {28.6650009, 25.4799996, 22.2950001}, {23.8880006, 20.7029991, 23.8880006},
+      {23.8880006, 27.073, 23.8880006},     {27.073, 27.073, 20.7029991},
+      {20.7029991, 23.8880006, 23.8880006}, {27.073, 23.8880006, 23.8880006},
+      {23.8880006, 23.8880006, 20.7029991}, {23.8880006, 23.8880006, 27.073},
+  };
+  ddcCloud.box = {40, 40, 40};
+  ddcCloud.boxLow = {0, 0, 0};
+  for (int i = 0; i < 14; ++i) {
+    molSys::Point<double> pt;
+    pt.type = 1;
+    pt.atomID = i;
+    pt.x = ddcXyz[i][0];
+    pt.y = ddcXyz[i][1];
+    pt.z = ddcXyz[i][2];
+    ddcCloud.pts.push_back(pt);
+    ddcCloud.idIndexMap[i] = i;
+  }
+  ddcCloud.nop = 14;
+  auto ddcListed = nneigh::neighListO(3.5, ddcCloud, 1);
+  auto ddcBy = nneigh::neighbourListByIndex(ddcCloud, ddcListed);
+  auto ddcRings = primitive::ringNetwork(ddcBy, 8);
+  if (!ddcRings.empty()) {
+    ddcRings.push_back(ddcRings[0]);
+    ddcRings.push_back(std::vector<int>{0, 1, 2, 3, 4});
+    ddcRings.push_back(std::vector<int>{-1, 0, 1, 2, 3, 4});
+    auto ddcIndex = ring::buildRingSearchIndex(ddcRings, 14);
+    std::vector<int> peripheral;
+    std::vector<int> chosen;
+    std::vector<int> rank(ddcRings.size());
+    std::iota(rank.begin(), rank.end(), 0);
+    ring::EquatorChoice raw;
+    for (int i = 0; i < static_cast<int>(ddcRings.size()); ++i) {
+      if (ddcRings[static_cast<std::size_t>(i)].size() == 6) {
+        (void)ring::equatorialConditions(ddcRings, i, ddcIndex, &peripheral,
+                                         &chosen, &rank, &raw);
+      }
+    }
+    std::vector<ring::strucType> ddcTypes(ddcRings.size(),
+                                          ring::strucType::unclassified);
+    std::vector<int> ddcHC;
+    std::vector<cage::Cage> ddcCages;
+    (void)ring::findDDC(ddcRings, ddcTypes, ddcHC, ddcCages, ddcIndex);
+    (void)ring::findHC(ddcRings, ddcTypes, ddcBy, ddcCages, ddcIndex);
+  }
+}
