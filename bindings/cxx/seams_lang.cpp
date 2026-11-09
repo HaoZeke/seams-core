@@ -48,40 +48,7 @@ std::string extension_of(const std::string &path) {
 }
 
 Cloud load_path(const std::string &path, int frame, int typeI) {
-  Cloud cloud;
-  const auto ext = extension_of(path);
-  if (ext == "xyz") {
-    return sinp::readXYZ(path);
-  }
-  if (ext == "con") {
-#ifdef SEAMS_HAS_READCON
-    return sinp::readCon(path, frame, cloud);
-#else
-    throw std::runtime_error(
-        "readcon-core is not in this build; CON input needs it");
-#endif
-  }
-  if (ext == "pdb" || ext == "gro" || ext == "dcd") {
-#ifdef SEAMS_HAS_CHEMFILES
-    const int filter = typeI > 0 ? typeI : -1;
-    return sinp::readChemfiles(path, frame, cloud, filter);
-#else
-    throw std::runtime_error("chemfiles is not in this build; " + ext +
-                             " input needs it");
-#endif
-  }
-  if (typeI < 0) {
-    return sinp::readLammpsTrj(path, frame, cloud);
-  }
-  if (typeI > 0) {
-    return sinp::readLammpsTrjO(path, frame, cloud, typeI);
-  }
-  cloud = sinp::readLammpsTrjO(path, frame, cloud, 2);
-  if (cloud.nop > 0) {
-    return cloud;
-  }
-  Cloud again;
-  return sinp::readLammpsTrjO(path, frame, again, 1);
+  return sinp::openFrame(path, frame, typeI);
 }
 
 int resolve_type(const Cloud &cloud, int requested) {

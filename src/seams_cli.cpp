@@ -83,39 +83,9 @@ const char *iceName(molSys::atom_state_type s) {
   return "unclassified";
 }
 
-Cloud load(const std::string &path, int frame, int typeI) {
-  Cloud cloud;
-  const auto ext = path.substr(path.find_last_of('.') + 1);
-  if (ext == "xyz") {
-    return sinp::readXYZ(path);
-  }
-  if (ext == "con") {
-#ifdef SEAMS_HAS_READCON
-    return sinp::readCon(path, frame, cloud);
-#else
-    throw std::runtime_error("readcon-core is not in this build; CON input needs it");
-#endif
-  }
-  if (ext == "pdb" || ext == "gro" || ext == "dcd") {
-#ifdef SEAMS_HAS_CHEMFILES
-    const int filter = typeI < 0 ? -1 : (typeI > 0 ? typeI : -1);
-    return sinp::readChemfiles(path, frame, cloud, filter);
-#else
-    throw std::runtime_error("chemfiles is not in this build; " + ext + " input needs it");
-#endif
-  }
-  if (typeI < 0) {
-    return sinp::readLammpsTrj(path, frame, cloud);
-  }
-  if (typeI > 0) {
-    return sinp::readLammpsTrjO(path, frame, cloud, typeI);
-  }
-  cloud = sinp::readLammpsTrjO(path, frame, cloud, 2);
-  if (cloud.nop > 0) {
-    return cloud;
-  }
-  Cloud again;
-  return sinp::readLammpsTrjO(path, frame, again, 1);
+Cloud load(const std::string &path, int frame, int typeI,
+          const std::string &selection = {}) {
+  return sinp::openFrame(path, frame, typeI, selection);
 }
 
 std::string_view trimView(std::string_view s) {
@@ -145,12 +115,24 @@ FrameSource frameSource(const std::string &path) {
 
 template <typename Fn>
 bool forEachInputFrame(const std::string &path, int first, int last,
-                       int typeFilter, int nThreads, Fn &&fn, int part = 0,
+                       int typeFilter, int nThreads, Fn &&fn,
+                       const std::string &selection = {}, int part = 0,
                        int parts = 1) {
   const FrameSource source = frameSource(path);
+#ifdef SEAMS_HAS_CHEMFILES
+  const auto dot = path.find_last_of('.');
+  const std::string ext =
+      dot == std::string::npos ? std::string() : path.substr(dot + 1);
+  if (ext != "con") {
+    if (sinp::forEachChemfilesFrame(path, first, last, typeFilter, selection,
+                                    part, parts, std::forward<Fn>(fn))) {
+      return true;
+    }
+  }
+#endif
   if (source == FrameSource::xyz) {
     if (first <= 1 && (last <= 0 || last >= 1)) {
-      Cloud cloud = load(path, 1, typeFilter);
+      Cloud cloud = load(path, 1, typeFilter, selection);
       fn(1, cloud);
     }
     return true;
@@ -159,7 +141,7 @@ bool forEachInputFrame(const std::string &path, int first, int last,
   if (source == FrameSource::serial) {
     const int stop = last <= 0 ? first : last;
     for (int frame = std::max(1, first); frame <= stop; ++frame) {
-      Cloud cloud = load(path, frame, typeFilter);
+      Cloud cloud = load(path, frame, typeFilter, selection);
       if (cloud.nop == 0 && frame != std::max(1, first)) {
         break;
       }
@@ -1667,6 +1649,15 @@ int main(int argc, char *argv[]) {
                    typeI = parseIntegral<int>(value);
                  }));
 
+  std::string selection;
+  parser.add(Option("--select")
+                 .argName("EXPR")
+                 .help("Chemfiles selection kept before the type filter "
+                       "(name O, type 1, [atomic_number] == 8)")
+                 .handler([&](std::string_view value) {
+                   selection = std::string(value);
+                 }));
+
   parser.add(Option("--cutoff", "-c")
                  .argName("ANGSTROM")
                  .help("Neighbour cutoff (rdf/cn rmax; hbonds heavy-atom nList)")
@@ -2226,7 +2217,7 @@ int main(int argc, char *argv[]) {
       return cmdDomains(os, cloud, cutoff, siteTable, domainKind);
     }
     if (cmd == "hbonds") {
-      Cloud hCloud = load(file, cloud.currentFrame, htype);
+      Cloud hCloud = load(file, cloud.currentFrame, htype, selection);
       return cmdHbonds(os, cloud, hCloud, cutoff, typeI, hdist, hangle,
                        allDonors);
     }
@@ -2248,7 +2239,7 @@ int main(int argc, char *argv[]) {
       return 0;
     }
 #endif
-    Cloud cloud = load(file, frame, loadType);
+    Cloud cloud = load(file, frame, loadType, selection);
     std::ostringstream line;
     FrameCarry once(false);
     const int rc = runOne(line, once, cloud);
@@ -2267,7 +2258,7 @@ int main(int argc, char *argv[]) {
   std::unique_ptr<FrameCarry> walkCarry;
   auto processFrame = [&](int fr, Cloud &cloud) {
         if (typeFilter <= 0 && cloud.nop == 0) {
-          cloud = load(file, cloud.currentFrame, loadType);
+          cloud = load(file, cloud.currentFrame, loadType, selection);
         }
         std::ostringstream line;
         FrameCarry fresh(false);
@@ -2304,7 +2295,7 @@ int main(int argc, char *argv[]) {
   }
   const bool ranged =
       lo > hi || forEachInputFrame(file, lo, hi, typeFilter, jobs, processFrame,
-                                   part, parts);
+                                   selection, part, parts);
 #ifdef SEAMS_HAS_MPI
   if (ranks.size > 1 &&
       !gatherFrameResults(ranks, outputLines, outputStatus, outputSeen)) {

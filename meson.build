@@ -246,10 +246,53 @@ if minimage_dep.found()
   _args += ['-DSEAMS_HAS_MINIMAGE=1']
 endif
 
+chemfiles_libdir = ''
+chemfiles_opt = get_option('with_chemfiles')
 chemfiles_dep = dependency('chemfiles', required: false)
+# The cmake subproject translation links molfile plugins into one
+# archive and their init symbols collide. FetchContent in
+# cmake/CMakeLists.txt is the build that produces a working library.
+if not chemfiles_dep.found() and not chemfiles_opt.disabled()
+  chem_prefix = meson.project_build_root() / 'chemfiles-prefix'
+  fs = import('fs')
+  cmake_bin = find_program('cmake', required: chemfiles_opt)
+  if cmake_bin.found() and not fs.exists(chem_prefix / 'lib' / 'libchemfiles.so')
+    run_command(cmake_bin, '-S', meson.project_source_root() / 'cmake',
+                '-B', meson.project_build_root() / 'chemfiles-fetch',
+                '-DCMAKE_BUILD_TYPE=Release',
+                '-DCMAKE_INSTALL_PREFIX=' + chem_prefix,
+                '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
+                check: true)
+    run_command(cmake_bin, '--build',
+                meson.project_build_root() / 'chemfiles-fetch',
+                '--parallel', check: true)
+    run_command(cmake_bin, '--install',
+                meson.project_build_root() / 'chemfiles-fetch',
+                check: true)
+  endif
+  if fs.exists(chem_prefix / 'lib' / 'libchemfiles.so')
+    chemfiles_dep = cppc.find_library('chemfiles',
+                                      dirs: chem_prefix / 'lib',
+                                      required: chemfiles_opt)
+    if chemfiles_dep.found()
+      chemfiles_dep = declare_dependency(
+        compile_args: ['-I' + chem_prefix / 'include'],
+        dependencies: chemfiles_dep)
+      chemfiles_libdir = chem_prefix / 'lib'
+    endif
+  endif
+endif
 if chemfiles_dep.found()
   _deps += [chemfiles_dep]
   _args += ['-DSEAMS_HAS_CHEMFILES=1']
+  probed_libdir = chemfiles_dep.get_variable(pkgconfig: 'libdir',
+                                             default_value: '')
+  if probed_libdir != ''
+    chemfiles_libdir = probed_libdir
+  endif
+  if chemfiles_libdir != ''
+    _link_args += ['-Wl,-rpath,' + chemfiles_libdir]
+  endif
 endif
 
 # The Rust reader follows the engine's library kind, so a static engine

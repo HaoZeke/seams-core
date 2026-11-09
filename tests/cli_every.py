@@ -30,7 +30,7 @@ def run(args, expect=0):
     return True
 
 
-ok = True
+ok = run(["rings", str(water), "--select", "type 2", "--frame", "1", "--last", "2"])
 with tempfile.TemporaryDirectory() as tmp:
     ions = Path(tmp) / "ions.lammpstrj"
     ions.write_text(

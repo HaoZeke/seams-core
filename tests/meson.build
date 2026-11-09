@@ -50,6 +50,9 @@ test_sources = {
 if readcon_dep.found()
   test_sources += {'readcon': 'test_readcon.cpp'}
 endif
+if chemfiles_dep.found()
+  test_sources += {'chemfiles_io': 'test_chemfiles_io.cpp'}
+endif
 
 # Ensure test binaries load the freshly-built libyodaLib.so instead of any
 # version installed in the conda env.  The conda toolchain injects
@@ -61,6 +64,9 @@ endif
 #   3. Setting build_rpath so the binary also works when run outside meson test.
 _test_env = environment()
 _test_env.prepend('LD_LIBRARY_PATH', meson.project_build_root() / 'src')
+if chemfiles_libdir != ''
+  _test_env.prepend('LD_LIBRARY_PATH', chemfiles_libdir)
+endif
 _test_env.set('SEAMS_INSITU_EXE', seams_insitu_exe.full_path())
 _test_env.set('SEAMS_GRO_IMD_EXE', seams_gromacs_imd_exe.full_path())
 _test_env.set('LC_ALL', 'C')
@@ -76,6 +82,9 @@ _test_rpath = '$ORIGIN/../src'
 if _readcondb_rpath != ''
   _test_rpath = _test_rpath + ':' + _readcondb_rpath
 endif
+if chemfiles_libdir != ''
+  _test_rpath = _test_rpath + ':' + chemfiles_libdir
+endif
 _test_link_args = _link_args
 if host_machine.system() == 'linux'
   _test_link_args += ['-Wl,--enable-new-dtags']
@@ -85,6 +94,15 @@ endif
 # LDFLAGS so ld rescans both archives.
 if cpp_id == 'nvidia' or cpp_id == 'nvidia_hpc' or cpp_id == 'pgi'
   _test_link_args += ['-Wl,--end-group']
+endif
+
+if chemfiles_dep.found()
+  executable('bench_chemfiles_read', 'bench_chemfiles_read.cpp',
+    dependencies: [yds_dep],
+    cpp_args: _args,
+    link_args: _test_link_args,
+    include_directories: _incdirs,
+    build_rpath: _test_rpath)
 endif
 
 foreach name, src : test_sources

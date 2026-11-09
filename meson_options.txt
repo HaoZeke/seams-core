@@ -31,5 +31,7 @@ option('openmm', type: 'feature', value: 'auto',
   description: 'Record an OpenMM request. The reporter is Python and is not compiled by Meson')
 option('plumed', type: 'feature', value: 'auto',
   description: 'Build the PLUMED action when PLUMED is found')
+option('with_chemfiles', type: 'feature', value: 'auto',
+  description: 'Trajectory I/O via chemfiles (on when the library is found or can be fetched)')
 option('with_linkcell', type: 'feature', value: 'auto', description: 'Periodic linked-cell neighbour search')
 option('with_minimage', type: 'feature', value: 'auto', description: 'Euclidean minimum-image geometry')
