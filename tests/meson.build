@@ -392,11 +392,16 @@ _device_host_cases = {
   'levi5': ['levi:5', '1'],
 }
 foreach name, args : _device_host_cases
+  # Coverage instrumentation makes the q=5 census exceed the plain timeout.
+  _host_timeout = 300
+  if name == 'levi5' and get_option('b_coverage')
+    _host_timeout = 1800
+  endif
   test('device_host_' + name, _check_device_host,
     args: args,
     workdir: meson.project_source_root() / 'input',
     env: _test_env,
-    timeout: 300)
+    timeout: _host_timeout)
 endforeach
 
 # The CUDA batch kernels on the host, no device needed
