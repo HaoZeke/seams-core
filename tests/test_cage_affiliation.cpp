@@ -812,3 +812,35 @@ TEST_CASE("AffiliationUpdater matches a forced HC/DDC edge flip with fallback of
   }
   REQUIRE(sawSwitch);
 }
+
+TEST_CASE("AffiliationUpdater matches a cycle stored out of lexicographic order",
+          "[cage_affiliation]") {
+  std::vector<std::vector<int>> nList(12);
+  for (int i = 0; i < 12; ++i) {
+    nList[static_cast<std::size_t>(i)] = {i, (i + 1) % 12, (i + 11) % 12,
+                                           (i + 2) % 12};
+  }
+  std::vector<std::vector<int>> rings = {
+      {0, 1, 2, 3, 4, 5},
+      {3, 4, 5, 6, 7, 8},
+      {6, 7, 8, 9, 10, 11},
+      {0, 2, 4, 6, 8, 10},
+  };
+  ring::AffiliationUpdater updater;
+  const auto first = updater.update(rings, nList);
+  REQUIRE(first.hc.size() == rings.size());
+  for (auto &ring : rings) {
+    std::rotate(ring.begin(), ring.begin() + 2, ring.end());
+    std::reverse(ring.begin() + 1, ring.end());
+  }
+  std::reverse(rings.begin(), rings.end());
+  const auto &again = updater.update(rings, nList);
+  REQUIRE(again.hc.size() == 4);
+  REQUIRE(again.ddc.size() == 4);
+  // A ring that is not the same cycle is an addition, and a repeated cycle
+  // still has one image.
+  rings.push_back({1, 3, 5, 7, 9, 11});
+  rings.insert(rings.begin(), rings.back());
+  const auto &third = updater.update(rings, nList);
+  REQUIRE(third.hc.size() == rings.size());
+}

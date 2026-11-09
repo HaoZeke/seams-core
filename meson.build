@@ -774,6 +774,16 @@ if get_option('with_cli')
     depends: [seams_exe],
     timeout: 60)
   test(
+    'seams_every_command',
+    python3,
+    args: [
+      files('tests/cli_every.py'),
+      seams_exe.full_path(),
+      meson.project_source_root(),
+    ],
+    depends: [seams_exe],
+    timeout: 600)
+  test(
     'seams_carried_frames_match_rebuild',
     python3,
     args: [

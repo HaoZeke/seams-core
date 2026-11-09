@@ -11,6 +11,7 @@
 // Standard
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <numeric>
@@ -994,4 +995,88 @@ TEST_CASE("equatorial search matches brute force on random graphs", "[topo_bulk]
     }
   }
   REQUIRE(checked == 100);
+}
+
+TEST_CASE("a wide parity product searches the large equator", "[topo]") {
+  const double xyz[][3] = {
+      {25.4799996, 25.4799996, 19.1100006}, {25.4799996, 25.4799996, 25.4799996},
+      {25.4799996, 22.2950001, 22.2950001}, {25.4799996, 28.6650009, 22.2950001},
+      {22.2950001, 22.2950001, 25.4799996}, {22.2950001, 25.4799996, 22.2950001},
+      {28.6650009, 25.4799996, 22.2950001}, {23.8880006, 20.7029991, 23.8880006},
+      {23.8880006, 27.073, 23.8880006},     {27.073, 27.073, 20.7029991},
+      {20.7029991, 23.8880006, 23.8880006}, {27.073, 23.8880006, 23.8880006},
+      {23.8880006, 23.8880006, 20.7029991}, {23.8880006, 23.8880006, 27.073},
+  };
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  cloud.box = {40.0, 40.0, 40.0};
+  cloud.boxLow = {0.0, 0.0, 0.0};
+  molSys::Point<double> point;
+  point.type = 1;
+  for (int i = 0; i < 14; ++i) {
+    point.atomID = i;
+    point.x = xyz[i][0];
+    point.y = xyz[i][1];
+    point.z = xyz[i][2];
+    cloud.pts.push_back(point);
+    cloud.idIndexMap[i] = i;
+  }
+  cloud.nop = 14;
+  auto rows = nneigh::neighListO(3.5, cloud, 1);
+  rows = nneigh::neighbourListByIndex(cloud, rows);
+  auto rings = primitive::ringNetwork(rows, 6);
+  const int base = static_cast<int>(rings.size());
+  REQUIRE(base > 6);
+  // Eight copies of every ring put more than sixteen candidates on a
+  // triplet, so the product leaves the triple loop.
+  rings.reserve(static_cast<std::size_t>(base * 9));
+  for (int copy = 0; copy < 8; ++copy) {
+    for (int i = 0; i < base; ++i) {
+      rings.push_back(rings[static_cast<std::size_t>(i)]);
+    }
+  }
+  auto index = ring::buildRingSearchIndex(rings, 14);
+  std::vector<int> peripheral;
+  std::vector<int> chosen;
+  std::vector<int> rank(rings.size());
+  std::iota(rank.begin(), rank.end(), 0);
+  ring::EquatorChoice raw;
+  bool any = false;
+  for (int iring = 0; iring < base; ++iring) {
+    any = ring::equatorialConditions(rings, iring, index, &peripheral, &chosen,
+                                     &rank, &raw) ||
+          any;
+    any = ring::equatorialConditions(rings, iring, index, nullptr) || any;
+  }
+  std::vector<ring::strucType> ringType(rings.size(), ring::strucType::unclassified);
+  std::vector<int> listHC;
+  std::vector<cage::Cage> cages;
+  setenv("DSEAMS_CAGE_TIME", "1", 1);
+  const auto ddc = ring::findDDC(rings, ringType, listHC, cages, index);
+  unsetenv("DSEAMS_CAGE_TIME");
+  REQUIRE_FALSE(ddc.empty());
+  REQUIRE(any);
+  const auto split = ring::lastDdcSplit();
+  REQUIRE(split.equator_ms >= 0.0);
+  std::vector<int> peripheralAgain;
+  for (int iring = 0; iring < base && iring < static_cast<int>(rings.size()); ++iring) {
+    (void)ring::conditionOneDDC(rings, peripheralAgain, iring, index);
+  }
+  if (base >= 2) {
+    const auto &b1 = rings[0];
+    const auto &b2 = rings[1];
+    (void)ring::basalConditions(rows, b1, b2);
+    ring::NeighBond bonds;
+    bonds.build(rows);
+    (void)ring::basalConditions(bonds, b1, b2);
+    std::vector<int> triplet = {b1[0], b1[1], b1[2]};
+    (void)ring::basalNeighbours(rows, triplet, b2[0], b2[1]);
+    (void)ring::notNeighboursOfRing(rows, triplet, b2);
+  }
+  std::vector<cage::iceType> atomTypes(14, cage::iceType::dummy);
+  (void)ring::getAtomTypesTopoBulk(rings, ringType, atomTypes);
+  int numHC = 0, numDDC = 0, mixed = 0, prism = 0, basal = 0;
+  (void)ring::getStrucNumbers(ringType, cages, numHC, numDDC, mixed, prism, basal);
+  std::vector<int> listDDC = ddc;
+  std::vector<int> listHC2;
+  (void)ring::findMixedRings(rings, ringType, listDDC, listHC2);
 }

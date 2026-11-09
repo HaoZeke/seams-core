@@ -407,3 +407,17 @@ TEST_CASE("populateGraphFromNListID skips a missing id and keeps the other verti
   REQUIRE(graph.pts[1].neighListIndex.empty());
   REQUIRE(graph.pts[0].neighListIndex.size() == 1);
 }
+
+TEST_CASE("ring search split and bond crossover are readable", "[franzblau]") {
+  std::vector<std::vector<int>> nList = {{0, 1, 2}, {1, 0, 2}, {2, 0, 1}};
+  const auto rings = primitive::ringNetwork(nList, 3);
+  REQUIRE_FALSE(rings.empty());
+  const auto split = primitive::lastRingSearchSplit();
+  REQUIRE(split.enumerate_ms >= 0.0);
+  primitive::RingUpdater updater(6);
+  updater.setBondCrossover(0.5);
+  updater.setFullPassFraction(0.5);
+  auto moved = std::move(updater);
+  const auto again = moved.update(nList);
+  REQUIRE(again.size() == rings.size());
+}
