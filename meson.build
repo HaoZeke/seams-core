@@ -825,6 +825,78 @@ if get_option('with_cli')
     depends: [seams_exe],
     timeout: 60)
   test(
+    'seams_cli_rejects',
+    python3,
+    args: [
+      files('tests/cli_rejects.py'),
+      seams_exe.full_path(),
+      meson.project_source_root() / 'input' / 'traj' / 'agi_water_tiny.lammpstrj',
+    ],
+    depends: [seams_exe],
+    timeout: 120)
+  test(
+    'seams_cli_commands',
+    python3,
+    args: [
+      files('tests/cli_commands.py'),
+      seams_exe.full_path(),
+      meson.project_source_root(),
+    ],
+    depends: [seams_exe],
+    timeout: 300)
+  test(
+    'seams_cli_ranges',
+    python3,
+    args: [
+      files('tests/cli_ranges.py'),
+      seams_exe.full_path(),
+      meson.project_source_root(),
+    ],
+    depends: [seams_exe],
+    timeout: 300)
+  test(
+    'seams_cli_cover',
+    python3,
+    args: [
+      files('tests/cli_cover.py'),
+      seams_exe.full_path(),
+      meson.project_source_root(),
+    ],
+    depends: [seams_exe],
+    timeout: 300)
+  test(
+    'seams_cli_edges',
+    python3,
+    args: [
+      files('tests/test_cli_edges.py'),
+      seams_exe.full_path(),
+      meson.project_source_root(),
+    ],
+    depends: [seams_exe],
+    timeout: 120)
+  test(
+    'seams_xyz_cli',
+    python3,
+    args: [
+      files('tests/test_xyz_cli.py'),
+      seams_exe.full_path(),
+      meson.project_source_root(),
+    ],
+    depends: [seams_exe],
+    timeout: 120)
+  if import('fs').exists('tests/test_dump_rejects.py')
+    test(
+      'seams_dump_rejects',
+      python3,
+      args: [
+        files('tests/test_dump_rejects.py'),
+        seams_exe.full_path(),
+        meson.project_source_root(),
+      ],
+      depends: [seams_exe],
+      timeout: 120)
+  endif
+  test(
     'seams_every_command',
     python3,
     args: [
