@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iostream>
@@ -137,6 +138,7 @@ void applyCell(molSys::PointCloud<molSys::Point<double>, double> &cloud,
 // chemfiles reason; an XYZ failure is reported from it and is not replaced
 // by a native parse of whatever lines happened to look like atoms.
 thread_local bool chemfilesUnreadable = false;
+thread_local bool framePastEnd = false;
 thread_local std::string chemfilesError;
 
 std::string forcedFormat(const std::string &filename) {
@@ -150,16 +152,6 @@ std::string forcedFormat(const std::string &filename) {
     return "CIF";
   }
   return "";
-}
-
-std::string sinp::currentExceptionText() {
-  try {
-    throw;
-  } catch (const std::exception &err) {
-    return err.what();
-  } catch (...) {
-    return "unhandled error";
-  }
 }
 
 int sinp::chemfilesSteps(const std::string &filename) {
@@ -208,9 +200,10 @@ sinp::readChemfiles(std::string filename,
         trajectory.set_topology(pdb);
       }
     }
-    if (static_cast<std::size_t>(request.frame) > trajectory.nsteps()) {
-      std::cerr << "Frame " << request.frame << " does not exist in "
-                << filename << " (has " << trajectory.nsteps() << " frames).\n";
+    if (trajectory.nsteps() > 0 &&
+        static_cast<std::size_t>(request.frame) > trajectory.nsteps()) {
+      framePastEnd = true;
+      yCloud = molSys::clearPointCloud(yCloud);
       return yCloud;
     }
     auto frame =
@@ -339,6 +332,11 @@ bool sinp::forEachChemfilesFrame(
   if (end <= 0 || end > steps) {
     end = steps;
   }
+  if (steps > 0 && last > 0 && begin > end) {
+    throw std::runtime_error(
+        "frame " + std::to_string(first) +
+        " is past the last frame in this file");
+  }
   if (parts < 1) {
     parts = 1;
   }
@@ -356,6 +354,107 @@ bool sinp::forEachChemfilesFrame(
 }
 
 #endif
+
+std::string sinp::currentExceptionText() {
+  try {
+    throw;
+  } catch (const std::exception &err) {
+    return err.what();
+  } catch (...) {
+    return "unhandled error";
+  }
+}
+
+namespace {
+
+// id -> mol for one LAMMPS frame. Chemfiles does not keep the mol
+// column. Ids that are exactly {1..N} are stored by chemfiles at
+// index id-1, so that index is the LAMMPS id and not the file row.
+struct LammpsIdMol {
+  std::unordered_map<int, int> molOf;
+  bool oneToN = false;
+};
+
+LammpsIdMol lammpsIdMol(const std::string &path, int frame) {
+  LammpsIdMol out;
+  std::ifstream in(path);
+  if (!in || frame < 1) {
+    return out;
+  }
+  int seen = 0;
+  int natoms = 0;
+  int idCol = -1;
+  int molCol = -1;
+  int got = 0;
+  bool atoms = false;
+  std::string line;
+  while (std::getline(in, line)) {
+    if (line.compare(0, 14, "ITEM: TIMESTEP") == 0) {
+      seen += 1;
+      atoms = false;
+      if (seen > frame) {
+        break;
+      }
+      continue;
+    }
+    if (seen != frame) {
+      continue;
+    }
+    if (line.compare(0, 20, "ITEM: NUMBER OF ATOMS") == 0) {
+      if (std::getline(in, line)) {
+        natoms = std::atoi(line.c_str());
+      }
+      continue;
+    }
+    if (line.compare(0, 11, "ITEM: ATOMS") == 0) {
+      idCol = -1;
+      molCol = -1;
+      std::istringstream head(line);
+      std::string tok;
+      head >> tok >> tok;
+      int col = 0;
+      while (head >> tok) {
+        if (tok == "id") {
+          idCol = col;
+        } else if (tok == "mol") {
+          molCol = col;
+        }
+        col += 1;
+      }
+      atoms = true;
+      got = 0;
+      continue;
+    }
+    if (!atoms || got >= natoms) {
+      continue;
+    }
+    std::istringstream row(line);
+    std::vector<std::string> fields;
+    std::string tok;
+    while (row >> tok) {
+      fields.push_back(tok);
+    }
+    got += 1;
+    if (idCol < 0 || idCol >= static_cast<int>(fields.size())) {
+      continue;
+    }
+    const int id = std::atoi(fields[static_cast<std::size_t>(idCol)].c_str());
+    int mol = id;
+    if (molCol >= 0 && molCol < static_cast<int>(fields.size())) {
+      mol = std::atoi(fields[static_cast<std::size_t>(molCol)].c_str());
+    }
+    out.molOf[id] = mol;
+  }
+  out.oneToN = natoms > 0 && static_cast<int>(out.molOf.size()) == natoms;
+  for (int id = 1; out.oneToN && id <= natoms; id++) {
+    if (out.molOf.find(id) == out.molOf.end()) {
+      out.oneToN = false;
+    }
+  }
+  return out;
+}
+
+} // namespace
 
 molSys::PointCloud<molSys::Point<double>, double>
 sinp::openFrame(const std::string &filename, int frame, int typeI,
@@ -382,23 +481,40 @@ sinp::openFrame(const std::string &filename, int frame, int typeI,
   } else {
     request.guessOxygen = true;
   }
-  cloud = readChemfiles(filename, cloud, request);
-  if (!chemfilesUnreadable) {
-    // Chemfiles reads a LAMMPS dump without the mol column, so every atom
-    // would be its own molecule. Hydrogen bonds and F4 pair H with O by
-    // that column. Copy it from the native reader and keep the coordinates.
-    const auto ext = extensionOf(filename);
-    if ((ext == "lammpstrj" || ext == "dump") && cloud.nop > 0) {
-      molSys::PointCloud<molSys::Point<double>, double> native;
-      native = readLammpsTrj(filename, frame, native);
-      std::unordered_map<int, int> molOf;
-      molOf.reserve(native.pts.size());
-      for (const auto &pt : native.pts) {
-        molOf[pt.atomID] = pt.molID;
+  const auto extNow = extensionOf(filename);
+  const bool dumpFile = extNow == "lammpstrj" || extNow == "dump";
+  LammpsIdMol ids;
+  if (dumpFile) {
+    ids = lammpsIdMol(filename, frame);
+    if (!ids.oneToN) {
+      // Gaps or ids that do not start at 1. Chemfiles stores an atom at
+      // index id-1 and would address past the atom count. One native read.
+      if (typeI < 0) {
+        return readLammpsTrj(filename, frame, cloud);
       }
+      if (typeI > 0) {
+        return readLammpsTrjO(filename, frame, cloud, typeI);
+      }
+      cloud = readLammpsTrjO(filename, frame, cloud, 2);
+      if (cloud.nop == 0) {
+        molSys::PointCloud<molSys::Point<double>, double> again;
+        cloud = readLammpsTrjO(filename, frame, again, 1);
+      }
+      return cloud;
+    }
+  }
+  framePastEnd = false;
+  cloud = readChemfiles(filename, cloud, request);
+  if (framePastEnd) {
+    throw std::runtime_error(
+        "frame " + std::to_string(frame) +
+        " is past the last frame in this file");
+  }
+  if (!chemfilesUnreadable) {
+    if (dumpFile) {
       for (auto &pt : cloud.pts) {
-        const auto found = molOf.find(pt.atomID);
-        if (found != molOf.end()) {
+        const auto found = ids.molOf.find(pt.atomID);
+        if (found != ids.molOf.end()) {
           pt.molID = found->second;
         }
       }
@@ -408,7 +524,12 @@ sinp::openFrame(const std::string &filename, int frame, int typeI,
   {
     const auto ext = extensionOf(filename);
     if (ext == "xyz") {
-      // Chemfiles rejected the file. The native reader is the fallback.
+      // Chemfiles rejected the file. The native reader is one frame.
+      if (frame > 1) {
+        throw std::runtime_error(
+            "frame " + std::to_string(frame) +
+            " is past the last frame in this file");
+      }
       return readXYZ(filename);
     }
     if (ext == "lammpstrj" || ext == "dump") {
@@ -432,6 +553,11 @@ sinp::openFrame(const std::string &filename, int frame, int typeI,
   (void)selection;
   const auto ext = extensionOf(filename);
   if (ext == "xyz") {
+    if (frame > 1) {
+      throw std::runtime_error(
+          "frame " + std::to_string(frame) +
+          " is past the last frame in this file");
+    }
     return readXYZ(filename);
   }
   if (typeI < 0) {
