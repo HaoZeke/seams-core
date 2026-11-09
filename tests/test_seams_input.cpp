@@ -6,6 +6,7 @@
 #include <seams_input.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -13,6 +14,9 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+#include <sys/resource.h>
+#include <unistd.h>
 
 namespace fs = std::filesystem;
 
@@ -805,6 +809,8 @@ TEST_CASE("con cells and the corpus errors", "[seams_input]") {
   const auto blocker = dir / "not-a-dir";
   writeText(blocker, "x");
   REQUIRE(sinp::ingestConCorpus(blocker.string(), 1, good.string()) < 0);
+  cloud = sinp::readConCorpus(blocker.string(), "", "", 1, cloud);
+  cloud = sinp::readConCorpus((dir / "no-such-corpus").string(), "", "", 1, cloud);
   cloud = sinp::readConCorpus(corpus.string(), "", "", 0, cloud);
   cloud = sinp::readConCorpus(corpus.string(), "Cu", "", 1, cloud);
   writeText(corpus / "shards.json", "{}\n");
@@ -981,4 +987,292 @@ TEST_CASE("a corpus that cannot be opened or holds a long frame",
   fs::remove_all(dir);
 }
 #endif
+#endif
+
+std::string captureCerr(const std::function<void()> &fn);
+std::string captureFd(int fd, const std::function<void()> &fn);
+
+TEST_CASE("a directory and a truncated timestep header", "[seams_input]") {
+  const auto dir = fs::temp_directory_path() / "dseams-input-edges";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  const std::string dirErr = captureFd(STDOUT_FILENO, [&] {
+    cloud = sinp::readLammpsTrj(dir.string(), 1, cloud);
+  });
+  REQUIRE(cloud.nop == 0);
+  REQUIRE(dirErr.find("Fatal Error: The file does not exist or you gave the wrong path.") !=
+          std::string::npos);
+  const auto trunc = dir / "trunc.lammpstrj";
+  writeText(trunc, "ITEM: TIMESTEP");
+  const std::string truncErr = captureFd(STDOUT_FILENO, [&] {
+    cloud = sinp::readLammpsTrj(trunc.string(), 2, cloud);
+  });
+  REQUIRE(cloud.nop == 0);
+  REQUIRE(truncErr.find("You entered a frame that doesn't exist.") != std::string::npos);
+  const auto junk = dir / "junk.con";
+  writeText(junk, "not a con\n");
+  const auto junkCorpus = dir / "junk-corpus";
+  fs::create_directories(junkCorpus);
+  const std::string junkErr = captureCerr([&] {
+    REQUIRE(sinp::ingestConCorpus(junkCorpus.string(), 1, junk.string()) < 0);
+  });
+  REQUIRE(junkErr.find("Cannot ingest") != std::string::npos);
+  const std::string missingErr = captureCerr([&] {
+    cloud = sinp::readConCorpus((dir / "no-such-corpus").string(), "", "", 1, cloud);
+  });
+  REQUIRE(cloud.nop == 0);
+  REQUIRE(missingErr.find("Frame 1 not found in corpus") != std::string::npos);
+  fs::remove_all(dir);
+}
+
+std::string captureCerr(const std::function<void()> &fn) {
+  return captureFd(STDERR_FILENO, fn);
+}
+
+std::string captureFd(int fd, const std::function<void()> &fn) {
+  int pipefd[2];
+  REQUIRE(pipe(pipefd) == 0);
+  const int saved = dup(fd);
+  dup2(pipefd[1], fd);
+  fn();
+  std::cerr.flush();
+  std::cout.flush();
+  dup2(saved, fd);
+  close(saved);
+  close(pipefd[1]);
+  std::string text;
+  char buf[1024];
+  ssize_t nread = 0;
+  while ((nread = read(pipefd[0], buf, sizeof buf)) > 0) {
+    text.append(buf, static_cast<std::size_t>(nread));
+  }
+  close(pipefd[0]);
+  return text;
+}
+
+TEST_CASE("a dump larger than the address-space limit is not mapped",
+          "[seams_input]") {
+  const auto dir = fs::temp_directory_path() / "dseams-unmap";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  const auto dump = dir / "wide.lammpstrj";
+  {
+    std::ofstream out(dump);
+    for (int i = 0; i < 4000000; ++i) {
+      out << "x\n";
+    }
+  }
+  std::ifstream status("/proc/self/status");
+  std::string line;
+  long vmKb = 0;
+  while (std::getline(status, line)) {
+    if (line.rfind("VmSize:", 0) == 0) {
+      vmKb = std::strtol(line.c_str() + 7, nullptr, 10);
+    }
+  }
+  struct rlimit previous {};
+  REQUIRE(getrlimit(RLIMIT_AS, &previous) == 0);
+  struct rlimit tight = previous;
+  tight.rlim_cur = static_cast<rlim_t>(vmKb) * 1024 + (1u << 20);
+  REQUIRE(setrlimit(RLIMIT_AS, &tight) == 0);
+  const int frames = sinp::nLammpsFrames(dump.string());
+  REQUIRE(setrlimit(RLIMIT_AS, &previous) == 0);
+  sinp::dropLammpsDumpIndex(dump.string());
+  REQUIRE(frames == 0);
+  fs::remove_all(dir);
+}
+
+#ifdef SEAMS_HAS_READCON
+TEST_CASE("a corpus frame past the text buffer and a frame that will not decode",
+          "[seams_input]") {
+  const auto dir = fs::temp_directory_path() / "dseams-corpus-body";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  const auto huge = dir / "huge.con";
+  {
+    std::ofstream out(huge);
+    const int atoms = 310000;
+    out << "Random Number Seed\n{\"con_spec_version\":2}\n"
+        << "10.0\t10.0\t10.0\n90.0\t90.0\t90.0\n0 0\n218 0 1\n1\n" << atoms
+        << "\n63.546000\nCu\nCoordinates of Component 1\n";
+    for (int i = 0; i < atoms; ++i) {
+      out << "   1.0    2.0    3.0 1    0\n";
+    }
+  }
+  const auto hugeCorpus = dir / "huge-corpus";
+  fs::create_directories(hugeCorpus);
+  REQUIRE(sinp::ingestConCorpus(hugeCorpus.string(), 1, huge.string()) > 0);
+  const std::string hugeErr = captureCerr([&] {
+    cloud = sinp::readConCorpus(hugeCorpus.string(), "", "", 1, cloud);
+  });
+  REQUIRE(cloud.nop == 0);
+  REQUIRE(hugeErr.find("Cannot read frame text from " + hugeCorpus.string()) !=
+          std::string::npos);
+
+  const auto good = dir / "good.con";
+  writeText(good, conText("10.0\t10.0\t10.0", "90.0\t90.0\t90.0",
+                          "   1.0    2.0    3.0 1    0\n   4.0    5.0    6.0 1    1\n"));
+  const auto corpus = dir / "corpus";
+  fs::create_directories(corpus);
+  REQUIRE(sinp::ingestConCorpus(corpus.string(), 1, good.string()) > 0);
+  const std::string needle = "   1.0    2.0    3.0";
+  const std::string spoil = "   q.q    q.q    q.q";
+  bool spoiled = false;
+  for (const auto &entry : fs::recursive_directory_iterator(corpus)) {
+    if (!entry.is_regular_file()) {
+      continue;
+    }
+    std::ifstream in(entry.path(), std::ios::binary);
+    std::string bytes((std::istreambuf_iterator<char>(in)),
+                      std::istreambuf_iterator<char>());
+    const auto at = bytes.find(needle);
+    if (at == std::string::npos) {
+      continue;
+    }
+    bytes.replace(at, needle.size(), spoil);
+    std::ofstream out(entry.path(), std::ios::binary | std::ios::trunc);
+    out << bytes;
+    spoiled = true;
+    break;
+  }
+  REQUIRE(spoiled);
+  const std::string decodeErr = captureCerr([&] {
+    cloud = sinp::readConCorpus(corpus.string(), "", "", 1, cloud);
+  });
+  REQUIRE(cloud.nop == 0);
+  REQUIRE(decodeErr.find("Cannot decode corpus frame 1") != std::string::npos);
+
+  const auto bad = dir / "badutf.con";
+  writeText(bad, conText("10.0\t10.0\t10.0", "90.0\t90.0\t90.0",
+                         "   1.0    2.0    3.0 1    0\n   4.0    5.0    6.0 1    1\n"));
+  const auto utfCorpus = dir / "utf-corpus";
+  fs::create_directories(utfCorpus);
+  REQUIRE(sinp::ingestConCorpus(utfCorpus.string(), 1, bad.string()) > 0);
+  bool marked = false;
+  for (const auto &entry : fs::recursive_directory_iterator(utfCorpus)) {
+    if (!entry.is_regular_file()) {
+      continue;
+    }
+    std::ifstream in(entry.path(), std::ios::binary);
+    std::string bytes((std::istreambuf_iterator<char>(in)),
+                      std::istreambuf_iterator<char>());
+    in.close();
+    const auto at = bytes.find("1.0");
+    if (at == std::string::npos) {
+      continue;
+    }
+    bytes[at] = static_cast<char>(0xFF);
+    std::ofstream out(entry.path(), std::ios::binary | std::ios::trunc);
+    out << bytes;
+    marked = true;
+    break;
+  }
+  REQUIRE(marked);
+  const std::string utfErr = captureCerr([&] {
+    cloud = sinp::readConCorpus(utfCorpus.string(), "", "", 1, cloud);
+  });
+  REQUIRE(cloud.nop == 0);
+  REQUIRE(utfErr.find("Cannot read frame text from " + utfCorpus.string()) !=
+          std::string::npos);
+  fs::remove_all(dir);
+}
+
+TEST_CASE("a corpus directory vanishes before the second open", "[seams_input]") {
+  const auto dir = fs::temp_directory_path() / "dseams-corpus-race";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  const auto good = dir / "good.con";
+  writeText(good, conText("10.0\t10.0\t10.0", "90.0\t90.0\t90.0",
+                          "   1.0    2.0    3.0 1    0\n   4.0    5.0    6.0 1    1\n"));
+  const auto corpus = dir / "corpus";
+  const auto parked = dir / "corpus-parked";
+  fs::create_directories(corpus);
+  REQUIRE(sinp::ingestConCorpus(corpus.string(), 1, good.string()) > 0);
+  std::atomic<bool> run{true};
+  std::thread mover([&] {
+    while (run.load()) {
+      std::error_code ec;
+      fs::rename(corpus, parked, ec);
+      fs::rename(parked, corpus, ec);
+    }
+  });
+  bool saw = false;
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(400);
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  while (std::chrono::steady_clock::now() < deadline && !saw) {
+    const std::string err = captureCerr([&] {
+      cloud = sinp::readConCorpus(corpus.string(), "", "", 1, cloud);
+    });
+    if (err.find("Cannot reopen corpus ") != std::string::npos) {
+      saw = true;
+      REQUIRE(cloud.nop == 0);
+    }
+  }
+  run.store(false);
+  mover.join();
+  REQUIRE(saw);
+  fs::remove_all(dir);
+}
+
+TEST_CASE("a dump vanishes while another read holds its index", "[seams_input]") {
+  const auto dir = fs::temp_directory_path() / "dseams-dump-race";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  const auto dump = dir / "wide.lammpstrj";
+  const auto parked = dir / "wide-parked.lammpstrj";
+  {
+    std::ofstream out(dump);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n200000\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 100\n0 100\n0 100\n"
+        << "ITEM: ATOMS id type x y z\n";
+    for (int i = 0; i < 200000; ++i) {
+      out << i + 1 << " 1 0 0 0\n";
+    }
+  }
+  molSys::PointCloud<molSys::Point<double>, double> warm;
+  warm = sinp::readLammpsTrj(dump.string(), 1, warm);
+  REQUIRE(warm.nop == 200000);
+  std::atomic<bool> run{true};
+  std::thread holder([&] {
+    molSys::PointCloud<molSys::Point<double>, double> cloud;
+    while (run.load()) {
+      try {
+        cloud = sinp::readLammpsTrj(dump.string(), 1, cloud);
+      } catch (const std::exception &) {
+      }
+    }
+  });
+  std::thread mover([&] {
+    while (run.load()) {
+      std::error_code ec;
+      fs::rename(dump, parked, ec);
+      fs::rename(parked, dump, ec);
+    }
+  });
+  bool saw = false;
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  while (std::chrono::steady_clock::now() < deadline && !saw) {
+    cloud.nop = -1;
+    const std::string out = captureFd(STDOUT_FILENO, [&] {
+      try {
+        cloud = sinp::readLammpsTrj(dump.string(), 1, cloud);
+      } catch (const std::exception &) {
+      }
+    });
+    if (cloud.nop == 0 &&
+        out.find("Fatal Error:") == std::string::npos &&
+        out.find("You entered a frame that doesn't exist.") != std::string::npos) {
+      saw = true;
+    }
+  }
+  run.store(false);
+  holder.join();
+  mover.join();
+  sinp::dropLammpsDumpIndex(dump.string());
+  REQUIRE(saw);
+  fs::remove_all(dir);
+}
 #endif
