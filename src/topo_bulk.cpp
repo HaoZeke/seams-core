@@ -719,9 +719,6 @@ bool ddcFourteen(const std::vector<std::vector<int>> &rings,
     const auto &cycle = rings[static_cast<size_t>(ri)];
     int share = 0;
     for (const int atom : cycle) {
-      if (atom < 0 || atom >= nAtoms) {
-        return false;
-      }
       share += stamp[static_cast<size_t>(atom)] == eqMark ? 1 : 0;
     }
     if (share != 3) {
