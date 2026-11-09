@@ -732,8 +732,9 @@ bool ddcFourteen(const std::vector<std::vector<int>> &rings,
   return unique == 14;
 }
 
-// One chain plus the equator is a subset of the seven rings, so more than
-// 14 molecules cannot be completed to a DDC.
+// A kept peripheral has three equator atoms and three others, and pairing
+// spends two of those others, so a chain cannot pass 14 molecules. This
+// only rejects an atom outside the cloud.
 bool ddcChainRoom(const std::vector<std::vector<int>> &rings,
                   const std::vector<int> &equatorial, const DdcChain &chain,
                   int nAtoms) {
@@ -743,7 +744,6 @@ bool ddcChainRoom(const std::vector<std::vector<int>> &rings,
     stamp.assign(static_cast<size_t>(nAtoms), 0);
   }
   const int mark = ++tick;
-  int unique = 0;
   auto take = [&](const std::vector<int> &cycle) -> bool {
     for (const int atom : cycle) {
       if (atom < 0 || atom >= nAtoms) {
@@ -751,10 +751,6 @@ bool ddcChainRoom(const std::vector<std::vector<int>> &rings,
       }
       if (stamp[static_cast<size_t>(atom)] != mark) {
         stamp[static_cast<size_t>(atom)] = mark;
-        ++unique;
-        if (unique > 14) {
-          return false;
-        }
       }
     }
     return true;
