@@ -375,6 +375,11 @@ struct LammpsIdMol {
   bool oneToN = false;
 };
 
+bool startsWith(const std::string &line, const char *prefix) {
+  const auto n = std::char_traits<char>::length(prefix);
+  return line.size() >= n && line.compare(0, n, prefix) == 0;
+}
+
 LammpsIdMol lammpsIdMol(const std::string &path, int frame) {
   LammpsIdMol out;
   std::ifstream in(path);
@@ -389,7 +394,7 @@ LammpsIdMol lammpsIdMol(const std::string &path, int frame) {
   bool atoms = false;
   std::string line;
   while (std::getline(in, line)) {
-    if (line.compare(0, 14, "ITEM: TIMESTEP") == 0) {
+    if (startsWith(line, "ITEM: TIMESTEP")) {
       seen += 1;
       atoms = false;
       if (seen > frame) {
@@ -400,13 +405,13 @@ LammpsIdMol lammpsIdMol(const std::string &path, int frame) {
     if (seen != frame) {
       continue;
     }
-    if (line.compare(0, 20, "ITEM: NUMBER OF ATOMS") == 0) {
+    if (startsWith(line, "ITEM: NUMBER OF ATOMS")) {
       if (std::getline(in, line)) {
         natoms = std::atoi(line.c_str());
       }
       continue;
     }
-    if (line.compare(0, 11, "ITEM: ATOMS") == 0) {
+    if (startsWith(line, "ITEM: ATOMS")) {
       idCol = -1;
       molCol = -1;
       std::istringstream head(line);
@@ -512,13 +517,10 @@ sinp::openFrame(const std::string &filename, int frame, int typeI,
   }
   if (!chemfilesUnreadable) {
     if (dumpFile) {
-      // Ids are {1..N}, and chemfiles stored id k at index k-1.
-      // The written id is that LAMMPS id, not the file row.
-      for (int i = 0; i < cloud.nop; ++i) {
-        auto &pt = cloud.pts[static_cast<std::size_t>(i)];
-        const int id = i + 1;
-        pt.atomID = id;
-        pt.molID = ids.molOf[id];
+      // Ids are {1..N}. Chemfiles stored id k at index k-1, and the
+      // point id is that index plus one: the LAMMPS id, not the file row.
+      for (auto &pt : cloud.pts) {
+        pt.molID = ids.molOf[pt.atomID];
       }
     }
     return cloud;
