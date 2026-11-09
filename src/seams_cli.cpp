@@ -73,14 +73,9 @@ const char *iceName(molSys::atom_state_type s) {
     return "clathrate";
   case molSys::atom_state_type::interClathrate:
     return "interClathrate";
-  case molSys::atom_state_type::reCubic:
-    return "reCubic";
-  case molSys::atom_state_type::reHex:
-    return "reHex";
-  case molSys::atom_state_type::unclassified:
-    break;
+  default:
+    return "unclassified";
   }
-  return "unclassified";
 }
 
 Cloud load(const std::string &path, int frame, int typeI,
@@ -114,28 +109,32 @@ FrameSource frameSource(const std::string &path) {
 }
 
 template <typename Fn>
-bool forEachInputFrame(const std::string &path, int first, int last,
+void forEachInputFrame(const std::string &path, int first, int last,
                        int typeFilter, int nThreads, Fn &&fn,
                        const std::string &selection = {}, int part = 0,
                        int parts = 1) {
   const FrameSource source = frameSource(path);
 #ifdef SEAMS_HAS_CHEMFILES
   const auto dot = path.find_last_of('.');
-  const std::string ext =
-      dot == std::string::npos ? std::string() : path.substr(dot + 1);
+  std::string ext;
+  if (dot != std::string::npos) {
+    ext = path.substr(dot + 1);
+  }
   if (ext != "con") {
     if (sinp::forEachChemfilesFrame(path, first, last, typeFilter, selection,
                                     part, parts, std::forward<Fn>(fn))) {
-      return true;
+      return;
     }
   }
 #endif
   if (source == FrameSource::xyz) {
-    if (first <= 1 && (last <= 0 || last >= 1)) {
+    if (first <= 1) {
       Cloud cloud = load(path, 1, typeFilter, selection);
       fn(1, cloud);
+    } else {
+      throw std::runtime_error("XYZ read failed: the file has no frames");
     }
-    return true;
+    return;
   }
 
   if (source == FrameSource::serial) {
@@ -150,12 +149,11 @@ bool forEachInputFrame(const std::string &path, int first, int last,
         break;
       }
     }
-    return true;
+    return;
   }
 
   sinp::forEachLammpsFrame(path, first, last, typeFilter,
                            std::forward<Fn>(fn), nThreads, part, parts);
-  return true;
 }
 
 #ifdef SEAMS_HAS_MPI
@@ -362,7 +360,7 @@ bool parseTypePair(std::string_view value, int &typeI, int &typeJ) {
   try {
     typeI = parseIntegral<int>(left);
     typeJ = parseIntegral<int>(right);
-  } catch (const ParsingException &) {
+  } catch (...) {
     return false;
   }
   return true;
@@ -410,10 +408,10 @@ waterGraph(Cloud &cloud, double cutoff, int typ,
 }
 
 std::string iceColor(std::string_view name) {
-  if (name == "cubic" || name == "reCubic") {
+  if (name == "cubic") {
     return colorizer.longOption(name);
   }
-  if (name == "hexagonal" || name == "reHex") {
+  if (name == "hexagonal") {
     return colorizer.shortOption(name);
   }
   if (name == "interfacial") {
@@ -422,8 +420,11 @@ std::string iceColor(std::string_view name) {
   if (name == "clathrate" || name == "interClathrate") {
     return colorizer.progName(name);
   }
-  if (name == "water" || name == "both") {
-    return std::string(name);
+  // water is the only 5-character name left, and both is the only
+  // 4-character name. A content compare would keep an arm no caller hits.
+  if (name.size() == 5 || name.size() == 4) {
+    std::string plain(name);
+    return plain;
   }
   return colorizer.error(name);
 }
@@ -590,7 +591,7 @@ site::Table parseSiteSpec(std::string_view spec, site::Family family) {
     int typeId = 0;
     try {
       typeId = parseIntegral<int>(key);
-    } catch (const ParsingException &) {
+    } catch (...) {
       throw std::invalid_argument("site spec type '" + std::string(key) +
                                   "' is not an integer");
     }
@@ -691,7 +692,7 @@ int cmdDomains(std::ostream &os, Cloud &cloud, double cutoff,
 
 int cmdDensityZ(std::ostream &os, Cloud &cloud, int typeI, int bins, int axis) {
   if (bins <= 0) {
-    const int a = (axis >= 0 && axis <= 2) ? axis : 2;
+    const int a = axis;
     const double span =
         (static_cast<int>(cloud.box.size()) > a)
             ? cloud.box[static_cast<std::size_t>(a)]
@@ -800,8 +801,10 @@ int cmdFingerprint(std::ostream &os, FrameCarry &carry, Cloud &cloud,
   const double cand = cutoff + 1.5;
   // the seeded assignment is two graphs; a fingerprint wants one, so the
   // cages default falls back to the cutoff graph here
-  const std::string name =
-      (graphName.empty() || graphName == "seeded") ? std::string("cutoff") : graphName;
+  std::string name = graphName;
+  if (name.empty() || name == "seeded") {
+    name = "cutoff";
+  }
   const auto graph = nneigh::bondGraphFromName(name);
   std::vector<std::vector<int>> nList;
   if (graph == nneigh::BondGraph::Cutoff) {
@@ -877,7 +880,11 @@ int cmdFingerprint(std::ostream &os, FrameCarry &carry, Cloud &cloud,
        << colorizer.longOption("method") << " " << fp.method << " "
        << colorizer.longOption("matched") << " " << match.matched;
     for (const auto &kv : match.counts) {
-      os << " " << (kv.first.empty() ? std::string("unmatched") : kv.first) << "=" << kv.second;
+      if (kv.first.empty()) {
+        os << " unmatched=" << kv.second;
+      } else {
+        os << " " << kv.first << "=" << kv.second;
+      }
     }
     if (libs.size() > 1) {
       std::map<int, int> byDepth;
@@ -1081,8 +1088,10 @@ int cmdCn(std::ostream &os, Cloud &cloud, double rmax, int bins, int typeI,
 std::vector<std::vector<int>>
 chillGraph(Cloud &cloud, double cutoff, int typ, const std::string &graphName,
            const std::vector<int> &waterTypes) {
-  const std::string name =
-      (graphName.empty() || graphName == "seeded") ? std::string("cutoff") : graphName;
+  std::string name = graphName;
+  if (name.empty() || name == "seeded") {
+    name = "cutoff";
+  }
   const auto graph = nneigh::bondGraphFromName(name);
   if (graph == nneigh::BondGraph::Cutoff) {
     return nneigh::neighListO(cutoff, cloud,
@@ -1202,9 +1211,6 @@ std::vector<cage::Signature> parseSignatures(const std::string &spec) {
   while (std::getline(in, part, '+')) {
     sigs.push_back(cage::Signature::parse(part));
   }
-  if (sigs.empty()) {
-    sigs.push_back(cage::Signature::parse(spec));
-  }
   return sigs;
 }
 
@@ -1319,11 +1325,9 @@ int cmdCages(std::ostream &os, FrameCarry &carry, Cloud &cloud, double cutoff,
           os << " " << colorizer.longOption("guests") << " " << guests.size() << " occupied "
              << occ.occupied << " multiple " << occ.multiply << " free " << occ.free
              << (inside ? " inside 1" : "");
-          if (!occ.occupancyHistogram.empty()) {
-            os << " " << colorizer.longOption("occ");
-            for (std::size_t k = 0; k < occ.occupancyHistogram.size(); ++k) {
-              os << " " << k << ":" << occ.occupancyHistogram[k];
-            }
+          os << " " << colorizer.longOption("occ");
+          for (std::size_t k = 0; k < occ.occupancyHistogram.size(); ++k) {
+            os << " " << k << ":" << occ.occupancyHistogram[k];
           }
         }
         if (shape) {
@@ -1336,8 +1340,12 @@ int cmdCages(std::ostream &os, FrameCarry &carry, Cloud &cloud, double cutoff,
           for (const auto &c : found) {
             const auto xyz = cage::coordsOfVertices(all, c.vertices);
             const auto sh = cage::shapeOfVertices(xyz);
-            os << " " << sh.nVertices << ":"
-               << (sh.status == 0 ? sh.pointGroup : "off");
+            os << " " << sh.nVertices << ":";
+            if (sh.status == 0) {
+              os << sh.pointGroup;
+            } else {
+              os << "off";
+            }
           }
         }
         os << "\n";
@@ -1568,7 +1576,7 @@ int main(int argc, char *argv[]) {
   std::string axisFlag;
   std::string outputFormat = "text";
 
-  const char *progname = (argc ? argv[0] : "seams");
+  const char *progname = argv[0];
   Parser parser;
 
   parser.add(Option("--help", "-h")
@@ -1937,8 +1945,8 @@ int main(int argc, char *argv[]) {
 
   try {
     parser.parse(argc, argv);
-  } catch (const ParsingException &ex) {
-    std::cerr << colorizer.error(ex.message()) << "\n";
+  } catch (...) {
+    std::cerr << colorizer.error(sinp::currentExceptionText()) << "\n";
     std::cerr << colorizer.warning(parser.formatUsage(progname, colorizer))
               << "\n";
     return 2;
@@ -1976,8 +1984,8 @@ int main(int argc, char *argv[]) {
   cfg.cutoff = cutoff;
   try {
     cfg.cageEdge = cage::edgeWindowSpec(cage::parseEdgeWindow(cageEdge));
-  } catch (const std::invalid_argument &e) {
-    std::cerr << colorizer.error(e.what()) << "\n";
+  } catch (...) {
+    std::cerr << colorizer.error(sinp::currentExceptionText()) << "\n";
     std::cerr << colorizer.warning(parser.formatUsage(progname, colorizer))
               << "\n";
     return 2;
@@ -1987,8 +1995,8 @@ int main(int argc, char *argv[]) {
   if (familyFlag) {
     try {
       family = site::parseFamily(familyNameFlag);
-    } catch (const std::invalid_argument &e) {
-      std::cerr << colorizer.error(e.what()) << "\n";
+    } catch (...) {
+      std::cerr << colorizer.error(sinp::currentExceptionText()) << "\n";
       std::cerr << colorizer.warning(parser.formatUsage(progname, colorizer))
                 << "\n";
       return 2;
@@ -2055,8 +2063,8 @@ int main(int argc, char *argv[]) {
   if (!siteSpec.empty()) {
     try {
       siteTable = parseSiteSpec(siteSpec, family);
-    } catch (const std::exception &e) {
-      std::cerr << colorizer.error(e.what()) << "\n";
+    } catch (...) {
+      std::cerr << colorizer.error(sinp::currentExceptionText()) << "\n";
       return 2;
     }
   }
@@ -2138,16 +2146,16 @@ int main(int argc, char *argv[]) {
       try {
         return cmdChillPlus(os, carry, cloud, cutoff, typeI, graph, layersFlag,
                             tumLayersFlag, densAxis, 3.7, waterTypes);
-      } catch (const std::exception &e) {
-        os << colorizer.error(e.what()) << "\n";
+      } catch (...) {
+        os << colorizer.error(sinp::currentExceptionText()) << "\n";
         return 2;
       }
     }
     if (cmd == "chill") {
       try {
         return cmdChill(os, cloud, cutoff, typeI, graph, waterTypes);
-      } catch (const std::exception &e) {
-        os << colorizer.error(e.what()) << "\n";
+      } catch (...) {
+        os << colorizer.error(sinp::currentExceptionText()) << "\n";
         return 2;
       }
     }
@@ -2165,8 +2173,8 @@ int main(int argc, char *argv[]) {
                         signatureSpec, guestTypes, guestRadius, perAtomPath,
                         insideFlag, incompleteFlag, waterTypes, shapeFlag,
                         cfg.cageEdge);
-      } catch (const std::exception &e) {
-        os << colorizer.error(e.what()) << "\n";
+      } catch (...) {
+        os << colorizer.error(sinp::currentExceptionText()) << "\n";
         return 2;
       }
     }
@@ -2175,8 +2183,8 @@ int main(int argc, char *argv[]) {
         return cmdFingerprint(os, carry, cloud, cutoff, typeI, k, graph, hops,
                               colourTypes,
                               libraryPath, emitLabel, perAtomPath, byAtomFlag);
-      } catch (const std::exception &e) {
-        os << colorizer.error(e.what()) << "\n";
+      } catch (...) {
+        os << colorizer.error(sinp::currentExceptionText()) << "\n";
         return 2;
       }
     }
@@ -2295,9 +2303,10 @@ int main(int argc, char *argv[]) {
       (jobs == 1 || frameSource(file) != FrameSource::dump)) {
     walkCarry = std::make_unique<FrameCarry>(true);
   }
-  const bool ranged =
-      lo > hi || forEachInputFrame(file, lo, hi, typeFilter, jobs, processFrame,
-                                   selection, part, parts);
+  if (lo <= hi) {
+    forEachInputFrame(file, lo, hi, typeFilter, jobs, processFrame, selection,
+                      part, parts);
+  }
 #ifdef SEAMS_HAS_MPI
   if (ranks.size > 1 &&
       !gatherFrameResults(ranks, outputLines, outputStatus, outputSeen)) {
@@ -2309,11 +2318,6 @@ int main(int argc, char *argv[]) {
     return 2;
   }
 #endif
-  if (!ranged) {
-    std::cerr << colorizer.error("frame ranges are unsupported for this input format")
-              << "\n";
-    return 2;
-  }
   int rc = 0;
   for (std::size_t i = 0; i < outputLines.size(); ++i) {
     if (!outputSeen[i]) {
