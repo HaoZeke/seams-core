@@ -331,7 +331,8 @@ def main():
         "ITEM: ATOMS id type mol\n"
         "1 1\n"
     )
-    expect(["read", str(shortmol), *one], 0, out_has="nop ")
+    expect(["read", str(shortmol), *one], 2,
+           err_line="LAMMPS dump frame is truncated: expected 1 atoms, read 0.")
     pdb = work / "end.pdb"
     pdb.write_text("END\n")
     expect(["read", str(pdb), "--frame", "1", "--last", "2"], 0, out_has="nop ")
