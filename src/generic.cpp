@@ -172,20 +172,9 @@ double gen::getAverageWithoutOutliers(std::vector<double> inpVec) {
     numOfObservations++;
     avgVal += sorted[i];
   }
-  // ----------------------
-  // This fails if there are not enough observations (ring size = 3)
-  if (numOfObservations == 0) {
-    double sumVal = 0.0;
-    // Loop through all the values and sum
-    for (int i = 0; i < n; i++) {
-      sumVal += inpVec[i];
-    } // end of sum
-    // Normalize
-    avgVal = sumVal / n;
-    return avgVal;
-  } // for triangular prism blocks
-  // ----------------------
-  // Divide by the number of observations used
+  // For n >= 4 the lower half is non-empty. Its maximum is at least Q1
+  // and at most Q3, so at least one value is inside the Tukey fences.
+  // n < 4 has already returned the plain average.
   avgVal /= numOfObservations;
 
   return avgVal;
