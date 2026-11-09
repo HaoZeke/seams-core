@@ -196,10 +196,9 @@ def main():
             code, text = run(module, repo, js)
             need(code == 0 and "gap.py 1 1 1.000000" in text, "a changed file with a row failed")
         finally:
-            if saved is None:
-                os.environ["DSEAMS_COVERAGE_BASE"] = anchor
-            else:
-                os.environ["DSEAMS_COVERAGE_BASE"] = saved
+            # saved was read after DSEAMS_COVERAGE_BASE was set to the
+            # anchor commit, and nothing clears it before that read.
+            os.environ["DSEAMS_COVERAGE_BASE"] = saved
         del first
         bare = Path(tempfile.mkdtemp())
         seen_py = bare / "seen.py"
