@@ -2799,9 +2799,6 @@ bool ring::NeighBond::operator()(int i, int j) const {
   if (!bits_.empty()) {
     return ((bits_[static_cast<size_t>(i)] >> static_cast<unsigned>(j)) & 1ULL) != 0;
   }
-  if (off_.empty()) {
-    return false;
-  }
   const auto b = cols_.begin() + off_[static_cast<size_t>(i)];
   const auto e = cols_.begin() + off_[static_cast<size_t>(i + 1)];
   return std::binary_search(b, e, j);
