@@ -79,8 +79,6 @@ def lammps_cases(work, plugin, lmp, mpirun, libdir):
         run 1
         """
     )
-    env_host = env.copy()
-    env_host["DSEAMS_NO_HOST"] = "1"
     for name, text in cases.items():
         folder = work / name
         folder.mkdir(parents=True, exist_ok=True)

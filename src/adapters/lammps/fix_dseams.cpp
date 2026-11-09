@@ -62,7 +62,7 @@ double parse_positive_double(const char *text, int *bad) {
 } // namespace
 
 FixDseams::FixDseams(LAMMPS *lmp, int narg, char **arg) :
-    Fix(lmp, narg, arg), active_(0), every_(1), depth_(8), cutoff_(3.5), seen_step_(-1),
+    Fix(lmp, narg, arg), active_(0), every_(1), depth_(8), seen_step_(-1), cutoff_(3.5),
     eng_(nullptr), list_(nullptr) {
   int iarg = 3;
   while (iarg < narg) {
@@ -211,7 +211,7 @@ void FixDseams::end_of_step() {
               lmp->world);
   // Every rank contributes its full neighbour rows. Ghost images keep the
   // real atom tag, and the engine drops repeated images inside the cutoff.
-  int want = (list_ != nullptr && std::getenv("DSEAMS_NO_HOST") == nullptr) ? 1 : 0;
+  int want = list_ != nullptr ? 1 : 0;
   int local_stale = want;
   if (want && built_x_.size() == static_cast<std::size_t>(kept) * 3) {
     local_stale = 0;
