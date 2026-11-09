@@ -67,17 +67,10 @@ rdf::PartialRdf rdf::partialRdf(
     }
     for (std::size_t k = 1; k < nList[iatom].size(); ++k) {
       const int jid = nList[iatom][k];
-      const auto found = yCloud.idIndexMap.find(jid);
-      if (found == yCloud.idIndexMap.end()) {
-        continue;
-      }
-      const int jatom = found->second;
-      if (jatom < 0 || jatom >= yCloud.nop) {
-        continue;
-      }
-      if (yCloud.pts[static_cast<std::size_t>(jatom)].type != typeJ) {
-        continue;
-      }
+      // neighListPair emits only an ID that indexToIDTable copied out of
+      // idIndexMap at an index in [0, nop). The partner is type J, or
+      // type I when the two requested types are the same.
+      const int jatom = yCloud.idIndexMap.find(jid)->second;
       if (like && jatom <= iatom) {
         continue;
       }
@@ -85,12 +78,9 @@ rdf::PartialRdf rdf::partialRdf(
       if (rij > rmax) {
         continue;
       }
-      int ibin = (out.binwidth > 0.0)
-                     ? static_cast<int>(rij / out.binwidth)
-                     : 0;
-      if (ibin < 0) {
-        continue;
-      }
+      // binwidth is rmax/nbins and rmax is positive here, so the quotient
+      // is not negative. A distance that rounds onto rmax lands on nbins.
+      int ibin = static_cast<int>(rij / out.binwidth);
       if (ibin >= nbins) {
         ibin = nbins - 1;
       }
