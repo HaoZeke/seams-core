@@ -95,6 +95,8 @@ The plugin acceptance also runs on two ranks.
 
 The module lives on the `dseams-insitu` branch, beside the metatomic
 module.
+GROMACS main is pinned at 2027.0-dev.
+The commit is 1ede0115a1c6cc063813d2b13085a86640e4273e.
 Configure leaves the module out when either path is empty.
 
 The GROMACS configure line sets `GMX_MPI` to ON.

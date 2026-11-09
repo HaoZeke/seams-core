@@ -2,6 +2,12 @@
 
 
 class DseamsReporter:
+    """OpenMM reporter that calls the in-situ engine.
+
+    Positions are read from the context on the host. The reporter
+    writes no trajectory of its own.
+    """
+
     def __init__(self, engine, dump, interval=1, types=None):
         self.engine = engine
         self.dump = dump

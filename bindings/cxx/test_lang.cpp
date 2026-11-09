@@ -227,6 +227,27 @@ int main(int argc, char **argv) {
   }
   seams_frame *fromXyz = seams_frame_read(tinyXyz.c_str(), 1, -1);
   if (fromXyz == nullptr) return fail("xyz read");
+  const auto nroot = std::filesystem::temp_directory_path();
+  const std::string twoXyz = (nroot / "dseams-nframes-two.xyz").string();
+  const std::string oneGro = (nroot / "dseams-nframes.gro").string();
+  const std::string onePdb = (nroot / "dseams-nframes.pdb").string();
+  {
+    std::ofstream out(twoXyz);
+    out << "1\nframe\nO 0.0 0.0 0.0\n1\nframe\nO 1.0 0.0 0.0\n";
+  }
+  {
+    std::ofstream out(oneGro);
+    out << "water\n    1\n"
+           "    1SOL     OW    1   0.000   0.000   0.000\n"
+           "   1.00000   1.00000   1.00000\n";
+  }
+  {
+    std::ofstream out(onePdb);
+    out << "ATOM      1  OW  SOL     1       0.000   0.000   0.000  1.00  0.00           O\nEND\n";
+  }
+  if (seams_path_nframes(twoXyz.c_str()) != 2) return fail("xyz frame count");
+  if (seams_path_nframes(oneGro.c_str()) != 1) return fail("gro frame count");
+  if (seams_path_nframes(onePdb.c_str()) != 1) return fail("pdb frame count");
   const std::string missingXyz = (std::filesystem::temp_directory_path() / "dseams-lang-missing.xyz").string();
   if (seams_frame_read(missingXyz.c_str(), 1, -1) != nullptr) return fail("missing xyz should fail");
   if (seams_frame_chill(tip, 3.5, 99, "cutoff", labels.data(), counts) != 0) return fail("chill type filter");

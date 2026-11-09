@@ -165,9 +165,17 @@ int seams_path_nframes(const char *path) {
     set_error("path is null");
     return -1;
   }
-  const auto ext = extension_of(path);
-  if (ext == "xyz") return 1;
-  return sinp::nLammpsFrames(path);
+  try {
+    const auto ext = extension_of(path);
+    if (ext == "lammpstrj" || ext == "dump") return sinp::nLammpsFrames(path);
+    const int steps = sinp::chemfilesSteps(path);
+    if (steps >= 0) return steps;
+    if (ext == "xyz") return 1;
+    return sinp::nLammpsFrames(path);
+  } catch (const std::exception &ex) {
+    set_error(ex.what());
+    return -1;
+  }
 }
 
 seams_frame *seams_frame_read(const char *path, int frame, int type_filter) {
@@ -196,24 +204,29 @@ seams_frame *seams_frame_from_arrays(const double *xyz, int n,
     set_error("xyz, box, and a positive atom count are required");
     return nullptr;
   }
-  auto *out = new seams_frame();
-  Cloud &cloud = out->cloud;
-  cloud.nop = n;
-  cloud.currentFrame = 1;
-  apply_box(cloud, box9);
-  cloud.pts.resize(static_cast<std::size_t>(n));
-  for (int i = 0; i < n; ++i) {
-    auto &point = cloud.pts[static_cast<std::size_t>(i)];
-    point.x = xyz[3 * i];
-    point.y = xyz[3 * i + 1];
-    point.z = xyz[3 * i + 2];
-    point.type = types != nullptr ? types[i] : 1;
-    point.atomID = ids != nullptr ? ids[i] : i + 1;
-    point.molID = point.atomID;
-    cloud.idIndexMap[point.atomID] = i;
+  try {
+    auto *out = new seams_frame();
+    Cloud &cloud = out->cloud;
+    cloud.nop = n;
+    cloud.currentFrame = 1;
+    apply_box(cloud, box9);
+    cloud.pts.resize(static_cast<std::size_t>(n));
+    for (int i = 0; i < n; ++i) {
+      auto &point = cloud.pts[static_cast<std::size_t>(i)];
+      point.x = xyz[3 * i];
+      point.y = xyz[3 * i + 1];
+      point.z = xyz[3 * i + 2];
+      point.type = types != nullptr ? types[i] : 1;
+      point.atomID = ids != nullptr ? ids[i] : i + 1;
+      point.molID = point.atomID;
+      cloud.idIndexMap[point.atomID] = i;
+    }
+    out->sync_arrays();
+    return out;
+  } catch (const std::exception &ex) {
+    set_error(ex.what());
+    return nullptr;
   }
-  out->sync_arrays();
-  return out;
 }
 
 void seams_frame_free(seams_frame *frame) { delete frame; }
@@ -367,22 +380,27 @@ int seams_frame_steinhardt(seams_frame *frame, double cutoff, int type,
     set_error("frame is null");
     return 1;
   }
-  const int typ = resolve_type(frame->cloud, type);
-  const double cand = cutoff + 1.5;
-  auto nList = nneigh::kNearestNeighbourList(frame->cloud, 4, cand, typ, true);
-  const auto result = chill::steinhardtQl(frame->cloud, nList, order_l);
-  const int n = frame->cloud.nop;
-  frame->ql = result.ql;
-  frame->qlbar = result.qlBar;
-  if (static_cast<int>(frame->ql.size()) < n) frame->ql.resize(static_cast<std::size_t>(n), 0.0);
-  if (static_cast<int>(frame->qlbar.size()) < n) frame->qlbar.resize(static_cast<std::size_t>(n), 0.0);
-  if (ql != nullptr && n > 0) {
-    std::memcpy(ql, frame->ql.data(), static_cast<std::size_t>(n) * sizeof(double));
+  try {
+    const int typ = resolve_type(frame->cloud, type);
+    const double cand = cutoff + 1.5;
+    auto nList = nneigh::kNearestNeighbourList(frame->cloud, 4, cand, typ, true);
+    const auto result = chill::steinhardtQl(frame->cloud, nList, order_l);
+    const int n = frame->cloud.nop;
+    frame->ql = result.ql;
+    frame->qlbar = result.qlBar;
+    if (static_cast<int>(frame->ql.size()) < n) frame->ql.resize(static_cast<std::size_t>(n), 0.0);
+    if (static_cast<int>(frame->qlbar.size()) < n) frame->qlbar.resize(static_cast<std::size_t>(n), 0.0);
+    if (ql != nullptr && n > 0) {
+      std::memcpy(ql, frame->ql.data(), static_cast<std::size_t>(n) * sizeof(double));
+    }
+    if (qlbar != nullptr && n > 0) {
+      std::memcpy(qlbar, frame->qlbar.data(), static_cast<std::size_t>(n) * sizeof(double));
+    }
+    return 0;
+  } catch (const std::exception &ex) {
+    set_error(ex.what());
+    return 1;
   }
-  if (qlbar != nullptr && n > 0) {
-    std::memcpy(qlbar, frame->qlbar.data(), static_cast<std::size_t>(n) * sizeof(double));
-  }
-  return 0;
 }
 
 int seams_frame_cages(seams_frame *frame, double cutoff, int type, int k,
@@ -581,7 +599,8 @@ int seams_frame_rdf(const seams_frame *frame, double rmax, int nbins,
     set_error("rdf needs a frame and r, g, count buffers");
     return 1;
   }
-  const int bins = seams_frame_rdf_nbins(rmax, nbins);
+  try {
+    const int bins = seams_frame_rdf_nbins(rmax, nbins);
     const int typ_i = resolve_type(frame->cloud, type_i);
     const int typ_j = type_j > 0 ? type_j : typ_i;
     const auto histogram =
@@ -600,7 +619,11 @@ int seams_frame_rdf(const seams_frame *frame, double rmax, int nbins,
     if (volume != nullptr) {
       *volume = histogram.volume;
     }
-  return 0;
+    return 0;
+  } catch (const std::exception &ex) {
+    set_error(ex.what());
+    return 1;
+  }
 }
 
 int seams_frame_rdf2d_nbin(double cutoff, double binwidth) {
@@ -618,7 +641,8 @@ int seams_frame_rdf2d(seams_frame *frame, double cutoff, double binwidth,
     set_error("rdf2d needs a frame and r, g buffers");
     return 1;
   }
-  const int nbin = seams_frame_rdf2d_nbin(cutoff, binwidth);
+  try {
+    const int nbin = seams_frame_rdf2d_nbin(cutoff, binwidth);
     if (output_dir != nullptr && output_dir[0] != '\0') {
       std::string dir(output_dir);
       if (dir.back() != '/') {
@@ -647,7 +671,11 @@ int seams_frame_rdf2d(seams_frame *frame, double cutoff, double binwidth,
       r[i] = binwidth * (static_cast<double>(i) + 0.5);
       g[i] = values[static_cast<std::size_t>(i)];
     }
-  return 0;
+    return 0;
+  } catch (const std::exception &ex) {
+    set_error(ex.what());
+    return 1;
+  }
 }
 
 int seams_frame_prisms(seams_frame *frame, double cutoff, int type,

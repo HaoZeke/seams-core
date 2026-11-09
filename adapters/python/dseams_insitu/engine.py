@@ -95,6 +95,11 @@ def load(path=None):
 
 
 class Engine:
+    """Live census over borrowed coordinates.
+
+    `lib` is the path of libyodaLib. `record` is the census file.
+    """
+
     def __init__(self, lib, record, cutoff=3.5, depth=8, every=1, water_type=1, debug=False):
         self.lib = lib
         opt = Options()
@@ -128,6 +133,7 @@ class Engine:
         return False
 
     def observe(self, step, xyz, box, dump, types=None, ids=None):
+        """Analyse one frame. Positions are in angstrom."""
         import numpy as np
 
         xyz = np.ascontiguousarray(xyz, dtype=np.float64)
