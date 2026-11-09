@@ -858,7 +858,9 @@ void loadLammpsFrame(
   }
   std::ifstream clone;
   if (!openCloneAt(filename, targetFrame, clone)) {
-    std::cout << "You entered a frame that doesn't exist.\n"; yCloud.currentFrame = targetFrame; return;
+    std::cout << "You entered a frame that doesn't exist.\n";
+    yCloud.currentFrame = targetFrame;
+    return;
   }
   parseLammpsFrameBody(clone, yCloud, typeFilter, keep, isSlice, coordLow,
                        coordHigh);
@@ -1118,7 +1120,9 @@ sinp::readCon(std::string filename, int targetFrame,
       return yCloud;
     }
     if (!cloudFromHandle(frame->get_handle(), targetFrame, yCloud)) {
-      std::cerr << "Cannot extract frame " << targetFrame << " from " << filename << "\n"; yCloud = molSys::clearPointCloud(yCloud);
+      std::cerr << "Cannot extract frame " << targetFrame << " from "
+                << filename << "\n";
+      yCloud = molSys::clearPointCloud(yCloud);
     }
   } catch (const std::exception &e) {
     std::cerr << "Cannot open .con file " << filename << ": " << e.what()
@@ -1141,7 +1145,8 @@ int sinp::ingestConCorpus(const std::string &corpus, std::uint64_t trajId,
   }
   size_t id = 0;
   if (rkrdb_open(dest.c_str(), &id) != RKRDB_OK) {
-    std::cerr << "Cannot open corpus " << dest << "\n"; return -1;
+    std::cerr << "Cannot open corpus " << dest << "\n";
+    return -1;
   }
   uint32_t nframes = 0;
   const int st =
@@ -1205,27 +1210,32 @@ molSys::PointCloud<molSys::Point<double>, double> sinp::readConCorpus(
   const Hit &hit = hits[static_cast<std::size_t>(targetFrame - 1)];
   size_t id = 0;
   if (rkrdb_open_readonly(hit.root.c_str(), &id) != RKRDB_OK) {
-    std::cerr << "Cannot reopen corpus " << hit.root << "\n"; return yCloud;
+    std::cerr << "Cannot reopen corpus " << hit.root << "\n";
+    return yCloud;
   }
   std::string text(1u << 20, '\0');
   int n = rkrdb_get_frame_text(id, hit.traj, hit.frame, text.data(),
                                text.size());
   if (n == RKRDB_ERR) {
-    text.assign(8u << 20, '\0'); n = rkrdb_get_frame_text(id, hit.traj, hit.frame, text.data(), text.size());
+    text.assign(8u << 20, '\0');
+    n = rkrdb_get_frame_text(id, hit.traj, hit.frame, text.data(), text.size());
   }
   rkrdb_close(id);
   if (n < 0) {
-    std::cerr << "Cannot read frame text from " << hit.root << "\n"; return yCloud;
+    std::cerr << "Cannot read frame text from " << hit.root << "\n";
+    return yCloud;
   }
   text.resize(static_cast<std::size_t>(n));
   readcon::CConFrameIterator *frames =
       readcon::read_con_string_iterator(text.c_str());
   if (frames == nullptr) {
-    std::cerr << "readcon-core rejected the corpus blob\n"; return yCloud;
+    std::cerr << "readcon-core rejected the corpus blob\n";
+    return yCloud;
   }
   readcon::RKRConFrame *handle = readcon::con_frame_iterator_next(frames);
   if (handle == nullptr || !cloudFromHandle(handle, targetFrame, yCloud)) {
-    std::cerr << "Cannot decode corpus frame " << targetFrame << "\n"; yCloud = molSys::clearPointCloud(yCloud);
+    std::cerr << "Cannot decode corpus frame " << targetFrame << "\n";
+    yCloud = molSys::clearPointCloud(yCloud);
   }
   if (handle != nullptr) {
     readcon::free_rkr_frame(handle);
