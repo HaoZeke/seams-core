@@ -1087,8 +1087,15 @@ def run_ipi():
     write_lammps(native, read_multi_xyz(xyz), [0, 0, 0, 6.4, 6.4, 6.4], [1] * 8)
     return match_lammps_cli(record, native)
 
+def scale_plan():
+    full = [(5, 1000, 8), (10, 8000, 4), (20, 64000, 2)]
+    if os.environ.get("DSEAMS_SCALE_TINY") == "1":
+        return [(5, 1000, 2)]
+    return full
+
+
 def scale_lammps():
-    plan = [(5, 1000, 8), (10, 8000, 4), (20, 64000, 2)]
+    plan = scale_plan()
     result = {}
     for ncell, natoms, steps in plan:
         result[str(natoms)] = {}
@@ -1223,7 +1230,7 @@ def gromacs_scale_case(folder, rows, steps, every, repeats):
 def scale_gromacs():
     import shutil
 
-    plan = [(5, 1000, 8), (10, 8000, 4), (20, 64000, 2)]
+    plan = scale_plan()
     result = {}
     for ncell, natoms, steps in plan:
         rows = diamond_positions(ncell)
@@ -1471,7 +1478,10 @@ def main():
     seal_tail(out, trr_frames_n)
 
 def seal_tail(out, trr_frames_n):
-    block = out["scale"]["1000"]["1"]
+    scale = out["scale"]
+    natoms = "1000" if "1000" in scale else next(iter(scale))
+    every = "1" if "1" in scale[natoms] else next(iter(scale[natoms]))
+    block = scale[natoms][every]
     per_frame = type7_median([block["live"][i] - block["plain"][i] for i in range(len(block["plain"]))])
     one = WORK / "lattice" / "5" / "one.lammpstrj"
     if not one.exists():
@@ -1515,7 +1525,8 @@ def seal_tail(out, trr_frames_n):
     ]
     print("ladder", flush=True)
     out["ladder"] = []
-    for ncell, natoms in ((5, 1000), (20, 64000)):
+    sizes = ((1, 8),) if os.environ.get("DSEAMS_SCALE_TINY") == "1" else ((5, 1000), (20, 64000))
+    for ncell, natoms in sizes:
         folder = WORK / "ladder-dump" / str(natoms)
         folder.mkdir(parents=True, exist_ok=True)
         dump = folder / "native.lammpstrj"
