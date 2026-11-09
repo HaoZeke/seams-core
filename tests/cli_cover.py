@@ -194,6 +194,11 @@ def main():
             "--type", "1", "--library", str(path_a) + "," + str(path_b)],
            0, out_has="depth ")
 
+    nodot = work / "nodot"
+    nodot.write_text(tiny.read_text())
+    expect(["rings", str(nodot), "--frame", "1", "--last", "2"], 0, out_has="rings ")
+    expect(["rings"], 2, err_line="A command and a trajectory file are required")
+
 
 if __name__ == "__main__":
     main()
