@@ -2620,13 +2620,6 @@ std::vector<int> ring::findHC(const std::vector<std::vector<int>> &rings,
         std::unique(prismaticRings.begin(), prismaticRings.end()),
         prismaticRings.end());
     for (const int kring : prismaticRings) {
-      if (ringType[static_cast<size_t>(kring)] == ring::strucType::unclassified) {
-        ringType[static_cast<size_t>(kring)] = ring::strucType::HCprismatic;
-        listHC.push_back(kring);
-      } else if (ringType[static_cast<size_t>(kring)] == ring::strucType::DDC) {
-        ringType[static_cast<size_t>(kring)] = ring::strucType::bothPrismatic;
-        listHC.push_back(kring);
-      }
       isPrismatic[static_cast<size_t>(kring)] = true;
     }
     HCRings.clear();
