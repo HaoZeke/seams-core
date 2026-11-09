@@ -675,9 +675,6 @@ void ddcChains(const std::vector<std::vector<int>> &rings,
     }
     for (const int kc : ac[static_cast<size_t>(i)]) {
       const int rc = C[static_cast<size_t>(kc)];
-      if (rc == ra) {
-        continue;
-      }
       const auto &atomsC = rings[static_cast<size_t>(rc)];
       for (const int jb : bcFromC[static_cast<size_t>(kc)]) {
         if (markB[static_cast<size_t>(jb)] == onB) {
