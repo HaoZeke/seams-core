@@ -2327,8 +2327,8 @@ int main(int argc, char *argv[]) {
     }
   }
   return rc;
-  } catch (const std::exception &e) {
-    std::cerr << colorizer.error(e.what()) << "\n";
+  } catch (...) {
+    std::cerr << colorizer.error(sinp::currentExceptionText()) << "\n";
     return 2;
   }
 }
