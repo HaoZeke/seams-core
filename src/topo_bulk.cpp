@@ -708,16 +708,11 @@ bool ddcFourteen(const std::vector<std::vector<int>> &rings,
     return tick;
   };
   const int eqMark = fresh();
-  int eqN = 0;
   for (const int atom : equatorial) {
     if (atom < 0 || atom >= nAtoms || stamp[static_cast<size_t>(atom)] == eqMark) {
       return false;
     }
     stamp[static_cast<size_t>(atom)] = eqMark;
-    ++eqN;
-  }
-  if (eqN != 6) {
-    return false;
   }
   const int ids[6] = {e.r[0], e.r[1], e.r[2], o.r[0], o.r[1], o.r[2]};
   for (const int ri : ids) {
