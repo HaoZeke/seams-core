@@ -40,6 +40,9 @@ class _Atoms:
     def get_positions(self):
         return np.array([[0.0, 0.0, 0.0], [2.8, 0.0, 0.0]])
 
+    def get_atomic_numbers(self):
+        return np.array([8, 1], dtype=np.int32)
+
     class cell:
         array = np.eye(3) * 20.0
 
@@ -62,8 +65,8 @@ class HookTests(unittest.TestCase):
             def box_from_rows(self, cell):
                 return [0, 0, 0, 20, 20, 20, 0, 0, 0]
 
-            def observe(self, step, pos, box, dump):
-                self.seen = (step, pos.shape, dump)
+            def observe(self, step, pos, box, dump, types=None):
+                self.seen = (step, pos.shape, dump, types)
 
         eng = Eng()
         obs = DseamsMDObserver(eng, _Atoms(), "dump")
@@ -71,6 +74,7 @@ class HookTests(unittest.TestCase):
         self.assertEqual(dyn.calls[0][1], 2)
         obs()
         self.assertEqual(eng.seen[0], 2)
+        self.assertEqual(eng.seen[3].tolist(), [8, 1])
         with self.assertRaises(TypeError):
             obs.attach(_BFGS())
 

@@ -39,4 +39,5 @@ class DseamsMDObserver:
         pos = np.ascontiguousarray(self.atoms.get_positions(), dtype=np.float64)
         cell = np.ascontiguousarray(self.atoms.cell.array, dtype=np.float64)
         box = self.engine.box_from_rows(cell)
-        self.engine.observe(int(self.dyn.nsteps), pos, box, self.dump)
+        numbers = np.ascontiguousarray(self.atoms.get_atomic_numbers(), dtype=np.int32)
+        self.engine.observe(int(self.dyn.nsteps), pos, box, self.dump, types=numbers)
