@@ -4,6 +4,7 @@ import ctypes
 import os
 import socket
 import sys
+import tempfile
 import unittest
 
 import numpy as np
@@ -251,9 +252,10 @@ class HookTests(unittest.TestCase):
                 load("libyodaLib.so")
         finally:
             engmod.ctypes.CDLL = real_cdll
-        dump = "var/run/seams-hook-round.lammpstrj"
-        live = "var/run/seams-hook-live.txt"
-        post = "var/run/seams-hook-post.txt"
+        folder = tempfile.mkdtemp()
+        dump = os.path.join(folder, "round.lammpstrj")
+        live = os.path.join(folder, "live.txt")
+        post = os.path.join(folder, "post.txt")
         for path in (dump, live, post):
             if os.path.exists(path):
                 os.remove(path)
@@ -284,7 +286,7 @@ class HookTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             replay(lib, dump, post, cutoff=0)
         with self.assertRaises(RuntimeError):
-            replay(lib, "var/run/seams-missing-dump.lammpstrj", post)
+            replay(lib, os.path.join(folder, "missing.lammpstrj"), post)
 
 
 if __name__ == "__main__":

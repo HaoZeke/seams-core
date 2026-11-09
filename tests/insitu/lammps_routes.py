@@ -80,6 +80,18 @@ def run_case(binary, mpirun, np, steps, every, ncell, plugin, folder, env):
     return loop_time(blob) / steps, section_time(blob, "Modify"), blob
 
 
+def plan_rows():
+    if os.environ.get("DSEAMS_ROUTE_TINY") == "1":
+        return [(1000, 5, 1, 2, 1)]
+    rows = []
+    for ncell, natoms, base in ((5, 1000, 40), (20, 64000, 8)):
+        for every in (1, 10, 100):
+            steps = max(base, every)
+            for np in (1, 2, 4):
+                rows.append((natoms, ncell, every, steps, np))
+    return rows
+
+
 def main():
     route = sys.argv[1]
     binary = sys.argv[2]
@@ -87,12 +99,7 @@ def main():
     mpirun = os.environ.get("DSEAMS_MPIRUN", "")
     env = os.environ.copy()
     env["OMP_NUM_THREADS"] = "1"
-    plan = []
-    for ncell, natoms, base in ((5, 1000, 40), (20, 64000, 8)):
-        for every in (1, 10, 100):
-            steps = max(base, every)
-            for np in (1, 2, 4):
-                plan.append((natoms, ncell, every, steps, np))
+    plan = plan_rows()
     out = {
         "route": route,
         "binary": binary,
