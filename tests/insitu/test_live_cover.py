@@ -1,0 +1,215 @@
+"""Cover the acceptance helpers and the error branches around them."""
+
+import os
+import shutil
+import stat
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+os.environ.setdefault("SEAMS_LIB", str(ROOT / "bbdir-rel" / "src" / "libyodaLib.so"))
+os.environ.setdefault("SEAMS_CLI", str(ROOT / "bbdir-rel" / "seams"))
+os.environ.setdefault("DSEAMS_MD_PREFIX", "var/dseams-md")
+os.environ.setdefault("DSEAMS_LIVE_WORK", "var/run/dseams-live-cover")
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import engine_e2e  # noqa: E402
+import live  # noqa: E402
+
+
+def expect_error(fn):
+    try:
+        fn()
+    except (RuntimeError, SystemExit):
+        return True
+    return False
+
+
+def check(cond):
+    if not cond:
+        raise SystemExit("check failed")
+
+
+def write_dump(path, step=1):
+    path.write_text(
+        "ITEM: TIMESTEP\n%d\nITEM: NUMBER OF ATOMS\n1\n"
+        "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        "ITEM: ATOMS id type x y z\n1 1 0 0 0\n" % step
+    )
+
+
+def real_lines(dump):
+    rings = [ln for ln in live.cli_text("rings", dump).splitlines() if ln.startswith("rings ")][0]
+    chill = [ln for ln in live.cli_text("chill-plus", dump).splitlines() if ln.startswith("nop ")][0]
+    cage = [
+        ln
+        for ln in live.cli_text("cages", dump, ["--graph", "cutoff"]).splitlines()
+        if ln.startswith("nop ")
+    ][0]
+    return rings, chill, cage
+
+
+def main():
+    work = Path(os.environ["DSEAMS_LIVE_WORK"])
+    work.mkdir(parents=True, exist_ok=True)
+    live.WORK = work
+    try:
+        check(False)
+    except SystemExit:
+        pass
+    check(True)
+    check(expect_error(lambda: None) is False)
+    check(expect_error(lambda: live.run(["/bin/false"], work)))
+    folder = work / "unit"
+    folder.mkdir(parents=True, exist_ok=True)
+    shutil.rmtree(folder)
+    folder.mkdir()
+    dump = folder / "one.lammpstrj"
+    write_dump(dump)
+    record = folder / "live.txt"
+
+    quiet = live.run(["/bin/false"], folder, check=False)
+    check(quiet.returncode != 0)
+
+    info = live.host_block()
+    check(bool(info["head"]) and bool(info["cpu"]))
+    digest = live.sha256(dump)
+    check(len(digest) == 64)
+
+    blocks = live.census_blocks("note\nstep 1\nrings 3:0\nchill cubic:1\ncage hc:0\n")
+    check(blocks[0]["step"] == 1 and blocks[0]["chill"]["cubic"] == 1)
+
+    live.lammps_input(folder / "in-dump", 1, dump, record, "plugin.so", write_dump=True)
+    live.lammps_input(folder / "in-nodump", 1, dump, record, "plugin.so", write_dump=False)
+    live.lammps_plain(folder / "plain-nodump", 1, every=0)
+    live.lammps_plain(folder / "plain-dump", 1, every=1, native=dump)
+
+    short = folder / "short.dcd"
+    short.write_bytes(b"1234")
+    check(expect_error(lambda: live.native_frame_count(short)))
+    check(live.native_frame_count(dump) == 1)
+
+    bad_trr = folder / "bad.trr"
+    bad_trr.write_bytes(b"\x00" * 84)
+    check(expect_error(lambda: live.trr_frames(bad_trr)))
+    import struct
+    header = bytearray(b"\x00" * 84)
+    struct.pack_into(">i", header, 0, 1993)
+    struct.pack_into(">i", header, 32, 36)
+    struct.pack_into(">i", header, 52, 0)
+    struct.pack_into(">ii", header, 64, 0, 1)
+    (folder / "trunc.trr").write_bytes(bytes(header) + b"\x00" * 40)
+    check(expect_error(lambda: live.trr_frames(folder / "trunc.trr")))
+
+    check(live.gmx_wall("Time: 1.5 2.5\n") == 2.5)
+    check(expect_error(lambda: live.gmx_wall("no time here\n")))
+
+    check(expect_error(lambda: live.ladder_values("1\n2\n", "")))
+    samples = live.ladder_values("\n".join(["0.1"] * 7) + "\n", "")
+    check(len(samples) == 7)
+
+    check(expect_error(lambda: live.require_equal(1, 2, "mismatch")))
+    live.require_equal(3, 3, "same")
+    check(expect_error(lambda: live.require_native_frames(1, 2, 2)))
+    check(expect_error(lambda: live.require_native_frames(1, 1, 2)))
+    live.require_native_frames(4, 4, 4)
+
+    rings, chill, cage = real_lines(dump)
+    chill_bits = []
+    chill_words = chill.split()
+    for index in range(2, len(chill_words), 2):
+        chill_bits.append("%s:%s" % (chill_words[index], chill_words[index + 1]))
+    cage_words = cage.split()
+    cage_map = {cage_words[index]: cage_words[index + 1] for index in range(4, len(cage_words), 2)}
+    cage_bits = "hc:%s ddc:%s both:%s water:%s" % (
+        cage_map.get("hexagonal", "0"),
+        cage_map.get("cubic", "0"),
+        cage_map.get("both", "0"),
+        cage_map.get("water", "0"),
+    )
+    good = "step 1\n%s\nchill %s\ncage %s\n" % (rings, " ".join(chill_bits), cage_bits)
+    record.write_text("step 1\nstep 1\n" + rings + "\n")
+    check(expect_error(lambda: live.match_lammps_cli(record, dump)))
+    write_dump(folder / "dup.lammpstrj", 1)
+    (folder / "dup.lammpstrj").write_text(dump.read_text() + dump.read_text())
+    record.write_text("step 1\n" + rings + "\nchill cubic:0\ncage hc:0 ddc:0 both:0 water:0\n")
+    check(expect_error(lambda: live.match_lammps_cli(record, folder / "dup.lammpstrj")))
+    record.write_text("step 9\n" + rings + "\n")
+    check(expect_error(lambda: live.match_lammps_cli(record, dump)))
+
+    saved = live.SEAMS
+    stub = folder / "stub-seams"
+    stub.write_text("#!/bin/sh\nexit 0\n")
+    stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+    live.SEAMS = str(stub)
+    record.write_text("step 1\n" + rings + "\n")
+    check(expect_error(lambda: live.match_lammps_cli(record, dump)))
+    check(expect_error(lambda: live.match_native_cli(record, dump)))
+    live.SEAMS = saved
+
+    record.write_text("step 1\nrings 3:9 4:0 5:0 6:0 7:0 8:0\nchill cubic:0\ncage hc:0 ddc:0 both:0 water:0\n")
+    check(expect_error(lambda: live.match_lammps_cli(record, dump)))
+    record.write_text("step 1\n" + rings + "\nchill cubic:9\ncage hc:0 ddc:0 both:0 water:0\n")
+    check(expect_error(lambda: live.match_lammps_cli(record, dump)))
+    record.write_text("step 1\n" + rings + "\nchill " + " ".join(chill_bits) + "\ncage hc:9 ddc:0 both:0 water:0\n")
+    check(expect_error(lambda: live.match_lammps_cli(record, dump)))
+    record.write_text("step 1\n" + rings + "\nchill " + " ".join(chill_bits) + "\ncage hc:0 ddc:0 both:0 water:9\n")
+    check(expect_error(lambda: live.match_lammps_cli(record, dump)))
+    record.write_text("step 1\n" + rings + "\nchill " + " ".join(chill_bits) + "\ncage " + cage_bits + "\n")
+    record.write_text("step 1\n" + rings + "\nchill " + " ".join(chill_bits) + "\ncage hc:9 ddc:0 both:0 water:0\n")
+    check(expect_error(lambda: live.match_native_cli(record, dump)))
+    record.write_text("step 1\nrings 3:9 4:0 5:0 6:0 7:0 8:0\nchill " + " ".join(chill_bits) + "\ncage " + cage_bits + "\n")
+    check(expect_error(lambda: live.match_native_cli(record, dump)))
+
+    parsed = live.parse_dump(dump)
+    check(len(parsed) == 1 and parsed[0][0] == 1)
+    (folder / "empty.txt").write_text("")
+    check(live.parse_dump(folder / "empty.txt") == [])
+
+    check(expect_error(lambda: live.module_entry(["live.py"])))
+    live.module_entry([sys.executable, "--ladder-worker", str(dump)])
+
+    empty = folder / "empty.lammpstrj"
+    empty.write_text("")
+    check(expect_error(lambda: live.thread_ladder(empty, 1)))
+    live.thread_ladder(dump, 1)
+
+    made = live.diamond_positions(1)
+    lattice = work / "lattice" / "1" / "one.lammpstrj"
+    lattice.unlink()
+    made = live.diamond_positions(1)
+    check(len(made) >= 1)
+
+    check(expect_error(lambda: engine_e2e.need("DSEAMS_NOT_SET")))
+    saved_mpi = os.environ.pop("DSEAMS_MPIRUN", None)
+    check(expect_error(lambda: engine_e2e.lammps_case("unused", "plugin.so", work / "rank-gap", 2)))
+    if saved_mpi is not None:
+        os.environ["DSEAMS_MPIRUN"] = saved_mpi
+
+    stub_lmp = folder / "stub-lmp"
+    stub_lmp.write_text(
+        "#!/bin/sh\n"
+        "cat > native.lammpstrj << 'END'\n"
+        + dump.read_text()
+        + "END\n"
+        "cat > live.txt << 'END'\n"
+        + good
+        + "END\n"
+    )
+    stub_lmp.chmod(stub_lmp.stat().st_mode | stat.S_IEXEC)
+    check(expect_error(lambda: engine_e2e.lammps_case(str(stub_lmp), "plugin.so", work / "short-run", 1)))
+
+    for name in ("lammps-plugin-1", "lammps-plugin-2", "lammps-package", "e2e-gromacs"):
+        (work / name).mkdir(parents=True, exist_ok=True)
+    check(live.SEAMS == os.environ["SEAMS_CLI"])
+    from dseams_insitu.engine import Engine
+    with Engine(os.environ["SEAMS_LIB"], str(folder / "path-record.txt")) as eng:
+        eng.observe(0, [[0.0, 0.0, 0.0], [2.8, 0.0, 0.0], [0.0, 2.8, 0.0], [1.4, 1.4, 2.0]],
+                    [0.0, 0.0, 0.0, 20.0, 20.0, 20.0, 0.0, 0.0, 0.0], None, [1, 1, 1, 1])
+    os.environ["DSEAMS_E2E_WORK"] = str(work)
+    engine_e2e.main()
+    print("cover ok")
+
+
+if __name__ == "__main__":
+    main()

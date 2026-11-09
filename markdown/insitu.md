@@ -124,8 +124,14 @@ The plugin acceptance also runs on two ranks.
 
 The module lives on the `dseams-insitu` branch, beside the metatomic
 module.
-GROMACS main is pinned at 2027.0-dev.
-The commit is 1ede0115a1c6cc063813d2b13085a86640e4273e.
+GROMACS main is the 2027.0-dev line.
+Upstream main at the branch point is
+1ede0115a1c6cc063813d2b13085a86640e4273e.
+The build pin is bdf53dcf3ca265a62600e1e3d5345476d666c6d0.
+That commit is the module tip.
+It sits five commits after the branch point.
+The clean binary records the module tip in its version line.
+The pin is that tip.
 Configure leaves the module out when either path is empty.
 
 The GROMACS configure line sets `GMX_MPI` to ON.

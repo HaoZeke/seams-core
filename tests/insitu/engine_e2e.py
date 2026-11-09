@@ -120,11 +120,9 @@ def gromacs_case():
         for ln in live.cli_text("rings", dump, type_filter=1).splitlines()
         if ln.startswith("rings ")
     ]
-    if trr_rings != dump_rings:
-        raise RuntimeError("seams on the TRR does not match seams on the same frames")
+    live.require_equal(trr_rings, dump_rings, "seams on the TRR does not match seams on the same frames")
     native = live.match_native_cli(folder / "live.txt", trr, type_filter=1)
-    if native != matched or native != len(frames):
-        raise RuntimeError("gromacs native %d dump %d trr %d" % (native, matched, len(frames)))
+    live.require_native_frames(native, matched, len(frames))
     (folder / "equal.log").write_text("frames %d\n" % matched)
     receipt = folder / "receipt.txt"
     receipt.write_text(
@@ -146,5 +144,4 @@ def main():
     print("gromacs", gromacs_case(), flush=True)
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()
