@@ -1386,6 +1386,520 @@ TEST_CASE("scaled dump columns and a parallel short frame", "[seams_input]") {
   sinp::dropLammpsDumpIndex(only.string());
 }
 
+TEST_CASE("reader edges on real files", "[seams_input]") {
+  const auto dir = fs::temp_directory_path() / "dseams-reader-edges";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+
+  auto expectThrow = [](const fs::path &path, const char *message) {
+    try {
+      sinp::readXYZ(path.string());
+      FAIL("expected a named xyz failure");
+    } catch (const std::runtime_error &err) {
+      REQUIRE(std::string(err.what()) == message);
+    }
+  };
+
+  const auto unclosed = dir / "unclosed.xyz";
+  {
+    std::ofstream out(unclosed);
+    out << "1\nLattice=\"10 0 0 0 10 0 0 0 10\nO 0 0 0\n";
+  }
+  expectThrow(unclosed, "XYZ Lattice is not a cell.");
+
+  const auto shortCell = dir / "shortcell.xyz";
+  {
+    std::ofstream out(shortCell);
+    out << "1\nLattice=\"1 2 3\"\nO 0 0 0\n";
+  }
+  expectThrow(shortCell, "XYZ Lattice is not a cell.");
+
+  const auto negative = dir / "neg.xyz";
+  {
+    std::ofstream out(negative);
+    out << "1\nLattice=\"-1 0 0 0 10 0 0 0 10\"\nO 0 0 0\n";
+  }
+  expectThrow(negative, "XYZ Lattice is not a reduced cell.");
+
+  const auto az = dir / "az.xyz";
+  {
+    std::ofstream out(az);
+    out << "1\nLattice=\"10 0 1 0 10 0 0 0 10\"\nO 0 0 0\n";
+  }
+  expectThrow(az, "XYZ Lattice is not a reduced cell.");
+
+  const auto bz = dir / "bz.xyz";
+  {
+    std::ofstream out(bz);
+    out << "1\nLattice=\"10 0 0 0 10 1 0 0 10\"\nO 0 0 0\n";
+  }
+  expectThrow(bz, "XYZ Lattice is not a reduced cell.");
+
+  const auto tiny = dir / "tiny.xyz";
+  {
+    std::ofstream out(tiny);
+    out << "1\nLattice=\"0.5 0 0 0 0.5 0 0 0 0.5\"\nO 0 0 0\n";
+  }
+  auto cloud = sinp::readXYZ(tiny.string());
+  REQUIRE(cloud.box.size() == 3);
+  REQUIRE_THAT(cloud.box[0], Catch::Matchers::WithinAbs(0.5, 1e-9));
+
+  const auto asDir = dir / "adir.xyz";
+  fs::create_directories(asDir);
+  expectThrow(asDir, "XYZ header is not an atom count.");
+
+  const auto cr = dir / "cr.lammpstrj";
+  {
+    std::ofstream out(cr, std::ios::binary);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n\t1\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\r\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type x y z xu xs xsu yu ys ysu zu zs zsu\n"
+        << "1 1 0.1 0.2 0.3 1 2 3 4 5 6 7 8 9\n";
+  }
+  molSys::PointCloud<molSys::Point<double>, double> dump;
+  dump = sinp::readLammpsTrj(cr.string(), 1, dump);
+  REQUIRE(dump.nop == 1);
+  REQUIRE_THAT(dump.pts[0].x, Catch::Matchers::WithinAbs(0.1, 1e-9));
+  sinp::dropLammpsDumpIndex(cr.string());
+
+  const auto junkTok = dir / "junk.lammpstrj";
+  {
+    std::ofstream out(junkTok);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10 extra\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type x y z\n1 1 0 0 0\n";
+  }
+  dump = sinp::readLammpsTrj(junkTok.string(), 1, dump);
+  REQUIRE(dump.nop == 1);
+  sinp::dropLammpsDumpIndex(junkTok.string());
+
+  const auto empty = dir / "empty.lammpstrj";
+  {
+    std::ofstream out(empty);
+    out << "";
+  }
+  REQUIRE(sinp::nLammpsFrames(empty.string()) == 0);
+  int seen = 0;
+  sinp::forEachLammpsFrame(empty.string(), 1, 2, -1,
+                           [&](int, molSys::PointCloud<molSys::Point<double>, double> &) { seen++; },
+                           1, -1, 1);
+  REQUIRE(seen == 0);
+  sinp::dropLammpsDumpIndex(empty.string());
+
+  const auto two = dir / "two.lammpstrj";
+  {
+    std::ofstream out(two);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type x y z\n1 1 0 0 0\n"
+        << "ITEM: TIMESTEP\n1\nITEM: NUMBER OF ATOMS\n1\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type x y z\n1 1 1 0 0\n";
+  }
+  seen = 0;
+  sinp::forEachLammpsFrame(two.string(), 1, 2, -1,
+                           [&](int, molSys::PointCloud<molSys::Point<double>, double> &) { seen++; },
+                           2, 0, 1);
+  REQUIRE(seen == 2);
+  seen = 0;
+  sinp::forEachLammpsFrame(two.string(), 1, 2, -1,
+                           [&](int, molSys::PointCloud<molSys::Point<double>, double> &) { seen++; },
+                           1, 5, 2);
+  REQUIRE(seen == 0);
+  sinp::dropLammpsDumpIndex(two.string());
+
+  {
+    std::ofstream out(two, std::ios::app);
+    out << " \n";
+  }
+  dump = sinp::readLammpsTrj(two.string(), 1, dump);
+  REQUIRE(dump.nop == 1);
+  sinp::dropLammpsDumpIndex(two.string());
+
+  const auto bonds = dir / "rings.txt";
+  {
+    std::ofstream out(bonds);
+    out << "2 Bonds\n1 2 3 0\nabc\n1 2\n4 5 6 7\n";
+  }
+  auto rings = sinp::readBonds(bonds.string());
+  REQUIRE(rings.size() >= 1);
+
+  const auto missing = dir / "no-such.lammpstrj";
+  dump = sinp::readLammpsTrj(missing.string(), 1, dump);
+  REQUIRE(dump.nop == 0);
+
+  fs::remove_all(dir);
+}
+
+TEST_CASE("one tilt axis is still a reduced cell", "[seams_input]") {
+  const auto dir = fs::temp_directory_path() / "dseams-one-tilt";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  const char *lattices[] = {"10 0 0 1 8 0 0 0 9", "10 0 0 0 8 0 1 0 9",
+                            "10 0 0 0 8 0 0 1 9"};
+  for (const char *lattice : lattices) {
+    const auto path = dir / "one.xyz";
+    {
+      std::ofstream out(path);
+      out << "1\nLattice=\"" << lattice << "\"\nO 0 0 0\n";
+    }
+    auto cloud = sinp::readXYZ(path.string());
+    REQUIRE(cloud.box.size() == 6);
+  }
+  fs::remove_all(dir);
+}
+
+TEST_CASE("a lattice axis that is not positive is rejected", "[seams_input]") {
+  const auto dir = fs::temp_directory_path() / "dseams-axis";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  auto expectThrow = [](const fs::path &path) {
+    try {
+      sinp::readXYZ(path.string());
+      FAIL("expected a reduced-cell failure");
+    } catch (const std::runtime_error &err) {
+      REQUIRE(std::string(err.what()) == "XYZ Lattice is not a reduced cell.");
+    }
+  };
+  const char *bad[] = {"10 0 0 0 0 0 0 0 10", "10 1 0 0 10 0 0 0 10",
+                       "10 0 0 0 10 0 0 0 0"};
+  for (const char *lattice : bad) {
+    const auto path = dir / "bad.xyz";
+    {
+      std::ofstream out(path);
+      out << "1\nLattice=\"" << lattice << "\"\nO 0 0 0\n";
+    }
+    expectThrow(path);
+  }
+  fs::remove_all(dir);
+}
+
+TEST_CASE("an unreadable xyz and a partial symbol", "[seams_input]") {
+  const auto dir = fs::temp_directory_path() / "dseams-xyz-mode";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+
+  const auto locked = dir / "locked.xyz";
+  {
+    std::ofstream out(locked);
+    out << "1\ncomment\nO 0 0 0\n";
+  }
+  fs::permissions(locked, fs::perms::none);
+  auto cloud = sinp::readXYZ(locked.string());
+  REQUIRE(cloud.nop == 0);
+  fs::permissions(locked, fs::perms::owner_all);
+
+  const auto partial = dir / "partial.xyz";
+  {
+    std::ofstream out(partial);
+    out << "1\ncomment\n1O 0 0 0\n";
+  }
+  cloud = sinp::readXYZ(partial.string());
+  REQUIRE(cloud.nop == 1);
+
+  const auto words = dir / "words.xyz";
+  {
+    std::ofstream out(words);
+    out << "1\ncomment\nO x 0 0\n";
+  }
+  try {
+    sinp::readXYZ(words.string());
+    FAIL("expected a coordinate failure");
+  } catch (const std::runtime_error &err) {
+    REQUIRE(std::string(err.what()) == "XYZ coordinate is not a number.");
+  }
+  fs::remove_all(dir);
+}
+
+TEST_CASE("dump lines cover the field scanner", "[seams_input]") {
+  const auto dir = fs::temp_directory_path() / "dseams-dump-fields";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+
+  const auto spaced = dir / "spaced.lammpstrj";
+  {
+    std::ofstream out(spaced);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n 1\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0\t10\t0\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type x y z\n1 1 0.2 0 0\n";
+  }
+  cloud = sinp::readLammpsTrj(spaced.string(), 1, cloud);
+  REQUIRE(cloud.nop == 1);
+  REQUIRE_THAT(cloud.pts[0].x, Catch::Matchers::WithinAbs(0.2, 1e-9));
+  sinp::dropLammpsDumpIndex(spaced.string());
+
+  const auto blankCount = dir / "blank.lammpstrj";
+  {
+    std::ofstream out(blankCount);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type x y z\n1 1 0 0 0\n";
+  }
+  cloud = sinp::readLammpsTrj(blankCount.string(), 1, cloud);
+  REQUIRE(cloud.nop == 1);
+  sinp::dropLammpsDumpIndex(blankCount.string());
+
+  const auto shortBox = dir / "shortbox.lammpstrj";
+  {
+    std::ofstream out(shortBox);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n5\nzz\t10\n0 10\n"
+        << "ITEM: ATOMS id type x y z\n1 1 0 0 0\n";
+  }
+  cloud = sinp::readLammpsTrj(shortBox.string(), 1, cloud);
+  REQUIRE(cloud.nop == 1);
+  sinp::dropLammpsDumpIndex(shortBox.string());
+
+  const auto noCount = dir / "nocount.lammpstrj";
+  {
+    std::ofstream out(noCount);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        << "ITEM:\nITEM: FOO bar\n"
+        << "ITEM: ATOMS id type x y z\n1 1 0 0 0\n";
+  }
+  cloud = sinp::readLammpsTrj(noCount.string(), 1, cloud);
+  REQUIRE(cloud.nop == 1);
+  sinp::dropLammpsDumpIndex(noCount.string());
+
+  const auto noZ = dir / "noz.lammpstrj";
+  {
+    std::ofstream out(noZ);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n0\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type x y\n1 1 0 0\n";
+  }
+  cloud = sinp::readLammpsTrj(noZ.string(), 1, cloud);
+  REQUIRE(cloud.pts.empty());
+  sinp::dropLammpsDumpIndex(noZ.string());
+
+  const auto crlf = dir / "crlf.lammpstrj";
+  {
+    std::ofstream out(crlf, std::ios::binary);
+    out << "ITEM: TIMESTEP\r\n0\r\nITEM: NUMBER OF ATOMS\r\n1\r\n"
+        << "note ITEM: TIMESTEP embedded\r\n"
+        << "ITEM: BOX BOUNDS pp pp pp\r\n0 10\r\n0 10\r\n0 10\r\n"
+        << "ITEM: ATOMS id type x y z\r\n1 1 0 0 0\r\n"
+        << "ITEM: TIMESTEP\r\n1\r\nITEM: NUMBER OF ATOMS\r\n1\r\n"
+        << "ITEM: BOX BOUNDS pp pp pp\r\n0 10\r\n0 10\r\n0 10\r\n"
+        << "ITEM: ATOMS id type x y z\r\n1 1 1 0 0\r\n"
+        << "ITEM: TIME";
+  }
+  REQUIRE(sinp::nLammpsFrames(crlf.string()) >= 1);
+  cloud = sinp::readLammpsTrj(crlf.string(), 2, cloud);
+  REQUIRE(cloud.nop == 1);
+  sinp::dropLammpsDumpIndex(crlf.string());
+
+  const auto gap = dir / "gap.lammpstrj";
+  {
+    std::ofstream out(gap);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type x y z\n1 1 0 0 0\n"
+        << "\n";
+  }
+  cloud = sinp::readLammpsTrj(gap.string(), 1, cloud);
+  REQUIRE(cloud.nop == 1);
+  cloud = sinp::readLammpsTrj(gap.string(), 2, cloud);
+  REQUIRE(cloud.nop == 0);
+  sinp::dropLammpsDumpIndex(gap.string());
+
+  const auto flipped = dir / "flip.lammpstrj";
+  {
+    std::ofstream out(flipped);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type x y z\n1 1 0 0 0\n";
+  }
+  cloud = sinp::readLammpsTrj(flipped.string(), 1, cloud);
+  REQUIRE(cloud.nop == 1);
+  const auto stamp = fs::last_write_time(flipped);
+  {
+    std::fstream io(flipped, std::ios::in | std::ios::out | std::ios::binary);
+    io.seekp(0);
+    io << "XXXX: TIMESTEP";
+  }
+  fs::last_write_time(flipped, stamp);
+  cloud = sinp::readLammpsTrj(flipped.string(), 1, cloud);
+  REQUIRE(cloud.nop == 0);
+  sinp::dropLammpsDumpIndex(flipped.string());
+
+  int seen = 0;
+  sinp::forEachLammpsFrame(spaced.string(), 1, 1, -1,
+                           [&](int, molSys::PointCloud<molSys::Point<double>, double> &) { seen++; },
+                           1, -1, 1);
+  REQUIRE(seen == 0);
+  seen = 0;
+  sinp::forEachLammpsFrame(spaced.string(), 1, 1, -1,
+                           [&](int, molSys::PointCloud<molSys::Point<double>, double> &) { seen++; },
+                           2, 0, 1);
+  REQUIRE(seen == 1);
+  sinp::dropLammpsDumpIndex(spaced.string());
+
+  const auto bonds = dir / "rings.txt";
+  {
+    std::ofstream out(bonds);
+    out << "2 Bonds\n\n1 2 3\n";
+  }
+  auto rings = sinp::readBonds(bonds.string());
+  REQUIRE(rings.size() == 1);
+  fs::permissions(bonds, fs::perms::none);
+  rings = sinp::readBonds(bonds.string());
+  REQUIRE(rings.empty());
+  fs::permissions(bonds, fs::perms::owner_all);
+
+  seen = 0;
+  sinp::forEachLammpsFrame(spaced.string(), 1, 9, -1,
+                           [&](int, molSys::PointCloud<molSys::Point<double>, double> &) { seen++; },
+                           1, 0, 1);
+  REQUIRE(seen == 1);
+  for (int n = 0; n < 64; ++n) {
+    cloud = sinp::readLammpsTrj(noZ.string(), 1, cloud);
+  }
+  sinp::dropLammpsDumpIndex(noZ.string());
+
+  const auto noType = dir / "notype.lammpstrj";
+  {
+    std::ofstream out(noType);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n0\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        << "ITEM: ATOMS id y z\n1 0 0\n"
+        << "ITEM: ATOMS id type y z\n1 1 0 0\n"
+        << "ITEM: ATOMS id type x z\n1 1 0 0\n"
+        << "ITEM: ATOMS id type x y z\n1\n";
+  }
+  cloud = sinp::readLammpsTrj(noType.string(), 1, cloud);
+  REQUIRE(cloud.pts.empty());
+  sinp::dropLammpsDumpIndex(noType.string());
+
+  const auto tabs = dir / "tabs.lammpstrj";
+  {
+    std::ofstream out(tabs);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n";
+    for (int n = 0; n < 200; ++n) {
+      out << "0\t10\t0\n";
+    }
+    out << "ITEM: ATOMS id type x y z\n1 1 0 0 0\n";
+  }
+  cloud = sinp::readLammpsTrj(tabs.string(), 1, cloud);
+  REQUIRE(cloud.nop == 1);
+  sinp::dropLammpsDumpIndex(tabs.string());
+
+  const auto proseCount = dir / "prosecount.lammpstrj";
+  {
+    std::ofstream out(proseCount);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n"
+        << "ITEM: BOX BOUNDS pp pp pp\nnotanumber\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type x y z\n1 1 3 0 0\n";
+  }
+  const auto blanks = dir / "blanks.lammpstrj";
+  {
+    std::ofstream out(blanks);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n0\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type x y z\n";
+    for (int n = 0; n < 80; ++n) {
+      out << " \n";
+    }
+  }
+  cloud = sinp::readLammpsTrj(blanks.string(), 1, cloud);
+  REQUIRE(cloud.nop == 0);
+  sinp::dropLammpsDumpIndex(blanks.string());
+
+  cloud = sinp::readLammpsTrj(proseCount.string(), 1, cloud);
+  REQUIRE(cloud.nop == 1);
+  REQUIRE_THAT(cloud.pts[0].x, Catch::Matchers::WithinAbs(3.0, 1e-9));
+  sinp::dropLammpsDumpIndex(proseCount.string());
+
+  const auto follow = dir / "follow.lammpstrj";
+  {
+    std::ofstream out(follow);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type x y z\n1 1 0 0 0\n"
+        << "ITEM: TIMESTEP\n1\nITEM: NUMBER OF ATOMS\n1\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type x y z\n1 1 1 0 0\n";
+  }
+  cloud = sinp::readLammpsTrj(follow.string(), 1, cloud);
+  REQUIRE(cloud.nop == 1);
+  {
+    const auto stamp = fs::last_write_time(follow);
+    std::fstream io(follow, std::ios::in | std::ios::out | std::ios::binary);
+    std::string bytes((std::istreambuf_iterator<char>(io)), {});
+    const auto at = bytes.find("\nITEM: TIMESTEP\n1\n");
+    REQUIRE(at != std::string::npos);
+    const auto pos = at + 1;
+    io.clear();
+    io.seekp(static_cast<std::streamoff>(pos));
+    io << "XXXX: TIMESTEP";
+    io.close();
+    fs::last_write_time(follow, stamp);
+  }
+  cloud = sinp::readLammpsTrj(follow.string(), 2, cloud);
+  REQUIRE(cloud.nop == 0);
+  sinp::dropLammpsDumpIndex(follow.string());
+
+  const auto bare = dir / "bare.xyz";
+  {
+    std::ofstream out(bare);
+    out << "1\ncomment\n0 0 0\n";
+  }
+  cloud = sinp::readXYZ(bare.string());
+  REQUIRE(cloud.nop == 1);
+  {
+    std::ofstream out(bare);
+    out << "2\ncomment\nO 0 0 0\nO 1\n";
+  }
+  try {
+    sinp::readXYZ(bare.string());
+    FAIL("expected a short xyz");
+  } catch (const std::runtime_error &err) {
+    REQUIRE(std::string(err.what()).find("XYZ frame is truncated") == 0);
+  }
+
+  const auto negativeCount = dir / "negcount.lammpstrj";
+  {
+    std::ofstream out(negativeCount);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n-1\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        << "ITEM: ATOMS type x y z\n1 0 0 0\n1\n";
+  }
+  cloud = sinp::readLammpsTrj(negativeCount.string(), 1, cloud);
+  REQUIRE(cloud.nop == 1);
+  sinp::dropLammpsDumpIndex(negativeCount.string());
+
+  seen = 0;
+  sinp::forEachLammpsFrame(spaced.string(), 1, 1, -1,
+                           [&](int, molSys::PointCloud<molSys::Point<double>, double> &) { seen++; },
+                           1, 0, 1);
+  REQUIRE(seen == 1);
+
+  const auto cut = dir / "cut.lammpstrj";
+  {
+    std::ofstream out(cut);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n2\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type x y z\n1 1 0 0 0\n"
+        << "ITEM: TIMESTEP\n1\nITEM: NUMBER OF ATOMS\n1\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type x y z\n1 1 1 0 0\n";
+  }
+  try {
+    sinp::forEachLammpsFrame(cut.string(), 1, 2, -1,
+                             [&](int, molSys::PointCloud<molSys::Point<double>, double> &) {},
+                             2, 0, 1);
+    FAIL("expected a truncated dump");
+  } catch (const std::runtime_error &err) {
+    REQUIRE(std::string(err.what()).find("LAMMPS dump frame is truncated") == 0);
+  }
+  sinp::dropLammpsDumpIndex(cut.string());
+
+  fs::remove_all(dir);
+}
+
 TEST_CASE("a triclinic lattice is bounds plus tilt", "[seams_input]") {
   const auto path = fs::temp_directory_path() / "dseams_tilt.xyz";
   {
