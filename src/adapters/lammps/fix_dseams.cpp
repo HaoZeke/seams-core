@@ -140,6 +140,10 @@ void FixDseams::init() {
 
 void FixDseams::init_list(int, NeighList *ptr) { list_ = ptr; }
 
+// LAMMPS dump writes the initial frame at timestep 0. end_of_step does not
+// run until a step has finished, so the census missed that frame.
+void FixDseams::setup(int) { end_of_step(); }
+
 void FixDseams::end_of_step() {
   if (!active_) {
     return;

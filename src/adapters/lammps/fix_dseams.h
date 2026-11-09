@@ -38,6 +38,7 @@ class FixDseams : public Fix {
   int setmask() override;
   void init() override;
   void init_list(int id, class NeighList *ptr) override;
+  void setup(int) override;
   void end_of_step() override;
 
  private:
