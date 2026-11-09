@@ -121,15 +121,21 @@ def cmd_fuzz(args):
     raw = out / "fuzz.raw"
     if raw.exists():
         raw.unlink()
-    code = stamp_run([str(binary), args.traj, str(args.trials)], raw, root)
+    if os.environ.get("DSEAMS_V30_FUZZ_RESUMMARIZE") == "1" and raw.exists():
+        code = 0
+    else:
+        if raw.exists():
+            raw.unlink()
+        code = stamp_run([str(binary), args.traj, str(args.trials)], raw, root)
     text = raw.read_text(errors="replace")
     ran = len(re.findall(r" OK\n", text))
     skipped = text.count("SKIP dense cutoff graph")
     failed = text.count("\nFAIL ") + text.count(" FAIL\n")
     summary = ""
     for line in text.splitlines():
-        if line.startswith("frames "):
-            summary = line
+        payload = re.sub(r"^[0-9]+\.[0-9]+ ", "", line)
+        if payload.startswith("frames "):
+            summary = payload
     log_path = out / "fuzz.log"
     with log_path.open("w", encoding="utf-8") as handle:
         handle.write("HEAD %s\n" % head)
@@ -146,6 +152,7 @@ def cmd_fuzz(args):
         handle.write(text if text.endswith("\n") else text + "\n")
     rows = []
     for line in text.splitlines():
+        line = re.sub(r"^[0-9]+\.[0-9]+ ", "", line)
         if " SKIP dense cutoff graph" in line:
             name = line.split()[0]
             rows.append("%s,skip,0,0" % name)
