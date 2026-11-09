@@ -255,7 +255,7 @@ class HookTests(unittest.TestCase):
             dtype=np.float64,
         )
         box = [0.0, 0.0, 0.0, 20.0, 20.0, 20.0, 0.0, 0.0, 0.0]
-        with Engine(lib, live) as eng:
+        with Engine(lib, live, debug=True) as eng:
             eng.observe(0, xyz, box, dump, types=np.array([1, 1, 1, 1], dtype=np.int32))
             with self.assertRaises(ValueError):
                 eng.box_from_rows(np.array([1, 2, 0, 0, 1, 0, 0, 0, 1], dtype=np.float64))

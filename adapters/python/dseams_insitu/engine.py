@@ -94,7 +94,7 @@ def load(path=None):
 
 
 class Engine:
-    def __init__(self, lib, record, cutoff=3.5, depth=8, every=1, water_type=1):
+    def __init__(self, lib, record, cutoff=3.5, depth=8, every=1, water_type=1, debug=False):
         self.lib = lib
         opt = Options()
         lib.seams_insitu_options_default(ctypes.byref(opt))
@@ -102,6 +102,7 @@ class Engine:
         opt.ring_depth = int(depth)
         opt.type = int(water_type)
         opt.cadence.every = int(every)
+        opt.debug_dump = 1 if debug else 0
         self._eng = lib.seams_insitu_create(ctypes.byref(opt))
         if not self._eng:
             raise RuntimeError("rejected in-situ options")
