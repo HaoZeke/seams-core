@@ -258,6 +258,7 @@ int main(int argc, char **argv) {
   }
   if (seams_path_nframes(missingXyzCount.c_str()) != -1 || seams_last_error() == nullptr) return fail("missing xyz count");
   if (seams_path_nframes(badXyz.c_str()) != -1 || seams_last_error() == nullptr) return fail("bad xyz count");
+  if (seams_path_nframes("missing-file.lammpstrj") != -1 || seams_last_error() == nullptr) return fail("missing dump count");
   // A thrown error must come back as a status, not abort the host.
   auto tighten = []() {
     std::ifstream status("/proc/self/status");
@@ -297,30 +298,20 @@ int main(int argc, char **argv) {
   std::vector<double> gg(static_cast<std::size_t>(many));
   std::vector<int> cc(static_cast<std::size_t>(many));
   cap = tighten();
-  if (seams_frame_rdf(built, 10.0, many, 1, 1, rr.data(), gg.data(), cc.data(), nullptr) == 0 ||
-      seams_last_error() == nullptr) {
-    loosen(cap);
-    return fail("rdf guard");
-  }
+  const int rdfStatus = seams_frame_rdf(built, 10.0, many, 1, 1, rr.data(), gg.data(), cc.data(), nullptr);
   loosen(cap);
+  if (rdfStatus == 0 || seams_last_error() == nullptr) return fail("rdf guard");
   cap = tighten();
-  if (seams_frame_rdf2d(built, 1.0e8, 0.05, nullptr, rr.data(), gg.data()) == 0 ||
-      seams_last_error() == nullptr) {
-    loosen(cap);
-    return fail("rdf2d guard");
-  }
+  const int rdf2Status = seams_frame_rdf2d(built, 1.0e8, 0.05, nullptr, rr.data(), gg.data());
   loosen(cap);
+  if (rdf2Status == 0 || seams_last_error() == nullptr) return fail("rdf2d guard");
   seams_frame *crowd = seams_frame_from_arrays(wide.data(), many, wideBox, nullptr, nullptr);
   if (crowd == nullptr) return fail("crowd frame");
   cap = tighten();
-  if (seams_frame_steinhardt(crowd, 3.5, 1, 4, rr.data(), gg.data()) == 0 ||
-      seams_last_error() == nullptr) {
-    loosen(cap);
-    seams_frame_free(crowd);
-    return fail("steinhardt guard");
-  }
+  const int steinStatus = seams_frame_steinhardt(crowd, 3.5, 1, 4, rr.data(), gg.data());
   loosen(cap);
   seams_frame_free(crowd);
+  if (steinStatus == 0 || seams_last_error() == nullptr) return fail("steinhardt guard");
   const std::string missingXyz = (std::filesystem::temp_directory_path() / "dseams-lang-missing.xyz").string();
   if (seams_frame_read(missingXyz.c_str(), 1, -1) != nullptr) return fail("missing xyz should fail");
   if (seams_frame_chill(tip, 3.5, 99, "cutoff", labels.data(), counts) != 0) return fail("chill type filter");
