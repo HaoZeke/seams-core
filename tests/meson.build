@@ -45,6 +45,7 @@ test_sources = {
   'gpu_residency': 'test_gpu_residency.cpp',
   'config': 'test_config.cpp',
   'site': 'test_site.cpp',
+  'molid_values': 'test_molid_values.cpp',
 }
 
 if readcon_dep.found()
@@ -443,8 +444,10 @@ test('invariance_empty_frame', _check_invariance,
   should_fail: true)
 # 1000 translations and 1000 permutations on every deposited frame, plus
 # the eight half-box shifts. The cage stage is the cost.
-# The count stays at 1000. The run is slow, so the timeout is long.
+# The count stays at 1000. A coverage run received SIGTERM at 551 s,
+# so the limit is 14400 s and the test does not run beside other tests.
 test('fuzz_cage_shift_permute', _fuzz_cage,
   args: [meson.project_source_root() / 'input' / 'traj', '1000'],
   env: _test_env,
-  timeout: 3600)
+  timeout: 14400,
+  is_parallel: false)
