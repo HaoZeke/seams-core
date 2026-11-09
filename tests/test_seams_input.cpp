@@ -1355,6 +1355,37 @@ TEST_CASE("a broken lattice is named", "[seams_input]") {
   fs::remove(shear);
 }
 
+TEST_CASE("scaled dump columns and a parallel short frame", "[seams_input]") {
+  const auto path = fs::temp_directory_path() / "dseams_scaled_cols.lammpstrj";
+  {
+    std::ofstream out(path);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type x y z xu xsu yu ysu zu zsu\n"
+        << "1 1 0.1 0.2 0.3 1 2 3 4 5 6\n";
+  }
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  cloud = sinp::readLammpsTrj(path.string(), 1, cloud);
+  REQUIRE(cloud.nop == 1);
+  REQUIRE_THAT(cloud.pts[0].x, Catch::Matchers::WithinAbs(0.1, 1e-9));
+  fs::remove(path);
+  sinp::dropLammpsDumpIndex(path.string());
+
+  const auto only = fs::temp_directory_path() / "dseams_xsu.lammpstrj";
+  {
+    std::ofstream out(only);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type xsu ysu zsu\n"
+        << "1 1 4 5 6\n";
+  }
+  cloud = sinp::readLammpsTrj(only.string(), 1, cloud);
+  REQUIRE(cloud.nop == 1);
+  REQUIRE_THAT(cloud.pts[0].x, Catch::Matchers::WithinAbs(4.0, 1e-9));
+  fs::remove(only);
+  sinp::dropLammpsDumpIndex(only.string());
+}
+
 TEST_CASE("a triclinic lattice is bounds plus tilt", "[seams_input]") {
   const auto path = fs::temp_directory_path() / "dseams_tilt.xyz";
   {

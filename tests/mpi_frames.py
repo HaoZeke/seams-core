@@ -80,7 +80,7 @@ same(["--strict-input", "--type", "99", "--frame", "1", "--last", "11", "read",
       dump], 11, rc=2)
 same(["--frame", "1", "--last", "4", "read", dump], 4, extra={"FORCE_COLOR": "1"})
 
-# A last frame cut short is not a frame. Both ranks must fail it.
+# A last frame cut short is not a frame. The serial read exits 2.
 with tempfile.TemporaryDirectory() as tmp:
     short = os.path.join(tmp, "short.lammpstrj")
     with open(dump) as f:
