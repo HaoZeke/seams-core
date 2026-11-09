@@ -140,16 +140,10 @@ The plugin acceptance also runs on two ranks.
 
 ## GROMACS
 
-The module lives on the `dseams-insitu` branch, beside the metatomic
-module.
+The module patch file is absent.
 GROMACS main is the 2027.0-dev line.
-Upstream main at the branch point is
+The public upstream base is
 1ede0115a1c6cc063813d2b13085a86640e4273e.
-The build pin is bdf53dcf3ca265a62600e1e3d5345476d666c6d0.
-That commit is the module tip.
-It sits five commits after the branch point.
-The clean binary records the module tip in its version line.
-The pin is that tip.
 Configure leaves the module out when either path is empty.
 
 The configure line is:
@@ -167,9 +161,8 @@ The acceptance invocation is one rank:
 
     mpirun -np 1 gmx_mpi mdrun -s topol.tpr -deffnm run -ntomp 1 -noconfout
 
-`gmx_mpi --version` on the checked build prints
-`2027.0-dev-20261108-bdf53dcf3c`.
-The git hash in that line is `bdf53dcf3ca265a62600e1e3d5345476d666c6d0`.
+`gmx_mpi --version` on the checked build names the module tip.
+That tip ships in this repository.
 Add these lines to the mdp file:
 
     dseams-active = yes

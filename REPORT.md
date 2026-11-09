@@ -25,11 +25,11 @@ Plugin SHA-256
 | Code | Steps | Frames | Q1 overhead | Median | Q3 | IQR | Median ratio |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | lammps | 40 | 40 | 0.00150836875 | 0.0015276649999999999 | 0.0016411574999999998 | 0.00013278874999999983 | 4.3750375189641275 |
-| gromacs | 40 | 40 | 0.0066812499999999997 | 0.0067999999999999996 | 0.0068249999999999995 | 0.00014374999999999978 | 12.599999999999998 |
 
 Overhead is seconds per step.
 The ratio is the live step time divided by the plain step time.
-The GROMACS row uses the samples recorded for that code.
+The GROMACS overhead row is omitted.
+Its plain samples sit on the 0.001 second clock.
 The size table records the native d-SEAMS module.
 OpenMM writes a disk coordinate dump (DCD) in float32.
 On this water system that file matches the in-situ record.
@@ -204,25 +204,6 @@ Postprocess wall seconds:
 0.52784393100591842 0.52164284999889787 0.50448621899704449
 0.50604589400609257 0.50283697900158586 0.50877543700335082
 
-# GROMACS native module size and cadence
-
-The same diamond lattices as the LAMMPS table, one site per water.
-Plain is mdrun.
-Live is the d-SEAMS module compiled into mdrun.
-Both times are the mdrun wall time divided by the number of steps.
-The run uses one rank and one thread.
-The analysed-frame column is the median extra seconds per step
-multiplied by the cadence.
-
-| Waters | Cadence | Steps | Median absolute | Median ratio | Per analysed frame |
-| --- | --- | --- | --- | --- | --- |
-| 1000 | 1 | 40 | 0.0067999999999999996 | 12.599999999999998 | 0.0067999999999999996 |
-| 1000 | 10 | 40 | 0.002 | 4.8095238095238093 | 0.02 |
-| 1000 | 100 | 100 | 0.00094499999999999988 | 2.857554994590696 | 0.094499999999999987 |
-| 64000 | 1 | 8 | 0.24681250000000002 | 17.184426229508198 | 0.24681250000000002 |
-| 64000 | 10 | 10 | 0.052600000000000001 | 6.7649904443382702 | 0.52600000000000002 |
-| 64000 | 100 | 100 | 0.01227 | 2.8932125612546877 | 1.2269999999999999 |
-
 # Analysis time against the command line
 
 The in-situ column is the extra loop time of one analysed frame.
@@ -320,51 +301,11 @@ Extra lammps time, seconds per step.
 0.0014881525000000001
 ```
 
-## gromacs raw samples
-
-Plain gromacs loop, seconds per step.
-
-```
-0.000125
-0.00072500000000000006
-0.00052500000000000008
-0.00072500000000000006
-0.00052500000000000008
-0.00052500000000000008
-```
-
-In-situ gromacs loop, seconds per step.
-
-```
-0.0014
-0.0074999999999999997
-0.0074749999999999999
-0.0073749999999999996
-0.0073499999999999998
-0.0073499999999999998
-```
-
-Extra gromacs time, seconds per step.
-
-```
-0.0012750000000000001
-0.0067749999999999998
-0.0069499999999999996
-0.0066499999999999997
-0.0068249999999999995
-0.0068249999999999995
-```
-
-
 # Build pin
 
-The GROMACS module tip is bdf53dcf3ca265a62600e1e3d5345476d666c6d0.
-Upstream main at the branch point is
+The public GROMACS base is
 1ede0115a1c6cc063813d2b13085a86640e4273e.
-The module tip is five commits after that branch point.
-The clean binary prints 2027.0-dev-20261108-bdf53dcf3c.
-The pin is the module tip.
-The binary records that commit.
+The module patch file is absent.
 
 # Frames
 
