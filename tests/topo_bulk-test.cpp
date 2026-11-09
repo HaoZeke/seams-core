@@ -1082,3 +1082,165 @@ TEST_CASE("a wide parity product searches the large equator", "[topo]") {
   std::vector<int> listHC2;
   (void)ring::findMixedRings(rings, ringType, listDDC, listHC2);
 }
+
+TEST_CASE("constructed rings hit the bulk type and neighbour branches", "[topo]") {
+  const double xyz[][3] = {
+      {25.4799996, 25.4799996, 19.1100006}, {25.4799996, 25.4799996, 25.4799996},
+      {25.4799996, 22.2950001, 22.2950001}, {25.4799996, 28.6650009, 22.2950001},
+      {22.2950001, 22.2950001, 25.4799996}, {22.2950001, 25.4799996, 22.2950001},
+      {28.6650009, 25.4799996, 22.2950001}, {23.8880006, 20.7029991, 23.8880006},
+      {23.8880006, 27.073, 23.8880006},     {27.073, 27.073, 20.7029991},
+      {20.7029991, 23.8880006, 23.8880006}, {27.073, 23.8880006, 23.8880006},
+      {23.8880006, 23.8880006, 20.7029991}, {23.8880006, 23.8880006, 27.073},
+  };
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  cloud.box = {40.0, 40.0, 40.0};
+  cloud.boxLow = {0.0, 0.0, 0.0};
+  molSys::Point<double> point;
+  point.type = 1;
+  for (int i = 0; i < 14; ++i) {
+    point.atomID = i;
+    point.x = xyz[i][0];
+    point.y = xyz[i][1];
+    point.z = xyz[i][2];
+    cloud.pts.push_back(point);
+    cloud.idIndexMap[i] = i;
+  }
+  cloud.nop = 14;
+  auto idRows = nneigh::neighListO(3.5, cloud, 1);
+  auto rows = nneigh::neighbourListByIndex(cloud, idRows);
+  auto rings = primitive::ringNetwork(rows, 8);
+  REQUIRE(rings.size() > 4);
+  auto index = ring::buildRingSearchIndex(rings, 14);
+  std::vector<ring::strucType> ringType(rings.size(), ring::strucType::unclassified);
+  std::vector<int> listHC;
+  std::vector<cage::Cage> cages;
+  auto ddc = ring::findDDC(rings, ringType, listHC, cages, index);
+  auto hc = ring::findHC(rings, ringType, rows, cages, index);
+  std::vector<int> prismatic;
+  if (rings.size() > 1) {
+    (void)ring::findPrismatic(rings, listHC, ringType, 0, 1, prismatic, index);
+  }
+  (void)ring::findMixedRings(rings, ringType, ddc, hc);
+  std::vector<double> rmsd(14, 0.0);
+  (void)prism3::findBulkPrisms(rings, ringType, rows, cloud, rmsd, 2.0);
+
+  std::vector<std::vector<int>> typed = {
+      {0, 1, 2, 3, 4, 5}, {0, 1, 2, 3, 4, 5}, {1, 2, 3, 4, 5, 0},
+      {0, 1, 2, 3, 4, 5}, {2, 3, 4, 5, 0, 1}, {0, 1, 2, 3, 4, 5},
+      {0, 1, 2, 3, 4, 5}, {0, 1, 2, 3, 4, 5}, {0, 1, 2, 3, 4, 5},
+  };
+  std::vector<ring::strucType> kinds = {
+      ring::strucType::unclassified, ring::strucType::DDC,
+      ring::strucType::HCbasal,      ring::strucType::HCprismatic,
+      ring::strucType::bothBasal,    ring::strucType::bothPrismatic,
+      ring::strucType::Prism,        ring::strucType::deformedPrism,
+      ring::strucType::mixedPrismRing,
+  };
+  std::vector<cage::iceType> atoms(6, cage::iceType::dummy);
+  atoms[0] = cage::iceType::pnc;
+  atoms[1] = cage::iceType::mixed;
+  atoms[2] = cage::iceType::mixed2;
+  REQUIRE(ring::getAtomTypesTopoBulk(typed, kinds, atoms) == 0);
+  REQUIRE(atoms[0] == cage::iceType::mixed2);
+
+  std::vector<cage::Cage> cageList(2);
+  cageList[0].type = cage::cageType::HexC;
+  cageList[1].type = cage::cageType::DoubleDiaC;
+  int numHC = 0, numDDC = 0, mixed = 0, prism = 0, basal = 0;
+  REQUIRE(ring::getStrucNumbers(kinds, cageList, numHC, numDDC, mixed, prism, basal) == 0);
+  REQUIRE(numHC == 1);
+  REQUIRE(numDDC == 1);
+  REQUIRE(mixed == 2);
+
+  std::vector<std::vector<int>> nList = {
+      {0, 1, 2}, {1, 0, 3}, {2, 0, 3}, {3, 1, 2}, {4},
+  };
+  std::vector<int> triplet = {0, 1, 2};
+  REQUIRE(ring::basalNeighbours(nList, triplet, 0, 3));
+  REQUIRE_FALSE(ring::basalNeighbours(nList, triplet, 1, 2));
+  triplet = {0, 1, 8};
+  REQUIRE_FALSE(ring::basalNeighbours(nList, triplet, 0, 3));
+  triplet = {0, 3, 8};
+  REQUIRE_FALSE(ring::basalNeighbours(nList, triplet, 1, 0));
+  triplet = {0, 1, 2};
+  REQUIRE(ring::notNeighboursOfRing(nList, triplet, std::vector<int>{4}));
+  REQUIRE_FALSE(ring::notNeighboursOfRing(nList, triplet, std::vector<int>{0}));
+
+  std::vector<int> basal1 = {0, 1, 2, 3};
+  std::vector<int> basal2 = {4, 5, 6, 7};
+  std::vector<std::vector<int>> prismList(8);
+  for (int i = 0; i < 4; ++i) {
+    prismList[i] = {i, basal2[i]};
+    prismList[basal2[i]] = {basal2[i], i};
+  }
+  (void)prism3::basalPrismConditions(prismList, basal1, basal2);
+  (void)prism3::basalPrismConditions(nList, basal1, basal1);
+
+  std::vector<int> bare;
+  (void)ring::conditionOneDDC(rings, bare, 0);
+  rings.push_back({-1, 0, 1, 2, 3, 4});
+  (void)ring::conditionOneDDC(rings, bare, static_cast<int>(rings.size()) - 1);
+  auto wideIndex = ring::buildRingSearchIndex(rings, 14);
+  (void)ring::conditionOneDDC(rings, bare, static_cast<int>(rings.size()) - 1, wideIndex);
+  std::vector<int> peripheral;
+  (void)ring::equatorialConditions(rings, 0, wideIndex, &peripheral);
+  (void)ring::findMixedRings(typed, kinds, ddc, hc);
+
+  // Many small edits of one real ring network. Each edit is a lattice the
+  // search can refuse, and together they walk the remaining branches.
+  std::vector<std::vector<int>> baseRings = rings;
+  if (!baseRings.empty() && baseRings[0].size() == 6) {
+    std::vector<std::vector<int>> variants;
+    variants.push_back(baseRings[0]);
+    auto shorter = baseRings[0];
+    shorter.pop_back();
+    variants.push_back(shorter);
+    auto longer = baseRings[0];
+    longer.push_back(longer.back());
+    variants.push_back(longer);
+    auto negative = baseRings[0];
+    negative[0] = -1;
+    variants.push_back(negative);
+    auto far = baseRings[0];
+    far[0] = 40;
+    variants.push_back(far);
+    auto reversed = baseRings[0];
+    std::reverse(reversed.begin(), reversed.end());
+    variants.push_back(reversed);
+    for (const auto &extra : variants) {
+      auto trial = baseRings;
+      trial.push_back(extra);
+      trial.push_back(baseRings[0]);
+      auto trialType = std::vector<ring::strucType>(trial.size(), ring::strucType::unclassified);
+      std::vector<int> trialHC;
+      std::vector<cage::Cage> trialCages;
+      auto trialIndex = ring::buildRingSearchIndex(trial, 48);
+      auto trialDDC = ring::findDDC(trial, trialType, trialHC, trialCages, trialIndex);
+      auto trialHCFound = ring::findHC(trial, trialType, rows, trialCages, trialIndex);
+      std::vector<int> peripheralTrial;
+      for (int i = 0; i < std::min(4, static_cast<int>(trial.size())); ++i) {
+        (void)ring::equatorialConditions(trial, i, trialIndex, &peripheralTrial);
+        (void)ring::conditionOneDDC(trial, peripheralTrial, i, trialIndex);
+      }
+      bool hexOnly = true;
+      for (const auto &ring : trial) {
+        if (ring.size() != 6) {
+          hexOnly = false;
+        }
+      }
+      if (hexOnly && trial.size() > 1) {
+        std::vector<int> prisms;
+        (void)ring::findPrismatic(trial, trialHC, trialType, 0, 1, prisms, trialIndex);
+      }
+      (void)ring::findMixedRings(trial, trialType, trialDDC, trialHCFound);
+    }
+  }
+  std::vector<std::vector<int>> unequal = {{1, 2, 3, 4, 5}, {1, 2, 3, 4, 5, 6}, {0}};
+  (void)ring::buildRingSearchIndex(unequal, 8);
+  std::vector<ring::strucType> unequalType(unequal.size(), ring::strucType::unclassified);
+  std::vector<int> unequalHC;
+  std::vector<cage::Cage> unequalCages;
+  (void)ring::findDDC(unequal, unequalType, unequalHC, unequalCages);
+  (void)ring::findHC(unequal, unequalType, rows, unequalCages);
+}

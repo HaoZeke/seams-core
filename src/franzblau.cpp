@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <numeric>
 #include <vector>
 
@@ -37,6 +38,7 @@ struct RingSplitTimes {
 };
 
 RingSplitTimes gRingSplit;
+
 
 double millisSince(std::chrono::steady_clock::time_point start) {
   return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
@@ -419,6 +421,11 @@ void shortestPathsFrom(const Graph &adjacency, int src, RingScratch &scr) {
     scr.pathFirst.assign(nVertices, 0);
     scr.pathCount.assign(nVertices, 0);
   }
+  // One reserve per thread. Growing the buffer inside the search takes the
+  // allocator lock, and eight cores then wait on each other.
+  if (scr.pathBuf.capacity() < static_cast<std::size_t>(nVertices) * 8) {
+    scr.pathBuf.reserve(static_cast<std::size_t>(nVertices) * 8);
+  }
   scr.pathBuf.clear();
   scr.pathFirst[src] = 0;
   scr.pathCount[src] = 1;
@@ -748,7 +755,7 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
 #pragma omp parallel
     {
       RingScratch scratch;
-#pragma omp for schedule(guided)
+#pragma omp for schedule(static)
       for (int k = 0; k < nFrom; k++) {
         enumerateFromSource(adjacency, balls, from[k], maxDepth, maxLvl,
                             scratch,         perSource[static_cast<std::size_t>(k)]);
@@ -1370,7 +1377,7 @@ struct primitive::RingUpdater::Impl {
         // Guided chunks: a nucleus and a partial shell put much heavier
         // sources next to empty ones, and a static share leaves the last
         // busy chunk with nothing left to steal.
-#pragma omp for schedule(guided)
+#pragma omp for schedule(static)
         for (int src = 0; src < nVertices; src++) {
           bySource[static_cast<std::size_t>(src)].reset();
           enumerateFromSource(adj, balls, src, maxDepth, maxLvl, scratch,
@@ -1443,7 +1450,7 @@ struct primitive::RingUpdater::Impl {
 #ifdef SEAMS_HAS_OPENMP
       RingScratch &scratch =
           scratches[static_cast<std::size_t>(omp_get_thread_num())];
-#pragma omp for schedule(guided)
+#pragma omp for schedule(static)
 #else
       RingScratch &scratch = scratches[0];
 #endif

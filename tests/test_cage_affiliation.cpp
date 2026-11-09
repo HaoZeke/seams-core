@@ -850,3 +850,29 @@ TEST_CASE("AffiliationUpdater matches a cycle stored out of lexicographic order"
   ring::AffiliationUpdater fresh(std::move(other));
   REQUIRE(fresh.update(rings, nList).hc.size() == rings.size());
 }
+
+TEST_CASE("AffiliationUpdater sweeps again after a hot frame", "[cage_affiliation]") {
+  std::vector<std::vector<int>> nList(12);
+  for (int i = 0; i < 12; ++i) {
+    nList[static_cast<std::size_t>(i)] = {i, (i + 1) % 12, (i + 11) % 12};
+  }
+  std::vector<std::vector<int>> rings = {
+      {0, 1, 2, 3, 4, 5},
+      {3, 4, 5, 6, 7, 8},
+      {6, 7, 8, 9, 10, 11},
+      {},
+      {0, 1, 2, 3, 4, 99},
+  };
+  ring::AffiliationUpdater updater;
+  REQUIRE(updater.update(rings, nList).hc.size() == rings.size());
+  std::vector<std::vector<int>> moved = nList;
+  for (auto &row : moved) {
+    if (row.size() > 1) {
+      row.back() = (row.back() + 3) % 12;
+    }
+  }
+  REQUIRE(updater.update(rings, moved).hc.size() == rings.size());
+  REQUIRE(updater.update(rings, moved).hc.size() == rings.size());
+  rings[0] = {0, 1, 2};
+  REQUIRE(updater.update(rings, moved).hc.size() == rings.size());
+}

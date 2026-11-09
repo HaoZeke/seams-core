@@ -476,3 +476,35 @@ TEST_CASE("a small edit expands into a full ring pass", "[franzblau]") {
   REQUIRE(second.size() == full.size());
   REQUIRE(updater.lastRecomputedSources() > 0);
 }
+
+TEST_CASE("a single changed bond refreshes the stored balls", "[franzblau]") {
+  const int n = 24;
+  std::vector<std::vector<int>> nList(static_cast<std::size_t>(n));
+  for (int i = 0; i < n; ++i) {
+    nList[static_cast<std::size_t>(i)] = {i, (i + 1) % n, (i + n - 1) % n,
+                                          (i + 2) % n, (i + n - 2) % n};
+  }
+  primitive::RingUpdater updater(6);
+  const auto first = updater.update(nList);
+  REQUIRE_FALSE(first.empty());
+  nList[0].push_back(4);
+  nList[4].push_back(0);
+  const auto second = updater.update(nList);
+  REQUIRE(second.size() == primitive::ringNetwork(nList, 6).size());
+  REQUIRE(updater.lastRecomputedSources() > 0);
+  REQUIRE(updater.lastRecomputedSources() < n);
+  REQUIRE(updater.lastBallsRefreshed() > 0);
+  const std::vector<std::vector<int>> empty;
+  primitive::ringNetwork(empty, 8);
+  primitive::ringNetwork(nList, 2);
+  std::vector<char> none(static_cast<std::size_t>(n), 0);
+  REQUIRE(primitive::ringNetwork(nList, 8, none).empty());
+  primitive::RingUpdater deep(8);
+  const auto primed = deep.update(nList);
+  REQUIRE_FALSE(primed.empty());
+  auto edited = nList;
+  edited[0].push_back(6);
+  edited[6].push_back(0);
+  const auto again = deep.update(edited);
+  REQUIRE(again.size() == primitive::ringNetwork(edited, 8).size());
+}
