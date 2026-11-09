@@ -73,9 +73,14 @@ const char *iceName(molSys::atom_state_type s) {
     return "clathrate";
   case molSys::atom_state_type::interClathrate:
     return "interClathrate";
-  default:
-    return "unclassified";
+  case molSys::atom_state_type::reCubic:
+    return "reCubic";
+  case molSys::atom_state_type::reHex:
+    return "reHex";
+  case molSys::atom_state_type::unclassified:
+    break;
   }
+  return "unclassified";
 }
 
 Cloud load(const std::string &path, int frame, int typeI,
@@ -132,7 +137,9 @@ void forEachInputFrame(const std::string &path, int first, int last,
       Cloud cloud = load(path, 1, typeFilter, selection);
       fn(1, cloud);
     } else {
-      throw std::runtime_error("XYZ read failed: the file has no frames");
+      throw std::runtime_error(
+          "frame " + std::to_string(first) +
+          " is past the last frame in this file");
     }
     return;
   }
@@ -408,10 +415,10 @@ waterGraph(Cloud &cloud, double cutoff, int typ,
 }
 
 std::string iceColor(std::string_view name) {
-  if (name == "cubic") {
+  if (name == "cubic" || name == "reCubic") {
     return colorizer.longOption(name);
   }
-  if (name == "hexagonal") {
+  if (name == "hexagonal" || name == "reHex") {
     return colorizer.shortOption(name);
   }
   if (name == "interfacial") {
@@ -420,11 +427,8 @@ std::string iceColor(std::string_view name) {
   if (name == "clathrate" || name == "interClathrate") {
     return colorizer.progName(name);
   }
-  // water is the only 5-character name left, and both is the only
-  // 4-character name. A content compare would keep an arm no caller hits.
-  if (name.size() == 5 || name.size() == 4) {
-    std::string plain(name);
-    return plain;
+  if (name == "water" || name == "both") {
+    return std::string(name);
   }
   return colorizer.error(name);
 }
@@ -1576,7 +1580,7 @@ int main(int argc, char *argv[]) {
   std::string axisFlag;
   std::string outputFormat = "text";
 
-  const char *progname = argv[0];
+  const char *progname = (argc ? argv[0] : "seams");
   Parser parser;
 
   parser.add(Option("--help", "-h")
