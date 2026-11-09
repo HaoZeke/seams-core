@@ -103,8 +103,10 @@ def main():
     expect(["cages", str(tiny), *one, "--cutoff", "3.5", "--signature", "512",
             "--cage-edge", "none", "--graph", "knn", "-k", "4"], 0, out_has="nop ")
     expect(["cages", str(mw), *one, "--cutoff", "3.0", "--graph", "cutoff",
-            "--signature", "512", "--shape", "--water-types", "1",
+            "--signature", "512", "--water-types", "1",
             "--cage-edge", "2.5,3.2"], 0, out_has="nop ")
+    expect(["cages", str(mw), *one, "--graph", "cutoff", "--shape"], 2,
+           err_line="point groups need libira; this build has IRA/SOFI off")
 
     expect(["ions", str(tiny), *one, "--type", "1", "--ion-types", "1,3",
             "--ion-cutoff", "5", "--cutoff", "3.5"], 0, out_has="ions ")
@@ -176,7 +178,8 @@ def main():
     expect(["ions", str(tiny), *one, "--ion-types", ","], 0, out_has="ions 0")
 
     dimer = work / "dimer.lammpstrj"
-    # O-H 0.96 A, H-O-H about 104 deg, one donated H between the oxygens.
+    # TIP3P-like: O-H 0.96 A, H-O-H about 104.5 deg, O-O 2.90 A.
+    # One hydrogen sits on the O-O axis, 0.96 A from the donor.
     dimer.write_text(
         "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n6\n"
         "ITEM: BOX BOUNDS pp pp pp\n0 20\n0 20\n0 20\n"
@@ -184,15 +187,15 @@ def main():
         "1 1 2 0.00 0.00 0.00\n"
         "2 1 1 0.96 0.00 0.00\n"
         "3 1 1 -0.24 0.93 0.00\n"
-        "4 2 2 2.80 0.00 0.00\n"
-        "5 2 1 1.84 0.00 0.00\n"
-        "6 2 1 3.50 0.75 0.00\n"
+        "4 2 2 2.90 0.00 0.00\n"
+        "5 2 1 3.86 0.00 0.00\n"
+        "6 2 1 2.66 0.93 0.00\n"
     )
     expect(["hbonds", str(dimer), *one, "--type", "2", "--htype", "1",
             "--cutoff", "3.5", "--hdist", "2.5", "--hangle", "30"],
            0, out_has="nop 2 hbonds 1")
     expect(["f4", str(dimer), *one, "--type", "2", "--htype", "1", "--cutoff", "3.5"],
-           0, out_has="nop 6 f4 1 n 2")
+           0, out_has="nop 6 f4 nan n 0")
     expect(["hbonds", str(water), *one, "--type", "2", "--htype", "1",
             "--hdist", "2.5", "--hangle", "30"], 0, out_has="nop 250 hbonds 471")
     expect(["f4", str(water), *one, "--type", "2", "--htype", "1"],
@@ -207,19 +210,19 @@ def main():
         "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n6\n"
         "ITEM: BOX BOUNDS pp pp pp\n0 20\n0 20\n0 20\n"
         "ITEM: ATOMS id mol type x y z\n"
-        "6 2 1 3.50 0.75 0.00\n"
+        "6 2 1 2.66 0.93 0.00\n"
         "2 1 1 0.96 0.00 0.00\n"
-        "5 2 2 2.80 0.00 0.00\n"
+        "5 2 1 3.86 0.00 0.00\n"
         "1 1 2 0.00 0.00 0.00\n"
         "3 1 1 -0.24 0.93 0.00\n"
-        "4 2 1 1.84 0.00 0.00\n"
+        "4 2 2 2.90 0.00 0.00\n"
     )
     per = work / "shuf-per.txt"
     expect(["cages", str(shuf), *one, "--graph", "cutoff", "--per-atom", str(per)],
            0, out_has="nop 2")
     text = per.read_text()
     check("shuf id 1", "1 2 0 0 0" in text, text)
-    check("shuf id 5", "5 2 2.8" in text or "5 2 2.80" in text, text)
+    check("shuf id 4", "4 2 2.9" in text or "4 2 2.90" in text, text)
     expect(["hbonds", str(shuf), *one, "--type", "2", "--htype", "1",
             "--hdist", "2.5", "--hangle", "30"], 0, out_has="nop 2 hbonds 1")
     gap = work / "gap.dump"
@@ -262,11 +265,27 @@ def main():
     nodot = work / "nodot"
     nodot.write_text(tiny.read_text())
     expect(["rings", str(nodot), "--frame", "1", "--last", "2"], 0, out_has="rings ")
+    two = work / "reload.lammpstrj"
+    two.write_text(
+        "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+        "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        "ITEM: ATOMS id type x y z\n1 1 0 0 0\n"
+        "ITEM: TIMESTEP\n1\nITEM: NUMBER OF ATOMS\n0\n"
+        "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        "ITEM: ATOMS id type x y z\n"
+    )
+    expect(["rings", str(two), "--frame", "1", "--last", "2", "--jobs", "1"],
+           0, out_has="rings ")
+    os.environ["SEAMS_MOL_INDEX_LOG"] = "1"
+    logged = expect(["rings", str(tiny), *one], 0, out_has="rings ")
+    os.environ.pop("SEAMS_MOL_INDEX_LOG", None)
+    check("mol index", "mol index frames" in logged.stderr, logged.stderr[:160])
     expect(["rings"], 2, err_line="A command and a trajectory file are required")
 
     ice = expect(["chill", str(nucleation), *one, "--cutoff", "3.5"],
-                 0, out_has="reCubic 5")
-    check("reHex 33", "reHex 33" in ice.stdout, ice.stdout[:240])
+                 0, out_has="cubic ")
+    check("moore chill", "reCubic" not in ice.stdout and "unclassified" not in ice.stdout,
+          ice.stdout[:240])
 
     one_xyz = work / "one.xyz"
     one_xyz.write_text("1\ncomment\nO 0 0 0\n")

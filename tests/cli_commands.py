@@ -96,8 +96,10 @@ def main():
     expect(["cages", str(tiny), *one, "--graph", "knn", "--water-types", "1"], 0, out_has="nop ")
     expect(["cages", str(tiny), *one, "--graph", "cutoff", "--signature", "512",
             "--guest-types", "3", "--inside", "--incomplete"], 0, out_has="nop ")
-    expect(["cages", str(mw), *one, "--graph", "cutoff", "--shape", "--cage-edge", "0,1",
+    expect(["cages", str(mw), *one, "--graph", "cutoff", "--cage-edge", "0,1",
             "--water-types", "1"], 0, out_has="nop ")
+    expect(["cages", str(mw), *one, "--graph", "cutoff", "--shape"], 2,
+           err_line="point groups need libira; this build has IRA/SOFI off")
     expect(["ions", str(tiny), *one, "--type", "1", "--ion-types", "3,4",
             "--ion-cutoff", "5", "--complete"], 0, out_has="ions ")
     expect(["f4", str(tiny), *one, "--type", "0", "--htype", "1"], 0, out_has="f4 ")

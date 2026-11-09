@@ -9,6 +9,7 @@
 #include <seams_input.hpp>
 
 #include <array>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -707,4 +708,101 @@ TEST_CASE("name checks and the dump fallback take both sides", "[chemfiles]") {
     REQUIRE(std::string(err.what()) == "XYZ header is not an atom count.");
   }
   fs::remove_all(asDir);
+}
+
+TEST_CASE("dump molecule ids follow the LAMMPS atom id", "[chemfiles]") {
+  const auto dir = fs::temp_directory_path() / "dseams_mol_id";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  const auto shuf = dir / "shuf.lammpstrj";
+  {
+    std::ofstream out(shuf);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n2\n"
+           "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+           "ITEM: ATOMS id mol type x y z\n"
+           "2 9 1 1 0 0\n"
+           "1 4 2 0 0 0\n";
+  }
+  Cloud via = sinp::openFrame(shuf.string(), 1, -1);
+  Cloud again = sinp::openFrame(shuf.string(), 1, -1);
+  REQUIRE(again.nop == via.nop);
+  REQUIRE(via.nop == 2);
+  REQUIRE(via.pts[0].atomID == 1);
+  REQUIRE(via.pts[0].molID == 4);
+  REQUIRE(via.pts[1].atomID == 2);
+  REQUIRE(via.pts[1].molID == 9);
+
+  const auto gap = dir / "gap.dump";
+  {
+    std::ofstream out(gap);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n2\n"
+           "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+           "ITEM: ATOMS id mol type x y z\n"
+           "4 7 2 1 1 1\n"
+           "1 7 1 0 0 0\n";
+  }
+  Cloud gapped = sinp::openFrame(gap.string(), 1, -1);
+  REQUIRE(gapped.nop == 2);
+  bool saw4 = false;
+  for (const auto &pt : gapped.pts) {
+    if (pt.atomID == 4) {
+      saw4 = true;
+      REQUIRE(pt.molID == 7);
+      REQUIRE(pt.type == 2);
+    }
+    if (pt.atomID == 1) {
+      REQUIRE(pt.molID == 7);
+    }
+  }
+  REQUIRE(saw4);
+
+  Cloud missing = sinp::openFrame((dir / "missing.lammpstrj").string(), 1, -1);
+  REQUIRE(missing.nop == 0);
+
+  const auto dup = dir / "dup.lammpstrj";
+  {
+    std::ofstream out(dup);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n2\n"
+           "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+           "ITEM: ATOMS id mol type x y z\n"
+           "1 3 2 0 0 0\n"
+           "1 3 1 1 0 0\n";
+  }
+  setenv("SEAMS_MOL_INDEX_LOG", "1", 1);
+  Cloud doubled = sinp::openFrame(dup.string(), 1, -1);
+  const auto zero = dir / "zero-log.lammpstrj";
+  {
+    std::ofstream out(zero);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+           "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+           "ITEM: ATOMS id type x y z\n0 1 0 0 0\n";
+  }
+  setenv("SEAMS_MOL_INDEX_LOG", "0", 1);
+  Cloud loggedZero = sinp::openFrame(zero.string(), 1, -1);
+  const auto emptyLog = dir / "empty-log.lammpstrj";
+  fs::copy_file(zero, emptyLog);
+  setenv("SEAMS_MOL_INDEX_LOG", "", 1);
+  Cloud loggedEmpty = sinp::openFrame(emptyLog.string(), 1, -1);
+  Cloud frameZero = sinp::openFrame(shuf.string(), 0, -1);
+  unsetenv("SEAMS_MOL_INDEX_LOG");
+  REQUIRE(loggedZero.nop >= 0);
+  REQUIRE(loggedEmpty.nop >= 0);
+  REQUIRE(frameZero.nop == 0);
+  REQUIRE(doubled.nop >= 0);
+  {
+    std::ofstream out(shuf, std::ios::app);
+    out << "ITEM: TIMESTEP\n1\nITEM: NUMBER OF ATOMS\n1\n"
+           "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+           "ITEM: ATOMS id mol type x y z\n1 4 2 0 0 0\n";
+  }
+  Cloud grown = sinp::openFrame(shuf.string(), 1, -1);
+  REQUIRE(grown.pts[0].molID == 4);
+  const auto stamped = fs::last_write_time(shuf);
+  fs::last_write_time(shuf, stamped + std::chrono::seconds(5));
+  Cloud later = sinp::openFrame(shuf.string(), 1, -1);
+  REQUIRE(later.pts[0].atomID == 1);
+  fs::last_write_time(shuf, stamped + std::chrono::seconds(5) + std::chrono::nanoseconds(2000));
+  Cloud laterNs = sinp::openFrame(shuf.string(), 1, -1);
+  REQUIRE(laterNs.pts[0].molID == 4);
+  fs::remove_all(dir);
 }

@@ -931,6 +931,18 @@ if get_option('with_cli')
       depends: [seams_exe],
       is_parallel: false,
       timeout: 300)
+    test(
+      'seams_cli_mpi',
+      python3,
+      args: [
+        files('tests/cli_mpi.py'),
+        _mpiexec.full_path(),
+        seams_exe.full_path(),
+        meson.project_source_root() / 'input' / 'traj' / 'agi_water_tiny.lammpstrj',
+      ],
+      depends: [seams_exe],
+      is_parallel: false,
+      timeout: 300)
   endif
 endif
 

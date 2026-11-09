@@ -61,6 +61,25 @@ def main():
     check("axis 2", axis.returncode == 0 and "# z rho" in axis.stdout,
           axis.stderr[-200:])
 
+    held = run(["rings", traj, "--frame", "1", "--last", "2"],
+               env={"OMP_NUM_THREADS": "2"})
+    check("omp set", held.returncode == 0 and "rings " in held.stdout,
+          held.stderr[-200:])
+
+    # A rank variable with no world size still marks the process as launched.
+    env = os.environ.copy()
+    for key in list(env):
+        if key.startswith(("OMPI_", "PMI_", "PMIX_", "MV2_")):
+            del env[key]
+    env.pop("SEAMS_MPI", None)
+    env["PMI_RANK"] = "0"
+    env["PMIX_RANK"] = "0"
+    alone = subprocess.run(
+        [seams, "rings", traj, "--frame", "1", "--last", "1"],
+        capture_output=True, text=True, env=env)
+    check("pmi rank", alone.returncode == 0 and "rings " in alone.stdout,
+          alone.stderr[-300:])
+
 
 if __name__ == "__main__":
     main()

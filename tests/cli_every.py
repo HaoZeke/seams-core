@@ -95,7 +95,7 @@ with tempfile.TemporaryDirectory() as tmp:
         ["chill-plus", str(ice), *one, "--graph", "mutual", "--family", "waterIce"],
         ["cages", str(ice), *one, "--graph", "cutoff", "--type", "1"],
         ["cages", str(ice), *one, "--graph", "mutual", "--complete"],
-        ["cages", str(ice), *one, "--graph", "cutoff", "--shape", "--cage-edge", "0,1"],
+        ["cages", str(ice), *one, "--graph", "cutoff", "--cage-edge", "0,1"],
         ["cages", str(ice), *one, "--graph", "cutoff", "--signature", "512",
          "--guest-types", "1", "--guest-radius", "4"],
         ["cages", str(ice), *one, "--graph", "cutoff", "--per-atom", per, "--inside"],
@@ -147,7 +147,7 @@ with tempfile.TemporaryDirectory() as tmp:
         ["steinhardt", str(tiny), "--type", "9", "--frame", "1", "--last", "1"],
         ["hbonds", str(tiny), "--type", "9", "--htype", "9", "--frame", "1", "--last", "1"],
         ["cages", str(ice), *one, "--graph", "cutoff", "--signature", "512+hc",
-         "--shape", "--guest-types", "1", "--inside", "--incomplete"],
+         "--guest-types", "1", "--inside", "--incomplete"],
         ["cages", str(ice), *one, "--graph", "seeded", "--signature", "512", "--water-types", "1"],
         ["cages", str(ice), *one, "--graph", "knn", "--water-types", "1"],
         ["chill", str(ice), *one, "--graph", "knn", "--water-types", "1"],
@@ -221,6 +221,7 @@ with tempfile.TemporaryDirectory() as tmp:
     blank_rc = subprocess.run([seams, "rings", str(blank), "--frame", "1", "--last", "1"], capture_output=True).returncode
     ok = blank_rc in (0, 2) and ok
     ok = run(["chill-plus", str(water), "--family", "not-a-family"], expect=2) and ok
+    ok = run(["cages", str(tiny), *one, "--graph", "cutoff", "--shape"], expect=2) and ok
     ok = run(["rdf", str(water), "--types", "1,2,3"], expect=2) and ok
     ok = run(["rdf", str(water), "--types", "a,b"], expect=2) and ok
     ok = run(["rdf", str(water), "--types", "1,"], expect=2) and ok

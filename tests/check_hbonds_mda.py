@@ -5,7 +5,9 @@ usage: check_hbonds_mda.py SEAMS LAMMPSTRJ
 
 d-SEAMS prints the number of O-O pairs that pass the test.
 MDAnalysis HydrogenBondAnalysis prints donor-H-acceptor rows.
-One O-O pair can be two of those rows when each molecule donates.
+On the physical dimer that row is one bond: donor 0, hydrogen 1,
+acceptor 3, distance 2.9 angstrom, angle 180 degrees. d-SEAMS
+counts the same contact as one O-O pair.
 """
 
 import subprocess
