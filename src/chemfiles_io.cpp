@@ -19,13 +19,17 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#include <sys/stat.h>
 
 #ifdef SEAMS_HAS_CHEMFILES
 #include <chemfiles.hpp>
@@ -282,6 +286,7 @@ sinp::readChemfiles(std::string filename,
       // property on the atom. A residue id covers formats that have one.
       point.atomID = static_cast<int>(i) + 1;
       point.molID = point.atomID;
+      // LAMMPS writes mol as a custom column. Chemfiles keeps it on the atom.
       if (const auto mol = topology[i].get<chemfiles::Property::DOUBLE>("mol")) {
         point.molID = static_cast<int>(std::lround(*mol));
       } else if (const auto residue = topology.residue_for_atom(i)) {
@@ -367,42 +372,60 @@ std::string sinp::currentExceptionText() {
 
 namespace {
 
-// id -> mol for one LAMMPS frame. Chemfiles does not keep the mol
-// column. Ids that are exactly {1..N} are stored by chemfiles at
-// index id-1, so that index is the LAMMPS id and not the file row.
-struct LammpsIdMol {
-  std::unordered_map<int, int> molOf;
-  bool oneToN = false;
-};
+// One bit per frame: ids are exactly {1..N}. Chemfiles then stores
+// id k at index k-1. A gap would index past the atom count, so those
+// frames stay on the native reader. The file is walked once and kept.
 
 bool startsWith(const std::string &line, const char *prefix) {
   const auto n = std::char_traits<char>::length(prefix);
   return line.size() >= n && line.compare(0, n, prefix) == 0;
 }
 
-LammpsIdMol lammpsIdMol(const std::string &path, int frame) {
-  LammpsIdMol out;
-  std::ifstream in(path);
-  if (!in || frame < 1) {
+struct DumpIdIndex {
+  off_t bytes = -1;
+  timespec mtime {};
+  std::vector<char> oneToN;
+};
+
+std::mutex gDumpIdMu;
+std::unordered_map<std::string, DumpIdIndex> gDumpIds;
+
+DumpIdIndex scanDumpIds(const std::string &path) {
+  DumpIdIndex out;
+  struct stat st {};
+  if (stat(path.c_str(), &st) != 0) {
     return out;
   }
+  out.bytes = st.st_size;
+  out.mtime = st.st_mtim;
+  std::ifstream in(path);
+  const auto t0 = std::chrono::steady_clock::now();
   int seen = 0;
   int natoms = 0;
   int idCol = -1;
-  int molCol = -1;
   int got = 0;
+  int unique = 0;
   bool atoms = false;
+  std::vector<char> seenId;
   std::string line;
+  auto finish = [&]() {
+    if (seen <= 0) {
+      return;
+    }
+    out.oneToN.resize(static_cast<std::size_t>(seen) + 1, 0);
+    const bool ok = natoms > 0 && unique == natoms;
+    out.oneToN[static_cast<std::size_t>(seen)] = ok ? 1 : 0;
+  };
   while (std::getline(in, line)) {
     if (startsWith(line, "ITEM: TIMESTEP")) {
+      finish();
       seen += 1;
       atoms = false;
-      if (seen > frame) {
-        break;
-      }
-      continue;
-    }
-    if (seen != frame) {
+      natoms = 0;
+      idCol = -1;
+      got = 0;
+      unique = 0;
+      seenId.clear();
       continue;
     }
     if (startsWith(line, "ITEM: NUMBER OF ATOMS")) {
@@ -413,7 +436,6 @@ LammpsIdMol lammpsIdMol(const std::string &path, int frame) {
     }
     if (startsWith(line, "ITEM: ATOMS")) {
       idCol = -1;
-      molCol = -1;
       std::istringstream head(line);
       std::string tok;
       head >> tok >> tok;
@@ -421,13 +443,13 @@ LammpsIdMol lammpsIdMol(const std::string &path, int frame) {
       while (head >> tok) {
         if (tok == "id") {
           idCol = col;
-        } else if (tok == "mol") {
-          molCol = col;
         }
         col += 1;
       }
       atoms = true;
       got = 0;
+      unique = 0;
+      seenId.assign(static_cast<std::size_t>(std::max(natoms, 0)) + 1, 0);
       continue;
     }
     if (!atoms || got >= natoms) {
@@ -444,19 +466,42 @@ LammpsIdMol lammpsIdMol(const std::string &path, int frame) {
       continue;
     }
     const int id = std::atoi(fields[static_cast<std::size_t>(idCol)].c_str());
-    int mol = id;
-    if (molCol >= 0 && molCol < static_cast<int>(fields.size())) {
-      mol = std::atoi(fields[static_cast<std::size_t>(molCol)].c_str());
+    if (id >= 1 && id <= natoms && seenId[static_cast<std::size_t>(id)] == 0) {
+      seenId[static_cast<std::size_t>(id)] = 1;
+      unique += 1;
     }
-    out.molOf[id] = mol;
   }
-  out.oneToN = natoms > 0 && static_cast<int>(out.molOf.size()) == natoms;
-  for (int id = 1; out.oneToN && id <= natoms; id++) {
-    if (out.molOf.find(id) == out.molOf.end()) {
-      out.oneToN = false;
+  finish();
+  const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                      std::chrono::steady_clock::now() - t0)
+                      .count();
+  if (const char *log = std::getenv("SEAMS_MOL_INDEX_LOG")) {
+    if (log[0] != '\0' && log[0] != '0') {
+      std::cerr << "mol index frames " << seen << " scan_ms " << ms << "\n";
     }
   }
   return out;
+}
+
+bool dumpFrameIsOneToN(const std::string &path, int frame) {
+  if (frame < 1) {
+    return false;
+  }
+  struct stat st {};
+  const bool exists = stat(path.c_str(), &st) == 0;
+  std::lock_guard<std::mutex> lock(gDumpIdMu);
+  auto it = gDumpIds.find(path);
+  const bool fresh = exists && it != gDumpIds.end() && it->second.bytes == st.st_size &&
+                     it->second.mtime.tv_sec == st.st_mtim.tv_sec &&
+                     it->second.mtime.tv_nsec == st.st_mtim.tv_nsec;
+  if (!fresh) {
+    gDumpIds[path] = scanDumpIds(path);
+    it = gDumpIds.find(path);
+  }
+  if (frame >= static_cast<int>(it->second.oneToN.size())) {
+    return false;
+  }
+  return it->second.oneToN[static_cast<std::size_t>(frame)] != 0;
 }
 
 } // namespace
@@ -488,10 +533,7 @@ sinp::openFrame(const std::string &filename, int frame, int typeI,
   }
   const auto extNow = extensionOf(filename);
   const bool dumpFile = extNow == "lammpstrj" || extNow == "dump";
-  LammpsIdMol ids;
-  if (dumpFile) {
-    ids = lammpsIdMol(filename, frame);
-    if (!ids.oneToN) {
+  if (dumpFile && !dumpFrameIsOneToN(filename, frame)) {
       // Gaps or ids that do not start at 1. Chemfiles stores an atom at
       // index id-1 and would address past the atom count. One native read.
       if (typeI < 0) {
@@ -506,7 +548,6 @@ sinp::openFrame(const std::string &filename, int frame, int typeI,
         cloud = readLammpsTrjO(filename, frame, again, 1);
       }
       return cloud;
-    }
   }
   framePastEnd = false;
   cloud = readChemfiles(filename, cloud, request);
@@ -516,13 +557,6 @@ sinp::openFrame(const std::string &filename, int frame, int typeI,
         " is past the last frame in this file");
   }
   if (!chemfilesUnreadable) {
-    if (dumpFile) {
-      // Ids are {1..N}. Chemfiles stored id k at index k-1, and the
-      // point id is that index plus one: the LAMMPS id, not the file row.
-      for (auto &pt : cloud.pts) {
-        pt.molID = ids.molOf[pt.atomID];
-      }
-    }
     return cloud;
   }
   {
@@ -578,3 +612,7 @@ sinp::openFrame(const std::string &filename, int frame, int typeI,
   return readLammpsTrjO(filename, frame, again, 1);
 #endif
 }
+
+#ifndef SEAMS_HAS_CHEMFILES
+int sinp::chemfilesSteps(const std::string &) { return -1; }
+#endif
