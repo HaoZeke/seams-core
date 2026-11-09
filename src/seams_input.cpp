@@ -13,6 +13,7 @@
 //-----------------------------------------------------------------------------------
 
 #include <algorithm>
+#include <atomic>
 #include <charconv>
 #include <cmath>
 #include <cstddef>
@@ -25,6 +26,7 @@
 #include <fstream>
 #include <generic.hpp>
 #include <map>
+#include <sstream>
 #include <neighbours.hpp>
 #include <memory>
 #include <mutex>
@@ -373,20 +375,37 @@ void sinp::forEachLammpsFrame(
   }
   const int count = static_cast<int>(frames.size());
 
+  std::mutex errorMu;
+  std::atomic<bool> failed{false};
+  std::string error;
 #ifdef SEAMS_HAS_OPENMP
   const int threads = nThreads > 0 ? nThreads : omp_get_max_threads();
 #pragma omp parallel for schedule(dynamic, 1) num_threads(threads)             \
     if (threads > 1 && count > 1)
 #endif
   for (int k = 0; k < count; ++k) {
-    const int frame = frames[static_cast<std::size_t>(k)];
-    molSys::PointCloud<molSys::Point<double>, double> cloud;
-    if (typeFilter > 0) {
-      cloud = readLammpsTrjO(filename, frame, cloud, typeFilter);
-    } else {
-      cloud = readLammpsTrj(filename, frame, cloud);
+    if (failed.load()) {
+      continue;
     }
-    fn(frame, cloud);
+    const int frame = frames[static_cast<std::size_t>(k)];
+    try {
+      molSys::PointCloud<molSys::Point<double>, double> cloud;
+      if (typeFilter > 0) {
+        cloud = readLammpsTrjO(filename, frame, cloud, typeFilter);
+      } else {
+        cloud = readLammpsTrj(filename, frame, cloud);
+      }
+      fn(frame, cloud);
+    } catch (const std::exception &ex) {
+      std::lock_guard<std::mutex> lock(errorMu);
+      if (error.empty()) {
+        error = ex.what();
+      }
+      failed.store(true);
+    }
+  }
+  if (!error.empty()) {
+    throw std::runtime_error(error);
   }
 }
 
@@ -472,6 +491,75 @@ std::vector<std::vector<int>> sinp::readBonds(std::string filename) {
 
   return bonds;
 }
+namespace {
+
+// Extended XYZ stores the cell as Lattice="ax ay az bx by bz cx cy cz".
+// A reduced cell becomes the LAMMPS box (lengths, then xy xz yz). The
+// coordinate span is not a cell.
+bool latticeCell(const std::string &comment, std::vector<double> &box,
+                 std::vector<double> &boxLow) {
+  const auto key = comment.find("Lattice=");
+  if (key == std::string::npos) {
+    return false;
+  }
+  const auto open = comment.find_first_of("\"'", key + 8);
+  if (open == std::string::npos) {
+    throw std::runtime_error("XYZ Lattice is not a cell.");
+  }
+  const char quote = comment[open];
+  const auto close = comment.find(quote, open + 1);
+  if (close == std::string::npos) {
+    throw std::runtime_error("XYZ Lattice is not a cell.");
+  }
+  std::istringstream in(comment.substr(open + 1, close - open - 1));
+  double cell[9];
+  for (double &value : cell) {
+    if (!(in >> value)) {
+      throw std::runtime_error("XYZ Lattice is not a cell.");
+    }
+  }
+  const double ax = cell[0];
+  const double ay = cell[1];
+  const double az = cell[2];
+  const double bx = cell[3];
+  const double by = cell[4];
+  const double bz = cell[5];
+  const double cx = cell[6];
+  const double cy = cell[7];
+  const double cz = cell[8];
+  const double scale = std::max(std::abs(ax), std::max(std::abs(by), std::abs(cz)));
+  const double tol = 1e-8 * (scale > 1.0 ? scale : 1.0);
+  if (!(ax > 0.0 && by > 0.0 && cz > 0.0) || std::abs(ay) > tol ||
+      std::abs(az) > tol || std::abs(bz) > tol) {
+    throw std::runtime_error("XYZ Lattice is not a reduced cell.");
+  }
+  // Same reduced frame as setBoxFromLammpsEdges: a along x, b in the
+  // xy plane. The stored box is the bound span plus xy, xz, yz, and
+  // the origin shifts when a tilt is negative.
+  const double lx = ax;
+  const double ly = by;
+  const double lz = cz;
+  const double xy = bx;
+  const double xz = cx;
+  const double yz = cy;
+  const double xmin = std::min(std::min(0.0, xy), std::min(xz, xy + xz));
+  const double xmax = std::max(std::max(0.0, xy), std::max(xz, xy + xz));
+  const double ymin = std::min(0.0, yz);
+  const double ymax = std::max(0.0, yz);
+  const bool tilt =
+      std::abs(xy) > tol || std::abs(xz) > tol || std::abs(yz) > tol;
+  if (!tilt) {
+    box = {lx, ly, lz};
+    boxLow = {0.0, 0.0, 0.0};
+    return true;
+  }
+  box = {lx + xmax - xmin, ly + ymax - ymin, lz, xy, xz, yz};
+  boxLow = {xmin, ymin, 0.0};
+  return true;
+}
+
+} // namespace
+
 /**
  * @details Function for reading in an XYZ file
  */
@@ -487,6 +575,7 @@ molSys::PointCloud<molSys::Point<double>, double> sinp::readXYZ(std::string file
   int iatom = 0;
   molSys::Point<double> iPoint; // Current point being read in from the file
   double xLo = 0.0, xHi = 0.0, yLo = 0.0, yHi = 0.0, zLo = 0.0, zHi = 0.0;
+  bool haveLattice = false;
 
   if (!(gen::file_exists(filename))) {
     std::cout
@@ -512,29 +601,38 @@ molSys::PointCloud<molSys::Point<double>, double> sinp::readXYZ(std::string file
     // At this point we know that the XYZ file is open
 
     // The first line contains the number of atoms
-    std::getline((*xyzFile), line);
+    if (!std::getline((*xyzFile), line)) {
+      xyzFile->close();
+      throw std::runtime_error("XYZ header is not an atom count.");
+    }
     try {
       nop = std::stoi(line);
     } catch (const std::exception &) {
       xyzFile->close();
-      std::cerr << "XYZ header is not an atom count.\n";
-      yCloud.nop = 0;
-      return yCloud;
+      throw std::runtime_error("XYZ header is not an atom count.");
     }
     if (nop < 0) {
       xyzFile->close();
-      std::cerr << "XYZ header is not an atom count.\n";
-      yCloud.nop = 0;
-      return yCloud;
+      throw std::runtime_error("XYZ header is not an atom count.");
     }
-    // Skip the comment line
-    std::getline((*xyzFile), line);
+    // The comment may carry an extended-XYZ Lattice.
+    std::string comment;
+    std::getline((*xyzFile), comment);
+    try {
+      haveLattice = latticeCell(comment, yCloud.box, yCloud.boxLow);
+    } catch (const std::runtime_error &) {
+      xyzFile->close();
+      throw;
+    }
     // Reserve memory for atom coordinates using nop read in
     yCloud.pts.reserve(nop);
     yCloud.nop = nop;
     // Run this until EOF or you reach the next timestep
     std::map<std::string, int> elementType;
-    while (std::getline((*xyzFile), line)) {
+    // Stop at the declared count. A later frame is the next record,
+    // not extra atoms of this one.
+    while (static_cast<int>(yCloud.pts.size()) < nop &&
+           std::getline((*xyzFile), line)) {
 
       // Read in lines and tokenize them into std::string words and <double>
       // numbers
@@ -576,7 +674,8 @@ molSys::PointCloud<molSys::Point<double>, double> sinp::readXYZ(std::string file
         iPoint.y = std::stod(tokens[coordinateOffset + 1]);
         iPoint.z = std::stod(tokens[coordinateOffset + 2]);
       } catch (const std::exception &) {
-        continue;
+        xyzFile->close();
+        throw std::runtime_error("XYZ coordinate is not a number.");
       }
       if (yCloud.pts.empty()) {
         xLo = xHi = iPoint.x;
@@ -601,21 +700,25 @@ molSys::PointCloud<molSys::Point<double>, double> sinp::readXYZ(std::string file
 
   xyzFile->close();
 
-  if (yCloud.pts.size() == 1) {
+  if (!haveLattice && yCloud.pts.size() == 1) {
     xHi = xLo + 10;
     yHi = yLo + 10;
     zHi = zLo + 10;
   } // for a single point in the system (never happens)
 
-  yCloud.box = {xHi - xLo, yHi - yLo, zHi - zLo};
-  yCloud.boxLow = {xLo, yLo, zLo};
+  if (!haveLattice) {
+    yCloud.box = {xHi - xLo, yHi - yLo, zHi - zLo};
+    yCloud.boxLow = {xLo, yLo, zLo};
+  }
   yCloud.currentFrame = 1;
 
   if (yCloud.pts.size() != static_cast<std::size_t>(yCloud.nop)) {
-    std::cerr << "Atoms didn't get filled in properly.\n";
-    // Callers index pts with nop. A short file must not keep the header
-    // count, or the next loop reads past pts.
-    yCloud.nop = static_cast<int>(yCloud.pts.size());
+    // A short or over-long frame is not a structure. Callers that kept
+    // the header count used to index past pts, and callers that rewrote
+    // nop used to report the fragment as one frame.
+    throw std::runtime_error(
+        "XYZ frame is truncated: expected " + std::to_string(yCloud.nop) +
+        " atoms, read " + std::to_string(yCloud.pts.size()) + ".");
   }
 
   return yCloud;
@@ -651,6 +754,8 @@ void parseLammpsFrameBody(
   bool sawMol = false;
   int nextSyntheticId = 1;
   bool isTriclinic = false;
+  int nKept = 0;
+  int nLines = 0;
   molSys::Point<double> iPoint;
 
   while (true) {
@@ -705,6 +810,9 @@ void parseLammpsFrameBody(
     }
     if (readAtoms && !itemLine && typeIndex >= 0 && xIndex >= 0 &&
         yIndex >= 0 && zIndex >= 0) {
+      if (line.find_first_not_of(" \t\r") != std::string::npos) {
+        nLines += 1;
+      }
       double fields[kMaxDumpFields];
       const int n = parseDumpFields(line, fields, kMaxDumpFields);
       int need = std::max({typeIndex, xIndex, yIndex, zIndex});
@@ -745,6 +853,7 @@ void parseLammpsFrameBody(
         if (keep != LammpsKeep::All && iPoint.type != typeFilter) {
           continue;
         }
+        nKept++;
         yCloud.pts.push_back(iPoint);
         mapAtomIdToIndex(yCloud);
       }
@@ -780,10 +889,21 @@ void parseLammpsFrameBody(
     }
   }
 
+  // Fewer atom lines than the declared count is not a frame. A count that
+  // does not fit in int leaves nop unset and is not this case.
+  if (nop >= 0 && nLines < nop) {
+    throw std::runtime_error(
+        "LAMMPS dump frame is truncated: expected " + std::to_string(nop) +
+        " atoms, read " + std::to_string(nLines) + ".");
+  }
+
   // A frame cut short (a dump still being written) keeps the atoms it has;
   // the warning goes to stderr, which every rank of a frame split keeps
   if (keep != LammpsKeep::All) {
     yCloud.nop = static_cast<int>(yCloud.pts.size());
+    if (yCloud.pts.size() != static_cast<std::size_t>(nKept)) {
+      std::cerr << "Atoms didn't get filled in properly.\n";
+    }
   } else if (yCloud.pts.size() !=
              static_cast<std::size_t>(yCloud.nop < 0 ? 0 : yCloud.nop)) {
     // A count that does not fit in int leaves nop unset. The atoms that

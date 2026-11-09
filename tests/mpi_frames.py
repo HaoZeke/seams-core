@@ -80,8 +80,7 @@ same(["--strict-input", "--type", "99", "--frame", "1", "--last", "11", "read",
       dump], 11, rc=2)
 same(["--frame", "1", "--last", "4", "read", dump], 4, extra={"FORCE_COLOR": "1"})
 
-# A last frame cut short keeps the atoms it has and warns on stderr once, as
-# only the rank dealt that frame reads it
+# A last frame cut short is not a frame. Both ranks must fail it.
 with tempfile.TemporaryDirectory() as tmp:
     short = os.path.join(tmp, "short.lammpstrj")
     with open(dump) as f:
@@ -89,10 +88,9 @@ with tempfile.TemporaryDirectory() as tmp:
     atoms = max(i for i, line in enumerate(lines) if line.startswith("ITEM: ATOMS"))
     with open(short, "w") as f:
         f.writelines(lines[:atoms + 3])
-    serial, mpi = same(["--frame", "1", "--last", "20", "read", short], 11)
-    warning = "Atoms didn't get filled in properly."
-    check("short frame warns once", '"nop 2 frame 11 ' in serial.stdout and
-          serial.stderr.count(warning) == 1 and mpi.stderr.count(warning) == 1)
+    serial = run([seams, "--jobs", "1", "--frame", "1", "--last", "20", "read", short], bare)
+    check("short frame rejected", serial.returncode == 2 and
+          "truncated" in serial.stderr and "nop " not in serial.stdout)
 
 with tempfile.TemporaryDirectory() as tmp:
     out = os.path.join(tmp, "cages.dump")

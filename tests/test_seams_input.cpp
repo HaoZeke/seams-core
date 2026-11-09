@@ -575,27 +575,33 @@ TEST_CASE("readLammpsTrj sets nop from the atoms when the count overflows",
   sinp::dropLammpsDumpIndex(path.string());
 }
 
-TEST_CASE("readXYZ sets nop to the atoms that were parsed", "[seams_input]") {
+TEST_CASE("readXYZ rejects a short frame", "[seams_input]") {
   const auto path = fs::temp_directory_path() / "dseams_test_short.xyz";
   {
     std::ofstream f(path);
     f << "5\ncomment\nO 0 0 0\nO 1 0 0\n";
   }
-  auto cloud = sinp::readXYZ(path.string());
-  REQUIRE(cloud.nop == 2);
-  REQUIRE(cloud.pts.size() == 2);
+  try {
+    sinp::readXYZ(path.string());
+    FAIL("a short XYZ must not come back as a frame");
+  } catch (const std::runtime_error &err) {
+    REQUIRE(std::string(err.what()).find("truncated") != std::string::npos);
+  }
   fs::remove(path);
 }
 
-TEST_CASE("readXYZ skips a coordinate that is not a number", "[seams_input]") {
+TEST_CASE("readXYZ rejects a coordinate that is not a number", "[seams_input]") {
   const auto path = fs::temp_directory_path() / "dseams_test_bad.xyz";
   {
     std::ofstream f(path);
     f << "2\ncomment\nO 0 0 0\nO foo bar baz\n";
   }
-  auto cloud = sinp::readXYZ(path.string());
-  REQUIRE(cloud.nop == 1);
-  REQUIRE(cloud.pts.size() == 1);
+  try {
+    sinp::readXYZ(path.string());
+    FAIL("a bad coordinate must not come back as a frame");
+  } catch (const std::runtime_error &err) {
+    REQUIRE(std::string(err.what()).find("not a number") != std::string::npos);
+  }
   fs::remove(path);
 }
 
@@ -745,14 +751,11 @@ TEST_CASE("dump and bond readers take the rejected inputs", "[seams_input]") {
 
   const auto xyz = dir / "odd.xyz";
   writeText(xyz, "nope\ncomment\n");
-  cloud = sinp::readXYZ(xyz.string());
-  REQUIRE(cloud.nop == 0);
+  REQUIRE_THROWS_AS(sinp::readXYZ(xyz.string()), std::runtime_error);
   writeText(xyz, "-1\ncomment\n");
-  cloud = sinp::readXYZ(xyz.string());
-  REQUIRE(cloud.nop == 0);
+  REQUIRE_THROWS_AS(sinp::readXYZ(xyz.string()), std::runtime_error);
   writeText(xyz, "3\ncomment\n\n1 0 0 0\nO 1 0 0\n");
-  cloud = sinp::readXYZ(xyz.string());
-  REQUIRE(cloud.nop >= 1);
+  REQUIRE_THROWS_AS(sinp::readXYZ(xyz.string()), std::runtime_error);
   const auto tri = dir / "tri.lammpstrj";
   writeText(tri,
             "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
@@ -1228,4 +1231,107 @@ TEST_CASE("a point below the slice misses the z comparison", "[seams_input]") {
   const std::array<double, 3> high{1.0, 1.0, 1.0};
   REQUIRE(sinp::atomInSlice(0.5, 0.5, -1.0, low, high) == false);
   REQUIRE(sinp::atomInSlice(0.5, 0.5, 0.5, low, high) == true);
+}
+
+TEST_CASE("a short xyz names the missing atoms", "[seams_input]") {
+  const auto path = fs::temp_directory_path() / "dseams_short.xyz";
+  {
+    std::ofstream out(path);
+    out << "3\ncomment\nO 0 0 0\n";
+  }
+  try {
+    sinp::readXYZ(path.string());
+    FAIL("a short xyz must not come back as a frame");
+  } catch (const std::runtime_error &err) {
+    REQUIRE(std::string(err.what()) ==
+            "XYZ frame is truncated: expected 3 atoms, read 1.");
+  }
+  fs::remove(path);
+}
+
+TEST_CASE("an empty xyz names the header", "[seams_input]") {
+  const auto path = fs::temp_directory_path() / "dseams_empty.xyz";
+  {
+    std::ofstream out(path);
+    out << "";
+  }
+  try {
+    sinp::readXYZ(path.string());
+    FAIL("an empty xyz must not come back as a frame");
+  } catch (const std::runtime_error &err) {
+    REQUIRE(std::string(err.what()) == "XYZ header is not an atom count.");
+  }
+  fs::remove(path);
+}
+
+TEST_CASE("a junk xyz header names the failure", "[seams_input]") {
+  const auto path = fs::temp_directory_path() / "dseams_junk.xyz";
+  {
+    std::ofstream out(path);
+    out << "this is not an xyz file\n";
+  }
+  try {
+    sinp::readXYZ(path.string());
+    FAIL("a junk xyz must not come back as a frame");
+  } catch (const std::runtime_error &err) {
+    REQUIRE(std::string(err.what()) == "XYZ header is not an atom count.");
+  }
+  fs::remove(path);
+}
+
+TEST_CASE("a multi-frame xyz returns the first frame", "[seams_input]") {
+  const auto path = fs::temp_directory_path() / "dseams_multi.xyz";
+  {
+    std::ofstream out(path);
+    out << "1\nframe\nO 1 2 3\n1\nframe\nO 4 5 6\n";
+  }
+  auto cloud = sinp::readXYZ(path.string());
+  REQUIRE(cloud.nop == 1);
+  REQUIRE_THAT(cloud.pts[0].x, Catch::Matchers::WithinAbs(1.0, 1e-9));
+  fs::remove(path);
+}
+
+TEST_CASE("a short lammps dump names the missing atoms", "[seams_input]") {
+  const auto path = fs::temp_directory_path() / "dseams_short.lammpstrj";
+  {
+    std::ofstream out(path);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n3\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type x y z\n1 1 0 0 0\n";
+  }
+  try {
+    molSys::PointCloud<molSys::Point<double>, double> cloud;
+    sinp::readLammpsTrj(path.string(), 1, cloud);
+    FAIL("a short dump must not come back as a frame");
+  } catch (const std::runtime_error &err) {
+    REQUIRE(std::string(err.what()) ==
+            "LAMMPS dump frame is truncated: expected 3 atoms, read 1.");
+  }
+  fs::remove(path);
+  sinp::dropLammpsDumpIndex(path.string());
+}
+
+TEST_CASE("a triclinic lattice is bounds plus tilt", "[seams_input]") {
+  const auto path = fs::temp_directory_path() / "dseams_tilt.xyz";
+  {
+    std::ofstream out(path);
+    // a=(10,0,0) b=(-2,8,0) c=(-1,-3,9)
+    // xy=-2 xz=-1 yz=-3
+    // xmin=-3 xmax=0 ymin=-3 ymax=0
+    // span = (13, 11, 9), origin = (-3, -3, 0)
+    out << "1\nLattice=\"10 0 0 -2 8 0 -1 -3 9\"\nO 1 1 1\n";
+  }
+  auto cloud = sinp::readXYZ(path.string());
+  REQUIRE(cloud.box.size() == 6);
+  REQUIRE(cloud.boxLow.size() == 3);
+  REQUIRE_THAT(cloud.box[0], Catch::Matchers::WithinAbs(13.0, 1e-9));
+  REQUIRE_THAT(cloud.box[1], Catch::Matchers::WithinAbs(11.0, 1e-9));
+  REQUIRE_THAT(cloud.box[2], Catch::Matchers::WithinAbs(9.0, 1e-9));
+  REQUIRE_THAT(cloud.box[3], Catch::Matchers::WithinAbs(-2.0, 1e-9));
+  REQUIRE_THAT(cloud.box[4], Catch::Matchers::WithinAbs(-1.0, 1e-9));
+  REQUIRE_THAT(cloud.box[5], Catch::Matchers::WithinAbs(-3.0, 1e-9));
+  REQUIRE_THAT(cloud.boxLow[0], Catch::Matchers::WithinAbs(-3.0, 1e-9));
+  REQUIRE_THAT(cloud.boxLow[1], Catch::Matchers::WithinAbs(-3.0, 1e-9));
+  REQUIRE_THAT(cloud.boxLow[2], Catch::Matchers::WithinAbs(0.0, 1e-9));
+  fs::remove(path);
 }
