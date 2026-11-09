@@ -1212,10 +1212,6 @@ molSys::PointCloud<molSys::Point<double>, double> sinp::readConCorpus(
   text.resize(static_cast<std::size_t>(n));
   readcon::CConFrameIterator *frames =
       readcon::read_con_string_iterator(text.c_str());
-  if (frames == nullptr) {
-    std::cerr << "readcon-core rejected the corpus blob\n";
-    return yCloud;
-  }
   readcon::RKRConFrame *handle = readcon::con_frame_iterator_next(frames);
   if (handle == nullptr || !cloudFromHandle(handle, targetFrame, yCloud)) {
     std::cerr << "Cannot decode corpus frame " << targetFrame << "\n";
