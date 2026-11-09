@@ -994,9 +994,6 @@ bool cloudFromHandle(
     const readcon::RKRConFrame *handle, int frameNo,
     molSys::PointCloud<molSys::Point<double>, double> &yCloud) {
   readcon::CFrame *frame = readcon::rkr_frame_to_c_frame(handle);
-  if (frame == nullptr) {
-    return false;
-  }
   applyConCell(yCloud, frame->cell, frame->angles);
   uintptr_t nxyz = 0;
   const double *xyz = readcon::rkr_frame_xyz_f64(handle, &nxyz);
