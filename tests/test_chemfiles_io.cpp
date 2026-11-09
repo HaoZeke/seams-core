@@ -268,7 +268,7 @@ TEST_CASE("a numeric dump guesses type 2 and then type 1", "[chemfiles]") {
   REQUIRE(sinp::openFrame(junkDump.string(), 1, -1).nop == 0);
   REQUIRE(sinp::openFrame(junkDump.string(), 1, 2).nop == 0);
   REQUIRE(sinp::openFrame(junkDump.string(), 1, 0).nop == 0);
-  REQUIRE(sinp::openFrame(junkXyz.string(), 1, -1).nop == 0);
+  REQUIRE_THROWS_AS(sinp::openFrame(junkXyz.string(), 1, -1), std::runtime_error);
   fs::remove(junkDump);
   fs::remove(junkXyz);
   REQUIRE(sinp::chemfilesSteps("no/such/trajectory.lammpstrj") == -1);
@@ -383,4 +383,69 @@ TEST_CASE("a dcd uses the sibling pdb names", "[chemfiles]") {
   REQUIRE(oxygen.pts[0].type == 8);
   fs::remove(dcd);
   fs::remove(pdb);
+}
+
+TEST_CASE("an extended xyz lattice is the cell", "[chemfiles]") {
+  const auto path = fs::temp_directory_path() / "dseams_chem_lattice.xyz";
+  {
+    std::ofstream out(path);
+    out << "2\n"
+        << "Properties=species:S:1:pos:R:3 Lattice=\"20 0 0 0 18 0 0 0 16\"\n"
+        << "O 1 1 1\n"
+        << "O 6 4 3\n";
+  }
+  Cloud via = sinp::openFrame(path.string(), 1, -1);
+  REQUIRE(via.nop == 2);
+  REQUIRE(via.box.size() >= 3);
+  REQUIRE_THAT(via.box[0], Catch::Matchers::WithinAbs(20.0, 1e-6));
+  REQUIRE_THAT(via.box[1], Catch::Matchers::WithinAbs(18.0, 1e-6));
+  REQUIRE_THAT(via.box[2], Catch::Matchers::WithinAbs(16.0, 1e-6));
+  REQUIRE_THAT(via.pts[1].x, Catch::Matchers::WithinAbs(6.0, 1e-6));
+  fs::remove(path);
+}
+
+TEST_CASE("cif and mmcif round trip with an explicit format", "[chemfiles]") {
+  const auto root = fs::temp_directory_path();
+  const auto cif = root / "dseams_chem_round.cif";
+  const auto mmcif = root / "dseams_chem_round.mmcif";
+  {
+    chemfiles::Frame frame;
+    frame.set_cell(chemfiles::UnitCell(chemfiles::Vector3D(10, 11, 12)));
+    frame.add_atom(chemfiles::Atom("O"), chemfiles::Vector3D(1, 2, 3));
+    chemfiles::Trajectory cifOut(cif.string(), 'w', "CIF");
+    cifOut.write(frame);
+    chemfiles::Trajectory mmOut(mmcif.string(), 'w', "mmCIF");
+    mmOut.write(frame);
+  }
+  for (const auto &path : {cif, mmcif}) {
+    Cloud cloud = sinp::openFrame(path.string(), 1, -1);
+    REQUIRE(cloud.nop == 1);
+    REQUIRE_THAT(cloud.pts[0].x, Catch::Matchers::WithinAbs(1.0, 1e-4));
+    REQUIRE_THAT(cloud.pts[0].y, Catch::Matchers::WithinAbs(2.0, 1e-4));
+    REQUIRE_THAT(cloud.pts[0].z, Catch::Matchers::WithinAbs(3.0, 1e-4));
+    REQUIRE(cloud.box.size() >= 3);
+    REQUIRE_THAT(cloud.box[0], Catch::Matchers::WithinAbs(10.0, 1e-4));
+    REQUIRE_THAT(cloud.box[1], Catch::Matchers::WithinAbs(11.0, 1e-4));
+    REQUIRE_THAT(cloud.box[2], Catch::Matchers::WithinAbs(12.0, 1e-4));
+    fs::remove(path);
+  }
+}
+
+TEST_CASE("the ice XXI cif is one cell of 152 oxygens", "[chemfiles]") {
+  std::string path;
+  for (const char *candidate :
+       {"traj/iceXXI_lee2026.cif", "input/traj/iceXXI_lee2026.cif",
+        "../input/traj/iceXXI_lee2026.cif"}) {
+    if (fs::exists(candidate)) {
+      path = candidate;
+      break;
+    }
+  }
+  REQUIRE(!path.empty());
+  Cloud cloud = sinp::openFrame(path, 1, -1);
+  REQUIRE(cloud.nop == 152);
+  REQUIRE(cloud.box.size() >= 3);
+  REQUIRE_THAT(cloud.box[0], Catch::Matchers::WithinAbs(20.1966, 1e-3));
+  REQUIRE_THAT(cloud.box[1], Catch::Matchers::WithinAbs(20.1966, 1e-3));
+  REQUIRE_THAT(cloud.box[2], Catch::Matchers::WithinAbs(7.8912, 1e-3));
 }

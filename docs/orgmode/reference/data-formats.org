@@ -43,6 +43,8 @@ when the reader knows it.
 | LAMMPS frame does not exist | empty cloud, ~currentFrame = targetFrame~ |
 | LAMMPS type filter matches nothing | ~nop == 0~ |
 | XYZ path missing | ~std::runtime_error("Wrong filepath")~ |
+| XYZ header is not a count, a coordinate is not a number, or the frame has fewer atoms than the header | ~std::runtime_error~ naming the failure. The CLI exits 2 and does not print that frame |
+| LAMMPS dump declares more atoms than the frame contains | ~std::runtime_error~ naming the failure. The CLI exits 2 and does not print that frame |
 | chemfiles frame out of range | cloud left as passed in (usually empty) |
 | chemfiles throws | empty cloud |
 | readcon path unreadable or frame missing | empty cloud |
@@ -156,12 +158,13 @@ O 6.7459998 14.2810001 15.0939999
 #+end_src
 
 ~templates/hc.xyz~ is this shape (hexagonal-cage template). The first
-line is the atom count, the second line is skipped, each data line is
-~symbol x y z~. Every atom is stored as type 1. The box is the axis-
-aligned bounding box of the coordinates (~boxLow~ is the minimum);
-the comment line is not parsed for a lattice. ~seams~ routes ~.xyz~
-here and ignores ~--type~ on the read (classification still uses
-~--type~, which then sees type 1).
+line is the atom count, the second line is the comment, each data line
+is ~symbol x y z~. Every atom is stored as type 1. Without a lattice
+the box is the axis-aligned span of the coordinates (~boxLow~ is the
+minimum). An extended-XYZ comment ~Lattice="ax ay az bx by bz cx cy cz"~
+stores that reduced cell instead, with the origin at zero. ~seams~
+routes ~.xyz~ here and ignores ~--type~ on the read (classification
+still uses ~--type~, which then sees type 1).
 
 XYZ files in this tree do not carry a periodic cell. Analyses that
 need the true box should use a LAMMPS dump.
@@ -171,6 +174,8 @@ need the true box should use a LAMMPS dump.
 Compiled when Meson finds chemfiles (~SEAMS_HAS_CHEMFILES~). The CLI
 opens ~.pdb~, ~.gro~, and ~.dcd~ only. The C++ entry
 ~sinp::readChemfiles~ accepts any path chemfiles can open.
+~.cif~ is small-molecule CIF and ~.mmcif~ is mmCIF. The format is
+passed explicitly, so a file is not opened by the other reader.
 
 Frame ~N~ is ~read_step(N-1)~. ~--type I~ with ~I > 0~ keeps that
 numeric type; otherwise every atom is kept. Type is the chemfiles

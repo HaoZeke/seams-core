@@ -320,8 +320,11 @@ Analysis choice (which command) is not this table.
 |--------+--------+-------------------|
 | ~xyz~ | ~sinp::readXYZ~ | always |
 | ~con~ | ~sinp::readCon~ | ~SEAMS_HAS_READCON~ |
-| ~pdb~, ~gro~, ~dcd~ | ~sinp::readChemfiles~ | ~SEAMS_HAS_CHEMFILES~ |
+| ~pdb~, ~gro~, ~dcd~, ~cif~, ~mmcif~ | ~sinp::readChemfiles~ | ~SEAMS_HAS_CHEMFILES~ |
 | anything else | LAMMPS dump (~readLammpsTrjO~ / ~readLammpsTrj~) | always |
+
+~.cif~ is small-molecule CIF. ~.mmcif~ is mmCIF. The reader passes
+that format explicitly.
 
 A build without chemfiles or readcon-core treats ~.pdb~ / ~.gro~ /
 ~.dcd~ / ~.con~ as LAMMPS dumps. ~seams --features~ reports those

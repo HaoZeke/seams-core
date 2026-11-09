@@ -113,14 +113,31 @@ void applyCell(molSys::PointCloud<molSys::Point<double>, double> &cloud,
 #ifdef SEAMS_HAS_CHEMFILES
 
 // Set when chemfiles rejects the file, so openFrame can try the native reader.
-// A selection that keeps no atoms does not set it.
+// A selection that keeps no atoms does not set it. The message is the
+// chemfiles reason; an XYZ failure is reported from it and is not replaced
+// by a native parse of whatever lines happened to look like atoms.
 thread_local bool chemfilesUnreadable = false;
+thread_local std::string chemfilesError;
+
+std::string forcedFormat(const std::string &filename) {
+  const auto ext = extensionOf(filename);
+  // .cif is small-molecule CIF. .mmcif is mmCIF. Guessing the other
+  // way round is how a written mmCIF was opened as CIF.
+  if (ext == "mmcif") {
+    return "mmCIF";
+  }
+  if (ext == "cif") {
+    return "CIF";
+  }
+  return "";
+}
 
 int sinp::chemfilesSteps(const std::string &filename) {
   try {
-    chemfiles::Trajectory trajectory(filename);
+    chemfiles::Trajectory trajectory(filename, 'r', forcedFormat(filename));
     return static_cast<int>(trajectory.nsteps());
-  } catch (const chemfiles::Error &) {
+  } catch (const chemfiles::Error &error) {
+    chemfilesError = error.what();
     return -1;
   }
 }
@@ -140,14 +157,18 @@ sinp::readChemfiles(std::string filename,
                     molSys::PointCloud<molSys::Point<double>, double> &yCloud,
                     const ChemfilesRead &request) {
   chemfilesUnreadable = false;
+  chemfilesError.clear();
   yCloud = molSys::clearPointCloud(yCloud);
   if (request.frame < 1) {
     return yCloud;
   }
   try {
-    chemfiles::Trajectory trajectory(filename);
+    chemfiles::Trajectory trajectory(filename, 'r', forcedFormat(filename));
     // A DCD has coordinates and a cell, not atom names. A sibling PDB
     // carries the names the host used to choose the analysed species.
+    if (extensionOf(filename) == "xyz" && trajectory.nsteps() == 0) {
+      throw std::runtime_error("XYZ read failed: the file has no frames");
+    }
     if (extensionOf(filename) == "dcd") {
       const auto dot = filename.find_last_of('.');
       if (dot != std::string::npos) {
@@ -259,8 +280,9 @@ sinp::readChemfiles(std::string filename,
               << "\n";
     yCloud = molSys::clearPointCloud(yCloud);
     return yCloud;
-  } catch (const chemfiles::Error &) {
+  } catch (const chemfiles::Error &error) {
     chemfilesUnreadable = true;
+    chemfilesError = error.what();
     yCloud = molSys::clearPointCloud(yCloud);
     return yCloud;
   }
@@ -277,6 +299,9 @@ bool sinp::forEachChemfilesFrame(
   const int steps = chemfilesSteps(filename);
   if (steps < 0) {
     return false;
+  }
+  if (steps == 0 && extensionOf(filename) == "xyz") {
+    throw std::runtime_error("XYZ read failed: the file has no frames");
   }
   const int begin = std::max(1, first);
   int end = last;
@@ -333,7 +358,13 @@ sinp::openFrame(const std::string &filename, int frame, int typeI,
   {
     const auto ext = extensionOf(filename);
     if (ext == "xyz") {
-      return readXYZ(filename);
+      // Chemfiles rejected the file. The native reader is the fallback.
+      // A short or empty frame still throws from that reader.
+      try {
+        return readXYZ(filename);
+      } catch (const std::runtime_error &) {
+        throw;
+      }
     }
     if (ext == "lammpstrj" || ext == "dump") {
       if (typeI < 0) {

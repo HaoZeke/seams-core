@@ -1930,7 +1930,8 @@ int main(int argc, char *argv[]) {
                  .handler([&](std::string_view value) { cmd = value; }));
 
   parser.add(Positional("file")
-                 .help("Trajectory file")
+                 .help("Trajectory: lammpstrj, xyz, pdb, gro, dcd, xtc, trr, "
+                       "nc, cif, mmcif")
                  .occurs(zeroOrOneTime)
                  .handler([&](std::string_view value) { file = value; }));
 
@@ -2233,6 +2234,7 @@ int main(int argc, char *argv[]) {
       !waterTypes.empty();
   const int loadType = loadAll ? -1 : typeI;
 
+  try {
   if (last <= 0 || last == frame) {
 #ifdef SEAMS_HAS_MPI
     if (ranks.rank != 0) {
@@ -2325,4 +2327,8 @@ int main(int argc, char *argv[]) {
     }
   }
   return rc;
+  } catch (const std::exception &e) {
+    std::cerr << colorizer.error(e.what()) << "\n";
+    return 2;
+  }
 }
