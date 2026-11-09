@@ -498,9 +498,6 @@ struct DdcMaskCount {
   void lists(const std::vector<int> &ids, const std::vector<DdcChain> &chains) {
     for (const int id : ids) {
       for (const int ring : chains[static_cast<size_t>(id)].r) {
-        if (ring < 0 || ring >= static_cast<int>(at.size())) {
-          continue;
-        }
         auto &row = at[static_cast<size_t>(ring)];
         if (row.empty()) {
           used.push_back(ring);
