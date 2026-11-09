@@ -670,9 +670,6 @@ void ddcChains(const std::vector<std::vector<int>> &rings,
         if (rc == ra || rc == rb) {
           continue;
         }
-        if (!commonAtom(atomsA, atomsB, rings[static_cast<size_t>(rc)])) {
-          continue;
-        }
         out.push_back(DdcChain{{ra, rb, rc}, 2U});
       }
     }
