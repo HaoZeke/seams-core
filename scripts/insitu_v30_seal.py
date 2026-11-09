@@ -289,11 +289,18 @@ def cmd_gcov(args):
             text=True,
         )
         produced = build / (name + ".gcov")
+        wanted = {Path(item).name: item for item in changed}
+        for extra in list(build.glob("*.gcov")):
+            matched = wanted.get(extra.name)
+            if matched is None:
+                extra.unlink()
+                continue
+            target = gcov_dir / (matched.replace("/", "__") + ".gcov")
+            extra.rename(target)
         if produced.exists():
             text = produced.read_text(errors="replace")
-            produced.rename(dest)
-            for extra in build.glob("*.gcov"):
-                extra.unlink()
+            if not dest.exists():
+                produced.rename(dest)
         else:
             text = proc.stdout + proc.stderr
             dest.write_text(text)
@@ -303,6 +310,19 @@ def cmd_gcov(args):
         else:
             hits, total = scored
             rows.append((rel, "%d %d %.6f" % (hits, total, hits / total)))
+    rescored = []
+    for rel, result in rows:
+        saved = gcov_dir / (rel.replace("/", "__") + ".gcov")
+        if not saved.exists():
+            rescored.append((rel, result))
+            continue
+        scored = gcov_score(saved.read_text(errors="replace"), Path(rel).name)
+        if scored is None:
+            rescored.append((rel, "no executable lines"))
+        else:
+            hits, total = scored
+            rescored.append((rel, "%d %d %.6f" % (hits, total, hits / total)))
+    rows = rescored
     report = out / "COVERAGE_CPP.txt"
     with report.open("w", encoding="utf-8") as handle:
         handle.write("file result\n")
