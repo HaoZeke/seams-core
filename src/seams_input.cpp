@@ -1107,11 +1107,7 @@ sinp::readCon(std::string filename, int targetFrame,
                 << "\n";
       return yCloud;
     }
-    if (!cloudFromHandle(frame->get_handle(), targetFrame, yCloud)) {
-      std::cerr << "Cannot extract frame " << targetFrame << " from "
-                << filename << "\n";
-      yCloud = molSys::clearPointCloud(yCloud);
-    }
+    cloudFromHandle(frame->get_handle(), targetFrame, yCloud);
   } catch (const std::exception &e) {
     std::cerr << "Cannot open .con file " << filename << ": " << e.what()
               << "\n";
