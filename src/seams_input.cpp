@@ -200,9 +200,6 @@ struct LammpsDumpSession {
   }
 
   bool discoverNext() {
-    if (!file.is_open()) {
-      return false;
-    }
     if (offsets.empty()) {
       file.clear();
       file.seekg(0);
@@ -214,7 +211,7 @@ struct LammpsDumpSession {
         return false;
       }
     }
-    while (file) {
+    for (;;) {
       const auto here = file.tellg();
       if (here < 0) {
         return false;
@@ -228,7 +225,6 @@ struct LammpsDumpSession {
         return true;
       }
     }
-    return false;
   }
 
   bool positionAt(int frame) {
