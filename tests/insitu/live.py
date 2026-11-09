@@ -1043,12 +1043,14 @@ def gromacs_scale_case(folder, rows, steps, every, repeats):
     box_nm = ncell * 0.64
     write_gro(folder / "conf.gro", rows, box_nm)
     write_oxygen_top(folder / "topol.top", natoms)
-    ompi = Path("var/run/gmx-ompi/bin/gmx")
+    ompi = Path(os.environ.get("DSEAMS_GMX_OMPI", "var/run/gmx-ompi/bin/gmx")).resolve()
     mpirun = PREFIX / "bin" / "mpirun"
     if ompi.exists() and mpirun.exists():
         grompp = [str(ompi)]
         mdrun = [str(mpirun), "--oversubscribe", "-np", "1", str(ompi)]
-        kernel = "var/run/plumed-ompi/lib/libplumedKernel.so"
+        kernel = os.environ.get(
+            "DSEAMS_PLUMED_KERNEL", "var/run/plumed-ompi/lib/libplumedKernel.so"
+        )
         libs = ":".join(
             [
                 str(PREFIX / "lib"),
@@ -1259,8 +1261,8 @@ def type7_median(values):
 
 
 def lammps_mpi_identity():
-    mpi = Path("var/run/lmp-mpi/.pixi/envs/default")
-    plugin = Path("var/run/libfixdseams-mpi.so")
+    mpi = Path(os.environ.get("DSEAMS_LMP_MPI_PREFIX", "var/run/lmp-mpi/.pixi/envs/default")).resolve()
+    plugin = Path(os.environ.get("DSEAMS_LMP_MPI_PLUGIN", "var/run/libfixdseams-mpi.so")).resolve()
     if not (mpi / "bin" / "mpirun").exists() or not plugin.exists():
         return False
     text = []
@@ -1286,10 +1288,12 @@ def lammps_mpi_identity():
 
 
 def gromacs_mpi_identity():
-    gmx = Path("var/run/gmx-ompi/bin/gmx")
+    gmx = Path(os.environ.get("DSEAMS_GMX_OMPI", "var/run/gmx-ompi/bin/gmx")).resolve()
     mpirun = PREFIX / "bin" / "mpirun"
-    plugin = Path("var/run/libDseams-ompi.so")
-    kernel = Path("var/run/plumed-ompi/lib/libplumedKernel.so")
+    plugin = Path(os.environ.get("DSEAMS_GMX_OMPI_PLUGIN", "var/run/libDseams-ompi.so")).resolve()
+    kernel = Path(
+        os.environ.get("DSEAMS_PLUMED_KERNEL", "var/run/plumed-ompi/lib/libplumedKernel.so")
+    ).resolve()
     if not (gmx.exists() and mpirun.exists() and plugin.exists() and kernel.exists()):
         return False, "the matched OpenMPI GROMACS or PLUMED kernel is absent"
     folder = WORK / "gromacs-mpi"
@@ -1315,7 +1319,7 @@ def gromacs_mpi_identity():
             [
                 str(PREFIX / "lib"),
                 str(kernel.parent),
-                "var/run/gmx-ompi/lib",
+                str(gmx.parent.parent / "lib"),
                 str(Path(LIB).parent),
                 str(Path(LIB).parent.parent / "subprojects" / "readcon-core"),
                 str(Path(LIB).parent.parent / "subprojects" / "readcon-db"),
@@ -1495,6 +1499,10 @@ def main():
     trr_frames_n = gromacs_trr_identity(so)
     print("gscale", flush=True)
     out["gromacs_scale"] = scale_gromacs(so)
+    seal_tail(out, trr_frames_n)
+
+
+def seal_tail(out, trr_frames_n):
     block = out["scale"]["1000"]["1"]
     per_frame = type7_median([block["live"][i] - block["plain"][i] for i in range(len(block["plain"]))])
     one = WORK / "lattice" / "5" / "one.lammpstrj"
