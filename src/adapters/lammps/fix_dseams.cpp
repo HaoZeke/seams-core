@@ -62,8 +62,8 @@ double parse_positive_double(const char *text, int *bad) {
 } // namespace
 
 FixDseams::FixDseams(LAMMPS *lmp, int narg, char **arg) :
-    Fix(lmp, narg, arg), active_(0), every_(1), depth_(8), cutoff_(3.5), eng_(nullptr),
-    list_(nullptr) {
+    Fix(lmp, narg, arg), active_(0), every_(1), depth_(8), cutoff_(3.5), seen_step_(-1),
+    eng_(nullptr), list_(nullptr) {
   int iarg = 3;
   while (iarg < narg) {
     if (std::strcmp(arg[iarg], "dump") == 0 && iarg + 1 < narg) {
@@ -152,6 +152,12 @@ void FixDseams::end_of_step() {
   if (step64 < 0 || (step64 % every_) != 0) {
     return;
   }
+  // setup runs at the first step of every run. A later run starts on the
+  // step the previous run already analysed.
+  if (step64 == seen_step_) {
+    return;
+  }
+  seen_step_ = step64;
   const int nlocal = atom->nlocal;
   std::vector<double> local(static_cast<std::size_t>(nlocal) * 3);
   std::vector<int> local_types(static_cast<std::size_t>(nlocal));

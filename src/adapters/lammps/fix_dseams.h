@@ -45,6 +45,7 @@ class FixDseams : public Fix {
   int active_;
   int every_;
   int depth_;
+  long long seen_step_;
   double cutoff_;
   std::string dump_;
   std::string record_;
