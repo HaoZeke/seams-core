@@ -1,0 +1,11 @@
+GROMACS 2026.3 passes the Message Passing Interface communicator into
+PLUMED by value.
+Open MPI stores MPI_Comm as a pointer, so PLUMED's TypesafePtr reads
+the communicator object as an address and MPI_Comm_dup faults.
+Apply this to src/gromacs/applied_forces/plumed/plumedforceprovider.cpp
+in the isParallel branch, and build PLUMED and GROMACS against the same
+Open MPI.
+
+-        plumed_->cmd("setMPIComm", options.mpiComm_->comm());
++        auto communicator = options.mpiComm_->comm();
++        plumed_->cmd("setMPIComm", &communicator);
