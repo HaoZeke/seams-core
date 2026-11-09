@@ -529,14 +529,14 @@ process may use.
 Both LAMMPS routes stay.
 On 1000 waters, one rank, stride 10, and 40 steps, six samples follow
 one warmup.
-The plugin first quartile is 0.00089856875000000002 seconds per step.
-Its third quartile is 0.00091758624999999994 seconds per step.
-The package first quartile is 0.0008864700000000001 seconds per step.
-Its third quartile is 0.00089840625000000001 seconds per step.
-The package third quartile is below the plugin first quartile.
+The plugin first quartile is 0.00089994312499999999 seconds per step.
+Its third quartile is 0.00090602374999999987 seconds per step.
+The package first quartile is 0.00088810500000000004 seconds per step.
+Its third quartile is 0.00090000750000000015 seconds per step.
+The two quartile ranges overlap.
 The raw pair is the six plugin samples and the six package samples.
 The library digest for that pair is
-675190fd08612b2fc4da59085d3a66abcad3459f4b09476e31b74cfd92360f7e.
+de5b160bc827eceb53aea7c7393da5803d2517a0fd21c0e4abe316b4d32aa8c4.
 The GROMACS census comes from a d-SEAMS module inside mdrun.
 The parameter keys are dseams-active, dseams-input-group,
 dseams-nstcalc, dseams-cutoff and dseams-output.
