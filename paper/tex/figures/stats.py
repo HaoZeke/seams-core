@@ -74,7 +74,7 @@ CALL_FIGURES = ("versions", "codes")
 # prints a setting only through its macro set@NAME. A third entry rounds the
 # printed setting to that many significant figures.
 CUTOFF_SOURCES = (
-    ("scripts/h2h_campaign.py", r"^CUTOFF_A = ([0-9.]+)$"),
+    ("scripts/h2h.py", r"^CUT = ([0-9.]+)$"),
     ("paper/tex/figures/worked_example.py", r"^CUTOFF_A = ([0-9.]+)$"),
     ("paper/tex/figures/nucleation_churn.py", r"^CUTOFF_A = ([0-9.]+)$"),
     ("paper/tex/repro/updates.sh", r"^CUTOFF=([0-9.]+)$"),
@@ -82,7 +82,7 @@ CUTOFF_SOURCES = (
     ("tests/bench_churn_sweep.cpp", r"std::atof\(argv\[4\]\) : ([0-9.]+);"),
     ("scripts/baseline_dseams1.cpp", r"neighListO\(([0-9.]+),"),
 )
-CAMPAIGN = "scripts/h2h_campaign.py"
+CAMPAIGN = "scripts/h2h.py"
 CAMPAIGN_SH = "paper/tex/repro/campaign.sh"
 VERSIONS_SH = "paper/tex/repro/versions.sh"
 UPDATES_SH = "paper/tex/repro/updates.sh"
@@ -442,7 +442,7 @@ def literal_source(number):
     extras = [
         ROOT / "bbdir" / "frame-counts.log",
         ROOT / "bbdir" / "h2h-data" / "manifest.json",
-        ROOT / "scripts" / "h2h_campaign.py",
+        ROOT / "scripts" / "h2h.py",
         ROOT / "paper" / "tex" / "repro" / "versions.sh",
         ROOT / "paper" / "tex" / "figures" / "generate_figure_data.py",
     ]
