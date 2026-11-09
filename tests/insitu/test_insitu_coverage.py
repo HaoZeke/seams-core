@@ -59,6 +59,8 @@ def main():
     need(1 in module.physical("code // note\n"), "c line comment ate the code")
     py = 'note = "/* never ends\\n"\nvalue = 1\n'
     need(module.physical(py, ".py") == {1, 2}, "a python string opened a c comment")
+    quoted = '"""/* never\nends"""\nvalue = 1\n'
+    need(module.physical(quoted, ".py") == {1, 2, 3}, "a python triple quote opened a c comment")
     with tempfile.TemporaryDirectory() as raw:
         root = Path(raw)
         folder = root / "notes"
@@ -114,6 +116,12 @@ def main():
         (root / "empty.cpp").write_text("int only;\n")
         code, text = run(module, root, empty_gcov)
         need(code == 1, "gcov without source text was accepted")
+        long_src = root / "long.cpp"
+        long_src.write_text("int real;\n")
+        long_gcov = root / "long.cpp.gcov"
+        long_gcov.write_text("        -:    0:Source:long.cpp\n        1:    9:int real;\n")
+        code, text = run(module, root, long_gcov)
+        need(code == 1, "a line past the file was accepted")
         hidden = root / "bbdir"
         hidden.mkdir()
         (nested / "widget.cpp").write_text("int other;\n")
