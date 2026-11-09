@@ -18,6 +18,9 @@
 
 #include <seams_insitu.h>
 
+#include <mpi.h>
+
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -103,22 +106,26 @@ FixDseams::FixDseams(LAMMPS *lmp, int narg, char **arg) :
       return;
     }
   }
-  if (dump_.empty() || record_.empty()) {
+  if (record_.empty()) {
     active_ = 0;
     return;
   }
-  seams_insitu_options opt;
-  seams_insitu_options_default(&opt);
-  opt.cutoff = cutoff_;
-  opt.ring_depth = depth_;
-  opt.cadence.every = 1;
-  eng_ = seams_insitu_create(&opt);
-  if (eng_ == nullptr) return;
-  if (seams_insitu_open_record(eng_, record_.c_str()) != SEAMS_INSITU_OK) {
-    active_ = 0;
-    return;
+  int opened = 0;
+  if (comm->me == 0) {
+    seams_insitu_options opt;
+    seams_insitu_options_default(&opt);
+    opt.cutoff = cutoff_;
+    opt.ring_depth = depth_;
+    opt.cadence.every = 1;
+    opt.debug_dump = dump_.empty() ? 0 : 1;
+    eng_ = seams_insitu_create(&opt);
+    if (eng_ != nullptr &&
+        seams_insitu_open_record(eng_, record_.c_str()) == SEAMS_INSITU_OK) {
+      opened = 1;
+    }
   }
-  active_ = 1;
+  MPI_Bcast(&opened, 1, MPI_INT, 0, lmp->world);
+  active_ = opened;
 }
 
 FixDseams::~FixDseams() {
@@ -133,7 +140,7 @@ int FixDseams::setmask() {
 }
 
 void FixDseams::end_of_step() {
-  if (!active_ || eng_ == nullptr) {
+  if (!active_) {
     return;
   }
   const auto step64 = static_cast<long long>(update->ntimestep);
@@ -159,18 +166,59 @@ void FixDseams::end_of_step() {
       kept_x.data(), kept_t.data(), kept_i.data());
   if (kept < 0) return;
   const int nprocs = comm->nprocs;
-  int counts = kept;
-  int displs = 0;
+  std::vector<int> counts(static_cast<std::size_t>(nprocs));
+  std::vector<int> displs(static_cast<std::size_t>(nprocs));
+  int nkept = kept;
+  MPI_Allgather(&nkept, 1, MPI_INT, counts.data(), 1, MPI_INT, lmp->world);
   int total = 0;
-  if (seams_insitu_gather_displs(1, &counts, &displs, &total) != 0 || total != kept) return;
-  // One rank already holds every atom. A domain-decomposed rank sets
-  // local_only and the core asks for a gather through seams_insitu_gather_displs.
+  if (seams_insitu_gather_displs(nprocs, counts.data(), displs.data(), &total) != 0) return;
+  std::vector<int> xcounts(static_cast<std::size_t>(nprocs));
+  std::vector<int> xdispls(static_cast<std::size_t>(nprocs));
+  for (int rank = 0; rank < nprocs; ++rank) {
+    xcounts[static_cast<std::size_t>(rank)] = counts[static_cast<std::size_t>(rank)] * 3;
+    xdispls[static_cast<std::size_t>(rank)] = displs[static_cast<std::size_t>(rank)] * 3;
+  }
+  std::vector<double> all_x(static_cast<std::size_t>(total) * 3);
+  std::vector<int> all_t(static_cast<std::size_t>(total));
+  std::vector<int> all_i(static_cast<std::size_t>(total));
+  double xpad = 0.0;
+  int ipad = 0;
+  MPI_Gatherv(kept > 0 ? kept_x.data() : &xpad, kept * 3, MPI_DOUBLE,
+              all_x.empty() ? &xpad : all_x.data(), xcounts.data(), xdispls.data(), MPI_DOUBLE, 0,
+              lmp->world);
+  MPI_Gatherv(kept > 0 ? kept_t.data() : &ipad, kept, MPI_INT,
+              all_t.empty() ? &ipad : all_t.data(), counts.data(), displs.data(), MPI_INT, 0,
+              lmp->world);
+  MPI_Gatherv(kept > 0 ? kept_i.data() : &ipad, kept, MPI_INT,
+              all_i.empty() ? &ipad : all_i.data(), counts.data(), displs.data(), MPI_INT, 0,
+              lmp->world);
+  if (comm->me != 0 || eng_ == nullptr) {
+    return;
+  }
+  std::vector<int> order(static_cast<std::size_t>(total));
+  for (int i = 0; i < total; ++i) {
+    order[static_cast<std::size_t>(i)] = i;
+  }
+  std::sort(order.begin(), order.end(), [&](int a, int b) {
+    return all_i[static_cast<std::size_t>(a)] < all_i[static_cast<std::size_t>(b)];
+  });
+  std::vector<double> sorted_x(all_x.size());
+  std::vector<int> sorted_t(all_t.size());
+  std::vector<int> sorted_i(all_i.size());
+  for (int i = 0; i < total; ++i) {
+    const int src = order[static_cast<std::size_t>(i)];
+    sorted_x[static_cast<std::size_t>(3 * i)] = all_x[static_cast<std::size_t>(3 * src)];
+    sorted_x[static_cast<std::size_t>(3 * i + 1)] = all_x[static_cast<std::size_t>(3 * src + 1)];
+    sorted_x[static_cast<std::size_t>(3 * i + 2)] = all_x[static_cast<std::size_t>(3 * src + 2)];
+    sorted_t[static_cast<std::size_t>(i)] = all_t[static_cast<std::size_t>(src)];
+    sorted_i[static_cast<std::size_t>(i)] = all_i[static_cast<std::size_t>(src)];
+  }
   seams_insitu_frame frame{};
   frame.step = static_cast<int>(step64);
   frame.n = total;
-  frame.xyz = kept_x.data();
-  frame.types = kept_t.data();
-  frame.ids = kept_i.data();
+  frame.xyz = sorted_x.data();
+  frame.types = sorted_t.data();
+  frame.ids = sorted_i.data();
   frame.xlo = domain->boxlo[0];
   frame.ylo = domain->boxlo[1];
   frame.zlo = domain->boxlo[2];
@@ -180,14 +228,13 @@ void FixDseams::end_of_step() {
   frame.xy = domain->xy;
   frame.xz = domain->xz;
   frame.yz = domain->yz;
-  frame.gathered = nprocs == 1 ? 1 : 0;
-  frame.local_only = nprocs > 1 ? 1 : 0;
-  frame.rank = comm->me;
+  frame.gathered = 1;
+  frame.local_only = 0;
+  frame.rank = 0;
   frame.nranks = nprocs;
-  const int rc = seams_insitu_observe(eng_, &frame, dump_.c_str());
-  if (rc != SEAMS_INSITU_OK && rc != SEAMS_INSITU_SKIP) {
-    active_ = 0;
-  }
+  const char *dump = dump_.empty() ? nullptr : dump_.c_str();
+  const int rc = seams_insitu_observe(eng_, &frame, dump);
+  (void)rc;
 }
 
 static Fix *dseams_creator(LAMMPS *lmp, int narg, char **arg) {

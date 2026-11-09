@@ -66,6 +66,7 @@ TEST_CASE("defaults and rejected options", "[insitu]") {
   REQUIRE(opt.type == 1);
   REQUIRE(opt.ring_depth == 8);
   REQUIRE(opt.write_labels == 1);
+  REQUIRE(opt.debug_dump == 0);
   REQUIRE(opt.cadence.every == 1);
   REQUIRE(opt.cadence.first == 0);
   REQUIRE(opt.cadence.last == -1);
@@ -76,6 +77,9 @@ TEST_CASE("defaults and rejected options", "[insitu]") {
   opt.cutoff = 0;
   REQUIRE(seams_insitu_create(&opt) == nullptr);
   opt.cutoff = std::nan("");
+  REQUIRE(seams_insitu_create(&opt) == nullptr);
+  seams_insitu_options_default(&opt);
+  opt.debug_dump = 2;
   REQUIRE(seams_insitu_create(&opt) == nullptr);
   seams_insitu_options_default(&opt);
   opt.ring_depth = 2;
@@ -283,7 +287,10 @@ TEST_CASE("dump round trip matches replay", "[insitu]") {
   const double xyz[12] = {1.0 / 3.0, -2.5, 1e-12, 2.8, 0, 0, 1.4, 2.42, 0.1, 1.1, 0.7, 2.3};
   const int types[4] = {1, 1, 1, 1};
   const int ids[4] = {4, 1, 9, 2};
-  auto *eng = seams_insitu_create(nullptr);
+  seams_insitu_options opt;
+  seams_insitu_options_default(&opt);
+  opt.debug_dump = 1;
+  auto *eng = seams_insitu_create(&opt);
   const auto dump = scratch("round.lammpstrj");
   const auto live = scratch("live.txt");
   const auto post = scratch("post.txt");
@@ -386,7 +393,14 @@ TEST_CASE("append rejects a bad frame and accepts an empty one", "[insitu]") {
   REQUIRE(readFile(path).find("NUMBER OF ATOMS\n0\n") != std::string::npos);
   auto *eng = seams_insitu_create(nullptr);
   REQUIRE(seams_insitu_observe(eng, &frame, "/no/such/dseams-dir/b.lammpstrj") ==
+          SEAMS_INSITU_OK);
+  seams_insitu_options dbg;
+  seams_insitu_options_default(&dbg);
+  dbg.debug_dump = 1;
+  auto *writing = seams_insitu_create(&dbg);
+  REQUIRE(seams_insitu_observe(writing, &frame, "/no/such/dseams-dir/b.lammpstrj") ==
           SEAMS_INSITU_ERR_IO);
+  seams_insitu_destroy(writing);
   const auto second = scratch("other.txt");
   REQUIRE(seams_insitu_open_record(eng, path.c_str()) == SEAMS_INSITU_OK);
   REQUIRE(seams_insitu_open_record(eng, second.c_str()) == SEAMS_INSITU_OK);
@@ -611,6 +625,9 @@ TEST_CASE("interactive molecular dynamics client round trip", "[insitu]") {
   REQUIRE(seams_insitu_imd_session("127.0.0.1", port, dump.c_str(), live.c_str(), box, 1) ==
           SEAMS_INSITU_OK);
   server.join();
+  const double xyzd[6] = {0.25, 0.5, 0.75, 2.5, 0.0, 1.0};
+  auto dumped = ortho(11, 2, xyzd);
+  REQUIRE(seams_insitu_append_dump(&dumped, dump.c_str()) == SEAMS_INSITU_OK);
   auto *eng = seams_insitu_create(nullptr);
   REQUIRE(seams_insitu_replay(eng, dump.c_str(), post.c_str()) == SEAMS_INSITU_OK);
   REQUIRE(readFile(live) == readFile(post));

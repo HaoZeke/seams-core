@@ -47,8 +47,8 @@ def main():
     lines.append("GROMACS SHA-256 `%s`." % host["gmx_sha256"])
     lines.append("Plugin SHA-256 `%s`." % host.get("plugin_sha256", ""))
     lines.append("")
-    lines.append("| Code | Steps | Frames | Q1 overhead | Median | Q3 | IQR |")
-    lines.append("| --- | --- | --- | --- | --- | --- | --- |")
+    lines.append("| Code | Steps | Frames | Q1 overhead | Median | Q3 | IQR | Median ratio |")
+    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
     for name, block in data["codes"].items():
         plain = block.get("plain") or []
         live = block.get("live") or []
@@ -59,11 +59,74 @@ def main():
         q1 = type7(delta, 0.25)
         med = type7(delta, 0.5)
         q3 = type7(delta, 0.75)
+        ratios = [live[i] / plain[i] for i in range(len(plain))]
         lines.append(
-            "| %s | %s | %s | %s | %s | %s | %s |"
-            % (name, block["steps"], block["frames"], fmt(q1), fmt(med), fmt(q3), fmt(q3 - q1))
+            "| %s | %s | %s | %s | %s | %s | %s | %s |"
+            % (
+                name,
+                block["steps"],
+                block["frames"],
+                fmt(q1),
+                fmt(med),
+                fmt(q3),
+                fmt(q3 - q1),
+                fmt(type7(ratios, 0.5)),
+            )
         )
     lines.append("")
+    lines.append("Overhead is seconds per step. The ratio is the live step time divided by the plain step time.")
+    lines.append("The GROMACS row is the interactive molecular dynamics client, kept as a fallback.")
+    lines.append("The installed GROMACS is built with PLUMED, and mdrun -plumed with the DSEAMS action is the native path.")
+    lines.append("OpenMM's DCD file is float32. On this water system its postprocess matches the in-situ record.")
+    lines.append("")
+    if "scale" in data:
+        lines.append("# LAMMPS size and cadence")
+        lines.append("")
+        lines.append("The system is a diamond lattice of one site per water.")
+        lines.append("Plain and live samples are the LAMMPS loop time divided by the number of steps.")
+        lines.append("The postprocess column is the wall time of the seams rings, chill-plus and cages commands on one native dump frame, repeated six times.")
+        lines.append("The in-situ run does not write a dump. The byte count is the native dump of one frame.")
+        lines.append("")
+        lines.append("| Waters | Cadence | Steps | Median absolute | Median ratio | Median postprocess | Dump bytes |")
+        lines.append("| --- | --- | --- | --- | --- | --- | --- |")
+        for natoms, cadences in data["scale"].items():
+            for every, block in cadences.items():
+                plain = block["plain"]
+                live = block["live"]
+                delta = [live[i] - plain[i] for i in range(len(plain))]
+                ratios = [live[i] / plain[i] for i in range(len(plain))]
+                lines.append(
+                    "| %s | %s | %s | %s | %s | %s | %d |"
+                    % (
+                        natoms,
+                        every,
+                        block["steps"],
+                        fmt(type7(delta, 0.5)),
+                        fmt(type7(ratios, 0.5)),
+                        fmt(type7(block["post_wall"], 0.5)),
+                        block["dump_bytes"],
+                    )
+                )
+        lines.append("")
+        for natoms, cadences in data["scale"].items():
+            for every, block in cadences.items():
+                lines.append("## lammps %s waters every %s" % (natoms, every))
+                lines.append("")
+                lines.append("Plain seconds per step:")
+                lines.append("")
+                for value in block["plain"]:
+                    lines.append(fmt(value))
+                lines.append("")
+                lines.append("Live seconds per step:")
+                lines.append("")
+                for value in block["live"]:
+                    lines.append(fmt(value))
+                lines.append("")
+                lines.append("Postprocess wall seconds:")
+                lines.append("")
+                for value in block["post_wall"]:
+                    lines.append(fmt(value))
+                lines.append("")
     for name, block in data["codes"].items():
         plain = block.get("plain") or []
         live = block.get("live") or []

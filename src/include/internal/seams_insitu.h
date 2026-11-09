@@ -12,17 +12,20 @@ extern "C" {
  * the tilt factors. A zero tilt is orthorhombic.
  *
  * xyz, types and ids are borrowed for the call and are not retained.
- * The engine copies them into its point cloud. That copy is the one the
- * published CHILL+ classifier and the ring and cage searches read.
+ * The engine copies them into its point cloud and analyses that copy.
+ * The neighbour list, the primitive rings, the published CHILL+ labels
+ * and the cage flags are computed from those values. The hot path does
+ * not write a file and does not read one back. debug_dump, off by
+ * default, appends a LAMMPS dump after the analysis for inspection.
+ *
  * gpu_resident means xyz is a device pointer. This build does not
  * dereference it and does not copy device memory. The host copy is left
  * for a later run.
  *
- * local_only means the arrays hold one rank's atoms after a spatial
- * domain decomposition. Rings and CHILL+ need the neighbour shell, so
- * the call returns SEAMS_INSITU_NEED_GATHER until the adapter has
- * gathered the full system and set gathered. Message Passing Interface
- * collectives stay in the adapter. The core does not link that library.
+ * local_only means the arrays hold one rank's atoms. The adapter gathers
+ * the full system with MPI_Gatherv onto the analysis rank and calls
+ * again with gathered set. The core does not link that library. A call
+ * that is still local returns SEAMS_INSITU_NEED_GATHER.
  *
  * CHILL+ is the published classifier. This header does not change it.
  */
@@ -67,6 +70,9 @@ typedef struct seams_insitu_options {
   int ring_depth;
   int write_labels;
   seams_insitu_cadence cadence;
+  /* 0 analyses memory only. 1 also appends a LAMMPS dump when a path
+   * is passed to seams_insitu_observe. */
+  int debug_dump;
 } seams_insitu_options;
 
 typedef struct seams_insitu_result {
@@ -95,7 +101,7 @@ void seams_insitu_options_default(seams_insitu_options *opt);
 
 /* Null when the options are rejected. Null options take the defaults:
  * cutoff 3.5 Angstrom, water type 1, ring depth 8, labels on,
- * every step from 0 with no last step. */
+ * every step from 0 with no last step, debug dump off. */
 seams_insitu_engine *seams_insitu_create(const seams_insitu_options *opt);
 void seams_insitu_destroy(seams_insitu_engine *eng);
 
@@ -110,10 +116,9 @@ int seams_insitu_due(const seams_insitu_cadence *cadence, int step);
 
 int seams_insitu_step(seams_insitu_engine *eng, const seams_insitu_frame *frame);
 
-/* Writes one LAMMPS dump frame from the borrowed arrays, reads that frame
- * back with the trajectory reader, and analyses the read values. A null
- * or empty path analyses the borrowed arrays directly. The dump is the
- * trajectory a postprocessor reads. */
+/* Analyses the borrowed frame. When debug_dump is set and dump_path is
+ * not empty, the same frame is appended to that file after the analysis.
+ * The dump is not read back. A null or empty path never writes. */
 int seams_insitu_observe(seams_insitu_engine *eng, const seams_insitu_frame *frame,
                          const char *dump_path);
 

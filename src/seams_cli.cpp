@@ -1956,7 +1956,7 @@ int main(int argc, char *argv[]) {
                  }));
 
   parser.add(Positional("command")
-                 .help("read | chill | chill-plus | cages | fingerprint | ions | "
+                 .help("read | chill | chill-plus | rings | cages | fingerprint | ions | "
                        "f4 | steinhardt | rdf | cn | hbonds | pairs | density-z | "
                        "domains")
                  .occurs(zeroOrOneTime)
@@ -2144,6 +2144,27 @@ int main(int argc, char *argv[]) {
     }
     if (cmd == "read") {
       return cmdRead(os, cloud);
+    }
+    if (cmd == "rings") {
+      int counts[13] = {};
+      int depth = 8;
+      if (cloud.nop > 0) {
+        const int typ = typeOf(cloud, typeI);
+        auto nList = nneigh::neighListO(cutoff, cloud, typ);
+        auto idx = nneigh::neighbourListByIndex(cloud, nList);
+        for (const auto &ring : primitive::ringNetwork(idx, depth)) {
+          const int size = static_cast<int>(ring.size());
+          if (size >= 0 && size <= 12) {
+            counts[size] += 1;
+          }
+        }
+      }
+      os << "rings";
+      for (int size = 3; size <= depth; ++size) {
+        os << " " << size << ":" << counts[size];
+      }
+      os << "\n";
+      return 0;
     }
     if (cmd == "chill-plus" || cmd == "chill_plus") {
       try {

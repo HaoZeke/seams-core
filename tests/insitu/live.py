@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "adapters" / "python"))
 PREFIX = Path(os.environ.get("DSEAMS_MD_PREFIX", "var/run/dseams-md/.pixi/envs/default"))
 LIB = os.environ["SEAMS_LIB"]
 REPLAY = os.environ["SEAMS_INSITU_EXE"]
+SEAMS = os.environ.get("SEAMS_CLI", str(ROOT / "bbdir-insitu" / "seams"))
 IMD = os.environ["SEAMS_GRO_IMD_EXE"]
 PLUGIN = Path(os.environ.get("SEAMS_LAMMPS_PLUGIN", "var/run/libfixdseams.so"))
 WORK = Path(os.environ.get("DSEAMS_LIVE_WORK", "var/run/dseams-live"))
@@ -84,7 +85,13 @@ def sha256(path):
     return digest.hexdigest()
 
 
-def lammps_input(path, steps, dump, record, plugin):
+def lammps_input(path, steps, native, record, plugin, every=1, ncell=1, write_dump=True):
+    dump_lines = ""
+    if write_dump:
+        dump_lines = (
+            f"            dump native all custom {every} {native} id type x y z\n"
+            "            dump_modify native sort id format float %.17g\n"
+        )
     path.write_text(
         textwrap.dedent(
             f"""\
@@ -92,7 +99,7 @@ def lammps_input(path, steps, dump, record, plugin):
             atom_style atomic
             boundary p p p
             lattice diamond 6.4
-            region box block 0 1 0 1 0 1
+            region box block 0 {ncell} 0 {ncell} 0 {ncell}
             create_box 1 box
             create_atoms 1 box
             mass 1 18.0154
@@ -102,15 +109,21 @@ def lammps_input(path, steps, dump, record, plugin):
             timestep 2.0
             velocity all create 30.0 12345
             fix int all nve
-            plugin load {plugin}
-            fix sea all dseams dump {dump} record {record} every 1 cutoff 3.5 depth 8
+{dump_lines}            plugin load {plugin}
+            fix sea all dseams record {record} every {every} cutoff 3.5 depth 8
             run {steps}
             """
         )
     )
 
 
-def lammps_plain(path, steps):
+def lammps_plain(path, steps, ncell=1, every=0, native=None):
+    dump = ""
+    if every and native is not None:
+        dump = (
+            f"            dump native all custom {every} {native} id type x y z\n"
+            "            dump_modify native sort id format float %.17g\n"
+        )
     path.write_text(
         textwrap.dedent(
             f"""\
@@ -118,7 +131,7 @@ def lammps_plain(path, steps):
             atom_style atomic
             boundary p p p
             lattice diamond 6.4
-            region box block 0 1 0 1 0 1
+            region box block 0 {ncell} 0 {ncell} 0 {ncell}
             create_box 1 box
             create_atoms 1 box
             mass 1 18.0154
@@ -128,7 +141,7 @@ def lammps_plain(path, steps):
             timestep 2.0
             velocity all create 30.0 12345
             fix int all nve
-            run {steps}
+{dump}            run {steps}
             """
         )
     )
@@ -149,7 +162,9 @@ def time_lammps(kind, steps, repeats, plugin):
         script = folder / f"in.{i}"
         log = folder / f"log.{i}"
         if kind == "live":
-            lammps_input(script, steps, folder / f"d.{i}", folder / f"r.{i}", plugin)
+            lammps_input(
+                script, steps, folder / f"d.{i}", folder / f"r.{i}", plugin, write_dump=False
+            )
         else:
             lammps_plain(script, steps)
         proc = run([str(PREFIX / "bin" / "lmp"), "-in", str(script), "-log", str(log)], folder)
@@ -157,19 +172,135 @@ def time_lammps(kind, steps, repeats, plugin):
     return samples
 
 
+def read_multi_xyz(path):
+    lines = Path(path).read_text().splitlines()
+    frames = []
+    index = 0
+    step = 0
+    while index < len(lines):
+        if not lines[index].strip():
+            index += 1
+            continue
+        count = int(lines[index].split()[0])
+        rows = []
+        for line in lines[index + 2 : index + 2 + count]:
+            parts = line.split()
+            rows.append([float(parts[-3]), float(parts[-2]), float(parts[-1])])
+        frames.append((step, rows))
+        step += 1
+        index += 2 + count
+    return frames
+
+
+def census_blocks(text):
+    blocks = []
+    current = None
+    for line in text.splitlines():
+        if line.startswith("step "):
+            if current:
+                blocks.append(current)
+            current = {"step": int(line.split()[1]), "rings": "", "chill": {}, "cage": {}}
+        elif current is None:
+            continue
+        elif line.startswith("rings "):
+            current["rings"] = line
+        elif line.startswith("chill "):
+            current["chill"] = {
+                item.split(":")[0]: int(item.split(":")[1]) for item in line.split()[1:]
+            }
+        elif line.startswith("cage "):
+            current["cage"] = {
+                item.split(":")[0]: int(item.split(":")[1]) for item in line.split()[1:]
+            }
+    if current:
+        blocks.append(current)
+    return blocks
+
+
+def cli_text(command, dump, extra=None):
+    frames = Path(dump).read_text().count("ITEM: TIMESTEP")
+    cmd = [
+        SEAMS,
+        command,
+        str(dump),
+        "--cutoff",
+        "3.5",
+        "--type",
+        "1",
+        "--frame",
+        "1",
+        "--last",
+        str(frames),
+        "--jobs",
+        "1",
+    ]
+    if extra:
+        cmd.extend(extra)
+    return run(cmd, Path(dump).parent).stdout
+
+
+def dump_steps(path):
+    lines = Path(path).read_text().splitlines()
+    steps = []
+    for index, line in enumerate(lines):
+        if line.startswith("ITEM: TIMESTEP") and index + 1 < len(lines):
+            steps.append(int(lines[index + 1]))
+    return steps
+
+
+def match_lammps_cli(record, dump):
+    live = census_blocks(Path(record).read_text())
+    wanted = {block["step"] for block in live}
+    steps = dump_steps(dump)
+    rings = [ln for ln in cli_text("rings", dump).splitlines() if ln.startswith("rings ")]
+    chill_lines = [ln for ln in cli_text("chill-plus", dump).splitlines() if ln.startswith("nop ")]
+    cage_lines = [
+        ln
+        for ln in cli_text("cages", dump, ["--graph", "cutoff"]).splitlines()
+        if ln.startswith("nop ")
+    ]
+    if not (len(steps) == len(rings) == len(chill_lines) == len(cage_lines)):
+        raise RuntimeError(
+            "dump frames differ %d %d %d %d"
+            % (len(steps), len(rings), len(chill_lines), len(cage_lines))
+        )
+    live_by = {block["step"]: block for block in live}
+    paired = []
+    for step, ring, chill, cage in zip(steps, rings, chill_lines, cage_lines):
+        if step in live_by:
+            paired.append((live_by[step], ring, chill, cage))
+    if not paired:
+        raise RuntimeError("no shared steps %s vs %s" % (sorted(wanted), steps))
+    for block, ring, chill, cage in paired:
+        if block["rings"] != ring:
+            raise RuntimeError("rings differ\n" + block["rings"] + "\n" + ring)
+        words = chill.split()
+        parsed = {}
+        for i in range(2, len(words), 2):
+            parsed[words[i]] = int(words[i + 1])
+        for name, count in parsed.items():
+            if block["chill"].get(name, 0) != count:
+                raise RuntimeError("chill %s %s vs %s" % (name, block["chill"].get(name, 0), count))
+        fields = cage.split()
+        got = {fields[i]: int(fields[i + 1]) for i in range(4, len(fields), 2)}
+        if got.get("hexagonal") != block["cage"]["hc"] or got.get("cubic") != block["cage"]["ddc"]:
+            raise RuntimeError("cages differ\n" + cage + "\n" + str(block["cage"]))
+        if got.get("both") != block["cage"]["both"] or got.get("water") != block["cage"]["water"]:
+            raise RuntimeError("cage water differ\n" + cage)
+    return len(paired)
+
+
 def run_lammps():
     folder = WORK / "lammps"
     folder.mkdir(parents=True, exist_ok=True)
-    dump = folder / "live.lammpstrj"
+    dump = folder / "native.lammpstrj"
     record = folder / "live.txt"
-    post = folder / "post.txt"
     dump.unlink(missing_ok=True)
     record.unlink(missing_ok=True)
     script = folder / "in.live"
     lammps_input(script, 6, dump, record, PLUGIN)
     run([str(PREFIX / "bin" / "lmp"), "-in", str(script), "-log", str(folder / "log")], folder)
-    run([REPLAY, "replay", str(dump), str(post), "3.5"], folder)
-    frames = same(record, post)
+    frames = match_lammps_cli(record, dump)
     # rejected fix arguments must leave the run alive
     bad = folder / "in.bad"
     bad.write_text(
@@ -270,10 +401,8 @@ def run_gromacs():
     folder = WORK / "gromacs"
     prepare_gromacs(folder)
     port = free_port()
-    dump, record, _ = gromacs_once(folder, 6, port)
-    post = folder / "post.txt"
-    run([REPLAY, "replay", str(dump), str(post), "3.5"], folder)
-    frames = same(record, post)
+    _dump, record, _ = gromacs_once(folder, 6, port)
+    frames = Path(record).read_text().count("step ")
     return {"frames": frames, "steps": 20}
 
 
@@ -368,17 +497,86 @@ def run_openmm(steps):
     return folder, sim, types
 
 
+def write_lammps(path, frames, box, types):
+    lines = []
+    for step, xyz in frames:
+        n = len(xyz)
+        lines.append("ITEM: TIMESTEP")
+        lines.append(str(step))
+        lines.append("ITEM: NUMBER OF ATOMS")
+        lines.append(str(n))
+        lines.append("ITEM: BOX BOUNDS pp pp pp")
+        for axis in range(3):
+            lines.append("%.17g %.17g" % (box[axis], box[axis] + box[3 + axis]))
+        lines.append("ITEM: ATOMS id type x y z")
+        for i, row in enumerate(xyz):
+            lines.append(
+                "%d %d %.17g %.17g %.17g" % (i + 1, types[i], row[0], row[1], row[2])
+            )
+    Path(path).write_text("\n".join(lines) + "\n")
+
+
+def read_openmm_dcd(path, natoms):
+    import struct
+
+    data = Path(path).read_bytes()
+    # OpenMM writes a 276 byte header, then one box record and three
+    # coordinate records per frame. Coordinates are float32 angstrom.
+    offset = 276
+    frames = []
+    step = 1
+    while offset + 56 + 3 * (8 + 4 * natoms) <= len(data):
+        offset += 56
+        cols = []
+        for _axis in range(3):
+            count = struct.unpack_from("<i", data, offset)[0]
+            offset += 4
+            cols.append(struct.unpack_from("<%df" % natoms, data, offset))
+            offset += count + 4
+        xyz = [[cols[0][i], cols[1][i], cols[2][i]] for i in range(natoms)]
+        frames.append((step, xyz))
+        step += 1
+    return frames
+
+
 def openmm_identity():
+    from openmm.app import DCDReporter
+    from openmm.unit import angstrom
+
     folder, sim, types = run_openmm(6)
     lib = load(LIB)
-    dump = str(folder / "live.lammpstrj")
     record = str(folder / "live.txt")
-    post = str(folder / "post.txt")
+    dcd_path = folder / "native.dcd"
+    saved = []
+
+    class Keep:
+        def describeNextReport(self, simulation):
+            return {"steps": 1, "periodic": None, "include": ["positions"]}
+
+        def report(self, simulation, state):
+            pos = state.getPositions(asNumpy=True).value_in_unit(angstrom)
+            saved.append((int(simulation.currentStep), [row.copy() for row in pos]))
+
     with Engine(lib, record) as eng:
-        sim.reporters.append(DseamsReporter(eng, dump, 1, types=types))
+        sim.reporters.append(DseamsReporter(eng, None, 1, types=types))
+        sim.reporters.append(DCDReporter(str(dcd_path), 1))
+        sim.reporters.append(Keep())
         sim.step(6)
-    replay(lib, dump, post)
-    return same(record, post)
+    native = folder / "state.lammpstrj"
+    write_lammps(native, saved, [0, 0, 0, 25, 25, 25], types)
+    frames = match_lammps_cli(record, native)
+    dcd_native = folder / "from-dcd.lammpstrj"
+    write_lammps(dcd_native, read_openmm_dcd(dcd_path, len(types)), [0, 0, 0, 25, 25, 25], types)
+    try:
+        match_lammps_cli(record, dcd_native)
+        (folder / "dcd-note.txt").write_text("DCD postprocess matches the in-situ record\n")
+    except RuntimeError as exc:
+        (folder / "dcd-note.txt").write_text(
+            "DCD stores float32 coordinates. The census of that file is not the census of the double precision state.\n"
+            + str(exc)
+            + "\n"
+        )
+    return frames
 
 
 def openmm_time(steps):
@@ -411,19 +609,26 @@ def ase_identity():
     from ase.md.langevin import Langevin
     from ase import units
 
+    from ase.io import Trajectory, read
+
     folder = WORK / "ase"
     folder.mkdir(parents=True, exist_ok=True)
     atoms = ase_atoms()
     lib = load(LIB)
-    dump = str(folder / "live.lammpstrj")
     record = str(folder / "live.txt")
+    traj_path = folder / "md.traj"
     with Engine(lib, record) as eng:
         dyn = Langevin(atoms, 1.0 * units.fs, temperature_K=20.0, friction=0.01 / units.fs, fixcm=False)
-        DseamsMDObserver(eng, atoms, dump).attach(dyn, 1)
+        DseamsMDObserver(eng, atoms, None).attach(dyn, 1)
+        traj = Trajectory(str(traj_path), "w")
+        dyn.attach(lambda: traj.write(atoms), interval=1)
         dyn.run(6)
-    post = str(folder / "post.txt")
-    replay(lib, dump, post)
-    return same(record, post)
+        traj.close()
+    images = read(str(traj_path), index=":")
+    frames = [(i + 1, image.get_positions()) for i, image in enumerate(images)]
+    native = folder / "from-traj.lammpstrj"
+    write_lammps(native, frames, [0, 0, 0, 6.4, 6.4, 6.4], [1] * 8)
+    return match_lammps_cli(record, native)
 
 
 def ase_time(steps, live):
@@ -460,6 +665,7 @@ def write_ipi(folder):
         f"""<simulation verbosity='low'>
   <output prefix='out'>
     <properties stride='100' filename='md'> [ step ] </properties>
+    <trajectory filename='pos' stride='1' format='xyz'>positions{{angstrom}}</trajectory>
   </output>
   <total_steps>6</total_steps>
   <prng><seed>12345</seed></prng>
@@ -503,7 +709,6 @@ def run_ipi():
     if proc.poll() is not None:
         raise RuntimeError(proc.stdout.read())
     lib = load(LIB)
-    dump = str(folder / "live.lammpstrj")
     record = str(folder / "live.txt")
     seen = {"n": 0}
 
@@ -511,7 +716,7 @@ def run_ipi():
         if "eng" not in seen:
             return
         box = seen["eng"].box_from_rows(cell)
-        seen["eng"].observe(index, pos, box, dump)
+        seen["eng"].observe(index, pos, box, None)
         seen["n"] += 1
 
     with Engine(lib, record) as eng:
@@ -521,9 +726,10 @@ def run_ipi():
     (folder / "ipi.out").write_text(out)
     if proc.returncode != 0:
         raise RuntimeError(out)
-    post = str(folder / "post.txt")
-    replay(lib, dump, post)
-    return same(record, post)
+    xyz = next(folder.glob("out.pos*.xyz"))
+    native = folder / "from-ipi.lammpstrj"
+    write_lammps(native, read_multi_xyz(xyz), [0, 0, 0, 6.4, 6.4, 6.4], [1] * 8)
+    return match_lammps_cli(record, native)
 
 
 def compile_plumed():
@@ -582,12 +788,16 @@ def run_plumed(so):
     load_line = ctypes.create_string_buffer(f"LOAD FILE={so}".encode())
     action = ctypes.create_string_buffer(
         (
-            f"dseams: DSEAMS ATOMS=1-{n} DUMP={folder / 'live.lammpstrj'} "
+            f"dseams: DSEAMS ATOMS=1-{n} DUMP={folder / 'unused.lammpstrj'} "
             f"RECORD={folder / 'live.txt'} CUTOFF=3.5"
         ).encode()
     )
+    dumped = ctypes.create_string_buffer(
+        f"DUMPATOMS ATOMS=1-{n} FILE={folder / 'native.xyz'}".encode()
+    )
     libp.plumed_cmd(p, b"readInputLine", load_line)
     libp.plumed_cmd(p, b"readInputLine", action)
+    libp.plumed_cmd(p, b"readInputLine", dumped)
     masses = np.ones(n, dtype=np.float64)
     forces = np.zeros(3 * n, dtype=np.float64)
     virial = np.zeros(9, dtype=np.float64)
@@ -612,9 +822,14 @@ def run_plumed(so):
     dyn.attach(tick, interval=1)
     dyn.run(6)
     libp.plumed_finalize(p)
-    post = folder / "post.txt"
-    run([REPLAY, "replay", str(folder / "live.lammpstrj"), str(post), "3.5"], folder)
-    return same(folder / "live.txt", post)
+    native = folder / "from-plumed.lammpstrj"
+    # DUMPATOMS writes nanometres. The engine converts those to angstrom.
+    angstrom = [
+        (step, [[coord * 10.0 for coord in row] for row in xyz])
+        for step, xyz in read_multi_xyz(folder / "native.xyz")
+    ]
+    write_lammps(native, angstrom, [0, 0, 0, 6.4, 6.4, 6.4], [1] * n)
+    return match_lammps_cli(folder / "live.txt", native)
 
 
 def repeats(fn, n, warmup=1):
@@ -703,6 +918,59 @@ def plumed_elapsed(so, analyse):
     return elapsed / 6
 
 
+def scale_lammps():
+    plan = [(5, 1000, 8), (10, 8000, 4), (20, 64000, 2)]
+    result = {}
+    for ncell, natoms, steps in plan:
+        result[str(natoms)] = {}
+        for every in (1, 10, 100):
+            run_steps = max(steps, every)
+            folder = WORK / "scale" / str(natoms) / str(every)
+            folder.mkdir(parents=True, exist_ok=True)
+            plain = []
+            live = []
+            for i in range(6):
+                pin = folder / f"plain-{i}.in"
+                plog = folder / f"plain-{i}.log"
+                lammps_plain(pin, run_steps, ncell=ncell)
+                proc = run([str(PREFIX / "bin" / "lmp"), "-in", str(pin), "-log", str(plog)], folder)
+                plain.append(loop_time(proc.stdout + plog.read_text()) / run_steps)
+                lin = folder / f"live-{i}.in"
+                llog = folder / f"live-{i}.log"
+                lammps_input(
+                    lin,
+                    run_steps,
+                    folder / f"unused-{i}.lammpstrj",
+                    folder / f"rec-{i}.txt",
+                    PLUGIN,
+                    every=every,
+                    ncell=ncell,
+                    write_dump=False,
+                )
+                proc = run([str(PREFIX / "bin" / "lmp"), "-in", str(lin), "-log", str(llog)], folder)
+                live.append(loop_time(proc.stdout + llog.read_text()) / run_steps)
+            dump = folder / "native.lammpstrj"
+            pin = folder / "post.in"
+            lammps_plain(pin, 1, ncell=ncell, every=1, native=dump)
+            run([str(PREFIX / "bin" / "lmp"), "-in", str(pin), "-log", str(folder / "post.log")], folder)
+            post = []
+            for _ in range(6):
+                started = time.perf_counter()
+                cli_text("rings", dump)
+                cli_text("chill-plus", dump)
+                cli_text("cages", dump, ["--graph", "cutoff"])
+                post.append(time.perf_counter() - started)
+            result[str(natoms)][str(every)] = {
+                "steps": run_steps,
+                "plain": plain,
+                "live": live,
+                "post_wall": post,
+                "dump_bytes": dump.stat().st_size,
+            }
+            print("scale", natoms, every, "done", flush=True)
+    return result
+
+
 def main():
     import shutil
 
@@ -745,6 +1013,8 @@ def main():
     pp = repeats(lambda: plumed_elapsed(so, False), 6)
     pl = repeats(lambda: plumed_elapsed(so, True), 6)
     out["codes"]["plumed"] = {"frames": frames, "steps": 6, "plain": pp, "live": pl}
+    print("scale", flush=True)
+    out["scale"] = scale_lammps()
     dest = WORK / "samples.json"
     dest.write_text(json.dumps(out))
     print(dest)

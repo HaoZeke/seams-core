@@ -75,6 +75,9 @@ bool options_ok(const seams_insitu_options &opt) {
   if (opt.write_labels != 0 && opt.write_labels != 1) {
     return false;
   }
+  if (opt.debug_dump != 0 && opt.debug_dump != 1) {
+    return false;
+  }
   return cadence_ok(opt.cadence);
 }
 
@@ -423,6 +426,7 @@ void seams_insitu_options_default(seams_insitu_options *opt) {
   opt->type = 1;
   opt->ring_depth = 8;
   opt->write_labels = 1;
+  opt->debug_dump = 0;
   opt->cadence.every = 1;
   opt->cadence.first = 0;
   opt->cadence.last = -1;
@@ -564,29 +568,18 @@ int seams_insitu_observe(seams_insitu_engine *eng, const seams_insitu_frame *fra
   if (gate(impl, frame, &status) == Gate::Done) {
     return status;
   }
-  if (dump_path == nullptr || dump_path[0] == '\0') {
-    return analyze_frame(impl, frame);
+  const int rc = analyze_frame(impl, frame);
+  if (rc != SEAMS_INSITU_OK) {
+    return rc;
+  }
+  if (impl->opt.debug_dump == 0 || dump_path == nullptr || dump_path[0] == '\0') {
+    return SEAMS_INSITU_OK;
   }
   const int wrote = seams_insitu_append_dump(frame, dump_path);
   if (wrote != SEAMS_INSITU_OK) {
     return fail(impl, wrote);
   }
-  sinp::dropLammpsDumpIndex(dump_path);
-  const int nframes = sinp::nLammpsFrames(dump_path);
-  if (nframes < 1) {
-    return fail(impl, SEAMS_INSITU_ERR_IO);
-  }
-  bool steps_ok = false;
-  const auto steps = timesteps_of(dump_path, &steps_ok);
-  if (!steps_ok || static_cast<int>(steps.size()) != nframes) {
-    return fail(impl, SEAMS_INSITU_ERR);
-  }
-  Cloud cloud;
-  sinp::readLammpsTrj(dump_path, nframes, cloud, false, {}, {});
-  if (cloud.nop != frame->n) {
-    return fail(impl, SEAMS_INSITU_ERR);
-  }
-  return analyze_cloud(impl, cloud, steps.back(), true);
+  return SEAMS_INSITU_OK;
 }
 
 int seams_insitu_replay(seams_insitu_engine *eng, const char *dump_path,

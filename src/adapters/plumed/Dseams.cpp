@@ -103,7 +103,7 @@ void Dseams::calculate() {
   frame.xz = xz;
   frame.yz = yz;
   frame.gathered = 1;
-  const int rc = seams_insitu_observe(eng_, &frame, dump_.c_str());
+  const int rc = seams_insitu_observe(eng_, &frame, nullptr);
   if (rc != SEAMS_INSITU_OK && rc != SEAMS_INSITU_SKIP) error("DSEAMS observe failed");
 }
 

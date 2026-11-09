@@ -149,7 +149,8 @@ int seams_insitu_imd_session(const char *host, int port, const char *dump, const
     frame.xz = box9[7];
     frame.yz = box9[8];
     frame.gathered = 1;
-    const int rc = seams_insitu_observe(eng, &frame, dump);
+    const int rc = seams_insitu_observe(eng, &frame, nullptr);
+    (void)dump;
     if (rc != SEAMS_INSITU_OK) {
       status = rc;
       break;

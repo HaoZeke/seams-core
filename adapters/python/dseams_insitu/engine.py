@@ -19,6 +19,7 @@ class Options(ctypes.Structure):
         ("ring_depth", ctypes.c_int),
         ("write_labels", ctypes.c_int),
         ("cadence", Cadence),
+        ("debug_dump", ctypes.c_int),
     ]
 
 
