@@ -165,8 +165,8 @@ int sinp::chemfilesSteps(const std::string &filename) {
   try {
     chemfiles::Trajectory trajectory(filename, 'r', forcedFormat(filename));
     return static_cast<int>(trajectory.nsteps());
-  } catch (const chemfiles::Error &error) {
-    chemfilesError = error.what();
+  } catch (...) {
+    chemfilesError = currentExceptionText();
     return -1;
   }
 }
