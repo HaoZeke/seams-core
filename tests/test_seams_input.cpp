@@ -1313,6 +1313,48 @@ TEST_CASE("a short lammps dump names the missing atoms", "[seams_input]") {
   sinp::dropLammpsDumpIndex(path.string());
 }
 
+TEST_CASE("an orthogonal lattice keeps three lengths", "[seams_input]") {
+  const auto path = fs::temp_directory_path() / "dseams_ortho.xyz";
+  {
+    std::ofstream out(path);
+    out << "1\nLattice=\"20 0 0 0 18 0 0 0 16\"\nO 1 1 1\n";
+  }
+  auto cloud = sinp::readXYZ(path.string());
+  REQUIRE(cloud.box.size() == 3);
+  REQUIRE_THAT(cloud.box[0], Catch::Matchers::WithinAbs(20.0, 1e-9));
+  REQUIRE_THAT(cloud.box[1], Catch::Matchers::WithinAbs(18.0, 1e-9));
+  REQUIRE_THAT(cloud.box[2], Catch::Matchers::WithinAbs(16.0, 1e-9));
+  REQUIRE_THAT(cloud.boxLow[0], Catch::Matchers::WithinAbs(0.0, 1e-9));
+  fs::remove(path);
+}
+
+TEST_CASE("a broken lattice is named", "[seams_input]") {
+  const auto bare = fs::temp_directory_path() / "dseams_bare.xyz";
+  {
+    std::ofstream out(bare);
+    out << "1\nLattice=10 0 0 0 10 0 0 0 10\nO 0 0 0\n";
+  }
+  try {
+    sinp::readXYZ(bare.string());
+    FAIL("a lattice without quotes must fail");
+  } catch (const std::runtime_error &err) {
+    REQUIRE(std::string(err.what()) == "XYZ Lattice is not a cell.");
+  }
+  fs::remove(bare);
+  const auto shear = fs::temp_directory_path() / "dseams_shear.xyz";
+  {
+    std::ofstream out(shear);
+    out << "1\nLattice=\"10 1 0 0 10 0 0 0 10\"\nO 0 0 0\n";
+  }
+  try {
+    sinp::readXYZ(shear.string());
+    FAIL("a non-reduced lattice must fail");
+  } catch (const std::runtime_error &err) {
+    REQUIRE(std::string(err.what()) == "XYZ Lattice is not a reduced cell.");
+  }
+  fs::remove(shear);
+}
+
 TEST_CASE("a triclinic lattice is bounds plus tilt", "[seams_input]") {
   const auto path = fs::temp_directory_path() / "dseams_tilt.xyz";
   {
