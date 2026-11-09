@@ -122,9 +122,15 @@ def gromacs_case():
     ]
     if trr_rings != dump_rings:
         raise RuntimeError("seams on the TRR does not match seams on the same frames")
-    if matched != len(frames):
-        raise RuntimeError("gromacs matched %d of %d frames" % (matched, len(frames)))
+    native = live.match_native_cli(folder / "live.txt", trr, type_filter=1)
+    if native != matched or native != len(frames):
+        raise RuntimeError("gromacs native %d dump %d trr %d" % (native, matched, len(frames)))
     (folder / "equal.log").write_text("frames %d\n" % matched)
+    receipt = folder / "receipt.txt"
+    receipt.write_text(
+        "seams %s\nlib %s\ngmx %s\nmpirun %s\n"
+        % (live.SEAMS, live.LIB, binary, mpirun)
+    )
     return matched
 
 

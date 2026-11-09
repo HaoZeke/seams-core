@@ -22,7 +22,6 @@ WORK = Path(os.environ.get("DSEAMS_LIVE_WORK", "var/run/dseams-live"))
 os.environ["SEAMS_LIB"] = LIB
 os.environ["PATH"] = str(PREFIX / "bin") + os.pathsep + os.environ.get("PATH", "")
 os.environ.setdefault("OMP_NUM_THREADS", "1")
-os.environ["PLUMED_KERNEL"] = str(PREFIX / "lib" / "libplumedKernel.so")
 
 from dseams_insitu.ase import DseamsMDObserver
 from dseams_insitu.engine import Engine, load, replay
@@ -304,6 +303,51 @@ def match_lammps_cli(record, dump, type_filter=1):
         if got.get("both") != block["cage"]["both"] or got.get("water") != block["cage"]["water"]:
             raise RuntimeError("cage water differ\n" + cage)
     return len(paired)
+
+
+def _kept_lines(text, prefix):
+    return [ln for ln in text.splitlines() if ln.startswith(prefix)]
+
+
+def match_native_cli(record, native, type_filter=1):
+    """Compare the live census with seams on the engine's own trajectory."""
+    live = census_blocks(Path(record).read_text())
+    live_steps = [block["step"] for block in live]
+    if len(live_steps) != len(set(live_steps)):
+        raise RuntimeError("duplicate live steps %s" % live_steps)
+    rings_text = cli_text("rings", native, type_filter=type_filter)
+    ice_text = cli_text("chill-plus", native, type_filter=type_filter)
+    cage_text = cli_text("cages", native, ["--graph", "cutoff"], type_filter=type_filter)
+    folder = Path(native).parent
+    stem = Path(native).name
+    (folder / (stem + ".rings.txt")).write_text(rings_text)
+    (folder / (stem + ".ice.txt")).write_text(ice_text)
+    (folder / (stem + ".cages.txt")).write_text(cage_text)
+    rings = _kept_lines(rings_text, "rings ")
+    chill_lines = _kept_lines(ice_text, "nop ")
+    cage_lines = _kept_lines(cage_text, "nop ")
+    if not (len(live) == len(rings) == len(chill_lines) == len(cage_lines)):
+        raise RuntimeError(
+            "native frame counts differ live %d rings %d chill %d cages %d for %s"
+            % (len(live), len(rings), len(chill_lines), len(cage_lines), native)
+        )
+    for block, ring, chill, cage in zip(live, rings, chill_lines, cage_lines):
+        if block["rings"] != ring:
+            raise RuntimeError("native rings differ\n" + block["rings"] + "\n" + ring)
+        words = chill.split()
+        parsed = {}
+        for i in range(2, len(words), 2):
+            parsed[words[i]] = int(words[i + 1])
+        for name, count in parsed.items():
+            if block["chill"].get(name, 0) != count:
+                raise RuntimeError("native chill %s %s vs %s" % (name, block["chill"].get(name, 0), count))
+        fields = cage.split()
+        got = {fields[i]: int(fields[i + 1]) for i in range(4, len(fields), 2)}
+        if got.get("hexagonal") != block["cage"]["hc"] or got.get("cubic") != block["cage"]["ddc"]:
+            raise RuntimeError("native cages differ\n" + cage + "\n" + str(block["cage"]))
+        if got.get("both") != block["cage"]["both"] or got.get("water") != block["cage"]["water"]:
+            raise RuntimeError("native cage water differ\n" + cage)
+    return len(live)
 
 
 def run_lammps():
@@ -610,7 +654,10 @@ def openmm_identity():
         rewritten.append((step, xyz))
     write_lammps(dcd_native, rewritten, [0, 0, 0, 20, 20, 20], types)
     match_lammps_cli(record, dcd_native)
-    (folder / "dcd-equal.log").write_text("frames %d\n" % frames)
+    native_frames = match_native_cli(record, dcd_path, type_filter=1)
+    if native_frames != frames:
+        raise RuntimeError("seams on the DCD matched %d of %d" % (native_frames, frames))
+    (folder / "dcd-equal.log").write_text("frames %d native %d\n" % (frames, native_frames))
     return frames
 
 
@@ -767,191 +814,6 @@ def run_ipi():
     return match_lammps_cli(record, native)
 
 
-def compile_plumed():
-    so = WORK / "libDseams.so"
-    WORK.mkdir(parents=True, exist_ok=True)
-    cmd = [
-        str(PREFIX / "bin" / "x86_64-conda-linux-gnu-g++"),
-        "-shared",
-        "-fPIC",
-        "-std=c++17",
-        "-O2",
-        "-I" + str(PREFIX / "include" / "plumed"),
-        "-I" + str(ROOT / "src" / "include" / "internal"),
-        str(ROOT / "src" / "adapters" / "plumed" / "Dseams.cpp"),
-        "-o",
-        str(so),
-        "-L" + str(Path(LIB).parent),
-        "-lyodaLib",
-        "-L" + str(PREFIX / "lib"),
-        "-lplumed",
-        "-Wl,-rpath," + str(Path(LIB).parent),
-        "-Wl,-rpath," + str(Path(LIB).parent.parent / "subprojects" / "readcon-core"),
-        "-Wl,-rpath," + str(Path(LIB).parent.parent / "subprojects" / "readcon-db"),
-        "-Wl,-rpath," + str(PREFIX / "lib"),
-    ]
-    run(cmd, WORK)
-    return so
-
-
-def run_plumed(so):
-    import ctypes
-    import numpy as np
-
-    libp = ctypes.CDLL(str(PREFIX / "lib" / "libplumed.so"))
-
-    class P(ctypes.Structure):
-        _fields_ = [("p", ctypes.c_void_p)]
-
-    libp.plumed_create.restype = P
-    libp.plumed_cmd.argtypes = [P, ctypes.c_char_p, ctypes.c_void_p]
-    libp.plumed_finalize.argtypes = [P]
-    folder = WORK / "plumed"
-    folder.mkdir(parents=True, exist_ok=True)
-    pos = ice_positions()
-    n = len(pos)
-    p = libp.plumed_create()
-    if not p.p:
-        raise RuntimeError("plumed_create failed")
-    nat = ctypes.c_int(n)
-    dt = ctypes.c_double(0.001)
-    libp.plumed_cmd(p, b"setNatoms", ctypes.byref(nat))
-    libp.plumed_cmd(p, b"setTimestep", ctypes.byref(dt))
-    log = ctypes.create_string_buffer(str(folder / "plumed.log").encode())
-    libp.plumed_cmd(p, b"setLogFile", log)
-    libp.plumed_cmd(p, b"init", None)
-    load_line = ctypes.create_string_buffer(f"LOAD FILE={so}".encode())
-    action = ctypes.create_string_buffer(
-        (
-            f"dseams: DSEAMS ATOMS=1-{n} DUMP={folder / 'unused.lammpstrj'} "
-            f"RECORD={folder / 'live.txt'} CUTOFF=3.5"
-        ).encode()
-    )
-    dumped = ctypes.create_string_buffer(
-        f"DUMPATOMS ATOMS=1-{n} FILE={folder / 'native.xyz'}".encode()
-    )
-    libp.plumed_cmd(p, b"readInputLine", load_line)
-    libp.plumed_cmd(p, b"readInputLine", action)
-    libp.plumed_cmd(p, b"readInputLine", dumped)
-    masses = np.ones(n, dtype=np.float64)
-    forces = np.zeros(3 * n, dtype=np.float64)
-    virial = np.zeros(9, dtype=np.float64)
-    from ase.md.langevin import Langevin
-    from ase import units
-
-    atoms = ase_atoms()
-    dyn = Langevin(atoms, 1.0 * units.fs, temperature_K=20.0, friction=0.01 / units.fs, fixcm=False)
-
-    def tick():
-        nm = np.ascontiguousarray(atoms.get_positions() / 10.0, dtype=np.float64)
-        cell = np.ascontiguousarray(atoms.cell.array / 10.0, dtype=np.float64).reshape(9)
-        istep = ctypes.c_int(int(dyn.nsteps))
-        libp.plumed_cmd(p, b"setStep", ctypes.byref(istep))
-        libp.plumed_cmd(p, b"setPositions", nm.ctypes.data_as(ctypes.c_void_p))
-        libp.plumed_cmd(p, b"setMasses", masses.ctypes.data_as(ctypes.c_void_p))
-        libp.plumed_cmd(p, b"setForces", forces.ctypes.data_as(ctypes.c_void_p))
-        libp.plumed_cmd(p, b"setBox", cell.ctypes.data_as(ctypes.c_void_p))
-        libp.plumed_cmd(p, b"setVirial", virial.ctypes.data_as(ctypes.c_void_p))
-        libp.plumed_cmd(p, b"calc", None)
-
-    dyn.attach(tick, interval=1)
-    dyn.run(6)
-    libp.plumed_finalize(p)
-    native = folder / "from-plumed.lammpstrj"
-    # DUMPATOMS writes nanometres. The engine converts those to angstrom.
-    angstrom = [
-        (step, [[coord * 10.0 for coord in row] for row in xyz])
-        for step, xyz in read_multi_xyz(folder / "native.xyz")
-    ]
-    write_lammps(native, angstrom, [0, 0, 0, 6.4, 6.4, 6.4], [1] * n)
-    return match_lammps_cli(folder / "live.txt", native)
-
-
-def repeats(fn, n, warmup=1):
-    for _ in range(warmup):
-        fn()
-    return [fn() for _ in range(n)]
-
-
-def ipi_elapsed(analyse):
-    folder = WORK / "ipi-bench" / ("live" if analyse else "plain")
-    folder.mkdir(parents=True, exist_ok=True)
-    port, xml = write_ipi(folder)
-    proc = subprocess.Popen(
-        [str(PREFIX / "bin" / "i-pi"), str(xml)],
-        cwd=folder,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    time.sleep(1.0)
-    if proc.poll() is not None:
-        raise RuntimeError(proc.stdout.read())
-    lib = load(LIB)
-    started = time.perf_counter()
-    with Engine(lib, str(folder / "rec.txt")) as eng:
-        def on_frame(index, pos, cell):
-            if analyse:
-                eng.observe(index, pos, eng.box_from_rows(cell), str(folder / "dump.lammpstrj"))
-        IpiClient("127.0.0.1", port).run(on_frame)
-    elapsed = time.perf_counter() - started
-    proc.communicate(timeout=60)
-    return elapsed / 6
-
-
-def plumed_elapsed(so, analyse):
-    import ctypes
-    import numpy as np
-    from ase.md.langevin import Langevin
-    from ase import units
-
-    if not analyse:
-        return ase_time(6, False)
-    libp = ctypes.CDLL(str(PREFIX / "lib" / "libplumed.so"))
-
-    class P(ctypes.Structure):
-        _fields_ = [("p", ctypes.c_void_p)]
-
-    libp.plumed_create.restype = P
-    libp.plumed_cmd.argtypes = [P, ctypes.c_char_p, ctypes.c_void_p]
-    libp.plumed_finalize.argtypes = [P]
-    atoms = ase_atoms()
-    n = len(atoms)
-    p = libp.plumed_create()
-    nat = ctypes.c_int(n)
-    dt = ctypes.c_double(0.001)
-    libp.plumed_cmd(p, b"setNatoms", ctypes.byref(nat))
-    libp.plumed_cmd(p, b"setTimestep", ctypes.byref(dt))
-    libp.plumed_cmd(p, b"init", None)
-    action = ctypes.create_string_buffer(
-        f"dseams: DSEAMS ATOMS=1-{n} DUMP={WORK / 'plumed-bench.lammpstrj'} RECORD={WORK / 'plumed-bench.txt'} CUTOFF=3.5".encode()
-    )
-    libp.plumed_cmd(p, b"readInputLine", ctypes.create_string_buffer(f"LOAD FILE={so}".encode()))
-    libp.plumed_cmd(p, b"readInputLine", action)
-    masses = np.ones(n, dtype=np.float64)
-    forces = np.zeros(3 * n, dtype=np.float64)
-    virial = np.zeros(9, dtype=np.float64)
-    dyn = Langevin(atoms, 1.0 * units.fs, temperature_K=20.0, friction=0.01 / units.fs, fixcm=False)
-
-    def tick():
-        nm = np.ascontiguousarray(atoms.get_positions() / 10.0, dtype=np.float64)
-        cell = np.ascontiguousarray(atoms.cell.array / 10.0, dtype=np.float64).reshape(9)
-        istep = ctypes.c_int(int(dyn.nsteps))
-        libp.plumed_cmd(p, b"setStep", ctypes.byref(istep))
-        libp.plumed_cmd(p, b"setPositions", nm.ctypes.data_as(ctypes.c_void_p))
-        libp.plumed_cmd(p, b"setMasses", masses.ctypes.data_as(ctypes.c_void_p))
-        libp.plumed_cmd(p, b"setForces", forces.ctypes.data_as(ctypes.c_void_p))
-        libp.plumed_cmd(p, b"setBox", cell.ctypes.data_as(ctypes.c_void_p))
-        libp.plumed_cmd(p, b"setVirial", virial.ctypes.data_as(ctypes.c_void_p))
-        libp.plumed_cmd(p, b"calc", None)
-
-    dyn.attach(tick, interval=1)
-    started = time.perf_counter()
-    dyn.run(6)
-    elapsed = time.perf_counter() - started
-    libp.plumed_finalize(p)
-    return elapsed / 6
-
 
 def scale_lammps():
     plan = [(5, 1000, 8), (10, 8000, 4), (20, 64000, 2)]
@@ -1078,30 +940,18 @@ def gromacs_scale_case(folder, rows, steps, every, repeats):
     box_nm = ncell * 0.64
     write_gro(folder / "conf.gro", rows, box_nm)
     write_oxygen_top(folder / "topol.top", natoms)
-    ompi = Path(os.environ.get("DSEAMS_GMX_OMPI", "var/run/gmx-ompi/bin/gmx")).resolve()
-    mpirun = PREFIX / "bin" / "mpirun"
-    if ompi.exists() and mpirun.exists():
-        grompp = [str(ompi)]
-        mdrun = [str(mpirun), "--oversubscribe", "-np", "1", str(ompi)]
-        kernel = os.environ.get(
-            "DSEAMS_PLUMED_KERNEL", "var/run/plumed-ompi/lib/libplumedKernel.so"
-        )
-        libs = ":".join(
-            [
-                str(PREFIX / "lib"),
-                "var/run/plumed-ompi/lib",
-                "var/run/gmx-ompi/lib",
-                str(Path(LIB).parent),
-                str(Path(LIB).parent.parent / "subprojects" / "readcon-core"),
-                str(Path(LIB).parent.parent / "subprojects" / "readcon-db"),
-            ]
-        )
-    else:
-        grompp = [str(PREFIX / "bin" / "gmx")]
-        mdrun = grompp + ["mdrun"]
-        # The conda binary takes -ntmpi. The branch below appends mdrun itself.
-        kernel = str(PREFIX / "lib" / "libplumedKernel.so")
-        libs = None
+    gmx = os.environ.get("DSEAMS_GMX") or str(PREFIX / "bin" / "gmx")
+    mpirun = os.environ.get("DSEAMS_GMX_MPIRUN") or str(PREFIX / "bin" / "mpirun")
+    grompp = [gmx]
+    mdrun = [mpirun, "--oversubscribe", "-np", "1", gmx, "mdrun"]
+    libs = ":".join(
+        [
+            str(Path(gmx).resolve().parent.parent / "lib"),
+            str(Path(LIB).parent),
+            str(Path(LIB).parent.parent / "subprojects" / "readcon-core"),
+            str(Path(LIB).parent.parent / "subprojects" / "readcon-db"),
+        ]
+    )
     plain = []
     live = []
     warmup_plain = None
@@ -1117,36 +967,26 @@ def gromacs_scale_case(folder, rows, steps, every, repeats):
             "gen-vel = yes\ngen-temp = 30\ngen-seed = 12345\n" % (steps, steps)
         )
         tpr = folder / f"plain-{i}.tpr"
-        gro_env = {"PLUMED_KERNEL": kernel}
-        if libs:
-            gro_env["LD_LIBRARY_PATH"] = libs
+        gro_env = {"LD_LIBRARY_PATH": libs, "OMP_NUM_THREADS": "1"}
         run(grompp + ["grompp", "-f", str(mdp), "-c", "conf.gro", "-p", "topol.top", "-o", str(tpr), "-maxwarn", "2"], folder, env=gro_env)
-        if libs:
-            proc = run(mdrun + ["mdrun", "-s", str(tpr), "-deffnm", f"plain-{i}", "-ntomp", "1", "-noconfout"], folder, env=gro_env)
-        else:
-            proc = run(grompp + ["mdrun", "-s", str(tpr), "-deffnm", f"plain-{i}", "-ntmpi", "1", "-ntomp", "1", "-noconfout"], folder, env=gro_env)
+        proc = run(mdrun + ["-s", str(tpr), "-deffnm", f"plain-{i}", "-ntomp", "1", "-noconfout"], folder, env=gro_env)
         sample = gmx_wall(proc.stdout + proc.stderr) / steps
         if i == 0:
             warmup_plain = sample
         else:
             plain.append(sample)
-        plumed = folder / f"live-{i}.dat"
-        plumed.write_text(
-            "LOAD FILE=%s\nd: DSEAMS ATOMS=1-%d RECORD=%s CUTOFF=3.5 EVERY=%d\n"
-            % (folder / "libDseams.so", natoms, folder / f"rec-{i}.txt", every)
+        live_mdp = folder / f"live-{i}.mdp"
+        live_mdp.write_text(
+            mdp.read_text()
+            + "dseams-active = yes\n"
+            + "dseams-input-group = System\n"
+            + "dseams-nstcalc = %d\n" % every
+            + "dseams-cutoff = 3.5\n"
+            + "dseams-output = %s\n" % (folder / f"rec-{i}.txt")
         )
-        if libs:
-            proc = run(
-                mdrun + ["mdrun", "-s", str(tpr), "-deffnm", f"live-{i}", "-plumed", str(plumed), "-ntomp", "1", "-noconfout"],
-                folder,
-                env=gro_env,
-            )
-        else:
-            proc = run(
-                grompp + ["mdrun", "-s", str(tpr), "-deffnm", f"live-{i}", "-plumed", str(plumed), "-ntmpi", "1", "-ntomp", "1", "-noconfout"],
-                folder,
-                env=gro_env,
-            )
+        live_tpr = folder / f"live-{i}.tpr"
+        run(grompp + ["grompp", "-f", str(live_mdp), "-c", "conf.gro", "-p", "topol.top", "-o", str(live_tpr), "-maxwarn", "2"], folder, env=gro_env)
+        proc = run(mdrun + ["-s", str(live_tpr), "-deffnm", f"live-{i}", "-ntomp", "1", "-noconfout"], folder, env=gro_env)
         sample = gmx_wall(proc.stdout + proc.stderr) / steps
         if i == 0:
             warmup_live = sample
@@ -1161,7 +1001,7 @@ def gromacs_scale_case(folder, rows, steps, every, repeats):
     }
 
 
-def scale_gromacs(so):
+def scale_gromacs():
     import shutil
 
     plan = [(5, 1000, 8), (10, 8000, 4), (20, 64000, 2)]
@@ -1177,9 +1017,6 @@ def scale_gromacs(so):
             if folder.exists():
                 shutil.rmtree(folder)
             folder.mkdir(parents=True)
-            ompi_so = Path("var/run/libDseams-ompi.so")
-            plugin = ompi_so if ompi_so.exists() and Path("var/run/gmx-ompi/bin/gmx").exists() else Path(so)
-            shutil.copy(plugin, folder / "libDseams.so")
             result[str(natoms)][str(every)] = gromacs_scale_case(folder, rows, run_steps, every, 6)
             print("gscale", natoms, every, "done", flush=True)
     return result
@@ -1228,7 +1065,7 @@ def trr_to_dump(frames, path):
     Path(path).write_text("\n".join(lines) + "\n")
 
 
-def gromacs_trr_identity(so):
+def gromacs_trr_identity():
     folder = WORK / "gromacs-trr"
     folder.mkdir(parents=True, exist_ok=True)
     rows = diamond_positions(5)
@@ -1241,18 +1078,24 @@ def gromacs_trr_identity(so):
         "coulombtype = Cut-off\nrcoulomb = 0.9\nrvdw = 0.9\n"
         "pbc = xyz\nconstraints = none\n"
         "gen-vel = yes\ngen-temp = 30\ngen-seed = 12345\n"
+        "dseams-active = yes\n"
+        "dseams-input-group = System\n"
+        "dseams-nstcalc = 1\n"
+        "dseams-cutoff = 3.5\n"
+        "dseams-output = live.txt\n"
     )
-    (folder / "plumed.dat").write_text(
-        "LOAD FILE=%s\nd: DSEAMS ATOMS=1-%d RECORD=%s CUTOFF=3.5\n"
-        % (so, len(rows), folder / "live.txt")
-    )
-    gmx = str(PREFIX / "bin" / "gmx")
-    run([gmx, "grompp", "-f", "md.mdp", "-c", "conf.gro", "-p", "topol.top", "-o", "topol.tpr", "-maxwarn", "2"], folder)
-    run([gmx, "mdrun", "-s", "topol.tpr", "-deffnm", "run", "-plumed", "plumed.dat", "-ntmpi", "1", "-ntomp", "1", "-noconfout"], folder)
+    gmx = os.environ.get("DSEAMS_GMX") or str(PREFIX / "bin" / "gmx")
+    mpirun = os.environ.get("DSEAMS_GMX_MPIRUN") or str(PREFIX / "bin" / "mpirun")
+    env = {"LD_LIBRARY_PATH": str(Path(gmx).resolve().parent.parent / "lib") + ":" + str(Path(LIB).parent), "OMP_NUM_THREADS": "1"}
+    run([mpirun, "--oversubscribe", "-np", "1", gmx, "grompp", "-f", "md.mdp", "-c", "conf.gro", "-p", "topol.top", "-o", "topol.tpr", "-maxwarn", "2"], folder, env=env)
+    run([mpirun, "--oversubscribe", "-np", "1", gmx, "mdrun", "-s", "topol.tpr", "-deffnm", "run", "-ntomp", "1", "-noconfout"], folder, env=env)
     frames = trr_frames(folder / "run.trr")
     dump = folder / "from-trr.lammpstrj"
     trr_to_dump(frames, dump)
     matched = match_lammps_cli(folder / "live.txt", dump)
+    native = match_native_cli(folder / "live.txt", folder / "run.trr", type_filter=1)
+    if native != matched:
+        raise RuntimeError("native trr matched %d, dump matched %d" % (native, matched))
     (folder / "equal.log").write_text("frames %d\n" % matched)
     return matched
 
@@ -1327,14 +1170,10 @@ def lammps_mpi_identity():
 
 
 def gromacs_mpi_identity():
-    gmx = Path(os.environ.get("DSEAMS_GMX_OMPI", "var/run/gmx-ompi/bin/gmx")).resolve()
-    mpirun = PREFIX / "bin" / "mpirun"
-    plugin = Path(os.environ.get("DSEAMS_GMX_OMPI_PLUGIN", "var/run/libDseams-ompi.so")).resolve()
-    kernel = Path(
-        os.environ.get("DSEAMS_PLUMED_KERNEL", "var/run/plumed-ompi/lib/libplumedKernel.so")
-    ).resolve()
-    if not (gmx.exists() and mpirun.exists() and plugin.exists() and kernel.exists()):
-        return False, "the matched OpenMPI GROMACS or PLUMED kernel is absent"
+    gmx = Path(os.environ.get("DSEAMS_GMX", "")).resolve() if os.environ.get("DSEAMS_GMX") else Path()
+    mpirun = Path(os.environ.get("DSEAMS_GMX_MPIRUN", str(PREFIX / "bin" / "mpirun")))
+    if not (gmx.is_file() and mpirun.is_file()):
+        return False, "the native GROMACS module binary is absent"
     folder = WORK / "gromacs-mpi"
     if folder.exists():
         import shutil
@@ -1344,20 +1183,9 @@ def gromacs_mpi_identity():
     rows = diamond_positions(5)
     write_gro(folder / "conf.gro", rows, 3.2)
     write_oxygen_top(folder / "topol.top", len(rows))
-    (folder / "md.mdp").write_text(
-        "integrator = md\ndt = 0.002\nnsteps = 8\n"
-        "nstxout = 1\nnstvout = 0\nnstfout = 0\nnstlog = 1\n"
-        "nstlist = 10\ncutoff-scheme = Verlet\n"
-        "coulombtype = Cut-off\nrcoulomb = 0.9\nrvdw = 0.9\n"
-        "pbc = xyz\nconstraints = none\n"
-        "gen-vel = yes\ngen-temp = 30\ngen-seed = 12345\n"
-    )
     env = {
-        "PLUMED_KERNEL": str(kernel),
         "LD_LIBRARY_PATH": ":".join(
             [
-                str(PREFIX / "lib"),
-                str(kernel.parent),
                 str(gmx.parent.parent / "lib"),
                 str(Path(LIB).parent),
                 str(Path(LIB).parent.parent / "subprojects" / "readcon-core"),
@@ -1366,28 +1194,36 @@ def gromacs_mpi_identity():
         ),
         "OMP_NUM_THREADS": "1",
     }
-    run([str(gmx), "grompp", "-f", "md.mdp", "-c", "conf.gro", "-p", "topol.top", "-o", "topol.tpr", "-maxwarn", "2"], folder, env=env)
     texts = []
     for np in (1, 2, 4):
-        (folder / ("plumed-%d.dat" % np)).write_text(
-            "LOAD FILE=%s\nd: DSEAMS ATOMS=1-%d RECORD=%s CUTOFF=3.5\n"
-            % (plugin, len(rows), folder / ("live-%d.txt" % np))
+        record = folder / ("live-%d.txt" % np)
+        (folder / "md.mdp").write_text(
+            "integrator = md\ndt = 0.002\nnsteps = 8\n"
+            "nstxout = 1\nnstvout = 0\nnstfout = 0\nnstlog = 1\n"
+            "nstlist = 10\ncutoff-scheme = Verlet\n"
+            "coulombtype = Cut-off\nrcoulomb = 0.9\nrvdw = 0.9\n"
+            "pbc = xyz\nconstraints = none\n"
+            "gen-vel = yes\ngen-temp = 30\ngen-seed = 12345\n"
+            "dseams-active = yes\n"
+            "dseams-input-group = System\n"
+            "dseams-nstcalc = 1\n"
+            "dseams-cutoff = 3.5\n"
+            "dseams-output = %s\n" % record.name
         )
+        run([str(mpirun), "--oversubscribe", "-np", "1", str(gmx), "grompp", "-f", "md.mdp", "-c", "conf.gro", "-p", "topol.top", "-o", "topol-%d.tpr" % np, "-maxwarn", "2"], folder, env=env)
         run(
-            [str(mpirun), "--oversubscribe", "-np", str(np), str(gmx), "mdrun", "-s", "topol.tpr", "-deffnm", "run-%d" % np, "-plumed", "plumed-%d.dat" % np, "-ntomp", "1", "-noconfout"],
+            [str(mpirun), "--oversubscribe", "-np", str(np), str(gmx), "mdrun", "-s", "topol-%d.tpr" % np, "-deffnm", "run-%d" % np, "-ntomp", "1", "-noconfout"],
             folder,
             env=env,
         )
-        texts.append((folder / ("live-%d.txt" % np)).read_text())
+        texts.append(record.read_text())
         frames = trr_frames(folder / ("run-%d.trr" % np))
-        dump = folder / ("from-trr-%d.lammpstrj" % np)
-        trr_to_dump(frames, dump)
-        matched = match_lammps_cli(folder / ("live-%d.txt" % np), dump)
-        if matched != len(frames):
-            raise RuntimeError("rank %d matched %d of %d" % (np, matched, len(frames)))
+        native = match_native_cli(record, folder / ("run-%d.trr" % np), type_filter=1)
+        if native != len(frames):
+            raise RuntimeError("rank %d matched %d of %d" % (np, native, len(frames)))
     same = bool(texts[0]) and texts[0] == texts[1] == texts[2]
     (folder / "equal.log").write_text("1==2 %s\n1==4 %s\nframes %d\n" % (texts[0] == texts[1], texts[0] == texts[2], texts[0].count("\nstep ") + 1))
-    return same, "OpenMPI GROMACS and PLUMED share one MPI library. Each rank's census matches its trajectory dump."
+    return same, "The native module on one, two and four ranks matches the trajectory."
 
 
 def parse_dump(path):
@@ -1525,19 +1361,12 @@ def main():
     ip = repeats(lambda: ipi_elapsed(False), 6)
     il = repeats(lambda: ipi_elapsed(True), 6)
     out["codes"]["ipi"] = {"frames": frames, "steps": 6, "plain": ip, "live": il}
-    print("plumed", flush=True)
-    so = compile_plumed()
-    frames = run_plumed(so)
-    pp = repeats(lambda: plumed_elapsed(so, False), 6)
-    pl = repeats(lambda: plumed_elapsed(so, True), 6)
-    out["codes"]["plumed"] = {"frames": frames, "steps": 6, "plain": pp, "live": pl}
     print("scale", flush=True)
     out["scale"] = scale_lammps()
     print("gromacs-trr", flush=True)
-    so = compile_plumed()
-    trr_frames_n = gromacs_trr_identity(so)
+    trr_frames_n = gromacs_trr_identity()
     print("gscale", flush=True)
-    out["gromacs_scale"] = scale_gromacs(so)
+    out["gromacs_scale"] = scale_gromacs()
     seal_tail(out, trr_frames_n)
 
 
@@ -1564,7 +1393,6 @@ def seal_tail(out, trr_frames_n):
         ("OpenMM", out["codes"]["openmm"]["frames"]),
         ("ASE", out["codes"]["ase"]["frames"]),
         ("i-PI", out["codes"]["ipi"]["frames"]),
-        ("PLUMED", out["codes"]["plumed"]["frames"]),
     ):
         out["equality"].append(
             {"code": code, "frames": frames, "rings": "yes", "chill": "yes", "cages": "yes"}

@@ -121,9 +121,11 @@ pkgconfig.generate(
   libraries: ['-L${libdir}', '-lyodaLib'],
   extra_cflags: _public_defines)
 
-# LAMMPS and PLUMED adapters link this library and nothing from the
-# molecular-dynamics code. They are built only when that code's headers
-# are visible. auto skips a missing dependency. enabled requires it.
+# The LAMMPS plugin links this library and nothing from the molecular
+# dynamics code. It is built only when that code's headers are visible.
+# auto skips a missing dependency. enabled requires it.
+# Live analysis does not go through PLUMED, so this tree builds no
+# PLUMED action. The neighbour-index fix stays in its own tree.
 # The GROMACS client is seams-gromacs-imd and links no GROMACS library,
 # so it is built with the core. OpenMM is the Python reporter.
 lammps_adapter = false
@@ -152,14 +154,5 @@ if not get_option('lammps').disabled()
 endif
 
 if get_option('plumed').enabled()
-  plumed_dep = dependency('plumed', required: get_option('plumed'))
-  if plumed_dep.found()
-    plumed_adapter = true
-    shared_module(
-      'Dseams',
-      'adapters/plumed/Dseams.cpp',
-      dependencies: [yds_dep, plumed_dep],
-      name_prefix: 'lib',
-      install: true)
-  endif
+  error('Live analysis does not use PLUMED. The neighbour-index fix stays in its own tree.')
 endif

@@ -325,25 +325,23 @@ and
 
 The host calls the C API (`setStep`, `setPositions`, `setBox`, `calc`)
 each step.
-The action reads positions in nanometres and scales them to ångström
-before the core.
-The action in this repository is `DSEAMS`.
+This repository builds no live action on that path.
+The neighbour-index correction stays in the PLUMED tree as a bug fix.
 
-That DSEAMS action sits in the PLUMED project, which lists the engines
-that already call PLUMED.
+PLUMED lists the engines that already call it.
 The list includes AMBER `pmemd` from version 20 and AMBER `sander` from
 AmberTools 15.
-It also includes CP2K, DL_POLY, GROMACS, LAMMPS.
-NAMD, OpenMM through openmm-plumed, i-PI and the Atomic Simulation
-Environment.
+It also includes CP2K, DL_POLY, GROMACS and LAMMPS.
+The same list names NAMD.
+It names OpenMM through its PLUMED build.
+It names i-PI and the Atomic Simulation Environment.
 See the
 [PLUMED manual](https://www.plumed.org/doc-v2.10/user-doc/html/index.html).
 The project describes the licence as L-GPL on its
 [home page](https://www.plumed.org/).
 Spack packages PLUMED.
 
-PLUMED therefore needs one action for every patched engine.
-That action is the fallback this design uses.
+Those observers are not the live route in this design.
 
 ## i-PI
 

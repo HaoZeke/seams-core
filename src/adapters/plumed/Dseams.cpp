@@ -1,6 +1,7 @@
 /* PLUMED action that calls the d-SEAMS in-situ engine.
  *
  * Positions and the box arrive in nanometres. The engine reads angstrom.
+ * Copyright (c) d-SEAMS developers
  * SPDX-License-Identifier: MIT
  */
 

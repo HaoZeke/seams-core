@@ -250,6 +250,14 @@ int main(int argc, char **argv) {
   if (seams_path_nframes(twoXyz.c_str()) != 2) return fail("xyz frame count");
   if (seams_path_nframes(oneGro.c_str()) != 1) return fail("gro frame count");
   if (seams_path_nframes(onePdb.c_str()) != 1) return fail("pdb frame count");
+  const std::string missingXyzCount = (nroot / "dseams-nframes-missing.xyz").string();
+  const std::string badXyz = (nroot / "dseams-nframes-bad.xyz").string();
+  {
+    std::ofstream out(badXyz);
+    out << "this is not an xyz file\n";
+  }
+  if (seams_path_nframes(missingXyzCount.c_str()) != -1 || seams_last_error() == nullptr) return fail("missing xyz count");
+  if (seams_path_nframes(badXyz.c_str()) != -1 || seams_last_error() == nullptr) return fail("bad xyz count");
   // A thrown error must come back as a status, not abort the host.
   auto tighten = []() {
     std::ifstream status("/proc/self/status");

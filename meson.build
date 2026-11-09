@@ -530,7 +530,7 @@ _incdirs += include_directories([
 # Library. The LAMMPS and PLUMED adapters are decided at the end of src.
 subdir('src')
 message('LAMMPS fix plugin: ' + (lammps_adapter ? 'built' : 'not built'))
-message('PLUMED action: ' + (plumed_adapter ? 'built' : 'not built'))
+message('PLUMED action: not a live route')
 
 seams_insitu_link = _link_args
 if host_machine.system() == 'linux'

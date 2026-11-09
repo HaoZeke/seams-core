@@ -168,11 +168,29 @@ int seams_path_nframes(const char *path) {
   }
   try {
     const auto ext = extension_of(path);
-    if (ext == "lammpstrj" || ext == "dump") return sinp::nLammpsFrames(path);
+    if (ext == "lammpstrj" || ext == "dump") {
+      const int frames = sinp::nLammpsFrames(path);
+      if (frames <= 0) {
+        set_error("unreadable dump");
+        return -1;
+      }
+      return frames;
+    }
     const int steps = sinp::chemfilesSteps(path);
-    if (steps >= 0) return steps;
-    if (ext == "xyz") return 1;
-    return sinp::nLammpsFrames(path);
+    if (steps >= 0) {
+      return steps;
+    }
+    // Without chemfiles the xyz reader still reports one structure.
+#ifdef SEAMS_HAS_CHEMFILES
+    set_error("unreadable trajectory");
+    return -1;
+#else
+    if (ext == "xyz") {
+      return 1;
+    }
+    set_error("unreadable trajectory");
+    return -1;
+#endif
   } catch (const std::exception &ex) {
     set_error(ex.what());
     return -1;

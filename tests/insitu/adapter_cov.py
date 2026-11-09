@@ -106,69 +106,6 @@ def lammps_cases(work, plugin, lmp, mpirun, libdir):
     print("lammps nohost ok", flush=True)
 
 
-def plumed_cases(work, so, plumed_lib, libdir, plumed_inc, gxx):
-    env = os.environ.copy()
-    env["LD_LIBRARY_PATH"] = str(Path(so).parent) + ":" + libdir + ":" + str(Path(plumed_lib).parent) + ":" + env.get("LD_LIBRARY_PATH", "")
-    src = work / "drive_plumed.cpp"
-    src.write_text(r'''
-#include "wrapper/Plumed.h"
-#include <exception>
-#include <iostream>
-#include <string>
-#include <vector>
-int once(const std::string &so, const std::vector<std::string> &lines, const std::vector<int> &steps, const double *box) {
-  try {
-    PLMD::Plumed p;
-    int nat = 4;
-    double dt = 0.001;
-    p.cmd("setNatoms", &nat);
-    p.cmd("setTimestep", &dt);
-    p.cmd("init");
-    for (const auto &line : lines) {
-      p.cmd("readInputLine", line.c_str());
-    }
-    double xyz[12] = {0,0,0, 0.12,0,0, 0,0.12,0, 0.04,0.04,0.12};
-    double masses[4] = {1,1,1,1};
-    double forces[12] = {};
-    double virial[9] = {};
-    for (int step : steps) {
-      p.cmd("setStep", &step);
-      p.cmd("setPositions", xyz);
-      p.cmd("setMasses", masses);
-      p.cmd("setForces", forces);
-      p.cmd("setBox", const_cast<double *>(box));
-      p.cmd("setVirial", virial);
-      p.cmd("calc");
-    }
-    return 0;
-  } catch (const std::exception &ex) {
-    std::cerr << ex.what() << "\n";
-    return 1;
-  }
-}
-int main(int argc, char **argv) {
-  const std::string load = std::string("LOAD FILE=") + argv[1];
-  const double good[9] = {2,0,0, 0,2,0, 0,0,2};
-  const double bad[9] = {0,0,0, 0,0,0, 0,0,0};
-  once(argv[1], {load, "d: DSEAMS ATOMS=1-4 RECORD=rec.txt CUTOFF=3.5 EVERY=2"}, {0, 1}, good);
-  once(argv[1], {load, "d: DSEAMS ATOMS=1-4 RECORD=rec.txt DUMP=dump.lammpstrj CUTOFF=3.5 EVERY=2"}, {0, 1}, bad);
-  once(argv[1], {load, "d: DSEAMS ATOMS=1-4 RECORD=/no/such/dir/rec.txt CUTOFF=3.5"}, {0}, good);
-  once(argv[1], {load, "d: DSEAMS ATOMS= RECORD=rec.txt CUTOFF=3.5"}, {0}, good);
-  once(argv[1], {load, "d: DSEAMS ATOMS=1-4 RECORD=rec.txt CUTOFF=-1"}, {0}, good);
-  once(argv[1], {load, "d: DSEAMS ATOMS=1-4 RECORD=rec.txt EVERY=0"}, {0}, good);
-  std::cout << "plumed driver ok\n";
-  return 0;
-}
-''')
-    exe = work / "drive_plumed"
-    run(
-        [gxx, "-std=c++17", "-O0", "-g", "-I" + plumed_inc, str(src), "-o", str(exe),
-         "-L" + str(Path(plumed_lib).parent), "-lplumed",
-         "-Wl,-rpath," + str(Path(plumed_lib).parent)],
-        work, env,
-    )
-    run([str(exe), so], work, env)
-
 
 def sys_python():
     return os.environ.get("DSEAMS_PYTHON", "python3")
@@ -180,9 +117,6 @@ def main():
     cxx = need("DSEAMS_MPICXX")
     lmp = need("DSEAMS_LMP")
     mpirun = need("DSEAMS_MPIRUN")
-    plumed_inc = need("DSEAMS_PLUMED_INC")
-    plumed_lib = need("DSEAMS_PLUMED_LIB")
-    gxx = need("DSEAMS_GXX")
     work = Path(os.environ.get("DSEAMS_ADAPTER_WORK", "var/run/dseams-adapter-cov"))
     work.mkdir(parents=True, exist_ok=True)
     build = work / "plugin"
@@ -203,22 +137,6 @@ def main():
     plugin = str(build / "libdseams_lammps.so")
     libdir = str(Path(seams_lib).parent)
     lammps_cases(work / "lmp", plugin, lmp, mpirun, libdir + ":" + str(Path(seams_lib).parent.parent / "subprojects" / "readcon-core"))
-    so = work / "libDseams.so"
-    run(
-        [
-            gxx, "-shared", "-fPIC", "-std=c++17", "-O0", "-g", "--coverage",
-            "-fprofile-update=single",
-            "-I" + plumed_inc, "-I" + str(ROOT / "src" / "include" / "internal"),
-            str(ROOT / "src" / "adapters" / "plumed" / "Dseams.cpp"),
-            "-o", str(so),
-            "-L" + libdir, "-lyodaLib",
-            "-L" + str(Path(plumed_lib).parent), "-lplumed",
-            "-Wl,-rpath," + libdir,
-            "-Wl,-rpath," + str(Path(plumed_lib).parent),
-        ],
-        work,
-    )
-    plumed_cases(work, str(so), plumed_lib, libdir, plumed_inc, gxx)
     print(work)
 
 
