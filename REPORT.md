@@ -305,7 +305,7 @@ Extra lammps time, seconds per step.
 
 The public GROMACS base is
 1ede0115a1c6cc063813d2b13085a86640e4273e.
-The module patch file is absent.
+The module patch is patches/gromacs-dseams-module.patch.
 
 # Frames
 

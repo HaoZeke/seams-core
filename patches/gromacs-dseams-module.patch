@@ -1,0 +1,808 @@
+From c3dc8362ae1eeabbbded898151d07aa8117a172a Mon Sep 17 00:00:00 2001
+From: Rohit Goswami <rgoswami@ieee.org>
+Date: Sun, 8 Nov 2026 04:40:00 -0600
+Subject: [PATCH 1/2] add a d-SEAMS module beside the metatomic one
+
+The molecular dynamics parameter keys are dseams-active,
+dseams-input-group, dseams-nstcalc, dseams-cutoff and dseams-output.
+The module gathers positions onto one rank and writes a census.
+It adds no force. CMake links libyodaLib.
+---
+ CMakeLists.txt                                |   1 +
+ cmake/gmxManageDseams.cmake                   |  33 +++
+ src/gromacs/CMakeLists.txt                    |   1 +
+ src/gromacs/applied_forces/CMakeLists.txt     |   1 +
+ .../applied_forces/dseams/CMakeLists.txt      |  12 ++
+ .../applied_forces/dseams/dseamsMDModule.cpp  |  98 +++++++++
+ .../applied_forces/dseams/dseamsMDModule.h    |  57 +++++
+ .../dseams/dseamsforceprovider.cpp            | 198 ++++++++++++++++++
+ .../dseams/dseamsforceprovider.h              |  72 +++++++
+ .../applied_forces/dseams/dseamsoptions.cpp   |  97 +++++++++
+ .../applied_forces/dseams/dseamsoptions.h     |  75 +++++++
+ src/gromacs/mdrun/mdmodules.cpp               |  11 +-
+ 12 files changed, 653 insertions(+), 3 deletions(-)
+ create mode 100644 cmake/gmxManageDseams.cmake
+ create mode 100644 src/gromacs/applied_forces/dseams/CMakeLists.txt
+ create mode 100644 src/gromacs/applied_forces/dseams/dseamsMDModule.cpp
+ create mode 100644 src/gromacs/applied_forces/dseams/dseamsMDModule.h
+ create mode 100644 src/gromacs/applied_forces/dseams/dseamsforceprovider.cpp
+ create mode 100644 src/gromacs/applied_forces/dseams/dseamsforceprovider.h
+ create mode 100644 src/gromacs/applied_forces/dseams/dseamsoptions.cpp
+ create mode 100644 src/gromacs/applied_forces/dseams/dseamsoptions.h
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 4f5b955..e6c4a1b 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -778,6 +778,7 @@ endif()
+ mark_as_advanced(GMX_HAVE_COLVARS)
+ 
+ include(gmxManagePlumed)
++include(gmxManageDseams)
+ 
+ include(gmxManageFMM)
+ 
+diff --git a/cmake/gmxManageDseams.cmake b/cmake/gmxManageDseams.cmake
+new file mode 100644
+index 0000000..6725562
+--- /dev/null
++++ b/cmake/gmxManageDseams.cmake
+@@ -0,0 +1,33 @@
++#
++# This file is part of the GROMACS molecular simulation package.
++#
++# Copyright 2026- The GROMACS Authors
++# and the project initiators Erik Lindahl, Berk Hess and David van der Spoel.
++# Consult the AUTHORS/COPYING files and https://www.gromacs.org for details.
++#
++# GROMACS is free software; you can redistribute it and/or
++# modify it under the terms of the GNU Lesser General Public License
++# as published by the Free Software Foundation; either version 2.1
++# of the License, or (at your option) any later version.
++
++# Detect seams-core and expose it as the dseamsgmx interface.
++
++set(SEAMS_INCLUDE "" CACHE PATH "Directory that contains seams_insitu.h")
++set(SEAMS_LIBRARY "" CACHE FILEPATH "Path to libyodaLib")
++
++function(gmx_manage_dseams)
++    add_library(dseamsgmx INTERFACE)
++    if(NOT SEAMS_INCLUDE OR NOT EXISTS "${SEAMS_INCLUDE}/seams_insitu.h")
++        message(FATAL_ERROR "d-SEAMS needs -DSEAMS_INCLUDE pointing at seams_insitu.h")
++    endif()
++    if(NOT SEAMS_LIBRARY OR NOT EXISTS "${SEAMS_LIBRARY}")
++        message(FATAL_ERROR "d-SEAMS needs -DSEAMS_LIBRARY pointing at libyodaLib")
++    endif()
++    target_include_directories(dseamsgmx INTERFACE "${SEAMS_INCLUDE}")
++    target_link_libraries(dseamsgmx INTERFACE "${SEAMS_LIBRARY}")
++    get_filename_component(_seams_libdir "${SEAMS_LIBRARY}" DIRECTORY)
++    set_property(TARGET dseamsgmx PROPERTY INTERFACE_LINK_DIRECTORIES "${_seams_libdir}")
++    message(STATUS "d-SEAMS module will link ${SEAMS_LIBRARY}")
++endfunction()
++
++gmx_manage_dseams()
+diff --git a/src/gromacs/CMakeLists.txt b/src/gromacs/CMakeLists.txt
+index 27b7f67..465a942 100644
+--- a/src/gromacs/CMakeLists.txt
++++ b/src/gromacs/CMakeLists.txt
+@@ -500,6 +500,7 @@ if (HAVE_MUPARSER)
+     target_link_libraries(libgromacs PRIVATE muparser::muparser)
+ endif()
+ target_link_libraries(libgromacs PRIVATE plumedgmx)
++target_link_libraries(libgromacs PRIVATE dseamsgmx)
+ 
+ # Make sure we fix "everything" found by compilers that support that
+ gmx_warn_on_everything(libgromacs)
+diff --git a/src/gromacs/applied_forces/CMakeLists.txt b/src/gromacs/applied_forces/CMakeLists.txt
+index be4d0eb..4515b54 100644
+--- a/src/gromacs/applied_forces/CMakeLists.txt
++++ b/src/gromacs/applied_forces/CMakeLists.txt
+@@ -68,6 +68,7 @@ add_subdirectory(densityfitting)
+ add_subdirectory(qmmm)
+ add_subdirectory(colvars)
+ add_subdirectory(plumed)
++add_subdirectory(dseams)
+ add_subdirectory(nnpot)
+ 
+ if (BUILD_TESTING)
+diff --git a/src/gromacs/applied_forces/dseams/CMakeLists.txt b/src/gromacs/applied_forces/dseams/CMakeLists.txt
+new file mode 100644
+index 0000000..f0002f8
+--- /dev/null
++++ b/src/gromacs/applied_forces/dseams/CMakeLists.txt
+@@ -0,0 +1,12 @@
++#
++# This file is part of the GROMACS molecular simulation package.
++#
++# Copyright 2026- The GROMACS Authors
++# and the project initiators Erik Lindahl, Berk Hess and David van der Spoel.
++# Consult the AUTHORS/COPYING files and https://www.gromacs.org for details.
++
++gmx_add_libgromacs_sources(
++    dseamsoptions.cpp
++    dseamsMDModule.cpp
++    dseamsforceprovider.cpp
++    )
+diff --git a/src/gromacs/applied_forces/dseams/dseamsMDModule.cpp b/src/gromacs/applied_forces/dseams/dseamsMDModule.cpp
+new file mode 100644
+index 0000000..294253d
+--- /dev/null
++++ b/src/gromacs/applied_forces/dseams/dseamsMDModule.cpp
+@@ -0,0 +1,98 @@
++/*
++ * This file is part of the GROMACS molecular simulation package.
++ *
++ * Copyright 2024- The GROMACS Authors
++ * and the project initiators Erik Lindahl, Berk Hess and David van der Spoel.
++ * Consult the AUTHORS/COPYING files and https://www.gromacs.org for details.
++ *
++ * GROMACS is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public License
++ * as published by the Free Software Foundation; either version 2.1
++ * of the License, or (at your option) any later version.
++ *
++ * GROMACS is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with GROMACS; if not, see
++ * https://www.gnu.org/licenses, or write to the Free Software Foundation,
++ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA.
++ *
++ * If you want to redistribute modifications to GROMACS, please
++ * consider that scientific software is very special. Version
++ * control is crucial - bugs must be traceable. We will be happy to
++ * consider code for inclusion in the official distribution, but
++ * derived work must not be called official GROMACS. Details are found
++ * in the README & COPYING files - if they are missing, get the
++ * official version at https://www.gromacs.org.
++ *
++ * To help us fund GROMACS development, we humbly ask that you cite
++ * the research papers on the package. Check out https://www.gromacs.org.
++ */
++/*! \internal \file
++ * \brief
++ * Implements the d-SEAMS MDModule.
++ *
++ * \author Rohit Goswami <rgoswami@ieee.org>
++ */
++#include "gmxpre.h"
++
++#include "dseamsMDModule.h"
++
++#include "gromacs/mdrunutility/mdmodulesnotifiers.h"
++#include "gromacs/mdtypes/imdmodule.h"
++
++#include "dseamsforceprovider.h"
++#include "dseamsoptions.h"
++
++namespace gmx
++{
++namespace
++{
++class DseamsMDModule final : public IMDModule
++{
++public:
++    void subscribeToPreProcessingNotifications(MDModulesNotifiers*) override {}
++
++    void subscribeToSimulationSetupNotifications(MDModulesNotifiers*) override {}
++
++    void subscribeToSimulationRunNotifications(MDModulesNotifiers* notifier) override
++    {
++        if (!options_.active())
++        {
++            return;
++        }
++        notifier->simulationRunNotifier_.subscribe([this](const MDModulesAtomsRedistributedSignal& signal) {
++            if (provider_ != nullptr)
++            {
++                provider_->setGlobalAtomIndices(signal.globalAtomIndices_);
++            }
++        });
++    }
++
++    IMdpOptionProvider* mdpOptionProvider() override { return &options_; }
++    IMDOutputProvider*  outputProvider() override { return nullptr; }
++
++    void initForceProviders(ForceProviders* forceProviders) override
++    {
++        if (!options_.active())
++        {
++            return;
++        }
++        provider_ = std::make_unique<DseamsForceProvider>(options_.parameters());
++        forceProviders->addForceProvider(provider_.get(), std::string(DseamsModuleInfo::sc_name));
++    }
++
++private:
++    DseamsOptions                         options_{};
++    std::unique_ptr<DseamsForceProvider>  provider_{};
++};
++} // namespace
++
++std::unique_ptr<IMDModule> DseamsModuleInfo::create()
++{
++    return std::make_unique<DseamsMDModule>();
++}
++} // namespace gmx
+diff --git a/src/gromacs/applied_forces/dseams/dseamsMDModule.h b/src/gromacs/applied_forces/dseams/dseamsMDModule.h
+new file mode 100644
+index 0000000..8b76a43
+--- /dev/null
++++ b/src/gromacs/applied_forces/dseams/dseamsMDModule.h
+@@ -0,0 +1,57 @@
++/*
++ * This file is part of the GROMACS molecular simulation package.
++ *
++ * Copyright 2024- The GROMACS Authors
++ * and the project initiators Erik Lindahl, Berk Hess and David van der Spoel.
++ * Consult the AUTHORS/COPYING files and https://www.gromacs.org for details.
++ *
++ * GROMACS is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public License
++ * as published by the Free Software Foundation; either version 2.1
++ * of the License, or (at your option) any later version.
++ *
++ * GROMACS is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with GROMACS; if not, see
++ * https://www.gnu.org/licenses, or write to the Free Software Foundation,
++ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA.
++ *
++ * If you want to redistribute modifications to GROMACS, please
++ * consider that scientific software is very special. Version
++ * control is crucial - bugs must be traceable. We will be happy to
++ * consider code for inclusion in the official distribution, but
++ * derived work must not be called official GROMACS. Details are found
++ * in the README & COPYING files - if they are missing, get the
++ * official version at https://www.gromacs.org.
++ *
++ * To help us fund GROMACS development, we humbly ask that you cite
++ * the research papers on the package. Check out https://www.gromacs.org.
++ */
++/*! \internal \file
++ * \brief
++ * Declares the d-SEAMS applied-forces module.
++ *
++ * \author Rohit Goswami <rgoswami@ieee.org>
++ * \ingroup module_applied_forces
++ */
++#ifndef GMX_APPLIED_FORCES_DSEAMSMDMODULE_H
++#define GMX_APPLIED_FORCES_DSEAMSMDMODULE_H
++
++#include <memory>
++#include <string_view>
++
++namespace gmx
++{
++class IMDModule;
++struct DseamsModuleInfo
++{
++    static std::unique_ptr<IMDModule> create();
++    static constexpr std::string_view sc_name = "dseams";
++};
++} // namespace gmx
++
++#endif
+diff --git a/src/gromacs/applied_forces/dseams/dseamsforceprovider.cpp b/src/gromacs/applied_forces/dseams/dseamsforceprovider.cpp
+new file mode 100644
+index 0000000..d821288
+--- /dev/null
++++ b/src/gromacs/applied_forces/dseams/dseamsforceprovider.cpp
+@@ -0,0 +1,198 @@
++/*
++ * This file is part of the GROMACS molecular simulation package.
++ *
++ * Copyright 2024- The GROMACS Authors
++ * and the project initiators Erik Lindahl, Berk Hess and David van der Spoel.
++ * Consult the AUTHORS/COPYING files and https://www.gromacs.org for details.
++ *
++ * GROMACS is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public License
++ * as published by the Free Software Foundation; either version 2.1
++ * of the License, or (at your option) any later version.
++ *
++ * GROMACS is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with GROMACS; if not, see
++ * https://www.gnu.org/licenses, or write to the Free Software Foundation,
++ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA.
++ *
++ * If you want to redistribute modifications to GROMACS, please
++ * consider that scientific software is very special. Version
++ * control is crucial - bugs must be traceable. We will be happy to
++ * consider code for inclusion in the official distribution, but
++ * derived work must not be called official GROMACS. Details are found
++ * in the README & COPYING files - if they are missing, get the
++ * official version at https://www.gromacs.org.
++ *
++ * To help us fund GROMACS development, we humbly ask that you cite
++ * the research papers on the package. Check out https://www.gromacs.org.
++ */
++/*! \internal \file
++ * \brief
++ * Gathers positions and runs the d-SEAMS census. No force is added.
++ *
++ * \author Rohit Goswami <rgoswami@ieee.org>
++ */
++#include "gmxpre.h"
++
++#include "dseamsforceprovider.h"
++
++#include <mpi.h>
++
++#include <vector>
++
++#include "gromacs/utility/vectypes.h"
++#include "gromacs/utility/mpicomm.h"
++
++#include <seams_insitu.h>
++
++namespace gmx
++{
++DseamsForceProvider::DseamsForceProvider(const DseamsParameters& parameters) :
++    parameters_(parameters)
++{
++    seams_insitu_options opt;
++    seams_insitu_options_default(&opt);
++    opt.cutoff            = parameters_.cutoff_;
++    opt.cadence.every     = 1;
++    opt.debug_dump        = 0;
++    engine_               = seams_insitu_create(&opt);
++    if (engine_ != nullptr)
++    {
++        seams_insitu_open_record(engine_, parameters_.output_.c_str());
++    }
++}
++
++DseamsForceProvider::~DseamsForceProvider()
++{
++    seams_insitu_destroy(engine_);
++    engine_ = nullptr;
++}
++
++void DseamsForceProvider::setGlobalAtomIndices(const std::optional<ArrayRef<const int>>& indices)
++{
++    globalIndices_.clear();
++    if (indices.has_value())
++    {
++        globalIndices_.assign(indices->begin(), indices->end());
++    }
++}
++
++void DseamsForceProvider::calculateForces(const ForceProviderInput& input, ForceProviderOutput*)
++{
++    if (engine_ == nullptr)
++    {
++        return;
++    }
++    if (parameters_.nstcalc_ > 1 && (input.step_ % parameters_.nstcalc_) != 0)
++    {
++        return;
++    }
++    const int nlocal = input.homenr_;
++    std::vector<int>    localIndex(static_cast<size_t>(nlocal));
++    std::vector<double> localXyz(static_cast<size_t>(nlocal) * 3);
++    for (int i = 0; i < nlocal; ++i)
++    {
++        const int global = globalIndices_.empty() ? i : globalIndices_[static_cast<size_t>(i)];
++        localIndex[static_cast<size_t>(i)] = global;
++        localXyz[static_cast<size_t>(3 * i)]     = input.x_[i][XX];
++        localXyz[static_cast<size_t>(3 * i + 1)] = input.x_[i][YY];
++        localXyz[static_cast<size_t>(3 * i + 2)] = input.x_[i][ZZ];
++    }
++    const int nprocs = input.mpiComm_.size();
++    std::vector<double> allXyz;
++    std::vector<int>    allIndex;
++    int                 total = nlocal;
++    if (nprocs == 1)
++    {
++        allXyz   = localXyz;
++        allIndex = localIndex;
++    }
++    else
++    {
++        std::vector<int> counts(static_cast<size_t>(nprocs));
++        MPI_Allgather(&nlocal, 1, MPI_INT, counts.data(), 1, MPI_INT, input.mpiComm_.comm());
++        std::vector<int> displs(static_cast<size_t>(nprocs));
++        std::vector<int> xcounts(static_cast<size_t>(nprocs));
++        std::vector<int> xdispls(static_cast<size_t>(nprocs));
++        total = 0;
++        for (int rank = 0; rank < nprocs; ++rank)
++        {
++            displs[static_cast<size_t>(rank)]  = total;
++            xdispls[static_cast<size_t>(rank)] = total * 3;
++            xcounts[static_cast<size_t>(rank)] = counts[static_cast<size_t>(rank)] * 3;
++            total += counts[static_cast<size_t>(rank)];
++        }
++        allIndex.resize(static_cast<size_t>(total));
++        allXyz.resize(static_cast<size_t>(total) * 3);
++        int    ipad = 0;
++        double xpad = 0.0;
++        MPI_Gatherv(nlocal > 0 ? localIndex.data() : &ipad,
++                    nlocal,
++                    MPI_INT,
++                    allIndex.data(),
++                    counts.data(),
++                    displs.data(),
++                    MPI_INT,
++                    0,
++                    input.mpiComm_.comm());
++        MPI_Gatherv(nlocal > 0 ? localXyz.data() : &xpad,
++                    nlocal * 3,
++                    MPI_DOUBLE,
++                    allXyz.data(),
++                    xcounts.data(),
++                    xdispls.data(),
++                    MPI_DOUBLE,
++                    0,
++                    input.mpiComm_.comm());
++    }
++    if (!input.mpiComm_.isMainRank())
++    {
++        return;
++    }
++    std::vector<double> xyz(static_cast<size_t>(total) * 3, 0.0);
++    std::vector<int>    types(static_cast<size_t>(total), 1);
++    std::vector<int>    ids(static_cast<size_t>(total));
++    for (int i = 0; i < total; ++i)
++    {
++        ids[static_cast<size_t>(i)] = i + 1;
++        const int global = allIndex[static_cast<size_t>(i)];
++        if (global < 0 || global >= total)
++        {
++            continue;
++        }
++        xyz[static_cast<size_t>(3 * global)]     = allXyz[static_cast<size_t>(3 * i)];
++        xyz[static_cast<size_t>(3 * global + 1)] = allXyz[static_cast<size_t>(3 * i + 1)];
++        xyz[static_cast<size_t>(3 * global + 2)] = allXyz[static_cast<size_t>(3 * i + 2)];
++    }
++    double rows[9] = { input.box_[0][0], input.box_[0][1], input.box_[0][2],
++                       input.box_[1][0], input.box_[1][1], input.box_[1][2],
++                       input.box_[2][0], input.box_[2][1], input.box_[2][2] };
++    double xlo = 0, ylo = 0, zlo = 0, lx = 0, ly = 0, lz = 0, xy = 0, xz = 0, yz = 0;
++    seams_insitu_box_from_rows(rows, &xlo, &ylo, &zlo, &lx, &ly, &lz, &xy, &xz, &yz);
++    seams_insitu_frame frame{};
++    frame.step        = static_cast<int>(input.step_);
++    frame.n           = total;
++    frame.xyz         = xyz.data();
++    frame.types       = types.data();
++    frame.ids         = ids.data();
++    frame.xlo         = xlo * 10.0;
++    frame.ylo         = ylo * 10.0;
++    frame.zlo         = zlo * 10.0;
++    frame.lx          = lx * 10.0;
++    frame.ly          = ly * 10.0;
++    frame.lz          = lz * 10.0;
++    frame.xy          = xy * 10.0;
++    frame.xz          = xz * 10.0;
++    frame.yz          = yz * 10.0;
++    frame.gathered    = 1;
++    frame.coord_scale = 10.0;
++    frame.rank        = 0;
++    frame.nranks      = nprocs;
++    seams_insitu_observe(engine_, &frame, nullptr);
++}
++} // namespace gmx
+diff --git a/src/gromacs/applied_forces/dseams/dseamsforceprovider.h b/src/gromacs/applied_forces/dseams/dseamsforceprovider.h
+new file mode 100644
+index 0000000..0d70cc9
+--- /dev/null
++++ b/src/gromacs/applied_forces/dseams/dseamsforceprovider.h
+@@ -0,0 +1,72 @@
++/*
++ * This file is part of the GROMACS molecular simulation package.
++ *
++ * Copyright 2024- The GROMACS Authors
++ * and the project initiators Erik Lindahl, Berk Hess and David van der Spoel.
++ * Consult the AUTHORS/COPYING files and https://www.gromacs.org for details.
++ *
++ * GROMACS is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public License
++ * as published by the Free Software Foundation; either version 2.1
++ * of the License, or (at your option) any later version.
++ *
++ * GROMACS is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with GROMACS; if not, see
++ * https://www.gnu.org/licenses, or write to the Free Software Foundation,
++ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA.
++ *
++ * If you want to redistribute modifications to GROMACS, please
++ * consider that scientific software is very special. Version
++ * control is crucial - bugs must be traceable. We will be happy to
++ * consider code for inclusion in the official distribution, but
++ * derived work must not be called official GROMACS. Details are found
++ * in the README & COPYING files - if they are missing, get the
++ * official version at https://www.gromacs.org.
++ *
++ * To help us fund GROMACS development, we humbly ask that you cite
++ * the research papers on the package. Check out https://www.gromacs.org.
++ */
++/*! \internal \file
++ * \brief
++ * Force provider that analyses positions and adds no force.
++ *
++ * \author Rohit Goswami <rgoswami@ieee.org>
++ * \ingroup module_applied_forces
++ */
++#ifndef GMX_APPLIED_FORCES_DSEAMSFORCEPROVIDER_H
++#define GMX_APPLIED_FORCES_DSEAMSFORCEPROVIDER_H
++
++#include <memory>
++#include <optional>
++#include <vector>
++
++#include "gromacs/mdtypes/iforceprovider.h"
++#include "gromacs/utility/arrayref.h"
++
++#include "dseamsoptions.h"
++
++struct seams_insitu_engine;
++
++namespace gmx
++{
++class DseamsForceProvider final : public IForceProvider
++{
++public:
++    explicit DseamsForceProvider(const DseamsParameters& parameters);
++    ~DseamsForceProvider();
++    void setGlobalAtomIndices(const std::optional<ArrayRef<const int>>& indices);
++    void calculateForces(const ForceProviderInput& input, ForceProviderOutput* output) override;
++
++private:
++    DseamsParameters          parameters_;
++    seams_insitu_engine*      engine_ = nullptr;
++    std::vector<int>          globalIndices_;
++};
++} // namespace gmx
++
++#endif
+diff --git a/src/gromacs/applied_forces/dseams/dseamsoptions.cpp b/src/gromacs/applied_forces/dseams/dseamsoptions.cpp
+new file mode 100644
+index 0000000..19227f2
+--- /dev/null
++++ b/src/gromacs/applied_forces/dseams/dseamsoptions.cpp
+@@ -0,0 +1,97 @@
++/*
++ * This file is part of the GROMACS molecular simulation package.
++ *
++ * Copyright 2024- The GROMACS Authors
++ * and the project initiators Erik Lindahl, Berk Hess and David van der Spoel.
++ * Consult the AUTHORS/COPYING files and https://www.gromacs.org for details.
++ *
++ * GROMACS is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public License
++ * as published by the Free Software Foundation; either version 2.1
++ * of the License, or (at your option) any later version.
++ *
++ * GROMACS is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with GROMACS; if not, see
++ * https://www.gnu.org/licenses, or write to the Free Software Foundation,
++ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA.
++ *
++ * If you want to redistribute modifications to GROMACS, please
++ * consider that scientific software is very special. Version
++ * control is crucial - bugs must be traceable. We will be happy to
++ * consider code for inclusion in the official distribution, but
++ * derived work must not be called official GROMACS. Details are found
++ * in the README & COPYING files - if they are missing, get the
++ * official version at https://www.gromacs.org.
++ *
++ * To help us fund GROMACS development, we humbly ask that you cite
++ * the research papers on the package. Check out https://www.gromacs.org.
++ */
++/*! \internal \file
++ * \brief
++ * Implements the d-SEAMS mdp options.
++ *
++ * \author Rohit Goswami <rgoswami@ieee.org>
++ */
++#include "gmxpre.h"
++
++#include "dseamsoptions.h"
++
++#include "dseamsMDModule.h"
++
++#include "gromacs/mdtypes/imdpoptionprovider_helpers.h"
++#include "gromacs/options/basicoptions.h"
++#include "gromacs/options/optionsection.h"
++#include "gromacs/utility/keyvaluetreebuilder.h"
++#include "gromacs/utility/keyvaluetreetransform.h"
++#include "gromacs/utility/strconvert.h"
++
++namespace gmx
++{
++namespace
++{
++const std::string c_active = "active";
++const std::string c_group  = "input-group";
++const std::string c_nst    = "nstcalc";
++const std::string c_cut    = "cutoff";
++const std::string c_out    = "output";
++} // namespace
++
++void DseamsOptions::initMdpTransform(IKeyValueTreeTransformRules* rules)
++{
++    const auto stringIdentityTransform = [](std::string text) { return text; };
++    addMdpTransformFromString<bool>(rules, &fromStdString<bool>, DseamsModuleInfo::sc_name, c_active);
++    addMdpTransformFromString<std::string>(rules, stringIdentityTransform, DseamsModuleInfo::sc_name, c_group);
++    addMdpTransformFromString<int>(rules, &fromStdString<int>, DseamsModuleInfo::sc_name, c_nst);
++    addMdpTransformFromString<double>(rules, &fromStdString<double>, DseamsModuleInfo::sc_name, c_cut);
++    addMdpTransformFromString<std::string>(rules, stringIdentityTransform, DseamsModuleInfo::sc_name, c_out);
++}
++
++void DseamsOptions::initMdpOptions(IOptionsContainerWithSections* options)
++{
++    auto section = options->addSection(OptionSection("dseams"));
++    section.addOption(BooleanOption(c_active.c_str()).store(&params_.active_));
++    section.addOption(StringOption(c_group.c_str()).store(&params_.inputGroup_));
++    section.addOption(IntegerOption(c_nst.c_str()).store(&params_.nstcalc_));
++    section.addOption(DoubleOption(c_cut.c_str()).store(&params_.cutoff_));
++    section.addOption(StringOption(c_out.c_str()).store(&params_.output_));
++}
++
++void DseamsOptions::buildMdpOutput(KeyValueTreeObjectBuilder* builder) const
++{
++    addMdpOutputComment(builder, DseamsModuleInfo::sc_name, "empty-line", "");
++    addMdpOutputComment(builder, DseamsModuleInfo::sc_name, "module", "; d-SEAMS in-situ analysis");
++    addMdpOutputValue(builder, DseamsModuleInfo::sc_name, c_active, params_.active_);
++    if (params_.active_)
++    {
++        addMdpOutputValue<std::string>(builder, DseamsModuleInfo::sc_name, c_group, params_.inputGroup_);
++        addMdpOutputValue<int>(builder, DseamsModuleInfo::sc_name, c_nst, params_.nstcalc_);
++        addMdpOutputValue<double>(builder, DseamsModuleInfo::sc_name, c_cut, params_.cutoff_);
++        addMdpOutputValue<std::string>(builder, DseamsModuleInfo::sc_name, c_out, params_.output_);
++    }
++}
++} // namespace gmx
+diff --git a/src/gromacs/applied_forces/dseams/dseamsoptions.h b/src/gromacs/applied_forces/dseams/dseamsoptions.h
+new file mode 100644
+index 0000000..e126cc1
+--- /dev/null
++++ b/src/gromacs/applied_forces/dseams/dseamsoptions.h
+@@ -0,0 +1,75 @@
++/*
++ * This file is part of the GROMACS molecular simulation package.
++ *
++ * Copyright 2024- The GROMACS Authors
++ * and the project initiators Erik Lindahl, Berk Hess and David van der Spoel.
++ * Consult the AUTHORS/COPYING files and https://www.gromacs.org for details.
++ *
++ * GROMACS is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public License
++ * as published by the Free Software Foundation; either version 2.1
++ * of the License, or (at your option) any later version.
++ *
++ * GROMACS is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with GROMACS; if not, see
++ * https://www.gnu.org/licenses, or write to the Free Software Foundation,
++ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA.
++ *
++ * If you want to redistribute modifications to GROMACS, please
++ * consider that scientific software is very special. Version
++ * control is crucial - bugs must be traceable. We will be happy to
++ * consider code for inclusion in the official distribution, but
++ * derived work must not be called official GROMACS. Details are found
++ * in the README & COPYING files - if they are missing, get the
++ * official version at https://www.gromacs.org.
++ *
++ * To help us fund GROMACS development, we humbly ask that you cite
++ * the research papers on the package. Check out https://www.gromacs.org.
++ */
++/*! \internal \file
++ * \brief
++ * mdp options for the d-SEAMS module.
++ *
++ * \author Rohit Goswami <rgoswami@ieee.org>
++ * \ingroup module_applied_forces
++ */
++#ifndef GMX_APPLIED_FORCES_DSEAMSOPTIONS_H
++#define GMX_APPLIED_FORCES_DSEAMSOPTIONS_H
++
++#include <string>
++
++#include "gromacs/mdtypes/imdpoptionprovider.h"
++
++namespace gmx
++{
++class MpiComm;
++
++struct DseamsParameters
++{
++    bool        active_   = false;
++    std::string inputGroup_ = "System";
++    int         nstcalc_  = 1;
++    double      cutoff_   = 3.5;
++    std::string output_   = "dseams.txt";
++};
++
++class DseamsOptions : public IMdpOptionProvider
++{
++public:
++    void initMdpTransform(IKeyValueTreeTransformRules* rules) override;
++    void initMdpOptions(IOptionsContainerWithSections* options) override;
++    void buildMdpOutput(KeyValueTreeObjectBuilder* builder) const override;
++    bool active() const { return params_.active_; }
++    const DseamsParameters& parameters() const { return params_; }
++
++private:
++    DseamsParameters params_;
++};
++} // namespace gmx
++
++#endif
+diff --git a/src/gromacs/mdrun/mdmodules.cpp b/src/gromacs/mdrun/mdmodules.cpp
+index 2e46536..6fcef59 100644
+--- a/src/gromacs/mdrun/mdmodules.cpp
++++ b/src/gromacs/mdrun/mdmodules.cpp
+@@ -45,6 +45,7 @@
+ #include "gromacs/applied_forces/densityfitting/densityfitting.h"
+ #include "gromacs/applied_forces/electricfield.h"
+ #include "gromacs/applied_forces/nnpot/nnpot.h"
++#include "gromacs/applied_forces/dseams/dseamsMDModule.h"
+ #include "gromacs/applied_forces/plumed/plumedMDModule.h"
+ #include "gromacs/applied_forces/qmmm/qmmm.h"
+ #include "gromacs/fmm/fmm_mdmodule.h"
+@@ -85,6 +86,7 @@ public:
+         modules_[std::string(SwapCoordinatesModuleInfo::sc_name)] = SwapCoordinatesModuleInfo::create();
+         modules_[std::string(ColvarsModuleInfo::sc_name)]       = ColvarsModuleInfo::create();
+         modules_[std::string(PlumedModuleInfo::sc_name)]        = PlumedModuleInfo::create();
++        modules_[std::string(DseamsModuleInfo::sc_name)]        = DseamsModuleInfo::create();
+         modules_[std::string(NNPotModuleInfo::sc_name)]         = NNPotModuleInfo::create();
+         modules_[std::string(FmmModuleInfo::sc_name)]           = FmmModuleInfo::create();
+         modules_[std::string(OutputControlModuleInfo::sc_name)] = OutputControlModuleInfo::create();
+@@ -104,7 +106,8 @@ public:
+                                              DensityFittingModuleInfo::sc_name,
+                                              QMMMModuleInfo::sc_name,
+                                              ColvarsModuleInfo::sc_name,
+-                                             NNPotModuleInfo::sc_name })
++                                             NNPotModuleInfo::sc_name,
++                                             DseamsModuleInfo::sc_name })
+         {
+             IMDModule*          module            = modules_.at(std::string(moduleName)).get();
+             IMdpOptionProvider* mdpOptionProvider = module->mdpOptionProvider();
+@@ -176,7 +179,8 @@ void MDModules::initMdpTransform(IKeyValueTreeTransformRules* rules)
+                                          DensityFittingModuleInfo::sc_name,
+                                          QMMMModuleInfo::sc_name,
+                                          ColvarsModuleInfo::sc_name,
+-                                         NNPotModuleInfo::sc_name })
++                                         NNPotModuleInfo::sc_name,
++                                         DseamsModuleInfo::sc_name })
+     {
+         IMDModule*          module            = impl_->modules_.at(std::string(moduleName)).get();
+         IMdpOptionProvider* mdpOptionProvider = module->mdpOptionProvider();
+@@ -216,7 +220,8 @@ void MDModules::buildMdpOutput(KeyValueTreeObjectBuilder* builder)
+                                          DensityFittingModuleInfo::sc_name,
+                                          QMMMModuleInfo::sc_name,
+                                          ColvarsModuleInfo::sc_name,
+-                                         NNPotModuleInfo::sc_name })
++                                         NNPotModuleInfo::sc_name,
++                                         DseamsModuleInfo::sc_name })
+     {
+         IMDModule*                module = impl_->modules_.at(std::string(moduleName)).get();
+         const IMdpOptionProvider* mdpOptionProvider = module->mdpOptionProvider();
