@@ -660,9 +660,6 @@ void ddcChains(const std::vector<std::vector<int>> &rings,
             std::binary_search(bc[static_cast<size_t>(jb)].begin(),
                                bc[static_cast<size_t>(jb)].end(), kc);
         const unsigned middles = 1U | (bcOK ? 2U : 0U) | (bcOK ? 4U : 0U);
-        if (!commonAtom(atomsA, atomsB, rings[static_cast<size_t>(rc)])) {
-          continue;
-        }
         out.push_back(DdcChain{{ra, rb, rc}, middles});
       }
       for (const int kc : bc[static_cast<size_t>(jb)]) {
