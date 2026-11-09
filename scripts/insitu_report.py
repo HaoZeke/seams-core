@@ -234,11 +234,12 @@ def main():
     if "ladder" in data:
         lines.append("# OpenMP threads")
         lines.append("")
-        lines.append("The command line census above is one frame.")
-        lines.append("Each sample here is the analysis of the dumped frames divided by the frame count, after one warmup.")
-        lines.append("The thread counts are the powers of two up to the processors the process may use.")
-        lines.append("A larger thread count scales when its third quartile is below the smaller thread count's first quartile.")
-        lines.append("Waters and threads in the table are those counts.")
+        lines.append("The ladder times a warm cached workload.")
+        lines.append("Five dumped frames are parsed before the clock starts.")
+        lines.append("One engine stays open for the warmup and the six samples.")
+        lines.append("Each sample calls observe on those frames and divides by five.")
+        lines.append("Parsing, construction, and the cold first pass stay outside the samples.")
+        lines.append("A larger thread count scales when its third quartile is below the previous first quartile.")
         lines.append("")
         previous = {}
         scaling_failed = []
@@ -280,15 +281,26 @@ def main():
             continue
         lines.append("## %s raw samples" % name)
         lines.append("")
-        lines.append("Plain %s seconds per step follow." % name)
+        lines.append("Plain %s loop, seconds per step." % name)
+        lines.append("")
+        lines.append("```")
         for value in plain:
             lines.append(fmt(value))
-        lines.append("In-situ %s seconds per step follow." % name)
+        lines.append("```")
+        lines.append("")
+        lines.append("In-situ %s loop, seconds per step." % name)
+        lines.append("")
+        lines.append("```")
         for value in live:
             lines.append(fmt(value))
-        lines.append("Extra %s seconds per step follow." % name)
+        lines.append("```")
+        lines.append("")
+        lines.append("Extra %s time, seconds per step." % name)
+        lines.append("")
+        lines.append("```")
         for i in range(len(plain)):
             lines.append(fmt(live[i] - plain[i]))
+        lines.append("```")
         lines.append("")
     dest.write_text("\n".join(lines) + "\n")
     if "ladder" in data:
