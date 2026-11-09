@@ -206,7 +206,9 @@ seams_frame *seams_frame_read(const char *path, int frame, int type_filter) {
   try {
     auto *out = new seams_frame();
     out->cloud = load_path(path, frame, type_filter);
-    if (out->cloud.currentFrame <= 0) out->cloud.currentFrame = frame > 0 ? frame : 1;
+    if (out->cloud.currentFrame <= 0) {
+      out->cloud.currentFrame = frame > 0 ? frame : 1;
+    }
     out->sync_arrays();
     return out;
   } catch (const std::exception &ex) {
@@ -320,7 +322,9 @@ int classify_chill(seams_frame *frame, double cutoff, int type,
       if (!keep_atom(point.type, type)) {
         label = static_cast<int>(molSys::atom_state_type::unclassified);
       }
-      if (label < 0 || label > 8) label = 6;
+      if (label < 0 || label > 8) {
+        label = 6;
+      }
       frame->labels[static_cast<std::size_t>(i)] = label;
       if (keep_atom(point.type, type)) {
         counts[label] += 1;
@@ -407,8 +411,12 @@ int seams_frame_steinhardt(seams_frame *frame, double cutoff, int type,
     const int n = frame->cloud.nop;
     frame->ql = result.ql;
     frame->qlbar = result.qlBar;
-    if (static_cast<int>(frame->ql.size()) < n) frame->ql.resize(static_cast<std::size_t>(n), 0.0);
-    if (static_cast<int>(frame->qlbar.size()) < n) frame->qlbar.resize(static_cast<std::size_t>(n), 0.0);
+    if (static_cast<int>(frame->ql.size()) < n) {
+      frame->ql.resize(static_cast<std::size_t>(n), 0.0);
+    }
+    if (static_cast<int>(frame->qlbar.size()) < n) {
+      frame->qlbar.resize(static_cast<std::size_t>(n), 0.0);
+    }
     if (ql != nullptr && n > 0) {
       std::memcpy(ql, frame->ql.data(), static_cast<std::size_t>(n) * sizeof(double));
     }

@@ -480,7 +480,9 @@ struct DdcMaskCount {
   }
 
   void add(int ring) {
-    if (ring < 0 || ring >= static_cast<int>(touch.size())) return;
+    if (ring < 0 || ring >= static_cast<int>(touch.size())) {
+      return;
+    }
     if (touch[static_cast<size_t>(ring)] != tick) {
       touch[static_cast<size_t>(ring)] = tick;
       cnt[static_cast<size_t>(ring)] = 0;
@@ -499,7 +501,9 @@ struct DdcMaskCount {
   void lists(const std::vector<int> &ids, const std::vector<DdcChain> &chains) {
     for (const int id : ids) {
       for (const int ring : chains[static_cast<size_t>(id)].r) {
-        if (ring < 0 || ring >= static_cast<int>(at.size())) continue;
+        if (ring < 0 || ring >= static_cast<int>(at.size())) {
+          continue;
+        }
         auto &row = at[static_cast<size_t>(ring)];
         if (row.empty()) {
           used.push_back(ring);
@@ -523,9 +527,13 @@ struct DdcMaskCount {
     int cover = 0;
     const int ringsHere[3] = {a, b, c};
     for (const int ring : ringsHere) {
-      if (ring < 0 || ring >= static_cast<int>(at.size())) continue;
+      if (ring < 0 || ring >= static_cast<int>(at.size())) {
+        continue;
+      }
       for (const int id : at[static_cast<size_t>(ring)]) {
-        if (id < 0 || id >= static_cast<int>(chainSeen.size())) continue;
+        if (id < 0 || id >= static_cast<int>(chainSeen.size())) {
+          continue;
+        }
         if (chainSeen[static_cast<size_t>(id)] == chainTick) {
           continue;
         }
@@ -563,10 +571,14 @@ void markDdcLive(const std::vector<DdcChain> &self,
     slow.clear();
     bool needLists = false;
     for (int i = 0; i < static_cast<int>(self.size()); ++i) {
-      if (live[static_cast<size_t>(i)] != 0) continue;
+      if (live[static_cast<size_t>(i)] != 0) {
+        continue;
+      }
       const unsigned partners =
           ddcPartnerMask(self[static_cast<size_t>(i)].middles);
-      if ((partners & mask) == 0U) continue;
+      if ((partners & mask) == 0U) {
+        continue;
+      }
       const auto &chain = self[static_cast<size_t>(i)];
       const int coverBound = count.get(chain.r[0]) + count.get(chain.r[1]) +
                              count.get(chain.r[2]);
@@ -582,7 +594,9 @@ void markDdcLive(const std::vector<DdcChain> &self,
     }
     count.lists(ids, other);
     for (const int i : slow) {
-      if (live[static_cast<size_t>(i)] != 0) continue;
+      if (live[static_cast<size_t>(i)] != 0) {
+        continue;
+      }
       const auto &chain = self[static_cast<size_t>(i)];
       if (count.hasDisjoint(chain.r[0], chain.r[1], chain.r[2])) {
         live[static_cast<size_t>(i)] = 1;
@@ -651,7 +665,9 @@ void ddcChains(const std::vector<std::vector<int>> &rings,
     const auto &atomsA = rings[static_cast<size_t>(ra)];
     for (const int jb : ab[static_cast<size_t>(i)]) {
       const int rb = B[static_cast<size_t>(jb)];
-      if (rb == ra) continue;
+      if (rb == ra) {
+        continue;
+      }
       const auto &atomsB = rings[static_cast<size_t>(rb)];
       for (const int kc : ac[static_cast<size_t>(i)]) {
         const int rc = C[static_cast<size_t>(kc)];
@@ -662,7 +678,9 @@ void ddcChains(const std::vector<std::vector<int>> &rings,
             std::binary_search(bc[static_cast<size_t>(jb)].begin(),
                                bc[static_cast<size_t>(jb)].end(), kc);
         const unsigned middles = 1U | (bcOK ? 2U : 0U) | (bcOK ? 4U : 0U);
-        if (!commonAtom(atomsA, atomsB, rings[static_cast<size_t>(rc)])) continue;
+        if (!commonAtom(atomsA, atomsB, rings[static_cast<size_t>(rc)])) {
+          continue;
+        }
         out.push_back(DdcChain{{ra, rb, rc}, middles});
       }
       for (const int kc : bc[static_cast<size_t>(jb)]) {
@@ -681,7 +699,9 @@ void ddcChains(const std::vector<std::vector<int>> &rings,
     }
     for (const int kc : ac[static_cast<size_t>(i)]) {
       const int rc = C[static_cast<size_t>(kc)];
-      if (rc == ra) continue;
+      if (rc == ra) {
+        continue;
+      }
       const auto &atomsC = rings[static_cast<size_t>(rc)];
       for (const int jb : bcFromC[static_cast<size_t>(kc)]) {
         if (markB[static_cast<size_t>(jb)] == onB) {
@@ -726,17 +746,25 @@ bool ddcFourteen(const std::vector<std::vector<int>> &rings,
     stamp[static_cast<size_t>(atom)] = eqMark;
     ++eqN;
   }
-  if (eqN != 6) return false;
+  if (eqN != 6) {
+    return false;
+  }
   const int ids[6] = {e.r[0], e.r[1], e.r[2], o.r[0], o.r[1], o.r[2]};
   for (const int ri : ids) {
     const auto &cycle = rings[static_cast<size_t>(ri)];
-    if (cycle.size() != 6) return false;
+    if (cycle.size() != 6) {
+      return false;
+    }
     int share = 0;
     for (const int atom : cycle) {
-      if (atom < 0 || atom >= nAtoms) return false;
+      if (atom < 0 || atom >= nAtoms) {
+        return false;
+      }
       share += stamp[static_cast<size_t>(atom)] == eqMark ? 1 : 0;
     }
-    if (share != 3) return false;
+    if (share != 3) {
+      return false;
+    }
   }
   const int allMark = fresh();
   int unique = 0;
@@ -769,18 +797,26 @@ bool ddcChainRoom(const std::vector<std::vector<int>> &rings,
   int unique = 0;
   auto take = [&](const std::vector<int> &cycle) -> bool {
     for (const int atom : cycle) {
-      if (atom < 0 || atom >= nAtoms) return false;
+      if (atom < 0 || atom >= nAtoms) {
+        return false;
+      }
       if (stamp[static_cast<size_t>(atom)] != mark) {
         stamp[static_cast<size_t>(atom)] = mark;
         ++unique;
-        if (unique > 14) return false;
+        if (unique > 14) {
+          return false;
+        }
       }
     }
     return true;
   };
-  if (!take(equatorial)) return false;
+  if (!take(equatorial)) {
+    return false;
+  }
   for (const int ri : chain.r) {
-    if (!take(rings[static_cast<size_t>(ri)])) return false;
+    if (!take(rings[static_cast<size_t>(ri)])) {
+      return false;
+    }
   }
   return true;
 }
@@ -826,7 +862,9 @@ void ddcKeepRoom(const std::vector<std::vector<int>> &rings,
     for (int i = 0; i < src.size(); ++i) {
       const int ring = src[static_cast<size_t>(i)];
       const auto &cycle = rings[static_cast<size_t>(ring)];
-      if (cycle.size() != 6) continue;
+      if (cycle.size() != 6) {
+        continue;
+      }
       int share = 0;
       for (const int atom : cycle) {
         if (atom >= 0 && atom < nAtoms &&
@@ -845,12 +883,18 @@ void ddcKeepRoom(const std::vector<std::vector<int>> &rings,
   std::vector<DdcChain> even;
   std::vector<DdcChain> odd;
   ddcChains(rings, equatorial, kept, 0, nAtoms, even);
-  if (even.empty()) return false;
+  if (even.empty()) {
+    return false;
+  }
   ddcChains(rings, equatorial, kept, 1, nAtoms, odd);
-  if (odd.empty()) return false;
+  if (odd.empty()) {
+    return false;
+  }
   ddcKeepRoom(rings, equatorial, nAtoms, even);
   ddcKeepRoom(rings, equatorial, nAtoms, odd);
-  if (even.empty() || odd.empty()) return false;
+  if (even.empty() || odd.empty()) {
+    return false;
+  }
   thread_local DdcMaskCount maskCount;
   std::vector<char> evenLive;
   std::vector<char> oddLive;
@@ -860,13 +904,17 @@ void ddcKeepRoom(const std::vector<std::vector<int>> &rings,
   for (const char flag : evenLive) {
     any = any || flag != 0;
   }
-  if (!any) return false;
+  if (!any) {
+    return false;
+  }
   markDdcLive(odd, even, nRings, oddLive, maskCount);
   any = false;
   for (const char flag : oddLive) {
     any = any || flag != 0;
   }
-  if (!any) return false;
+  if (!any) {
+    return false;
+  }
   const bool wantBest =
       rank != nullptr && (chosen != nullptr || raw != nullptr);
   auto pairIsKept = [&](const DdcChain &e, const DdcChain &o) {
@@ -875,9 +923,13 @@ void ddcKeepRoom(const std::vector<std::vector<int>> &rings,
   };
   if (!wantBest && peripheralUnion == nullptr) {
     for (size_t i = 0; i < even.size(); ++i) {
-      if (evenLive[static_cast<size_t>(i)] == 0) continue;
+      if (evenLive[static_cast<size_t>(i)] == 0) {
+        continue;
+      }
       for (size_t j = 0; j < odd.size(); ++j) {
-        if (oddLive[static_cast<size_t>(j)] == 0) continue;
+        if (oddLive[static_cast<size_t>(j)] == 0) {
+          continue;
+        }
         if (pairIsKept(even[i], odd[j])) {
           return true;
         }
@@ -887,9 +939,13 @@ void ddcKeepRoom(const std::vector<std::vector<int>> &rings,
   }
   if (peripheralUnion != nullptr) {
     for (size_t i = 0; i < even.size(); ++i) {
-      if (evenLive[static_cast<size_t>(i)] == 0) continue;
+      if (evenLive[static_cast<size_t>(i)] == 0) {
+        continue;
+      }
       for (size_t j = 0; j < odd.size(); ++j) {
-        if (oddLive[static_cast<size_t>(j)] == 0) continue;
+        if (oddLive[static_cast<size_t>(j)] == 0) {
+          continue;
+        }
         if (!pairIsKept(even[i], odd[j])) {
           continue;
         }
@@ -903,7 +959,9 @@ void ddcKeepRoom(const std::vector<std::vector<int>> &rings,
     peripheralUnion->erase(
         std::unique(peripheralUnion->begin(), peripheralUnion->end()),
         peripheralUnion->end());
-    if (peripheralUnion->empty() && !wantBest) return false;
+    if (peripheralUnion->empty() && !wantBest) {
+      return false;
+    }
   }
   if (wantBest) {
     int bestRank = std::numeric_limits<int>::max();
@@ -916,13 +974,17 @@ void ddcKeepRoom(const std::vector<std::vector<int>> &rings,
       }
     };
     for (size_t i = 0; i < even.size(); ++i) {
-      if (evenLive[static_cast<size_t>(i)] == 0) continue;
+      if (evenLive[static_cast<size_t>(i)] == 0) {
+        continue;
+      }
       for (const int ring : even[static_cast<size_t>(i)].r) {
         consider(ring);
       }
     }
     for (size_t i = 0; i < odd.size(); ++i) {
-      if (oddLive[static_cast<size_t>(i)] == 0) continue;
+      if (oddLive[static_cast<size_t>(i)] == 0) {
+        continue;
+      }
       for (const int ring : odd[static_cast<size_t>(i)].r) {
         consider(ring);
       }
@@ -954,7 +1016,9 @@ void ddcKeepRoom(const std::vector<std::vector<int>> &rings,
           second = v;
         }
       }
-      if (!bestKey.empty() && second > bestKey[1]) return;
+      if (!bestKey.empty() && second > bestKey[1]) {
+        return;
+      }
       for (int i = 1; i < 6; ++i) {
         const int v = key[i];
         int j = i;
@@ -1008,7 +1072,9 @@ void ddcKeepRoom(const std::vector<std::vector<int>> &rings,
     evenHit.reserve(even.size() / 8 + 1);
     oddHit.reserve(odd.size() / 8 + 1);
     for (int i = 0; i < static_cast<int>(even.size()); ++i) {
-      if (evenLive[static_cast<size_t>(i)] == 0) continue;
+      if (evenLive[static_cast<size_t>(i)] == 0) {
+        continue;
+      }
       evenBucket[even[static_cast<size_t>(i)].middles & 7U].push_back(i);
       for (const int ring : even[static_cast<size_t>(i)].r) {
         if (ring == pivot) {
@@ -1018,7 +1084,9 @@ void ddcKeepRoom(const std::vector<std::vector<int>> &rings,
       }
     }
     for (int i = 0; i < static_cast<int>(odd.size()); ++i) {
-      if (oddLive[static_cast<size_t>(i)] == 0) continue;
+      if (oddLive[static_cast<size_t>(i)] == 0) {
+        continue;
+      }
       oddBucket[odd[static_cast<size_t>(i)].middles & 7U].push_back(i);
       for (const int ring : odd[static_cast<size_t>(i)].r) {
         if (ring == pivot) {
@@ -1068,7 +1136,9 @@ void ddcKeepRoom(const std::vector<std::vector<int>> &rings,
       const unsigned partners =
           ddcPartnerMask(even[static_cast<size_t>(i)].middles);
       for (unsigned mask = 1; mask <= 7; ++mask) {
-        if ((partners & mask) == 0U) continue;
+        if ((partners & mask) == 0U) {
+          continue;
+        }
         for (const int j : oddBucket[mask]) {
           if (!bestKey.empty() && gate > bestKey[1] &&
               oddMin[static_cast<size_t>(j)] > bestKey[1]) {
@@ -1085,7 +1155,9 @@ void ddcKeepRoom(const std::vector<std::vector<int>> &rings,
         // tryPair tests partner(even) & odd. The mask that reaches an even
         // chain is the even middles, so the odd chain has to meet
         // partner(that mask), not partner(odd) & mask.
-        if ((ddcPartnerMask(mask) & oddMiddles) == 0U) continue;
+        if ((ddcPartnerMask(mask) & oddMiddles) == 0U) {
+          continue;
+        }
         for (const int i : evenBucket[mask]) {
           if (!bestKey.empty() && gate > bestKey[1] &&
               evenMin[static_cast<size_t>(i)] > bestKey[1]) {
@@ -1806,7 +1878,9 @@ std::vector<int> canonicalRingOrderByAtoms(
     if (ka.len != kb.len) {
       return ka.len < kb.len;
     }
-    if (ka.shift != kb.shift) return ka.shift < kb.shift;
+    if (ka.shift != kb.shift) {
+      return ka.shift < kb.shift;
+    }
     if (ka.cycle < kb.cycle) {
       return true;
     }
@@ -2488,7 +2562,9 @@ std::vector<int> ring::findHC(const std::vector<std::vector<int>> &rings,
       return span;
     };
     auto stampArm = [&](int atom, std::vector<int> &stamp, int tick) {
-      if (atom < 0 || atom >= nAtoms) return;
+      if (atom < 0 || atom >= nAtoms) {
+        return;
+      }
       const auto &row = nList[static_cast<size_t>(atom)];
       for (size_t n = 1; n < row.size(); n++) {
         const int nb = row[n];
@@ -2704,7 +2780,9 @@ std::vector<int> ring::findHC(const std::vector<std::vector<int>> &rings,
           continue;
         }
         const std::vector<int> &basal2 = rings[static_cast<size_t>(jring)];
-        if (ring::hasCommonElements(basal1, basal2)) continue;
+        if (ring::hasCommonElements(basal1, basal2)) {
+          continue;
+        }
         const bool cond2 = ring::basalConditions(bonds, basal1, basal2);
         const bool reverse = ring::basalConditions(bonds, basal2, basal1);
         if (!cond2 && !reverse) {
@@ -2785,7 +2863,9 @@ bool ring::NeighBond::operator()(int i, int j) const {
   if (!bits_.empty()) {
     return ((bits_[static_cast<size_t>(i)] >> static_cast<unsigned>(j)) & 1ULL) != 0;
   }
-  if (off_.empty()) return false;
+  if (off_.empty()) {
+    return false;
+  }
   const auto b = cols_.begin() + off_[static_cast<size_t>(i)];
   const auto e = cols_.begin() + off_[static_cast<size_t>(i + 1)];
   return std::binary_search(b, e, j);
@@ -3420,7 +3500,9 @@ bool prism3::basalPrismConditions(const std::vector<std::vector<int>> &nList,
   // They should all be neighbours
   for (int k = 0; k < ringSize; k++) {
     // Check to see if any element is false
-    if (!isNeighbour[k]) return false;
+    if (!isNeighbour[k]) {
+      return false;
+    }
   }
 
   // Everything works out!

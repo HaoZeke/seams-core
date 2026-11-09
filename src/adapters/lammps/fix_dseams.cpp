@@ -34,7 +34,9 @@ using namespace LAMMPS_NS;
 namespace {
 
 int parse_positive_int(const char *text, int *out) {
-  if (text == nullptr || text[0] == '\0') return 1;
+  if (text == nullptr || text[0] == '\0') {
+    return 1;
+  }
   char *end = nullptr;
   const long value = std::strtol(text, &end, 10);
   if (end == text || *end != '\0' || value < 1 || value > 1000000) {
@@ -45,7 +47,9 @@ int parse_positive_int(const char *text, int *out) {
 }
 
 double parse_positive_double(const char *text, int *bad) {
-  if (text == nullptr || text[0] == '\0') return (*bad = 1), 0.0;
+  if (text == nullptr || text[0] == '\0') {
+    return (*bad = 1), 0.0;
+  }
   char *end = nullptr;
   const double value = std::strtod(text, &end);
   if (end == text || *end != '\0' || !(value > 0.0)) {
@@ -141,7 +145,9 @@ void FixDseams::end_of_step() {
     return;
   }
   const auto step64 = static_cast<long long>(update->ntimestep);
-  if (step64 < 0 || (step64 % every_) != 0) return;
+  if (step64 < 0 || (step64 % every_) != 0) {
+    return;
+  }
   const int nlocal = atom->nlocal;
   std::vector<double> local(static_cast<std::size_t>(nlocal) * 3);
   std::vector<int> local_types(static_cast<std::size_t>(nlocal));
@@ -161,14 +167,18 @@ void FixDseams::end_of_step() {
   const int kept = seams_insitu_pack_owned(
       nlocal, mask.data(), groupbit, local.data(), local_types.data(), local_ids.data(),
       kept_x.data(), kept_t.data(), kept_i.data());
-  if (kept < 0) return;
+  if (kept < 0) {
+    return;
+  }
   const int nprocs = comm->nprocs;
   std::vector<int> counts(static_cast<std::size_t>(nprocs));
   std::vector<int> displs(static_cast<std::size_t>(nprocs));
   int nkept = kept;
   MPI_Allgather(&nkept, 1, MPI_INT, counts.data(), 1, MPI_INT, lmp->world);
   int total = 0;
-  if (seams_insitu_gather_displs(nprocs, counts.data(), displs.data(), &total) != 0) return;
+  if (seams_insitu_gather_displs(nprocs, counts.data(), displs.data(), &total) != 0) {
+    return;
+  }
   std::vector<int> xcounts(static_cast<std::size_t>(nprocs));
   std::vector<int> xdispls(static_cast<std::size_t>(nprocs));
   for (int rank = 0; rank < nprocs; ++rank) {
@@ -224,13 +234,17 @@ void FixDseams::end_of_step() {
     const int nall = atom->nlocal + atom->nghost;
     for (int ii = 0; ii < list_->inum; ++ii) {
       const int i = list_->ilist[ii];
-      if (i < 0 || i >= atom->nlocal || (atom->mask[i] & groupbit) == 0) continue;
+      if (i < 0 || i >= atom->nlocal || (atom->mask[i] & groupbit) == 0) {
+        continue;
+      }
       const int begin = static_cast<int>(flat.size());
       flat.push_back(static_cast<int>(atom->tag[i]));
       int *jlist = list_->firstneigh[i];
       for (int jj = 0; jj < list_->numneigh[i]; ++jj) {
         const int j = jlist[jj] & NEIGHMASK;
-        if (j < 0 || j >= nall || (atom->mask[j] & groupbit) == 0) continue;
+        if (j < 0 || j >= nall || (atom->mask[j] & groupbit) == 0) {
+          continue;
+        }
         flat.push_back(static_cast<int>(atom->tag[j]));
       }
       if (static_cast<int>(flat.size()) > begin) {

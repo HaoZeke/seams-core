@@ -132,6 +132,8 @@ double legendreAmplitude(int orderL, int absM, const AngularTerms &terms) {
       return s[2] * c[1];
     case 3:
       return s[3];
+    default:
+      return 0.0;
     }
   }
 
@@ -147,6 +149,8 @@ double legendreAmplitude(int orderL, int absM, const AngularTerms &terms) {
       return s[3] * c[1];
     case 4:
       return s[4];
+    default:
+      return 0.0;
     }
   }
 
@@ -166,6 +170,8 @@ double legendreAmplitude(int orderL, int absM, const AngularTerms &terms) {
       return s[5] * c[1];
     case 6:
       return s[6];
+    default:
+      return 0.0;
     }
   }
 
@@ -189,6 +195,8 @@ double legendreAmplitude(int orderL, int absM, const AngularTerms &terms) {
       return s[7] * c[1] * 2027025.0;
     case 8:
       return s[8] * 2027025.0;
+    default:
+      return 0.0;
     }
   }
 
@@ -276,7 +284,9 @@ std::vector<int> nearestNeighbourIndices(
 
 void associatedP(int L, double x, std::vector<double> &p) {
   p.assign(static_cast<std::size_t>(L) + 1, 0.0);
-  if (L < 0) return;
+  if (L < 0) {
+    return;
+  }
   const double s = std::sqrt(std::max(0.0, 1.0 - x * x));
   double pmm = 1.0;
   for (int m = 0; m <= L; m++) {
@@ -316,7 +326,9 @@ double nlmNorm(int l, int m) {
 void spheriHarmoGeneral(int orderL, std::array<double, 2> angles,
                         std::vector<std::complex<double>> &out) {
   out.assign(static_cast<std::size_t>(2 * orderL + 1), {0.0, 0.0});
-  if (orderL < 0) return;
+  if (orderL < 0) {
+    return;
+  }
   std::vector<double> p;
   associatedP(orderL, std::cos(angles[1]), p);
   const double phi = angles[0];
