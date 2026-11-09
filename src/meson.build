@@ -151,7 +151,7 @@ if not get_option('lammps').disabled()
   endif
 endif
 
-if not get_option('plumed').disabled()
+if get_option('plumed').enabled()
   plumed_dep = dependency('plumed', required: get_option('plumed'))
   if plumed_dep.found()
     plumed_adapter = true

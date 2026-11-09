@@ -244,21 +244,28 @@ def main():
     clock = Path(os.environ["DSEAMS_FRAME_CLOCK"]) if os.environ.get("DSEAMS_FRAME_CLOCK") else None
     dump = WORK / "post" / "1000" / "native.lammpstrj"
     if clock is not None and clock.exists() and dump.exists():
-        proc = subprocess.run([str(clock), str(dump)], cwd=ROOT, env=env(), text=True, capture_output=True)
-        excluded = None
-        for line in (proc.stdout + proc.stderr).splitlines():
-            if line.startswith("analysis_s "):
-                excluded = float(line.split()[1])
+        excluded_samples = []
+        for _ in range(6):
+            proc = subprocess.run([str(clock), str(dump)], cwd=ROOT, env=env(), text=True, capture_output=True)
+            excluded = None
+            for line in (proc.stdout + proc.stderr).splitlines():
+                if line.startswith("analysis_s "):
+                    excluded = float(line.split()[1])
+            if excluded is None:
+                raise RuntimeError(proc.stdout + proc.stderr)
+            excluded_samples.append(excluded)
         included = postprocess(dump)
         insitu = out["scale"]["1000"]["1"]
         delta = [insitu["live"][i] - insitu["plain"][i] for i in range(6)]
         ordered = sorted(included)
+        excluded_ordered = sorted(excluded_samples)
         out["clock"] = {
             "system": "1000 waters, one frame",
             "insitu_per_frame": sorted(delta)[2] * 0.5 + sorted(delta)[3] * 0.5,
             "cli_included": ordered[2] * 0.5 + ordered[3] * 0.5,
-            "cli_excluded": excluded,
+            "cli_excluded": excluded_ordered[2] * 0.5 + excluded_ordered[3] * 0.5,
             "cli_included_samples": included,
+            "cli_excluded_samples": excluded_samples,
         }
         (WORK / "samples.json").write_text(json.dumps(out))
     print(WORK / "samples.json", flush=True)

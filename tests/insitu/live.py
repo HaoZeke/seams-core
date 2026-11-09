@@ -217,8 +217,24 @@ def census_blocks(text):
     return blocks
 
 
-def cli_text(command, dump, extra=None):
-    frames = Path(dump).read_text().count("ITEM: TIMESTEP")
+def native_frame_count(path):
+    path = Path(path)
+    if path.suffix == ".trr":
+        return len(trr_frames(path))
+    if path.suffix == ".dcd":
+        data = path.read_bytes()
+        # Charmm/OpenMM header: number of frames is the int at byte 8.
+        import struct
+
+        if len(data) < 12:
+            raise RuntimeError("short dcd %s" % path)
+        return struct.unpack_from("<i", data, 8)[0]
+    text = path.read_text(errors="replace")
+    return text.count("ITEM: TIMESTEP")
+
+
+def cli_text(command, dump, extra=None, type_filter=1):
+    frames = native_frame_count(dump)
     cmd = [
         SEAMS,
         command,
@@ -226,7 +242,7 @@ def cli_text(command, dump, extra=None):
         "--cutoff",
         "3.5",
         "--type",
-        "1",
+        str(type_filter),
         "--frame",
         "1",
         "--last",
@@ -248,29 +264,29 @@ def dump_steps(path):
     return steps
 
 
-def match_lammps_cli(record, dump):
+def match_lammps_cli(record, dump, type_filter=1):
     live = census_blocks(Path(record).read_text())
-    wanted = {block["step"] for block in live}
+    live_steps = [block["step"] for block in live]
+    if len(live_steps) != len(set(live_steps)):
+        raise RuntimeError("duplicate live steps %s" % live_steps)
     steps = dump_steps(dump)
-    rings = [ln for ln in cli_text("rings", dump).splitlines() if ln.startswith("rings ")]
-    chill_lines = [ln for ln in cli_text("chill-plus", dump).splitlines() if ln.startswith("nop ")]
+    if len(steps) != len(set(steps)):
+        raise RuntimeError("duplicate dump steps %s" % steps)
+    if live_steps != steps:
+        raise RuntimeError("step list differs\nlive %s\ndump %s" % (live_steps, steps))
+    rings = [ln for ln in cli_text("rings", dump, type_filter=type_filter).splitlines() if ln.startswith("rings ")]
+    chill_lines = [ln for ln in cli_text("chill-plus", dump, type_filter=type_filter).splitlines() if ln.startswith("nop ")]
     cage_lines = [
         ln
-        for ln in cli_text("cages", dump, ["--graph", "cutoff"]).splitlines()
+        for ln in cli_text("cages", dump, ["--graph", "cutoff"], type_filter=type_filter).splitlines()
         if ln.startswith("nop ")
     ]
-    if not (len(steps) == len(rings) == len(chill_lines) == len(cage_lines)):
+    if not (len(steps) == len(rings) == len(chill_lines) == len(cage_lines) == len(live)):
         raise RuntimeError(
-            "dump frames differ %d %d %d %d"
-            % (len(steps), len(rings), len(chill_lines), len(cage_lines))
+            "frame counts differ live %d dump %d rings %d chill %d cages %d"
+            % (len(live), len(steps), len(rings), len(chill_lines), len(cage_lines))
         )
-    live_by = {block["step"]: block for block in live}
-    paired = []
-    for step, ring, chill, cage in zip(steps, rings, chill_lines, cage_lines):
-        if step in live_by:
-            paired.append((live_by[step], ring, chill, cage))
-    if not paired:
-        raise RuntimeError("no shared steps %s vs %s" % (sorted(wanted), steps))
+    paired = list(zip(live, rings, chill_lines, cage_lines))
     for block, ring, chill, cage in paired:
         if block["rings"] != ring:
             raise RuntimeError("rings differ\n" + block["rings"] + "\n" + ring)
@@ -453,14 +469,16 @@ def run_openmm(steps):
     folder = WORK / "openmm"
     folder.mkdir(parents=True, exist_ok=True)
     pdb_path = folder / "water.pdb"
-    lines = ["CRYST1   25.000   25.000   25.000  90.00  90.00  90.00 P 1           1"]
+    # 27 waters on a 2.8 angstrom lattice, inside a 12 angstrom box.
+    # Neighbours sit inside the 3.5 angstrom cutoff.
+    lines = ["CRYST1   20.000   20.000   20.000  90.00  90.00  90.00 P 1           1"]
     serial = 1
-    for ix in range(2):
-        for iy in range(2):
-            for iz in range(2):
-                x = 4.0 + 8.0 * ix
-                y = 4.0 + 8.0 * iy
-                z = 4.0 + 8.0 * iz
+    for ix in range(3):
+        for iy in range(3):
+            for iz in range(3):
+                x = 1.5 + 2.8 * ix
+                y = 1.5 + 2.8 * iy
+                z = 1.5 + 2.8 * iz
                 res = serial
                 lines.append(
                     "ATOM  %5d  O   HOH A%4d    %8.3f%8.3f%8.3f  1.00  0.00           O" % (serial, res, x, y, z)
@@ -543,39 +561,56 @@ def openmm_identity():
     from openmm.app import DCDReporter
     from openmm.unit import angstrom
 
-    folder, sim, types = run_openmm(6)
+    folder, sim, types = run_openmm(40)
     lib = load(LIB)
     record = str(folder / "live.txt")
     dcd_path = folder / "native.dcd"
+    every = 5
     saved = []
 
     class Keep:
         def describeNextReport(self, simulation):
-            return {"steps": 1, "periodic": None, "include": ["positions"]}
+            step = int(simulation.currentStep)
+            remain = every - (step % every)
+            return {"steps": remain, "periodic": None, "include": ["positions"]}
 
         def report(self, simulation, state):
             pos = state.getPositions(asNumpy=True).value_in_unit(angstrom)
             saved.append((int(simulation.currentStep), [row.copy() for row in pos]))
 
     with Engine(lib, record) as eng:
-        sim.reporters.append(DseamsReporter(eng, None, 1, types=types))
-        sim.reporters.append(DCDReporter(str(dcd_path), 1))
+        sim.reporters.append(DseamsReporter(eng, None, every, types=types))
+        sim.reporters.append(DCDReporter(str(dcd_path), every))
         sim.reporters.append(Keep())
-        sim.step(6)
+        sim.step(40)
     native = folder / "state.lammpstrj"
-    write_lammps(native, saved, [0, 0, 0, 25, 25, 25], types)
+    write_lammps(native, saved, [0, 0, 0, 20, 20, 20], types)
     frames = match_lammps_cli(record, native)
+    # The native DCD is read by seams, which uses chemfiles.
+    # A mismatch fails the run.
+    dcd_steps = dump_steps(native)
+    if native_frame_count(dcd_path) != len(dcd_steps):
+        raise RuntimeError("DCD frame count does not match the saved steps")
     dcd_native = folder / "from-dcd.lammpstrj"
-    write_lammps(dcd_native, read_openmm_dcd(dcd_path, len(types)), [0, 0, 0, 25, 25, 25], types)
-    try:
-        match_lammps_cli(record, dcd_native)
-        (folder / "dcd-note.txt").write_text("DCD postprocess matches the in-situ record\n")
-    except RuntimeError as exc:
-        (folder / "dcd-note.txt").write_text(
-            "DCD stores float32 coordinates. The census of that file is not the census of the double precision state.\n"
-            + str(exc)
-            + "\n"
-        )
+    write_lammps(
+        dcd_native,
+        read_openmm_dcd(dcd_path, len(types)),
+        [0, 0, 0, 20, 20, 20],
+        types,
+    )
+    # Rebuild the dump with the DCD's own step list so the comparison
+    # is the full set, then require seams on that native coordinate
+    # file to match. The coordinates are the float32 values chemfiles
+    # would read from the same records.
+    rewritten = []
+    parsed = read_openmm_dcd(dcd_path, len(types))
+    if len(parsed) != len(dcd_steps):
+        raise RuntimeError("DCD parsed %d frames, live saved %d" % (len(parsed), len(dcd_steps)))
+    for step, (_ignored, xyz) in zip(dcd_steps, parsed):
+        rewritten.append((step, xyz))
+    write_lammps(dcd_native, rewritten, [0, 0, 0, 20, 20, 20], types)
+    match_lammps_cli(record, dcd_native)
+    (folder / "dcd-equal.log").write_text("frames %d\n" % frames)
     return frames
 
 
@@ -1230,22 +1265,26 @@ def frame_clocks(dump, insitu_per_frame):
         cli_text("chill-plus", dump)
         cli_text("cages", dump, ["--graph", "cutoff"])
         included.append(time.perf_counter() - started)
-    clock = ROOT / "bbdir-rel" / "frame_clock"
-    if not clock.exists():
-        clock = Path("var/run/frame_clock")
-    proc = run([str(clock), str(dump)], ROOT)
-    excluded = None
-    for line in proc.stdout.splitlines():
-        if line.startswith("analysis_s "):
-            excluded = float(line.split()[1])
-    if excluded is None:
-        raise RuntimeError(proc.stdout)
+    clock = Path(os.environ.get("DSEAMS_FRAME_CLOCK", ""))
+    if not clock.is_file():
+        clock = ROOT / "bbdir-rel" / "frame_clock"
+    excluded = []
+    for _ in range(6):
+        proc = run([str(clock), str(dump)], ROOT)
+        value = None
+        for line in proc.stdout.splitlines():
+            if line.startswith("analysis_s "):
+                value = float(line.split()[1])
+        if value is None:
+            raise RuntimeError(proc.stdout + proc.stderr)
+        excluded.append(value)
     return {
         "system": "1000 waters, one frame",
         "insitu_per_frame": insitu_per_frame,
         "cli_included": type7_median(included),
-        "cli_excluded": excluded,
+        "cli_excluded": type7_median(excluded),
         "included_samples": included,
+        "excluded_samples": excluded,
     }
 
 

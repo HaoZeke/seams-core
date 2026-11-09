@@ -26,22 +26,35 @@ def lib_env(extra):
     return merged
 
 
-def lammps_case(binary, plugin, folder):
+def lammps_case(binary, plugin, folder, ranks):
     if folder.exists():
         shutil.rmtree(folder)
     folder.mkdir(parents=True)
     record = folder / "live.txt"
     dump = folder / "native.lammpstrj"
     script = folder / "in"
-    live.lammps_input(script, 4, dump, record, plugin or "UNUSED", every=1, ncell=2, write_dump=True)
+    # 216 waters, 40 steps, census and dump every 5 steps.
+    live.lammps_input(script, 40, dump, record, plugin or "UNUSED", every=5, ncell=3, write_dump=True)
+    text = script.read_text().replace(
+        "dump_modify native sort id format float %.17g",
+        "dump_modify native sort id delay 5 format float %.17g",
+    )
     if not plugin:
-        kept = [line for line in script.read_text().splitlines(True) if "plugin load" not in line]
-        script.write_text("".join(kept))
-    live.run([binary, "-in", "in", "-log", "log"], folder, env=lib_env(str(Path(binary).parent)))
+        text = "".join(line for line in text.splitlines(True) if "plugin load" not in line)
+    script.write_text(text)
+    env = lib_env(str(Path(binary).parent))
+    mpirun = os.environ.get("DSEAMS_MPIRUN", "")
+    if ranks > 1:
+        if not mpirun:
+            raise SystemExit("set DSEAMS_MPIRUN")
+        cmd = [mpirun, "--oversubscribe", "-np", str(ranks), binary, "-in", "in", "-log", "log"]
+    else:
+        cmd = [binary, "-in", "in", "-log", "log"]
+    live.run(cmd, folder, env=env)
     matched = live.match_lammps_cli(record, dump)
-    (folder / "equal.log").write_text("frames %d\n" % matched)
-    if matched < 1:
-        raise RuntimeError("no matched frames in %s" % folder)
+    (folder / "equal.log").write_text("frames %d ranks %d\n" % (matched, ranks))
+    if matched != 8:
+        raise RuntimeError("expected 8 frames in %s, got %d" % (folder, matched))
     return matched
 
 
@@ -52,22 +65,22 @@ def gromacs_case():
     if folder.exists():
         shutil.rmtree(folder)
     folder.mkdir(parents=True)
-    rows = live.diamond_positions(2)
-    live.write_gro(folder / "conf.gro", rows, 1.28)
+    rows = live.diamond_positions(3)
+    live.write_gro(folder / "conf.gro", rows, 1.92)
     live.write_oxygen_top(folder / "topol.top", len(rows))
     (folder / "md.mdp").write_text(
         "integrator = md\n"
         "dt = 0.001\n"
-        "nsteps = 4\n"
-        "nstxout = 1\n"
+        "nsteps = 40\n"
+        "nstxout = 5\n"
         "nstvout = 0\n"
         "nstfout = 0\n"
-        "nstlog = 1\n"
+        "nstlog = 5\n"
         "nstlist = 10\n"
         "cutoff-scheme = Verlet\n"
         "coulombtype = Cut-off\n"
-        "rcoulomb = 0.6\n"
-        "rvdw = 0.6\n"
+        "rcoulomb = 0.9\n"
+        "rvdw = 0.9\n"
         "pbc = xyz\n"
         "constraints = none\n"
         "gen-vel = yes\n"
@@ -75,7 +88,7 @@ def gromacs_case():
         "gen-seed = 12345\n"
         "dseams-active = yes\n"
         "dseams-input-group = System\n"
-        "dseams-nstcalc = 1\n"
+        "dseams-nstcalc = 5\n"
         "dseams-cutoff = 3.5\n"
         "dseams-output = live.txt\n"
     )
@@ -90,13 +103,28 @@ def gromacs_case():
         folder,
         env=env,
     )
-    frames = live.trr_frames(folder / "run.trr")
+    trr = folder / "run.trr"
+    frames = live.trr_frames(trr)
+    # seams reads the TRR through chemfiles. The atoms are oxygen, so
+    # the type filter is atomic number 8.
     dump = folder / "from-trr.lammpstrj"
     live.trr_to_dump(frames, dump)
-    matched = live.match_lammps_cli(folder / "live.txt", dump)
+    matched = live.match_lammps_cli(folder / "live.txt", dump, type_filter=1)
+    trr_rings = [
+        ln
+        for ln in live.cli_text("rings", trr, type_filter=1).splitlines()
+        if ln.startswith("rings ")
+    ]
+    dump_rings = [
+        ln
+        for ln in live.cli_text("rings", dump, type_filter=1).splitlines()
+        if ln.startswith("rings ")
+    ]
+    if trr_rings != dump_rings:
+        raise RuntimeError("seams on the TRR does not match seams on the same frames")
+    if matched != len(frames):
+        raise RuntimeError("gromacs matched %d of %d frames" % (matched, len(frames)))
     (folder / "equal.log").write_text("frames %d\n" % matched)
-    if matched < 1:
-        raise RuntimeError("gromacs matched no frames")
     return matched
 
 
@@ -106,8 +134,9 @@ def main():
     work = Path(os.environ.get("DSEAMS_E2E_WORK", "var/run/dseams-e2e"))
     live.WORK = work
     print("openmm", live.openmm_identity(), flush=True)
-    print("lammps-plugin", lammps_case(need("DSEAMS_LMP"), need("DSEAMS_PLUGIN"), work / "lammps-plugin"), flush=True)
-    print("lammps-package", lammps_case(need("DSEAMS_LMP_INTREE"), "", work / "lammps-package"), flush=True)
+    print("lammps-plugin-1", lammps_case(need("DSEAMS_LMP"), need("DSEAMS_PLUGIN"), work / "lammps-plugin-1", 1), flush=True)
+    print("lammps-plugin-2", lammps_case(need("DSEAMS_LMP"), need("DSEAMS_PLUGIN"), work / "lammps-plugin-2", 2), flush=True)
+    print("lammps-package", lammps_case(need("DSEAMS_LMP_INTREE"), "", work / "lammps-package", 1), flush=True)
     print("gromacs", gromacs_case(), flush=True)
 
 

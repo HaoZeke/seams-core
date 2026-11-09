@@ -32,12 +32,10 @@ optimizer.
 The architecture is one C core and thin adapters.
 The core is `seams_insitu.h` in this repository.
 The Meson options are `-Dlammps=enabled|auto|disabled` and the same
-pattern for `gromacs`, `openmm`, and `plumed`.
+pattern for `gromacs` and `openmm`.
 The default is `auto`.
 A build that finds none of those codes still compiles and its tests
-still pass.
-PLUMED is the broad fallback: one PLUMED action calls the core and every
-engine that already calls PLUMED picks it up.
+still pass, and live analysis does not go through PLUMED.
 
 Device coordinates are part of the frame the adapters pass in.
 This build does not dereference a device pointer.
@@ -82,11 +80,11 @@ Cadence is `every`, `first`, and `last` on the step index.
 A step outside that window returns `SEAMS_INSITU_SKIP` and does not
 write a frame.
 
-`seams_insitu_observe` appends one LAMMPS dump frame in round-trip
-decimal.
-The same call reads that frame back with the existing trajectory reader
-and analyses those values.
-`seams_insitu_replay` reads the same file and writes the same text.
+`seams_insitu_observe` analyses the borrowed frame.
+It does not read a trajectory back.
+A debug dump can append one LAMMPS frame, and that dump stays off unless
+requested.
+`seams_insitu_replay` reads a saved trajectory and writes the same text.
 The live record and the postprocessed record are the same bytes.
 The text records the ring census by size.
 It records the nine CHILL+ counts.
@@ -95,17 +93,14 @@ It records the cage counters and, when requested, the per-atom labels.
 Adapters, in the order implemented here:
 
 1. LAMMPS fix plugin `dseams`, loaded with `plugin load`.
-2. GROMACS interactive molecular dynamics client.
-3. OpenMM reporter.
-4. PLUMED action `DSEAMS`, loaded with `LOAD`.
+2. LAMMPS in-tree package with the same fix.
+3. GROMACS module inside mdrun.
+4. OpenMM reporter.
 5. i-PI socket client and an Atomic Simulation Environment molecular
    dynamics observer.
 
-The PLUMED action covers NAMD.
-AMBER `sander` and AMBER `pmemd` use that same action.
-CP2K, DL_POLY, and HOOMD-blue use it as well.
-Other engines that already call PLUMED use it too.
-Those engines do not need a separate compiled adapter for the census.
+Those observers do not cover NAMD, AMBER, CP2K, DL_POLY, or HOOMD-blue.
+The neighbour-list fix on the PLUMED fork is a credibility fix only.
 
 ## Comparison
 
@@ -169,10 +164,7 @@ The snapshot is a host copy on rank 0.
 GPU arrays stay in the state until a snapshot.
 The engine licence is BSD-3-Clause.
 
-DL_POLY reads the linked PLUMED library.
-The host copies the coordinates.
-The device path depends on the build.
-Use PLUMED for the census.
+DL_POLY is not a live route in this delivery.
 
 ## LAMMPS
 
@@ -469,17 +461,17 @@ LAMMPS, GROMACS, PLUMED, CP2K, NAMD, AMBER and DL_POLY are native
 builds.
 Meson feature options keep this repository optional around them.
 `auto` builds the LAMMPS plugin when `lammpsplugin.h` compiles.
-The same setting builds the PLUMED action when pkg-config finds
-`plumed`.
-`enabled` fails configure when that header or that package is missing.
+`enabled` fails configure when that header is missing.
 `disabled` skips the search.
+The PLUMED action is not built.
+The option that used to request it stays off.
 A conda-forge LAMMPS package often omits headers.
 `-Dlammps_include` then points at a LAMMPS source tree.
-`seams-gromacs-imd` is the GROMACS client.
+The supported GROMACS route is the d-SEAMS module inside mdrun.
+`seams-gromacs-imd` is an older socket client.
 It links no GROMACS library.
 A fake socket is the default test, so the client is always built.
-A GROMACS build with PLUMED calls the same action through
-`mdrun -plumed`.
+Live analysis does not call `mdrun -plumed`.
 OpenMM, i-PI and the Atomic Simulation Environment adapters are Python.
 Meson does not compile them.
 Gathering in the LAMMPS adapter uses MPI_Gatherv onto one rank before
@@ -509,8 +501,8 @@ skin.
 Rings and cages update only for the rings that touch a moved atom.
 A large set uses one full pass.
 The full pass matches the incremental result and finishes sooner.
-The PLUMED action passes the position pointer with a coordinate scale.
-The action does not copy the array.
+The GROMACS module passes positions with a coordinate scale of ten.
+The module does not copy through PLUMED.
 The engine builds the cutoff shell.
 `NeighborList::getIndexPair` in PLUMED 2.10.2 computes `8*ii` in a
 32-bit unsigned integer.
@@ -529,7 +521,7 @@ From PLUMED 2.10 the action reports that it applies no forces.
 Only rank 0 writes the census.
 Equality uses each code's own trajectory file through the `seams`
 command line.
-The comparison does not use a dump the engine wrote.
+That file is the trajectory the engine wrote.
 Overhead uses at least six repeats on one host.
 Warmups stay apart from the samples.
 The report uses type 7 quartiles.
@@ -544,8 +536,8 @@ The package first quartile is 0.00089052312499999988 seconds per step.
 Its third quartile is 0.00089222812500000005 seconds per step.
 The package third quartile is below the plugin first quartile.
 The GROMACS census comes from a d-SEAMS module inside mdrun.
-The molecular dynamics parameter keys are dseams-active.
-Dseams-input-group, dseams-nstcalc, dseams-cutoff and dseams-output.
+The parameter keys are dseams-active, dseams-input-group,
+dseams-nstcalc, dseams-cutoff and dseams-output.
 The OpenMM reporter reads positions with getState.
 It asks for positions and a periodic box.
 It does not write a trajectory.
