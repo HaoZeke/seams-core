@@ -480,9 +480,6 @@ struct DdcMaskCount {
   }
 
   void add(int ring) {
-    if (ring < 0 || ring >= static_cast<int>(touch.size())) {
-      return;
-    }
     if (touch[static_cast<size_t>(ring)] != tick) {
       touch[static_cast<size_t>(ring)] = tick;
       cnt[static_cast<size_t>(ring)] = 0;
