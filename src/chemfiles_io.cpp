@@ -23,6 +23,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #ifdef SEAMS_HAS_CHEMFILES
@@ -383,6 +384,25 @@ sinp::openFrame(const std::string &filename, int frame, int typeI,
   }
   cloud = readChemfiles(filename, cloud, request);
   if (!chemfilesUnreadable) {
+    // Chemfiles reads a LAMMPS dump without the mol column, so every atom
+    // would be its own molecule. Hydrogen bonds and F4 pair H with O by
+    // that column. Copy it from the native reader and keep the coordinates.
+    const auto ext = extensionOf(filename);
+    if ((ext == "lammpstrj" || ext == "dump") && cloud.nop > 0) {
+      molSys::PointCloud<molSys::Point<double>, double> native;
+      native = readLammpsTrj(filename, frame, native);
+      std::unordered_map<int, int> molOf;
+      molOf.reserve(native.pts.size());
+      for (const auto &pt : native.pts) {
+        molOf[pt.atomID] = pt.molID;
+      }
+      for (auto &pt : cloud.pts) {
+        const auto found = molOf.find(pt.atomID);
+        if (found != molOf.end()) {
+          pt.molID = found->second;
+        }
+      }
+    }
     return cloud;
   }
   {
