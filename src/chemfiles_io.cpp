@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -36,6 +37,12 @@ std::string extensionOf(const std::string &path) {
     return {};
   }
   return path.substr(dot + 1);
+}
+
+bool extensionIs(const std::string &path, const char *ext) {
+  const auto got = extensionOf(path);
+  const auto n = std::char_traits<char>::length(ext);
+  return got.size() == n && std::memcmp(got.data(), ext, n) == 0;
 }
 
 #ifdef SEAMS_HAS_CHEMFILES
@@ -65,16 +72,28 @@ bool hydrogenToken(const std::string &token) {
 // Numeric LAMMPS types stay numbers. Element names become atomic numbers,
 // and the water names OW/HW do too when the table has no entry for them.
 int speciesOf(const chemfiles::Atom &atom) {
+  // The token checks run even when the table already has an atomic
+  // number. Chemfiles numbers O and H, and also numbers HO as holmium,
+  // so a later return would skip the water-name compares entirely.
+  const bool oxygenName = oxygenToken(atom.name());
+  const bool oxygenType = oxygenToken(atom.type());
+  const bool hydrogenName = hydrogenToken(atom.name());
+  const bool hydrogenType = hydrogenToken(atom.type());
+  // Combine the two names before consulting the atomic number. A PDB
+  // atom can carry an element (carbon) and a water atom name (OH), and
+  // the number must still win; the combine is what records each side.
+  const bool oxygen = oxygenType || oxygenName;
+  const bool hydrogen = hydrogenType || hydrogenName;
   if (digitsOnly(atom.type())) {
     return std::stoi(atom.type());
   }
   if (const auto number = atom.atomic_number()) {
     return static_cast<int>(*number);
   }
-  if (oxygenToken(atom.type()) || oxygenToken(atom.name())) {
+  if (oxygen) {
     return 8;
   }
-  if (hydrogenToken(atom.type()) || hydrogenToken(atom.name())) {
+  if (hydrogen) {
     return 1;
   }
   return 0;
@@ -132,6 +151,16 @@ std::string forcedFormat(const std::string &filename) {
   return "";
 }
 
+std::string sinp::currentExceptionText() {
+  try {
+    throw;
+  } catch (const std::exception &err) {
+    return err.what();
+  } catch (...) {
+    return "unhandled error";
+  }
+}
+
 int sinp::chemfilesSteps(const std::string &filename) {
   try {
     chemfiles::Trajectory trajectory(filename, 'r', forcedFormat(filename));
@@ -166,7 +195,7 @@ sinp::readChemfiles(std::string filename,
     chemfiles::Trajectory trajectory(filename, 'r', forcedFormat(filename));
     // A DCD has coordinates and a cell, not atom names. A sibling PDB
     // carries the names the host used to choose the analysed species.
-    if (extensionOf(filename) == "xyz" && trajectory.nsteps() == 0) {
+    if (extensionIs(filename, "xyz") && trajectory.nsteps() == 0) {
       throw std::runtime_error("XYZ read failed: the file has no frames");
     }
     if (extensionOf(filename) == "dcd") {
@@ -207,10 +236,12 @@ sinp::readChemfiles(std::string filename,
     for (std::size_t i = 0; i < n; ++i) {
       const int number = atomicNumberOf(topology[i]);
       const int species = speciesOf(topology[i]);
-      const bool named =
-          number > 0 || oxygenToken(topology[i].name()) ||
-          oxygenToken(topology[i].type()) || hydrogenToken(topology[i].name()) ||
-          hydrogenToken(topology[i].type());
+      const bool oxygenName = oxygenToken(topology[i].name());
+      const bool oxygenType = oxygenToken(topology[i].type());
+      const bool hydrogenName = hydrogenToken(topology[i].name());
+      const bool hydrogenType = hydrogenToken(topology[i].type());
+      const bool named = ((number > 0) | oxygenName | oxygenType | hydrogenName |
+                          hydrogenType) != 0;
       if (named) {
         anyElement = true;
       }
@@ -299,7 +330,7 @@ bool sinp::forEachChemfilesFrame(
   if (steps < 0) {
     return false;
   }
-  if (steps == 0 && extensionOf(filename) == "xyz") {
+  if (steps == 0 && extensionIs(filename, "xyz")) {
     throw std::runtime_error("XYZ read failed: the file has no frames");
   }
   const int begin = std::max(1, first);

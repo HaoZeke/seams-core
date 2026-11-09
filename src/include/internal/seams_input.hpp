@@ -62,6 +62,10 @@ int nLammpsFrames(const std::string &filename);
 //! Drop a cached dump session (tests that rewrite a path in place).
 void dropLammpsDumpIndex(const std::string &filename);
 
+//! Text of the exception currently being handled. Call from a catch
+//! clause. A std::exception yields what(); anything else is unnamed.
+std::string currentExceptionText();
+
 //! Call fn(frame, cloud) for each frame from max(first, 1) to last
 //! (1-based, inclusive) that falls to part of parts. last <= 0 means every
 //! ITEM: TIMESTEP. Frames are dealt in rounds of parts, in serpentine order

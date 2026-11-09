@@ -11,6 +11,7 @@
 #include <array>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -76,6 +77,19 @@ std::vector<std::array<double, 3>> oxygenCoords(const std::string &dump,
 }
 
 } // namespace
+
+TEST_CASE("a caught exception keeps its text", "[chemfiles]") {
+  try {
+    throw std::runtime_error("XYZ header is not an atom count.");
+  } catch (...) {
+    REQUIRE(sinp::currentExceptionText() == "XYZ header is not an atom count.");
+  }
+  try {
+    throw 1;
+  } catch (...) {
+    REQUIRE(sinp::currentExceptionText() == "unhandled error");
+  }
+}
 
 TEST_CASE("chemfiles matches the native LAMMPS and XYZ readers",
           "[chemfiles]") {
@@ -527,4 +541,170 @@ TEST_CASE("water names and a rejected dump use the matching reader", "[chemfiles
       [&](int, molSys::PointCloud<molSys::Point<double>, double> &) { groFrames += 1; });
   REQUIRE((walked == false || groFrames == 0));
   fs::remove(gro);
+}
+
+TEST_CASE("name checks and the dump fallback take both sides", "[chemfiles]") {
+  const auto pdb = fs::temp_directory_path() / "dseams_oh_ho.pdb";
+  {
+    std::ofstream out(pdb);
+    out << "ATOM      1  OH  MOL A   1       1.000   1.000   1.000  1.00  0.00\n"
+        << "ATOM      2  HO  MOL A   1       1.200   1.000   1.000  1.00  0.00\n"
+        << "ATOM      3  XX  MOL A   2       3.000   1.000   1.000  1.00  0.00\n"
+        << "END\n";
+  }
+  Cloud named = sinp::openFrame(pdb.string(), 1, -1);
+  REQUIRE(named.nop >= 1);
+  REQUIRE(named.pts[0].type == 8);
+  fs::remove(pdb);
+
+  const auto junk = fs::temp_directory_path() / "dseams_bad_steps_dir.pdb";
+  fs::remove_all(junk);
+  fs::create_directories(junk);
+  REQUIRE(sinp::chemfilesSteps(junk.string()) < 0);
+  fs::remove_all(junk);
+
+  const auto emptyGro = fs::temp_directory_path() / "dseams_zero.gro";
+  {
+    std::ofstream out(emptyGro);
+    out << "";
+  }
+  Cloud none = sinp::openFrame(emptyGro.string(), 1, -1);
+  REQUIRE(none.nop == 0);
+  int walked = 0;
+  sinp::forEachChemfilesFrame(
+      emptyGro.string(), 1, 1, -1, "", 0, 1,
+      [&](int, molSys::PointCloud<molSys::Point<double>, double> &) { walked += 1; });
+  REQUIRE(walked == 0);
+  fs::remove(emptyGro);
+
+  const auto dump = fs::temp_directory_path() / "dseams_only_type1.dump";
+  {
+    std::ofstream out(dump);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type x y z\n1 1 0 0 0\n";
+  }
+  // type 0 is the guess path: chemfiles may read this, and if it cannot
+  // the native reader keeps the type 1 atom after an empty type 2 pass.
+  Cloud guessed = sinp::openFrame(dump.string(), 1, 0);
+  REQUIRE(guessed.nop == 1);
+  fs::remove(dump);
+  sinp::dropLammpsDumpIndex(dump.string());
+
+  const auto names = fs::temp_directory_path() / "dseams_oh_ho.xyz";
+  {
+    std::ofstream out(names);
+    out << "3\ncomment\nOH 0 0 0\nHO 1 0 0\nAr 2 0 0\n";
+  }
+  Cloud tokens = sinp::openFrame(names.string(), 1, 0);
+  REQUIRE(tokens.nop >= 1);
+  fs::remove(names);
+
+  const auto emptyXyz = fs::temp_directory_path() / "dseams_empty_walk.xyz";
+  {
+    std::ofstream out(emptyXyz);
+    out << "";
+  }
+  auto expectEmpty = [&](const std::function<void()> &fn) {
+    try {
+      fn();
+      FAIL("expected an empty xyz failure");
+    } catch (const std::runtime_error &err) {
+      REQUIRE(std::string(err.what()) == "XYZ read failed: the file has no frames");
+    }
+  };
+  expectEmpty([&] {
+    sinp::forEachChemfilesFrame(
+        emptyXyz.string(), 1, 1, -1, "", 0, 1,
+        [&](int, molSys::PointCloud<molSys::Point<double>, double> &) {});
+  });
+  expectEmpty([&] { sinp::readChemfiles(emptyXyz.string(), 1, guessed, -1); });
+  fs::remove(emptyXyz);
+
+  const auto badDump = fs::temp_directory_path() / "dseams_not_a_dump.dump";
+  fs::remove_all(badDump);
+  fs::create_directories(badDump);
+  Cloud fallback = sinp::openFrame(badDump.string(), 1, 0);
+  REQUIRE(fallback.nop == 0);
+  fs::remove_all(badDump);
+
+  const auto typed = fs::temp_directory_path() / "dseams_type2.dump";
+  {
+    std::ofstream out(typed);
+    out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+        << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        << "ITEM: ATOMS id type x y z\n1 2 4 5 6\n";
+  }
+  Cloud typeTwo = sinp::openFrame(typed.string(), 1, 0);
+  REQUIRE(typeTwo.nop == 1);
+  REQUIRE(typeTwo.pts[0].type == 2);
+  fs::remove(typed);
+  sinp::dropLammpsDumpIndex(typed.string());
+
+  const auto words = fs::temp_directory_path() / "dseams_tokens.xyz";
+  {
+    std::ofstream out(words);
+    out << "6\ncomment\nO 0 0 0\nOW 1 0 0\nOH 2 0 0\n"
+        << "H 3 0 0\nHW 4 0 0\nHO 5 0 0\n";
+  }
+  const auto mixed = fs::temp_directory_path() / "dseams_mixed.pdb";
+  {
+    std::ofstream out(mixed);
+    out << "ATOM      1   OH MOL A   1       0.000   0.000   0.000  1.00  0.00           C\n"
+        << "ATOM      2   HO MOL A   1       1.000   0.000   0.000  1.00  0.00           C\n"
+        << "END\n";
+  }
+  Cloud mixedCloud = sinp::openFrame(mixed.string(), 1, -1);
+  REQUIRE(mixedCloud.nop == 2);
+  REQUIRE(mixedCloud.pts[0].type == 6);
+  fs::remove(mixed);
+
+  const auto smiles = fs::temp_directory_path() / "dseams_group.smi";
+  {
+    std::ofstream out(smiles);
+    out << "O\n";
+  }
+  Cloud grouped = sinp::openFrame(smiles.string(), 1, -1);
+  REQUIRE(grouped.nop == 1);
+  REQUIRE(grouped.pts[0].molID == grouped.pts[0].atomID);
+  fs::remove(smiles);
+
+  Cloud spelled = sinp::openFrame(words.string(), 1, -1);
+  REQUIRE(spelled.nop == 6);
+  REQUIRE(spelled.pts[2].type == 8);
+  REQUIRE(spelled.pts[3].type == 1);
+  fs::remove(words);
+
+  const auto picked = fs::temp_directory_path() / "dseams_select.xyz";
+  {
+    std::ofstream out(picked);
+    out << "2\ncomment\nO 0 0 0\nH 1 0 0\n";
+  }
+  Cloud selected = sinp::openFrame(picked.string(), 1, 8, "name O");
+  REQUIRE(selected.nop == 1);
+  Cloud allNamed = sinp::openFrame(picked.string(), 1, -1, "name O");
+  REQUIRE(allNamed.nop == 1);
+  fs::remove(picked);
+
+  const auto locked = fs::temp_directory_path() / "dseams_locked_fallback.xyz";
+  {
+    std::ofstream out(locked);
+    out << "1\ncomment\nO 0 0 0\n";
+  }
+  fs::permissions(locked, fs::perms::none);
+  Cloud hidden = sinp::openFrame(locked.string(), 1, -1);
+  REQUIRE(hidden.nop == 0);
+  fs::permissions(locked, fs::perms::owner_all);
+  fs::remove(locked);
+
+  const auto asDir = fs::temp_directory_path() / "dseams_dir_fallback.xyz";
+  fs::remove_all(asDir);
+  fs::create_directories(asDir);
+  try {
+    sinp::openFrame(asDir.string(), 1, -1);
+    FAIL("a directory is not an xyz frame");
+  } catch (const std::runtime_error &err) {
+    REQUIRE(std::string(err.what()) == "XYZ header is not an atom count.");
+  }
+  fs::remove_all(asDir);
 }
