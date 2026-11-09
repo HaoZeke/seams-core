@@ -508,7 +508,7 @@ TEST_CASE("output paths and padded data files", "[cover_io]") {
   }
   stopRace.store(true);
   racer.join();
-  REQUIRE(lastCode == 0 || lastCode == 1);
+  REQUIRE((lastCode == 0 || lastCode == 1));
   REQUIRE(sawDirectory > 0);
 
   auto cloud = makeCloud(4);
