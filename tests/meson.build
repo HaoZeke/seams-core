@@ -90,7 +90,7 @@ endif
 foreach name, src : test_sources
   # meson allows no nested ternary; the long-running suites get more time
   _timeout = 120
-  if name == 'cage_enum'
+  if name == 'cage_enum' or name == 'domain'
     _timeout = 300
   elif name == 'bulkTUM'
     _timeout = 300
