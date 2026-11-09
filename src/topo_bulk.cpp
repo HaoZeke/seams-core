@@ -755,9 +755,7 @@ bool ddcChainRoom(const std::vector<std::vector<int>> &rings,
     }
     return true;
   };
-  if (!take(equatorial)) {
-    return false;
-  }
+  take(equatorial);
   for (const int ri : chain.r) {
     if (!take(rings[static_cast<size_t>(ri)])) {
       return false;
