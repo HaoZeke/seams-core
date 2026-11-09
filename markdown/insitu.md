@@ -15,6 +15,11 @@ The Meson build includes Chemfiles.
 
 The Meson command follows.
 
+`DSEAMS_PIN`, when set, pins each OpenMP worker to one core from the
+process affinity mask. Unset, the workers keep the placement they had.
+`DSEAMS_PHASE`, when set, records the steady-clock time of the neighbour
+and bond phases on stderr. Unset, those clocks are not taken.
+
 ```
 meson setup bbdir-rel --optimization=2
 meson compile -C bbdir-rel
@@ -140,7 +145,7 @@ The plugin acceptance also runs on two ranks.
 
 ## GROMACS
 
-The module patch is patches/gromacs-dseams-module.patch, beside the metatomic module.
+The module patch is patches/gromacs-dseams-module.patch.
 GROMACS main is the 2027.0-dev line.
 The public upstream base is
 1ede0115a1c6cc063813d2b13085a86640e4273e.
