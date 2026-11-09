@@ -1022,6 +1022,7 @@ TEST_CASE("a directory and a truncated timestep header", "[seams_input]") {
   writeText(junk, "not a con\n");
   const auto junkCorpus = dir / "junk-corpus";
   fs::create_directories(junkCorpus);
+#ifdef SEAMS_HAS_READCON
   const std::string junkErr = captureCerr([&] {
     REQUIRE(sinp::ingestConCorpus(junkCorpus.string(), 1, junk.string()) < 0);
   });
@@ -1031,6 +1032,7 @@ TEST_CASE("a directory and a truncated timestep header", "[seams_input]") {
   });
   REQUIRE(cloud.nop == 0);
   REQUIRE(missingErr.find("Frame 1 not found in corpus") != std::string::npos);
+#endif
   fs::remove_all(dir);
 }
 
