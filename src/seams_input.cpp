@@ -231,7 +231,7 @@ struct LammpsDumpSession {
   }
 
   bool positionAt(int frame) {
-    if (frame < 1 || !file.is_open()) {
+    if (frame < 1) {
       return false;
     }
     if (lastFrame + 1 == frame && lastFrame > 0) {
@@ -298,7 +298,7 @@ std::shared_ptr<LammpsDumpSession> sessionFor(const std::string &filename) {
   }
   std::lock_guard<std::mutex> lock(gDumpMu);
   auto &slot = gDumps[filename];
-  if (!slot || slot->stale() || !slot->file.is_open()) {
+  if (!slot || slot->stale()) {
     slot = std::make_shared<LammpsDumpSession>();
     if (!slot->open(filename)) {
       slot.reset();
@@ -450,7 +450,7 @@ std::vector<std::vector<int>> sinp::readBonds(std::string filename) {
       for (int i = 0; i < static_cast<int>(tokens.size()); i++) {
         try {
           id.push_back(std::stoi(tokens[i]));
-        } catch (const std::exception &) {
+        } catch (...) {
           ok = false;
           break;
         }
@@ -607,7 +607,7 @@ molSys::PointCloud<molSys::Point<double>, double> sinp::readXYZ(std::string file
     }
     try {
       nop = std::stoi(line);
-    } catch (const std::exception &) {
+    } catch (...) {
       xyzFile->close();
       throw std::runtime_error("XYZ header is not an atom count.");
     }
@@ -620,7 +620,7 @@ molSys::PointCloud<molSys::Point<double>, double> sinp::readXYZ(std::string file
     std::getline((*xyzFile), comment);
     try {
       haveLattice = latticeCell(comment, yCloud.box, yCloud.boxLow);
-    } catch (const std::runtime_error &) {
+    } catch (...) {
       xyzFile->close();
       throw;
     }
@@ -673,7 +673,7 @@ molSys::PointCloud<molSys::Point<double>, double> sinp::readXYZ(std::string file
         iPoint.x = std::stod(tokens[coordinateOffset]);
         iPoint.y = std::stod(tokens[coordinateOffset + 1]);
         iPoint.z = std::stod(tokens[coordinateOffset + 2]);
-      } catch (const std::exception &) {
+      } catch (...) {
         xyzFile->close();
         throw std::runtime_error("XYZ coordinate is not a number.");
       }
@@ -754,7 +754,6 @@ void parseLammpsFrameBody(
   bool sawMol = false;
   int nextSyntheticId = 1;
   bool isTriclinic = false;
-  int nKept = 0;
   int nLines = 0;
   molSys::Point<double> iPoint;
 
@@ -824,7 +823,7 @@ void parseLammpsFrameBody(
       }
       // n is the field count, and need is a 0-based column, so the line
       // must hold at least need + 1 fields.
-      if (n > need && typeIndex >= 0) {
+      if (n > need) {
         iPoint.type = static_cast<int>(fields[typeIndex]);
         // A dump with no id column cannot reuse the type column: every
         // oxygen would share one ID and the last atom would win the map.
@@ -853,7 +852,6 @@ void parseLammpsFrameBody(
         if (keep != LammpsKeep::All && iPoint.type != typeFilter) {
           continue;
         }
-        nKept++;
         yCloud.pts.push_back(iPoint);
         mapAtomIdToIndex(yCloud);
       }
@@ -901,16 +899,12 @@ void parseLammpsFrameBody(
   // the warning goes to stderr, which every rank of a frame split keeps
   if (keep != LammpsKeep::All) {
     yCloud.nop = static_cast<int>(yCloud.pts.size());
-    if (yCloud.pts.size() != static_cast<std::size_t>(nKept)) {
-      std::cerr << "Atoms didn't get filled in properly.\n";
-    }
   } else if (yCloud.pts.size() !=
              static_cast<std::size_t>(yCloud.nop < 0 ? 0 : yCloud.nop)) {
-    // A count that does not fit in int leaves nop unset. The atoms that
-    // were actually read are the frame.
-    if (nop >= 0 || !yCloud.pts.empty()) {
-      std::cerr << "Atoms didn't get filled in properly.\n";
-    }
+    // Reaching this else-if means the stored count and the atom vector
+    // disagree. A missing count leaves the stored nop at 0, so an empty
+    // vector never enters, and the warning condition is always true here.
+    std::cerr << "Atoms didn't get filled in properly.\n";
     yCloud.nop = static_cast<int>(yCloud.pts.size());
   }
 }
