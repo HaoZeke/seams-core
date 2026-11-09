@@ -35,11 +35,14 @@ def main():
     lines.append("LAMMPS samples are its reported loop time divided by the step count.")
     lines.append("Every other code times the same driver call and divides that wall clock by how many steps ran.")
     lines.append("The plain run and the in-situ run use the same input on one process and one thread.")
-    lines.append("Six samples are kept. The quartiles are Hyndman-Fan type 7.")
+    lines.append("Six samples are kept.")
+    lines.append("The quartiles are Hyndman-Fan type 7.")
     lines.append("The interquartile range (IQR) is the third quartile minus the first.")
     lines.append("Overhead is the live sample minus the plain sample at the same index, in seconds per step.")
     lines.append("")
     lines.append("CPU `%s`." % host["cpu"])
+    lines.append("Measured commit `%s`." % host["head"])
+    lines.append("Measured tree `%s`." % host["tree"])
     lines.append("libyodaLib SHA-256 `%s`." % host["lib_sha256"])
     lines.append("LAMMPS SHA-256 `%s`." % host["lmp_sha256"])
     lines.append("GROMACS SHA-256 `%s`." % host["gmx_sha256"])
@@ -74,18 +77,22 @@ def main():
         lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
         lines.extend(code_lines)
     lines.append("")
-    lines.append("Overhead is seconds per step. The ratio is the live step time divided by the plain step time.")
+    lines.append("Overhead is seconds per step.")
+    lines.append("The ratio is the live step time divided by the plain step time.")
     lines.append("The GROMACS row uses the samples recorded for that code.")
     lines.append("The size table records the native d-SEAMS module.")
-    lines.append("OpenMM writes a disk coordinate dump (DCD) in float32. On this water system that file matches the in-situ record.")
+    lines.append("OpenMM writes a disk coordinate dump (DCD) in float32.")
+    lines.append("On this water system that file matches the in-situ record.")
     lines.append("")
     if "scale" in data:
         lines.append("# LAMMPS size and cadence")
         lines.append("")
         lines.append("The system is a diamond lattice of one site per water.")
         lines.append("Plain and live samples are the LAMMPS loop time divided by the number of steps.")
-        lines.append("The postprocess column is the wall time of the seams rings, chill-plus and cages commands on one native dump frame, repeated six times.")
-        lines.append("The in-situ run does not write a dump. The byte count is the native dump of one frame.")
+        lines.append("The postprocess column is the wall time of the seams rings, chill-plus and cages commands.")
+        lines.append("That column uses one native dump frame, repeated six times.")
+        lines.append("The in-situ run does not write a dump.")
+        lines.append("The byte count is the native dump of one frame.")
         lines.append("")
         lines.append("| Waters | Cadence | Steps | Median absolute | Median ratio | Per analysed frame | Median postprocess | Dump bytes |")
         lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
@@ -141,7 +148,8 @@ def main():
         lines.append("# GROMACS native module size and cadence")
         lines.append("")
         lines.append("The same diamond lattices as the LAMMPS table, one site per water.")
-        lines.append("Plain is mdrun. Live is the d-SEAMS module compiled into mdrun.")
+        lines.append("Plain is mdrun.")
+        lines.append("Live is the d-SEAMS module compiled into mdrun.")
         lines.append("Both times are the mdrun wall time divided by the number of steps.")
         lines.append("The run uses one rank and one thread.")
         lines.append("The analysed-frame column is the median extra seconds per step multiplied by the cadence.")
@@ -171,7 +179,8 @@ def main():
         lines.append("# Analysis time against the command line")
         lines.append("")
         lines.append("The in-situ column is the extra loop time of one analysed frame.")
-        lines.append("The command line included column is the wall time of seams rings, chill-plus and cages, process start and file reading included.")
+        lines.append("The command line included column is the wall time of seams rings, chill-plus and cages.")
+        lines.append("Process start and file reading are included.")
         lines.append("The excluded column is those three censuses after the dump is already in memory.")
         lines.append("")
         lines.append("| System | In-situ per frame | CLI included | CLI excluded |")
@@ -188,9 +197,10 @@ def main():
         lines.append("")
         steps = data.get("scale", {}).get("1000", {}).get("1", {}).get("steps", "")
         lines.append(
-            "The in-situ number is the median extra time per step of the 1000-water every-step run (%s steps), so it includes the first frame."
+            "The in-situ number is the median extra time per step of the 1000-water every-step run (%s steps)."
             % steps
         )
+        lines.append("It includes the first frame.")
         if "steady" in data:
             steady = data["steady"]
             delta = [steady["live"][i] - steady["plain"][i] for i in range(len(steady["plain"]))]
@@ -205,7 +215,8 @@ def main():
                     fmt(type7(delta, 0.5) * steady["every"]),
                 )
             )
-        lines.append("The command line excluded time is one frame. Its included time is one process per census.")
+        lines.append("The command line excluded time is one frame.")
+        lines.append("Its included time is one process per census.")
         lines.append("")
     if "equality" in data:
         lines.append("# Equality against each code's own file")
@@ -223,7 +234,8 @@ def main():
     if "ladder" in data:
         lines.append("# OpenMP threads")
         lines.append("")
-        lines.append("The command line census above is one frame. Each sample here is the analysis of the dumped frames divided by the frame count, after one warmup.")
+        lines.append("The command line census above is one frame.")
+        lines.append("Each sample here is the analysis of the dumped frames divided by the frame count, after one warmup.")
         lines.append("The thread counts are the powers of two up to the processors the process may use.")
         lines.append("A larger thread count scales when its third quartile is below the smaller thread count's first quartile.")
         lines.append("Waters and threads in the table are those counts.")
@@ -237,10 +249,10 @@ def main():
                 q1 = type7(samples, 0.25)
                 med = type7(samples, 0.5)
                 q3 = type7(samples, 0.75)
-                lines.append(
-                    "Thread quartile for %s waters at %s threads: first %s, median %s, third %s."
-                    % (waters, count, fmt(q1), fmt(med), fmt(q3))
-                )
+                lines.append("Waters %s, threads %s." % (waters, count))
+                lines.append("First quartile %s." % fmt(q1))
+                lines.append("Median %s." % fmt(med))
+                lines.append("Third quartile %s." % fmt(q3))
                 if waters in previous and not (q3 < previous[waters]):
                     scaling_failed.append((waters, count))
                 previous[waters] = q1
@@ -268,18 +280,15 @@ def main():
             continue
         lines.append("## %s raw samples" % name)
         lines.append("")
-        lines.append(
-            "Recorded plain %s seconds per step: %s."
-            % (name, " ".join(fmt(value) for value in plain))
-        )
-        lines.append(
-            "Measured in-situ %s seconds per step: %s."
-            % (name, " ".join(fmt(value) for value in live))
-        )
-        lines.append(
-            "Subtracted extra %s seconds per step: %s."
-            % (name, " ".join(fmt(live[i] - plain[i]) for i in range(len(plain))))
-        )
+        lines.append("Plain %s seconds per step follow." % name)
+        for value in plain:
+            lines.append(fmt(value))
+        lines.append("In-situ %s seconds per step follow." % name)
+        for value in live:
+            lines.append(fmt(value))
+        lines.append("Extra %s seconds per step follow." % name)
+        for i in range(len(plain)):
+            lines.append(fmt(live[i] - plain[i]))
         lines.append("")
     dest.write_text("\n".join(lines) + "\n")
     if "ladder" in data:
