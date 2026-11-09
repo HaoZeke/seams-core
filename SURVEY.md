@@ -535,9 +535,14 @@ Warmups stay apart from the samples.
 The report uses type 7 quartiles.
 OpenMP thread counts are the powers of two up to the processors the
 process may use.
-The LAMMPS route kept for use is the runtime plugin.
-An in-tree package of the same fix did not separate from the plugin once
-both were built at -O3.
+Both LAMMPS routes stay.
+On 1000 waters, one rank, stride 10, and 40 steps, six samples follow
+one warmup.
+The plugin first quartile is 0.000901546875 seconds per step.
+Its third quartile is 0.00090798124999999996 seconds per step.
+The package first quartile is 0.00089052312499999988 seconds per step.
+Its third quartile is 0.00089222812500000005 seconds per step.
+The package third quartile is below the plugin first quartile.
 The GROMACS census comes from a d-SEAMS module inside mdrun.
 The molecular dynamics parameter keys are dseams-active.
 Dseams-input-group, dseams-nstcalc, dseams-cutoff and dseams-output.
