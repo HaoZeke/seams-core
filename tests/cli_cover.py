@@ -249,7 +249,7 @@ def main():
     )
     expect(["cn", str(zero), "--ions", "--site", "1=cationHead,2=anion",
             "--cutoff", "6", *one], 0, out_has="degree 0",
-           err_line="The simulation box has a non-positive edge; cannot build a neighbour list.")
+           err_line="The point cloud has no simulation box; cannot build a neighbour list.")
 
     short = work / "short-box.lammpstrj"
     short.write_text(
@@ -263,6 +263,81 @@ def main():
     nodot.write_text(tiny.read_text())
     expect(["rings", str(nodot), "--frame", "1", "--last", "2"], 0, out_has="rings ")
     expect(["rings"], 2, err_line="A command and a trajectory file are required")
+
+    ice = expect(["chill", str(nucleation), *one, "--cutoff", "3.5"],
+                 0, out_has="reCubic 5")
+    check("reHex 33", "reHex 33" in ice.stdout, ice.stdout[:240])
+
+    one_xyz = work / "one.xyz"
+    one_xyz.write_text("1\ncomment\nO 0 0 0\n")
+    expect(["rings", str(one_xyz), "--frame", "2", "--last", "2"], 2,
+           err_line="frame 2 is past the last frame in this file")
+    expect(["rings", str(tiny), "--frame", "5", "--last", "6"], 2,
+           err_line="frame 5 is past the last frame in this file")
+
+    empty = work / "empty.lammpstrj"
+    empty.write_text(
+        "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n0\n"
+        "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        "ITEM: ATOMS id type x y z\n"
+    )
+    expect(["f4", str(empty), *one, "--type", "1", "--htype", "2"],
+           0, out_has="nop 0 f4 nan")
+    expect(["ions", str(empty), *one, "--ion-types", "3"], 0, out_has="nop 0")
+    expect(["read", str(empty), *one, "--strict-input"], 2,
+           out_has="contains no atoms")
+    expect(["rings", str(tiny), *one, "--family", "moltenSalt"], 0, out_has="rings ")
+
+    ions = work / "ions.lammpstrj"
+    ions.write_text(
+        "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n2\n"
+        "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        "ITEM: ATOMS id type x y z\n"
+        "1 1 0 0 0\n"
+        "2 2 8 0 0\n"
+    )
+    expect(["cn", str(ions), "--ions", "--site", "1=cationHead,2=anion",
+            "--cutoff", "6", *one], 0, out_has="nAnion 1")
+
+    junk = work / "junk.pdb"
+    junk.write_text("END\n")
+    expect(["read", str(junk), "--frame", "1", "--last", "2"], 0, out_has="nop ")
+
+    noid = work / "noid.lammpstrj"
+    noid.write_text(
+        "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+        "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        "ITEM: ATOMS type x y z\n"
+        "1 0 0 0\n"
+        "trailing\n"
+    )
+    expect(["read", str(noid), *one], 0, out_has="nop ")
+    trunc = work / "trunc.lammpstrj"
+    trunc.write_text("ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n")
+    expect(["read", str(trunc), *one], 0, out_has="nop ")
+    nomol = work / "nomol.lammpstrj"
+    nomol.write_text(
+        "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n2\n"
+        "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        "ITEM: ATOMS type x y z id\n"
+        "1 0 0 0 7\n"
+        "1 0 0\n"
+    )
+    expect(["read", str(nomol), *one], 0, out_has="nop ")
+    shortmol = work / "shortmol.lammpstrj"
+    shortmol.write_text(
+        "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+        "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        "ITEM: ATOMS id type mol\n"
+        "1 1\n"
+    )
+    expect(["read", str(shortmol), *one], 0, out_has="nop ")
+    pdb = work / "end.pdb"
+    pdb.write_text("END\n")
+    expect(["read", str(pdb), "--frame", "1", "--last", "2"], 0, out_has="nop ")
+    con = work / "end.con"
+    con.write_text("END\n")
+    expect(["read", str(con), "--frame", "1", "--last", "2"], 2)
 
 
 if __name__ == "__main__":
