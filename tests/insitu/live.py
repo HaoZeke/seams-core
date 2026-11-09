@@ -1069,8 +1069,6 @@ def run_ipi():
     seen = {"n": 0}
 
     def on_frame(index, pos, cell):
-        if "eng" not in seen:
-            return
         box = seen["eng"].box_from_rows(cell)
         seen["eng"].observe(index, pos, box, None)
         seen["n"] += 1
