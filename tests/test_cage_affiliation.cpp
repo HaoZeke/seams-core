@@ -1020,3 +1020,249 @@ TEST_CASE("AffiliationUpdater covers a moved owner, a short batch, and a dropped
     REQUIRE(part.ddc == partBatch.ddc);
   }
 }
+
+TEST_CASE("Affiliation edges the sweep used to leave closed",
+          "[cage_affiliation]") {
+  // The lesser neighbour of the least atom sits behind it, so the cycle
+  // hash walks backward. The updater must still match the forward writing.
+  std::vector<std::vector<int>> rows(6);
+  for (int a = 0; a < 6; ++a) {
+    rows[a] = {a};
+  }
+  const std::vector<std::vector<int>> backward = {{1, 0, 3, 4, 5, 2}};
+  const std::vector<std::vector<int>> forward = {{0, 2, 5, 4, 3, 1}};
+  ring::AffiliationUpdater walk;
+  walk.setBatchFraction(1.0);
+  const auto &backAff = walk.update(backward, rows);
+  const auto backBatch = ring::cageAffiliation(backward, rows);
+  REQUIRE(backAff.hc == backBatch.hc);
+  REQUIRE(backAff.ddc == backBatch.ddc);
+  const auto &fwdAff = walk.update(forward, rows);
+  const auto fwdBatch = ring::cageAffiliation(forward, rows);
+  REQUIRE(fwdAff.hc == fwdBatch.hc);
+  REQUIRE(fwdAff.hc == backAff.hc);
+
+  // These two triples are not the same cycle, and they share a hash.
+  // The matcher has to reject the cross pair.
+  const std::vector<std::vector<int>> collided = {
+      {1, 1277, 8208187},
+      {0, 1, 2},
+  };
+  std::vector<std::vector<int>> wide(8208188);
+  for (int a : {0, 1, 2, 1277, 8208187}) {
+    wide[static_cast<std::size_t>(a)] = {a};
+  }
+  ring::AffiliationUpdater collide;
+  collide.setBatchFraction(1.0);
+  const auto &first = collide.update(collided, wide);
+  const auto firstBatch = ring::cageAffiliation(collided, wide);
+  REQUIRE(first.hc.size() == 2);
+  REQUIRE(first.hc == firstBatch.hc);
+  const std::vector<std::vector<int>> collidedAgain = {
+      {0, 1, 2},
+      {1, 1277, 8208187},
+  };
+  const auto &second = collide.update(collidedAgain, wide);
+  const auto secondBatch = ring::cageAffiliation(collidedAgain, wide);
+  REQUIRE(second.hc == secondBatch.hc);
+  REQUIRE(second.ddc == secondBatch.ddc);
+
+  // Enough generations that the 8-bit stamp counter wraps. The rings
+  // are disjoint, so the answer is empty and a second pass matches it.
+  constexpr int nWrap = 10000;
+  std::vector<std::vector<int>> wrapRows(static_cast<std::size_t>(nWrap * 6));
+  std::vector<std::vector<int>> many(static_cast<std::size_t>(nWrap));
+  for (int i = 0; i < nWrap; ++i) {
+    std::vector<int> ring;
+    for (int k = 0; k < 6; ++k) {
+      const int atom = i * 6 + k;
+      ring.push_back(atom);
+      wrapRows[static_cast<std::size_t>(atom)] = {atom};
+    }
+    many[static_cast<std::size_t>(i)] = std::move(ring);
+  }
+  const auto wrapped = ring::cageAffiliation(many, wrapRows);
+  REQUIRE(wrapped.hc.size() == many.size());
+  REQUIRE(std::count(wrapped.hc.begin(), wrapped.hc.end(), true) == 0);
+  const auto wrappedAgain = ring::cageAffiliation(many, wrapRows);
+  REQUIRE(wrappedAgain.hc == wrapped.hc);
+  REQUIRE(wrappedAgain.ddc == wrapped.ddc);
+  const auto small = ring::cageAffiliation(forward, rows);
+  REQUIRE(small.hc == fwdBatch.hc);
+
+  // First use of a ring fills its basal list. The planes and the
+  // affiliation describe the same rings.
+  const auto planes = ring::stackingPlanes(forward, rows);
+  REQUIRE(planes.basal.size() == forward.size());
+  for (std::size_t i = 0; i < planes.basal.size(); ++i) {
+    if (planes.basal[i]) {
+      REQUIRE(small.hc[i]);
+    }
+  }
+
+  // A neighbour id outside the cloud is dropped by the flood and does
+  // not change which atoms keep the seed.
+  ring::CageAffiliation strict;
+  strict.hc = {true};
+  strict.ddc = {false};
+  ring::CageAffiliation permissive = strict;
+  std::vector<std::vector<int>> nList(3);
+  for (int a = 0; a < 3; ++a) {
+    nList[static_cast<std::size_t>(a)] = {a};
+  }
+  nList[0].push_back(-1);
+  nList[0].push_back(40);
+  nList[0].push_back(1);
+  const std::vector<std::vector<int>> one = {{0, 1, 2}};
+  const auto flooded =
+      ring::seededCageAffiliation(one, strict, one, permissive, nList, false);
+  std::vector<std::vector<int>> clean = nList;
+  clean[0] = {0, 1};
+  const auto plain =
+      ring::seededCageAffiliation(one, strict, one, permissive, clean, false);
+  REQUIRE(flooded.hc == plain.hc);
+  REQUIRE(flooded.ddc == plain.ddc);
+  REQUIRE(flooded.hc[0]);
+  REQUIRE(flooded.hc[1]);
+}
+
+TEST_CASE("Affiliation reads a backward cycle and an index outside the cloud",
+          "[cage_affiliation]") {
+  // Two rings, out of order, so the matcher hashes. The least atom of the
+  // first ring has its lesser neighbour behind it. The next frame writes
+  // that same cycle toward the lesser neighbour.
+  std::vector<std::vector<int>> rows(8);
+  for (int a = 0; a < 8; ++a) {
+    rows[static_cast<std::size_t>(a)] = {a};
+  }
+  const std::vector<std::vector<int>> backward = {
+      {1, 0, 3, 4, 5, 2},
+      {0, 1, 2, 3, 6, 7},
+  };
+  const std::vector<std::vector<int>> forward = {
+      {0, 1, 2, 5, 4, 3},
+      {0, 1, 2, 3, 6, 7},
+  };
+  ring::AffiliationUpdater walk;
+  walk.setBatchFraction(1.0);
+  const auto &back = walk.update(backward, rows);
+  REQUIRE(back.hc == ring::cageAffiliation(backward, rows).hc);
+  REQUIRE(back.ddc == ring::cageAffiliation(backward, rows).ddc);
+  const auto &fwd = walk.update(forward, rows);
+  REQUIRE(fwd.hc == ring::cageAffiliation(forward, rows).hc);
+  REQUIRE(fwd.ddc == ring::cageAffiliation(forward, rows).ddc);
+
+  // A six-ring atom past the cloud, a negative ring atom, and neighbour
+  // ids that are negative or past the cloud. Atom 5 is in the cloud and
+  // past every atom the rings actually contain, except the rejected one.
+  std::vector<std::vector<int>> wide(6);
+  for (int a = 0; a < 6; ++a) {
+    wide[static_cast<std::size_t>(a)] = {a, -1, 50, 5};
+  }
+  const std::vector<std::vector<int>> odd = {
+      {0, 1, 2, 3, 4, 100},
+      {-4, 0, 1, 2, 3, 4},
+  };
+  const auto oddAff = ring::cageAffiliation(odd, wide);
+  REQUIRE(oddAff.hc.size() == odd.size());
+  REQUIRE(oddAff.ddc.size() == odd.size());
+  REQUIRE(ring::stackingPlanes(odd, wide).basal.size() == odd.size());
+  const auto oddAgain = ring::cageAffiliation(odd, wide);
+  REQUIRE(oddAgain.hc == oddAff.hc);
+  REQUIRE(oddAgain.ddc == oddAff.ddc);
+  // Neighbour 5 is in this cloud and past every atom the ring lists.
+  std::vector<std::vector<int>> pastRows(6);
+  for (int a = 0; a < 6; ++a) {
+    pastRows[static_cast<std::size_t>(a)] = {a, 5};
+  }
+  const auto pastRing =
+      ring::cageAffiliation(std::vector<std::vector<int>>{{0, 1, 2, 3, 4, 0}}, pastRows);
+  REQUIRE(pastRing.hc.size() == 1);
+
+  // Drop a ring that shares no atom with the ring that stays. The rows
+  // do not change, and they name a negative id and an id past the cloud.
+  std::vector<std::vector<int>> cloud(12);
+  for (int a = 0; a < 12; ++a) {
+    cloud[static_cast<std::size_t>(a)] = {a, -2, 80};
+  }
+  const std::vector<std::vector<int>> both = {
+      {0, 1, 2, 3, 4, 5},
+      {6, 7, 8, 9, 10, 100},
+  };
+  ring::AffiliationUpdater drop;
+  drop.setBatchFraction(1.0);
+  REQUIRE(drop.update(both, cloud).hc == ring::cageAffiliation(both, cloud).hc);
+  const std::vector<std::vector<int>> left = {{0, 1, 2, 3, 4, 5}};
+  const auto &kept = drop.update(left, cloud);
+  REQUIRE(kept.hc == ring::cageAffiliation(left, cloud).hc);
+  REQUIRE(kept.ddc == ring::cageAffiliation(left, cloud).ddc);
+
+  // Any changed row crosses a zero fraction and the next cloud is longer.
+  std::vector<std::vector<int>> hotRows(6);
+  for (int a = 0; a < 6; ++a) {
+    hotRows[static_cast<std::size_t>(a)] = {a};
+  }
+  const std::vector<std::vector<int>> hex = {{0, 1, 2, 3, 4, 5}};
+  ring::AffiliationUpdater hot;
+  hot.setBatchFraction(0.0);
+  REQUIRE(hot.update(hex, hotRows).hc == ring::cageAffiliation(hex, hotRows).hc);
+  auto changed = hotRows;
+  changed[0].push_back(1);
+  REQUIRE(hot.update(hex, changed).hc == ring::cageAffiliation(hex, changed).hc);
+  changed.push_back({0});
+  const auto &resized = hot.update(hex, changed);
+  REQUIRE(resized.hc == ring::cageAffiliation(hex, changed).hc);
+  REQUIRE(resized.ddc == ring::cageAffiliation(hex, changed).ddc);
+
+  ring::AffiliationUpdater sized;
+  sized.setBatchFraction(1.0);
+  (void)sized.update(hex, hotRows);
+  auto longer = hotRows;
+  longer.push_back({1});
+  REQUIRE(sized.update(hex, longer).hc == ring::cageAffiliation(hex, longer).hc);
+
+#ifdef SEAMS_HAS_OPENMP
+  std::vector<std::vector<int>> manyRows(1024);
+  for (int a = 0; a < 1024; ++a) {
+    manyRows[static_cast<std::size_t>(a)] = {a % 6};
+  }
+  ring::AffiliationUpdater inside;
+  inside.setBatchFraction(1.0);
+  (void)inside.update(hex, manyRows);
+  int inner = 0;
+#pragma omp parallel
+  {
+    if (omp_get_thread_num() == 0) {
+      inner = static_cast<int>(inside.update(hex, manyRows).hc.size());
+    }
+  }
+  REQUIRE(inner == 1);
+#endif
+
+  // Strict and permissive clouds label different atoms. An empty label
+  // vector returns before the walk, and a ring atom past the cloud does not.
+  ring::CageAffiliation strictOnly;
+  strictOnly.hc = {true};
+  strictOnly.ddc = {false};
+  ring::CageAffiliation permOnly;
+  permOnly.hc = {false};
+  permOnly.ddc = {true};
+  std::vector<std::vector<int>> bond(2);
+  bond[0] = {0, -1, 40, 1};
+  bond[1] = {1};
+  const std::vector<std::vector<int>> pair = {{0, 1}};
+  const auto mixed =
+      ring::seededCageAffiliation(pair, strictOnly, pair, permOnly, bond, true);
+  REQUIRE(mixed.hc.size() == bond.size());
+  REQUIRE(mixed.hc[0]);
+  REQUIRE(mixed.ddc.size() == bond.size());
+  ring::SeededAtomLabels none;
+  REQUIRE(ring::ringAdjacentCompletion(none, pair).hc.empty());
+  ring::SeededAtomLabels two;
+  two.hc = {true, false};
+  two.ddc = {false, false};
+  const auto past = ring::ringAdjacentCompletion(two, {{0, 9, -3}});
+  REQUIRE(past.hc.size() == 2);
+  REQUIRE(past.hc[0]);
+  REQUIRE(!past.hc[1]);
+}
