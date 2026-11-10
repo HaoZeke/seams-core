@@ -4,6 +4,8 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -92,6 +94,33 @@ TEST_CASE("a non-positive lattice row is rejected", "[insitu]") {
   REQUIRE(seams_insitu_box_from_rows(small, &xlo, &ylo, &zlo, &lx, &ly, &lz,
                                      &xy, &xz, &yz) == 0);
   REQUIRE(lx == 0.5);
+}
+
+TEST_CASE("a dump with one box line still analyses", "[insitu]") {
+  const char *text =
+      "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n2\n"
+      "ITEM: BOX BOUNDS pp pp pp\n0.0 10.0\n"
+      "ITEM: ATOMS id mol type x y z\n"
+      "1 1 1 0.0 0.0 0.0\n2 2 1 1.0 0.0 0.0\n";
+  const char *none =
+      "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n2\n"
+      "ITEM: ATOMS id mol type x y z\n"
+      "1 1 1 0.0 0.0 0.0\n2 2 1 1.0 0.0 0.0\n";
+  const auto dir = std::filesystem::temp_directory_path() / "seams-cover-insitu";
+  std::filesystem::create_directories(dir);
+  const auto one = dir / "one-box.lammpstrj";
+  const auto zero = dir / "no-box.lammpstrj";
+  const auto rec = dir / "rec.txt";
+  {
+    std::ofstream(one) << text;
+    std::ofstream(zero) << none;
+  }
+  seams_insitu_options opt;
+  seams_insitu_options_default(&opt);
+  auto *eng = seams_insitu_create(&opt);
+  REQUIRE(seams_insitu_replay(eng, one.c_str(), rec.c_str()) == SEAMS_INSITU_OK);
+  REQUIRE(seams_insitu_replay(eng, zero.c_str(), rec.c_str()) == SEAMS_INSITU_OK);
+  seams_insitu_destroy(eng);
 }
 
 TEST_CASE("two hundred and fifty six host rows use the parallel filter",
