@@ -20,11 +20,7 @@ def sha256(path):
     return digest.hexdigest()
 
 
-def ppid(pid):
-    try:
-        text = open("/proc/%d/stat" % pid, encoding="utf-8", errors="replace").read()
-    except OSError:
-        return None
+def parent_of(text):
     mark = text.rfind(")")
     if mark < 0:
         return None
@@ -32,6 +28,23 @@ def ppid(pid):
     if len(fields) < 2:
         return None
     return int(fields[1])
+
+
+def ppid(pid):
+    try:
+        text = open("/proc/%d/stat" % pid, encoding="utf-8", errors="replace").read()
+    except OSError:
+        return None
+    return parent_of(text)
+
+
+def map_path(line):
+    if "liblammps.so" not in line and "libdseams_lammps.so" not in line:
+        return ""
+    parts = line.split()
+    if len(parts) >= 6:
+        return parts[-1]
+    return ""
 
 
 def descendants(root):
@@ -60,11 +73,9 @@ def mapped(pid):
         return []
     paths = []
     for line in lines:
-        if "liblammps.so" not in line and "libdseams_lammps.so" not in line:
-            continue
-        parts = line.split()
-        if len(parts) >= 6:
-            paths.append(parts[-1])
+        path = map_path(line)
+        if path:
+            paths.append(path)
     return paths
 
 

@@ -125,6 +125,43 @@ def require_ok(code, message):
         raise SystemExit(message)
 
 
+def require_record(folder, route, system, launch):
+    if not (folder / "live.txt").exists():
+        raise SystemExit("%s %s %s wrote no live record" % (route, system, launch))
+
+
+def absent_route(system, launch):
+    return {"system": system, "launch": launch, "frames_plugin": 0, "frames_intree": 0, "mismatches": ""}
+
+
+def take_pair(saved, system, launch, route_summary):
+    left = saved.get((system, launch, "plugin"))
+    right = saved.get((system, launch, "intree"))
+    if left is None or right is None:
+        route_summary.append(absent_route(system, launch))
+        return None
+    return left, right
+
+
+def place_plugin(folder, plugin_bytes):
+    so = folder / "libdseams_lammps.so"
+    if plugin_bytes is None:
+        if so.exists():
+            so.unlink()
+    else:
+        so.write_bytes(plugin_bytes)
+
+
+def require_literal(compared, route):
+    if compared["mismatches"] != 0 or compared["live_steps"] != [0]:
+        raise SystemExit("literal %s mismatch %s" % (route, compared))
+
+
+def require_route_match(count):
+    if count != 0:
+        raise SystemExit("literal routes mismatch %d" % count)
+
+
 def quantile7(values, probability):
     ordered = sorted(values)
     count = len(ordered)
@@ -473,8 +510,7 @@ def main():
                     "wall_s": wall,
                     "loop_s": loop,
                 }
-                if not (folder / "live.txt").exists():
-                    raise SystemExit("%s %s %s wrote no live record" % (route, system, launch))
+                require_record(folder, route, system, launch)
                 compared = compare_live_cli(system, launch, route, folder, cli_rows)
                 entry.update(
                     frames=compared["frames"],
@@ -489,11 +525,10 @@ def main():
     route_summary = []
     for system in systems:
         for launch in launches:
-            left = saved.get((system, launch, "plugin"))
-            right = saved.get((system, launch, "intree"))
-            if left is None or right is None:
-                route_summary.append({"system": system, "launch": launch, "frames_plugin": 0, "frames_intree": 0, "mismatches": ""})
+            pair = take_pair(saved, system, launch, route_summary)
+            if pair is None:
                 continue
+            left, right = pair
             mismatches = compare_routes(system, launch, left["blocks"], right["blocks"], route_rows)
             route_summary.append(
                 {
@@ -516,20 +551,14 @@ def main():
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "in.dseams").write_text(shipped)
         (folder / "water.data").write_bytes(WATER.read_bytes())
-        so = folder / "libdseams_lammps.so"
-        if plugin_bytes is None:
-            if so.exists():
-                so.unlink()
-        else:
-            so.write_bytes(plugin_bytes)
+        place_plugin(folder, plugin_bytes)
         code, loop, wall = run_lammps(
             binary, token, digest, folder, "serial", route, "literal-in.dseams",
             "%s-literal-in.dseams-serial.log" % route, in_name="in.dseams",
         )
         require_ok(code, "literal %s exit %d" % (route, code))
         compared = compare_live_cli("literal-in.dseams", "serial", route, folder, cli_rows)
-        if compared["mismatches"] != 0 or compared["live_steps"] != [0]:
-            raise SystemExit("literal %s mismatch %s" % (route, compared))
+        require_literal(compared, route)
         summary.append({
             "system": "literal-in.dseams",
             "launch": "serial",
@@ -548,8 +577,7 @@ def main():
     left = saved[("literal-in.dseams", "serial", "plugin")]
     right = saved[("literal-in.dseams", "serial", "intree")]
     literal_routes = compare_routes("literal-in.dseams", "serial", left["blocks"], right["blocks"], route_rows)
-    if literal_routes != 0:
-        raise SystemExit("literal routes mismatch %d" % literal_routes)
+    require_route_match(literal_routes)
     route_summary.append({
         "system": "literal-in.dseams",
         "launch": "serial",

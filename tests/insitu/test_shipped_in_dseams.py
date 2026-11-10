@@ -178,6 +178,7 @@ def main():
     os.environ.pop("DSEAMS_NO_HOST", None)
     (work / "plugin").mkdir(parents=True, exist_ok=True)
     run_route("plugin", need("DSEAMS_LMP"), need("DSEAMS_PLUGIN"), work)
+    run_route("plugin", need("DSEAMS_LMP"), need("DSEAMS_PLUGIN"), work)
     run_route("intree", need("DSEAMS_LMP_INTREE"), "", work)
 
 

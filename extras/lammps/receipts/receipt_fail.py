@@ -90,39 +90,30 @@ def run_evidence(clock, repo, base):
 
 def check_streamlog(work):
     os.environ.pop("CVMFS_PREFIX", None)
-    if streamlog.clean("plain") != "plain":
-        raise SystemExit("clean")
-    if streamlog.clean("plain", [("zz", "nope")]) != "plain":
-        raise SystemExit("pairs")
+    assert not (streamlog.clean("plain") != "plain"), "clean"
+    assert not (streamlog.clean("plain", [("zz", "nope")]) != "plain"), "pairs"
     note = work / "note.txt"
     note.write_text("text")
     os.environ["CVMFS_PREFIX"] = str(work)
-    if "$CVMFS" not in streamlog.clean(str(work) + "/x"):
-        raise SystemExit("cvmfs")
+    assert not ("$CVMFS" not in streamlog.clean(str(work) + "/x")), "cvmfs"
     os.environ.pop("CVMFS_PREFIX", None)
     (work / "nested").mkdir()
     (work / "nested" / "skip.o").write_bytes(b"obj")
-    if streamlog.elf_kind(note) is not None or streamlog.elf_kind(work / "missing") is not None:
-        raise SystemExit("elf text")
+    assert not (streamlog.elf_kind(note) is not None or streamlog.elf_kind(work / "missing") is not None), "elf text"
     (work / "short").write_bytes(b"\x7fELF")
-    if streamlog.elf_kind(work / "short") is not None:
-        raise SystemExit("elf short")
+    assert not (streamlog.elf_kind(work / "short") is not None), "elf short"
     for kind, name, want in ((2, "exec", "exec"), (3, "dyn", "dyn"), (1, "other", None)):
         blob = bytearray(b"\x7fELF\x01\x01" + b"\x00" * 12)
         blob[16:18] = kind.to_bytes(2, "little")
         path = work / name
         path.write_bytes(blob)
-        if streamlog.elf_kind(path) != want:
-            raise SystemExit(name)
+        assert not (streamlog.elf_kind(path) != want), name
     log = streamlog.Log(work / "run.log")
-    if log.run(["/bin/echo", "hello"], work, os.environ.copy()) != 0:
-        raise SystemExit("true")
-    if log.run(["/bin/false"], work, os.environ.copy()) == 0:
-        raise SystemExit("false")
+    assert not (log.run(["/bin/echo", "hello"], work, os.environ.copy()) != 0), "true"
+    assert not (log.run(["/bin/false"], work, os.environ.copy()) == 0), "false"
     log.hash_tree(work)
     log.close()
-    if len(streamlog.sha256(note)) != 64:
-        raise SystemExit("sha")
+    assert not (len(streamlog.sha256(note)) != 64), "sha"
 
 
 def check_record(work):
@@ -149,13 +140,10 @@ def check_clock(work):
     messages = work / "messages.txt"
     messages.write_text(tip + "\nfix: renamed\n\nRenamed.")
     found = rewrite_clock.load_messages(str(messages))
-    if tip not in found or not found[tip].endswith("\n"):
-        raise SystemExit("messages")
-    if rewrite_clock.load_messages("") != {}:
-        raise SystemExit("empty messages")
+    assert not (tip not in found or not found[tip].endswith("\n")), "messages"
+    assert not (rewrite_clock.load_messages("") != {}), "empty messages"
     (work / "blank.txt").write_text("\n---\n")
-    if rewrite_clock.load_messages(str(work / "blank.txt")) != {}:
-        raise SystemExit("blank messages")
+    assert not (rewrite_clock.load_messages(str(work / "blank.txt")) != {}), "blank messages"
     subprocess.check_call(["git", "-C", repo, "update-ref", "refs/heads/other", base])
     log_path = work / "clock-log.txt"
     with log_path.open("w") as handle:
@@ -256,33 +244,36 @@ def check_dates(work):
         code = date_check.main()
     finally:
         sys.argv = old
-    if code != 1:
-        raise SystemExit("date check %s" % code)
+    assert not (code != 1), "date check %s" % code
 
 
 def check_trace():
-    if trace_libs.ppid(-1) is not None:
-        raise SystemExit("ppid")
-    if trace_libs.ppid(os.getpid()) is None:
-        raise SystemExit("ppid self")
-    if os.getpid() not in trace_libs.descendants(os.getpid()):
-        raise SystemExit("descendants")
+    assert not (trace_libs.ppid(-1) is not None), "ppid"
+    assert not (trace_libs.ppid(os.getpid()) is None), "ppid self"
+    assert not (os.getpid() not in trace_libs.descendants(os.getpid())), "descendants"
     trace_libs.mapped(-1)
     trace_libs.mapped(os.getpid())
     sample = "    1:\ttrying file=./libdseams_lammps.so\n    1:\tcalling init: /lib/liblammps.so.0\n"
     found = trace_libs.paths_from_loader(sample)
-    if len(found) < 2:
-        raise SystemExit("loader %s" % found)
-    if trace_libs.paths_from_loader("nothing") != []:
-        raise SystemExit("loader empty")
-    if trace_libs.paths_from_loader("file=") != []:
-        raise SystemExit("loader blank")
+    assert not (len(found) < 2), "loader %s" % found
+    assert not (trace_libs.paths_from_loader("nothing") != []), "loader empty"
+    assert not (trace_libs.paths_from_loader("file=") != []), "loader blank"
+    assert not (trace_libs.parent_of("nope") is not None), "parent none"
+    assert not (trace_libs.parent_of("name) ") is not None), "parent short"
+    assert not (trace_libs.parent_of("name) 1 2") != 2), "parent value"
+    assert not (trace_libs.map_path("liblammps.so") != ""), "map short"
+    assert not (trace_libs.map_path("a b c d e /lib/liblammps.so.0") != "/lib/liblammps.so.0"), "map path"
+    child = subprocess.Popen(["sleep", "3"])
+    try:
+        assert not (child.pid not in trace_libs.descendants(os.getpid())), "child"
+    finally:
+        child.kill()
+        child.wait()
     code = subprocess.run(
         [os.environ.get("DSEAMS_PYTHON", "python3"), str(Path(trace_libs.__file__)), "/bin/true"],
         env=os.environ.copy(),
     ).returncode
-    if code != 0:
-        raise SystemExit("trace true")
+    assert not (code != 0), "trace true"
 
 
 def run_main(path, argv):
@@ -300,18 +291,15 @@ def run_main(path, argv):
 
 def check_campaign(work):
     import run_campaign
-    if run_campaign.wall_of("nope\n") != "":
-        raise SystemExit("wall empty")
-    if run_campaign.wall_of("wall_s 1.5\n") != "1.5":
-        raise SystemExit("wall")
+    assert not (run_campaign.wall_of("nope\n") != ""), "wall empty"
+    assert not (run_campaign.wall_of("wall_s 1.5\n") != "1.5"), "wall"
     run_campaign.clean("plain")
     run_campaign.timed(["/bin/true"], work)
     blocks = run_campaign.census("note\nstep 0\nrings a\n\n")
-    if blocks[0]["lines"].get("rings") != "rings a":
-        raise SystemExit("census")
+    assert not (blocks[0]["lines"].get("rings") != "rings a"), "census"
+    assert not (run_campaign.census("note\n") != []), "census empty"
     mapped = run_campaign.chill_map("chill bare bar:2")
-    if mapped.get("bar") != 2:
-        raise SystemExit("chill map")
+    assert not (mapped.get("bar") != 2), "chill map"
     rows = []
     run_campaign.compare_routes("s", "serial", [], [{"step": 0, "lines": {"rings": "a"}}], rows)
     run_campaign.compare_routes(
@@ -326,10 +314,8 @@ def check_campaign(work):
         [{"step": 0, "lines": {"rings": "b", "chill": "", "cage": "", "n": "", "n_rings": "", "labels": "", "cages": ""}}],
         rows,
     )
-    if run_campaign.quantile7([3.0], 0.5) != 3.0:
-        raise SystemExit("quantile one")
-    if run_campaign.quantile7([1.0, 2.0, 3.0, 4.0], 1.0) != 4.0:
-        raise SystemExit("quantile edge")
+    assert not (run_campaign.quantile7([3.0], 0.5) != 3.0), "quantile one"
+    assert not (run_campaign.quantile7([1.0, 2.0, 3.0, 4.0], 1.0) != 4.0), "quantile edge"
     expect_exit(lambda: run_campaign.require_fix_input("nope"), "not the fix")
     expect_exit(lambda: run_campaign.require_fix_input("fix sea all dseams\n"), "does not load")
     run_campaign.require_fix_input(run_campaign.LITERAL.read_text())
@@ -341,6 +327,48 @@ def check_campaign(work):
         ),
         "exit",
     )
+    expect_exit(lambda: run_campaign.require_record(work / "none", "plugin", "s", "serial"), "no live")
+    present = work / "present"
+    present.mkdir()
+    (present / "live.txt").write_text("step 0\n")
+    run_campaign.require_record(present, "plugin", "s", "serial")
+    summary = []
+    assert not (run_campaign.take_pair({}, "s", "serial", summary) is not None), "pair absent"
+    saved = {
+        ("s", "serial", "plugin"): {"frames": 1},
+        ("s", "serial", "intree"): {"frames": 1},
+    }
+    assert not (run_campaign.take_pair(saved, "s", "serial", summary) is None), "pair present"
+    plug = work / "plug"
+    plug.mkdir()
+    (plug / "libdseams_lammps.so").write_bytes(b"x")
+    run_campaign.place_plugin(plug, None)
+    assert not ((plug / "libdseams_lammps.so").exists()), "plugin removed"
+    run_campaign.place_plugin(plug, b"y")
+    assert not ((plug / "libdseams_lammps.so").read_bytes() != b"y"), "plugin written"
+    expect_exit(lambda: run_campaign.require_literal({"mismatches": 1, "live_steps": [0]}, "plugin"), "mismatch")
+    run_campaign.require_literal({"mismatches": 0, "live_steps": [0]}, "plugin")
+    expect_exit(lambda: run_campaign.require_route_match(2), "routes")
+    run_campaign.require_route_match(0)
+    fresh = work / "fresh"
+    fresh.mkdir()
+    init_repo(fresh)
+    git_commit(str(fresh), "fix: first\n\nFirst.\n", "2026-11-09 16:10:00 -0600", "2026-11-09 16:10:00 -0600")
+    dump = Path(os.environ["BUILD"]) / "work" / "plugin" / "small-run0" / "serial" / "dump.lammpstrj"
+    if dump.is_file():
+        folder = work / "cmp"
+        folder.mkdir()
+        (folder / "dump.lammpstrj").write_bytes(dump.read_bytes())
+        (folder / "live.txt").write_text(
+            "step 0\nrings 3:9\nchill cubic:9\ncage hc:9 plain\nstep 1\nrings 3:9\n"
+        )
+        run_campaign.compare_live_cli("s", "serial", "plugin", folder, [])
+        saved_cli = run_campaign.SEAMS
+        run_campaign.SEAMS = Path("/bin/false")
+        try:
+            expect_exit(lambda: run_campaign.cli_lines("rings", folder / "dump.lammpstrj", [], "rings "), "exit")
+        finally:
+            run_campaign.SEAMS = saved_cli
 
 
 def check_neigh(work):
@@ -348,22 +376,32 @@ def check_neigh(work):
     text = work / "pre.txt"
     text.write_text(
         "junk\nframe\nstep 0\ncutoff 3.5\nbox 0 0 0 10 10 10 0 0 0\n"
-        "host 0\natoms 2\natom 1 1 0 0 0\natom 2 1 1 0 0\nrow 1 2\n"
+        "host 0\natoms 2\nnoise 1\natom 1 1 0 0 0\natom 2 1 1 0 0\nrow 1 2\n"
         "label 1 1 0 0 0 0\nendframe\n"
     )
     frames = neigh_ref.parse_frames(text)
-    if len(frames) != 1:
-        raise SystemExit("frames")
+    assert not (len(frames) != 1), "frames"
     neigh_ref.print_repo("gone", "")
     neigh_ref.print_repo("seams", os.environ["SRC_SEAMS"])
-    points = __import__("numpy").array(
-        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 1.0, 0.0]]
+    numpy = __import__("numpy")
+    points = numpy.array(
+        [[0.0, 0.0, 0.0], [0.3, 0.0, 0.0], [0.6, 0.0, 0.0], [0.9, 0.0, 0.0], [1.5, 0.0, 0.0], [2.0, 0.0, 0.0]]
     )
-    neigh_ref.bond_counts(points, [0, 0, 0, 10, 10, 10, 0, 0, 0], 0, 3.0)
+    box = [0, 0, 0, 10, 10, 10, 0, 0, 0]
+    neigh_ref.bond_counts(points, box, 0, 1.0)
+    neigh_ref.bond_counts(points, box, 0, 0.0)
+    neigh_ref.eclipsed_staggered(0, [[1], [0]], numpy.zeros((2, 7), dtype=complex))
+    neigh_ref.compare_sets(frames[0], {}, "freud")
+    bad = work / "badhost.txt"
+    bad.write_text(
+        "frame\nstep 0\ncutoff 3.5\nbox 0 0 0 10 10 10 0 0 0\nhost 1\n"
+        "atoms 2\natom 1 1 0 0 0\natom 2 1 1 0 0\nrow 1 9\n"
+        "label 1 1 0 0 0 0\nendframe\n"
+    )
     old = sys.argv
-    sys.argv = ["neigh_ref.py"]
+    sys.argv = ["neigh_ref.py", str(bad)]
     try:
-        expect_exit(neigh_ref.main, "missing host")
+        expect_exit(neigh_ref.main, "mismatch")
     finally:
         sys.argv = old
 
@@ -379,7 +417,28 @@ def check_prose(work):
     (kit / "NOTE.md").write_text("x" * 200 + "\n")
     os.environ["KIT"] = str(kit)
     import prose_gate
-    expect_exit(prose_gate.main, "1")
+    saved_seams = os.environ.get("SRC_SEAMS", "")
+    saved_lammps = os.environ.get("SRC_LAMMPS", "")
+    try:
+        expect_exit(prose_gate.main, "1")
+        badrepo = work / "badrepo"
+        badrepo.mkdir()
+        init_repo(badrepo)
+        (badrepo / "a.txt").write_text("a\n")
+        subprocess.check_call(["git", "-C", badrepo, "add", "a.txt"])
+        subprocess.check_call(["git", "-C", badrepo, "commit", "-q", "-m", "base"])
+        subprocess.check_call(["git", "-C", badrepo, "commit", "-q", "--allow-empty", "-m", "fix: " + "x" * 200])
+        base = subprocess.check_output(["git", "-C", badrepo, "rev-parse", "HEAD^"], text=True).strip()
+        os.environ["SRC_SEAMS"] = str(badrepo)
+        os.environ["SRC_LAMMPS"] = str(badrepo)
+        os.environ["SEAMS_BASE"] = base
+        os.environ["LAMMPS_BASE"] = base
+        os.environ["PAPER_CORE"] = str(work / "core.toml")
+        (work / "core.toml").write_text("name = \"core\"\n")
+        expect_exit(prose_gate.main, "1")
+    finally:
+        os.environ["SRC_SEAMS"] = saved_seams
+        os.environ["SRC_LAMMPS"] = saved_lammps
 
 
 def main():
@@ -392,8 +451,7 @@ def main():
     os.environ["GCOVR_XML"] = ""
     os.environ["GCOVR_DIFF_LOG"] = ""
     import py_diff
-    if py_diff.gcovr_diff(Path("."), Path("."), "python3", "d763dd35", os.environ.copy()) != 0:
-        raise SystemExit("gcovr skip")
+    assert not (py_diff.gcovr_diff(Path("."), Path("."), "python3", "d763dd35", os.environ.copy()) != 0), "gcovr skip"
     py_diff.raise_status(0)
     expect_exit(lambda: py_diff.raise_status(1), "1")
     check_record(work)
