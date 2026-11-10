@@ -87,3 +87,20 @@ Branches executed is not that bar.
 On the five-profile merge, src/insitu.cpp is 1265 of 1348
 branches taken, which is 93 percent.
 Each profile alone takes 75.71 percent of 844 branches.
+
+GPU class
+These files are measured on a GPU coverage profile.
+They do not block the CPU seal.
+A return that runs on the host before any device launch stays in scope.
+
+src/gpu_batch.cpp
+Build condition: meson option with_gpulite, compile define SEAMS_HAS_GPULITE,
+and the linkcell device k-nearest.
+Reason: the body allocates device memory and launches kernels.
+This CPU seal has no CUDA device.
+analyzeResident returns before that launch when the device path is absent.
+
+src/gpu_residency.cpp
+Build condition: meson option with_gpulite, compile define SEAMS_HAS_GPULITE.
+Reason: probeDevice asks the CUDA driver for a device.
+Without a device it records the reason and does not launch work.
