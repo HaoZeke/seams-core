@@ -368,6 +368,7 @@ def check_campaign(work):
 
     compare_dump(work / "no-such-dump.lammpstrj")
     compare_dump(Path(os.environ["BUILD"]) / "work" / "plugin" / "small-run0" / "serial" / "dump.lammpstrj")
+    expect_exit(lambda: run_campaign.require_fix_input(run_campaign.LITERAL.read_text()), "not the fix")
 
 
 def check_neigh(work):
@@ -471,7 +472,6 @@ def main():
     check_prose(work)
     if snap:
         os.environ["SNAPPER"] = snap
-    expect_exit(lambda: run_campaign.require_fix_input(run_campaign.LITERAL.read_text()), "not the fix")
     check_prose(work)
     run_main(date_check.__file__, ["date_check.py", str(work / "logs")])
     run_main(record_build.__file__, ["record_build.py", str(work / "ok-build.log"), str(work), "true", "true"])
