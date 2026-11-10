@@ -382,10 +382,6 @@ struct FrameContext {
   mutable BasalScratch lazyScratch;
 
   [[nodiscard]] const std::vector<int> &basalCandidates(int i) const {
-    static const std::vector<int> empty;
-    if (i < 0 || i >= static_cast<int>(basalCand.size())) {
-      return empty;
-    }
     if (!basalReady[static_cast<std::size_t>(i)]) {
       basalCand[static_cast<std::size_t>(i)] =
           collectBasalCandidates(i, lazyScratch);
