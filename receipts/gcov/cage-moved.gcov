@@ -1,0 +1,3170 @@
+        -:    0:Source:../src/cage_affiliation.cpp
+        -:    0:Graph:src/libyodaLib.so.p/cage_affiliation.cpp.gcno
+        -:    0:Data:src/libyodaLib.so.p/cage_affiliation.cpp.gcda
+        -:    0:Runs:1
+        -:    1://-----------------------------------------------------------------------------------
+        -:    2:// d-SEAMS - Deferred Structural Elucidation Analysis for Molecular Simulations
+        -:    3://
+        -:    4:// Copyright (c) 2018--present d-SEAMS core team
+        -:    5://
+        -:    6:// SPDX-License-Identifier: MIT
+        -:    7://-----------------------------------------------------------------------------------
+        -:    8:
+        -:    9:#include <cage_affiliation.hpp>
+        -:   10:
+        -:   11:#include <ring.hpp>
+        -:   12:#include <topo_bulk.hpp>
+        -:   13:
+        -:   14:#include <algorithm>
+        -:   15:#include <cstdint>
+        -:   16:#include <memory>
+        -:   17:#include <numeric>
+        -:   18:#include <vector>
+        -:   19:
+        -:   20:#ifdef SEAMS_HAS_OPENMP
+        -:   21:#include <omp.h>
+        -:   22:#endif
+        -:   23:
+        -:   24:namespace {
+        -:   25:
+        -:   26://! Fingerprint of a ring's cycle, the same however the ring was rotated or
+        -:   27://! traversed: ring atoms are distinct, so the lexicographically least
+        -:   28://! reading starts at the least atom and runs toward its lesser neighbour
+function _ZN12_GLOBAL__N_19cycleHashEPKim called 10 returned 100% blocks executed 91%
+       10:   29:std::uint64_t cycleHash(const int *atoms, std::size_t k) {
+       10:   30:  std::uint64_t h = 1469598103934665603ULL ^ k;
+       10:   31:  if (k == 0) {
+branch  0 taken 20% (fallthrough)
+branch  1 taken 80%
+        2:   32:    return h;
+        -:   33:  }
+        -:   34:  const std::size_t start =
+        8:   35:      static_cast<std::size_t>(std::min_element(atoms, atoms + k) - atoms);
+call    0 returned 100%
+        8:   36:  const bool forward = atoms[(start + 1) % k] <= atoms[(start + k - 1) % k];
+       56:   37:  for (std::size_t m = 0; m < k; m++) {
+branch  0 taken 86%
+branch  1 taken 14% (fallthrough)
+       48:   38:    h ^= static_cast<std::uint32_t>(
+      48*:   39:        atoms[forward ? (start + m) % k : (start + k - m) % k]);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       48:   40:    h *= 1099511628211ULL;
+        -:   41:  }
+        8:   42:  return h;
+        -:   43:}
+        -:   44:
+function _ZN12_GLOBAL__N_19sameCycleEPKimS1_m called 3 returned 100% blocks executed 79%
+        3:   45:bool sameCycle(const int *a, std::size_t ka, const int *b, std::size_t kb) {
+        3:   46:  if (ka != kb) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:   47:    return false;
+        -:   48:  }
+        3:   49:  if (ka == 0) {
+branch  0 taken 33% (fallthrough)
+branch  1 taken 67%
+        1:   50:    return true;
+        -:   51:  }
+        -:   52:  const std::size_t sa =
+        2:   53:      static_cast<std::size_t>(std::min_element(a, a + ka) - a);
+call    0 returned 100%
+        -:   54:  const std::size_t sb =
+        2:   55:      static_cast<std::size_t>(std::min_element(b, b + kb) - b);
+call    0 returned 100%
+        2:   56:  const bool fa = a[(sa + 1) % ka] <= a[(sa + ka - 1) % ka];
+        2:   57:  const bool fb = b[(sb + 1) % kb] <= b[(sb + kb - 1) % kb];
+       14:   58:  for (std::size_t m = 0; m < ka; m++) {
+branch  0 taken 86%
+branch  1 taken 14% (fallthrough)
+      12*:   59:    if (a[fa ? (sa + m) % ka : (sa + ka - m) % ka] !=
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      12*:   60:        b[fb ? (sb + m) % kb : (sb + kb - m) % kb]) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+    #####:   61:      return false;
+        -:   62:    }
+        -:   63:  }
+        2:   64:  return true;
+        -:   65:}
+        -:   66:
+        -:   67://! Shared per-frame machinery: the inverted index, sorted ring copies for
+        -:   68://! overlap tests, and cached basal/adjacency lists (one sort per ring).
+        -:   69:struct FrameContext {
+        -:   70:  // Pointers so a caller can keep one context and rebind it each frame.
+        -:   71:  const std::vector<std::vector<int>> *rings = nullptr;
+        -:   72:  const std::vector<std::vector<int>> *nList = nullptr;
+        -:   73:  ring::RingSearchIndex index;
+        -:   74:  std::vector<std::vector<int>> sortedRings;
+        -:   75:  mutable   std::vector<std::vector<int>> basalCand;
+        -:   76:  mutable std::vector<char> basalReady;
+        -:   77:  mutable std::vector<std::vector<int>> adjRings;
+        -:   78:  mutable std::vector<char> adjReady;
+        -:   79:  ring::NeighBond bonds;
+        -:   80:  // Scratch for findPrismatic, which appends to a list and stamps a type
+        -:   81:  // vector neither of which affiliation reads
+        -:   82:  std::vector<int> scratchListHC;
+        -:   83:  std::vector<ring::strucType> scratchType;
+        -:   84:  // Ring atoms in one block, six per ring, when every ring has length 6.
+        -:   85:  // The basal search reads these atoms for every candidate.
+        -:   86:  std::vector<int> flat6;
+        -:   87:  bool allHex = false;
+        -:   88:
+function _ZN12_GLOBAL__N_112FrameContextC2Ev called 1 returned 100% blocks executed 100%
+        1:   89:  FrameContext() = default;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+call    9 returned 100%
+call   10 returned 100%
+        -:   90:
+function _ZN12_GLOBAL__N_112FrameContextC2ERKSt6vectorIS1_IiSaIiEESaIS3_EES7_ called 35 returned 100% blocks executed 40%
+       35:   91:  FrameContext(const std::vector<std::vector<int>> &rings_,
+       35:   92:               const std::vector<std::vector<int>> &nList_) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+call    9 returned 100%
+call   10 returned 100%
+       35:   93:    prepare(rings_, nList_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       35:   94:  }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+call   10 never executed
+        -:   95:
+function _ZN12_GLOBAL__N_112FrameContext7prepareERKSt6vectorIS1_IiSaIiEESaIS3_EES7_ called 37 returned 100% blocks executed 85%
+       37:   96:  void prepare(const std::vector<std::vector<int>> &rings_,
+        -:   97:               const std::vector<std::vector<int>> &nList_) {
+       37:   98:    rings = &rings_;
+       37:   99:    nList = &nList_;
+       37:  100:    int maxAtom = 0;
+     9309:  101:    for (const auto &r : rings_) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100%
+branch  6 taken 1% (fallthrough)
+    64870:  102:      for (const int a : r) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 86%
+branch  5 taken 14% (fallthrough)
+    55598:  103:        maxAtom = std::max(maxAtom, a);
+call    0 returned 100%
+call    1 returned 100%
+        -:  104:      }
+        -:  105:    }
+       37:  106:    index = ring::buildRingSearchIndex(rings_, maxAtom + 1);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+       37:  107:    bonds.build(nList_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       37:  108:    const int nR = static_cast<int>(rings_.size());
+call    0 returned 100%
+       37:  109:    sortedRings.resize(static_cast<std::size_t>(nR));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  110:#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
+      37*:  111:#pragma omp parallel for schedule(static) if (nR >= 1024 && !omp_in_parallel())
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+        -:  112:#endif
+        -:  113:    for (int i = 0; i < nR; i++) {
+        -:  114:      sortedRings[static_cast<std::size_t>(i)] =
+        -:  115:          rings_[static_cast<std::size_t>(i)];
+        -:  116:      std::sort(sortedRings[static_cast<std::size_t>(i)].begin(),
+        -:  117:                sortedRings[static_cast<std::size_t>(i)].end());
+        -:  118:    }
+       37:  119:    scratchType.assign(static_cast<std::size_t>(nR),
+       37:  120:                       ring::strucType::unclassified);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       37:  121:    allHex = true;
+     9295:  122:    for (int i = 0; i < nR; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+     9267:  123:      if (rings_[static_cast<std::size_t>(i)].size() != 6) {
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 1% (fallthrough)
+branch  3 taken 100%
+        9:  124:        allHex = false;
+        9:  125:        break;
+        -:  126:      }
+        -:  127:    }
+       37:  128:    flat6.clear();
+call    0 returned 100%
+       37:  129:    if (allHex) {
+branch  0 taken 76% (fallthrough)
+branch  1 taken 24%
+       28:  130:      flat6.resize(static_cast<std::size_t>(nR) * 6);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+     9273:  131:      for (int i = 0; i < nR; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+     9245:  132:        const auto &ring = rings_[static_cast<std::size_t>(i)];
+call    0 returned 100%
+     9245:  133:        std::copy(ring.begin(), ring.end(),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+    18490:  134:                  flat6.begin() + static_cast<std::ptrdiff_t>(i) * 6);
+call    0 returned 100%
+        -:  135:      }
+        -:  136:    }
+       37:  137:    basalCand.resize(static_cast<std::size_t>(nR));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       37:  138:    adjRings.resize(static_cast<std::size_t>(nR));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       37:  139:    adjReady.assign(static_cast<std::size_t>(nR), 0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  140:    // Left clear. basalCandidates fills a ring the first time a sweep asks.
+       37:  141:    basalReady.assign(static_cast<std::size_t>(nR), 0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       37:  142:  }
+        -:  143:
+function _ZNK12_GLOBAL__N_112FrameContext10shareAtomsEii called 3883 returned 100% blocks executed 100%
+     3883:  144:  [[nodiscard]] bool shareAtoms(int i, int j) const {
+     3883:  145:    const auto &a = sortedRings[i];
+call    0 returned 100%
+     3883:  146:    const auto &b = sortedRings[j];
+call    0 returned 100%
+     3883:  147:    size_t p = 0, q = 0;
+    45243:  148:    while (p < a.size() && q < b.size()) {
+call    0 returned 100%
+branch  1 taken 96% (fallthrough)
+branch  2 taken 4%
+call    3 returned 100%
+branch  4 taken 96% (fallthrough)
+branch  5 taken 4%
+branch  6 taken 91%
+branch  7 taken 9% (fallthrough)
+    41361:  149:      if (a[p] == b[q]) {
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 1% (fallthrough)
+branch  3 taken 100%
+        1:  150:        return true;
+        -:  151:      }
+    41360:  152:      (a[p] < b[q]) ? p++ : q++;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 50% (fallthrough)
+branch  3 taken 50%
+        -:  153:    }
+     3882:  154:    return false;
+        -:  155:  }
+        -:  156:
+        -:  157:  struct RingRow {
+        -:  158:    const int *p = nullptr;
+        -:  159:    int n = 0;
+        -:  160:  };
+        -:  161:
+function _ZNK12_GLOBAL__N_112FrameContext7ringsOfEi called 119762 returned 100% blocks executed 100%
+   119762:  162:  [[nodiscard]] RingRow ringsOf(int atom) const {
+   239524:  163:    if (atom < 0 || index.ringOff.empty() ||
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0%
+branch  5 taken 1% (fallthrough)
+branch  6 taken 100%
+branch  7 taken 1% (fallthrough)
+branch  8 taken 100%
+   119762:  164:        static_cast<std::size_t>(atom) + 1 >= index.ringOff.size()) {
+call    0 returned 100%
+       68:  165:      return {};
+        -:  166:    }
+   119694:  167:    const int begin = index.ringOff[static_cast<std::size_t>(atom)];
+call    0 returned 100%
+   119694:  168:    const int end = index.ringOff[static_cast<std::size_t>(atom) + 1];
+call    0 returned 100%
+   119694:  169:    return {index.ringCol.data() + begin, end - begin};
+call    0 returned 100%
+        -:  170:  }
+        -:  171:
+        -:  172:  [[nodiscard]] const std::vector<int> &ringsThroughAtom(int atom) const {
+        -:  173:    static const std::vector<int> empty;
+        -:  174:    if (atom < 0 ||
+        -:  175:        atom >= static_cast<int>(index.ringsContainingAtom.size())) {
+        -:  176:      return empty;
+        -:  177:    }
+        -:  178:    return index.ringsContainingAtom[atom];
+        -:  179:  }
+        -:  180:
+        -:  181:  [[nodiscard]] std::vector<int> collectAdjacentRings(int r) const {
+        -:  182:    std::vector<int> out;
+        -:  183:    for (const int atom : (*rings)[r]) {
+        -:  184:      for (const int s : ringsThroughAtom(atom)) {
+        -:  185:        if (s != r) {
+        -:  186:          out.push_back(s);
+        -:  187:        }
+        -:  188:      }
+        -:  189:      if (atom >= 0 && atom < static_cast<int>(nList->size())) {
+        -:  190:        for (size_t n = 1; n < (*nList)[atom].size(); n++) {
+        -:  191:          for (const int s : ringsThroughAtom((*nList)[atom][n])) {
+        -:  192:            if (s != r) {
+        -:  193:              out.push_back(s);
+        -:  194:            }
+        -:  195:          }
+        -:  196:        }
+        -:  197:      }
+        -:  198:    }
+        -:  199:    std::sort(out.begin(), out.end());
+        -:  200:    out.erase(std::unique(out.begin(), out.end()), out.end());
+        -:  201:    return out;
+        -:  202:  }
+        -:  203:
+        -:  204:  //! Ordered basal-pair predicate, exactly the findHC acceptance test
+function _ZNK12_GLOBAL__N_112FrameContext9basalPairEii called 3883 returned 100% blocks executed 100%
+     3883:  205:  [[nodiscard]] bool basalPair(int i, int j) const {
+     3883:  206:    if (shareAtoms(i, j)) {
+call    0 returned 100%
+branch  1 taken 1% (fallthrough)
+branch  2 taken 100%
+        1:  207:      return false;
+        -:  208:    }
+     3882:  209:    return ring::basalConditions(bonds, (*rings)[static_cast<std::size_t>(i)],
+call    0 returned 100%
+call    1 returned 100%
+     7764:  210:                                 (*rings)[static_cast<std::size_t>(j)]);
+call    0 returned 100%
+        -:  211:  }
+        -:  212:
+        -:  213:  [[nodiscard]] const std::vector<int> &adjacentRings(int r) {
+        -:  214:    static const std::vector<int> empty;
+        -:  215:    if (r < 0 || r >= static_cast<int>(adjRings.size())) {
+        -:  216:      return empty;
+        -:  217:    }
+        -:  218:    if (!adjReady[static_cast<std::size_t>(r)]) {
+        -:  219:      adjRings[static_cast<std::size_t>(r)] = collectAdjacentRings(r);
+        -:  220:      adjReady[static_cast<std::size_t>(r)] = 1;
+        -:  221:    }
+        -:  222:    return adjRings[static_cast<std::size_t>(r)];
+        -:  223:  }
+        -:  224:
+        -:  225:  //! Rings that can pass basalConditions with ring i as the first argument.
+        -:  226:  //! A passing partner holds a neighbour of each atom of some alternate
+        -:  227:  //! triplet of i. Other rings are not candidates.
+        -:  228:  struct BasalScratch {
+        -:  229:    std::vector<int> onRing;
+        -:  230:    std::vector<int> arm1;
+        -:  231:    std::vector<int> arm2;
+        -:  232:    std::vector<int> seen;
+        -:  233:    // Unsigned, so the generation counter wraps by the language rules.
+        -:  234:    // A signed increment that passed INT_MAX would be undefined, and the
+        -:  235:    // reset under that test was not a path the compiler could take.
+        -:  236:    std::uint8_t tickOn = 0;
+        -:  237:    std::uint8_t tick1 = 0;
+        -:  238:    std::uint8_t tick2 = 0;
+        -:  239:    std::uint8_t tickSeen = 0;
+function _ZN12_GLOBAL__N_112FrameContext12BasalScratch7prepareEii called 7526 returned 100% blocks executed 80%
+     7526:  240:    void prepare(int atoms, int nRings) {
+     7526:  241:      if (static_cast<int>(onRing.size()) < atoms) {
+call    0 returned 100%
+branch  1 taken 1% (fallthrough)
+branch  2 taken 100%
+       36:  242:        onRing.assign(static_cast<size_t>(atoms), 0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 never executed
+       36:  243:        arm1.assign(static_cast<size_t>(atoms), 0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 never executed
+       36:  244:        arm2.assign(static_cast<size_t>(atoms), 0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 never executed
+        -:  245:      }
+     7526:  246:      if (static_cast<int>(seen.size()) < nRings) {
+call    0 returned 100%
+branch  1 taken 1% (fallthrough)
+branch  2 taken 100%
+       36:  247:        seen.assign(static_cast<size_t>(nRings), 0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  248:      }
+     7526:  249:    }
+function _ZN12_GLOBAL__N_112FrameContext12BasalScratch4nextERhRSt6vectorIiSaIiEE called 52682 returned 100% blocks executed 100%
+    52682:  250:    int next(std::uint8_t &tick, std::vector<int> &stamp) {
+    52682:  251:      ++tick;
+    52682:  252:      if (tick == 0) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+      182:  253:        std::fill(stamp.begin(), stamp.end(), 0);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+      182:  254:        tick = 1;
+        -:  255:      }
+    52682:  256:      return tick;
+        -:  257:    }
+        -:  258:  };
+        -:  259:
+function _ZNK12_GLOBAL__N_112FrameContext22collectBasalCandidatesEiRNS0_12BasalScratchE called 7534 returned 100% blocks executed 94%
+     7534:  260:  [[nodiscard]] std::vector<int> collectBasalCandidates(int i,
+        -:  261:                                                        BasalScratch &scratch) const {
+     7534:  262:    std::vector<int> out;
+     7534:  263:    const std::vector<int> &basal1 = (*rings)[static_cast<size_t>(i)];
+call    0 returned 100%
+     7534:  264:    if (basal1.size() != 6) {
+call    0 returned 100%
+branch  1 taken 1% (fallthrough)
+branch  2 taken 100%
+        8:  265:      return out;
+        -:  266:    }
+     7526:  267:    const int nAtoms = static_cast<int>(nList->size());
+call    0 returned 100%
+     7526:  268:    const int nRings = static_cast<int>(rings->size());
+call    0 returned 100%
+     7526:  269:    scratch.prepare(nAtoms, nRings);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+     7526:  270:    const int on = scratch.next(scratch.tickOn, scratch.onRing);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+    52682:  271:    for (const int atom : basal1) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 86%
+branch  6 taken 14% (fallthrough)
+    45156:  272:      if (atom >= 0 && atom < nAtoms) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 1%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+    45145:  273:        scratch.onRing[static_cast<size_t>(atom)] = on;
+call    0 returned 100%
+        -:  274:      }
+        -:  275:    }
+function _ZZNK12_GLOBAL__N_112FrameContext22collectBasalCandidatesEiRNS0_12BasalScratchEENKUliE_clEi called 45156 returned 100% blocks executed 100%
+    45156:  276:    auto neighbourSpan = [&](int atom) {
+    45156:  277:      int span = 0;
+    45156:  278:      if (atom < 0 || atom >= nAtoms) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 1%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+       11:  279:        return span;
+        -:  280:      }
+    45145:  281:      const auto &row = (*nList)[static_cast<size_t>(atom)];
+call    0 returned 100%
+   224705:  282:      for (size_t n = 1; n < row.size(); n++) {
+call    0 returned 100%
+branch  1 taken 80%
+branch  2 taken 20% (fallthrough)
+   179560:  283:        const int nb = row[n];
+call    0 returned 100%
+   359120:  284:        if (nb < 0 || nb >= nAtoms ||
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+branch  4 taken 50% (fallthrough)
+branch  5 taken 50%
+   179560:  285:            scratch.onRing[static_cast<size_t>(nb)] == on) {
+call    0 returned 100%
+branch  1 taken 50% (fallthrough)
+branch  2 taken 50%
+    89733:  286:          continue;
+        -:  287:        }
+    89827:  288:        span += ringsOf(nb).n;
+call    0 returned 100%
+        -:  289:      }
+    45145:  290:      return span;
+     7526:  291:    };
+function _ZZNK12_GLOBAL__N_112FrameContext22collectBasalCandidatesEiRNS0_12BasalScratchEENKUliRSt6vectorIiSaIiEEiE_clEiS6_i called 30104 returned 100% blocks executed 100%
+    30104:  292:    auto stampArm = [&](int atom, std::vector<int> &stamp, int tick) {
+    30104:  293:      if (atom < 0 || atom >= nAtoms) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 1%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        1:  294:        return;
+        -:  295:      }
+    30103:  296:      const auto &row = (*nList)[static_cast<size_t>(atom)];
+call    0 returned 100%
+   149815:  297:      for (size_t n = 1; n < row.size(); n++) {
+call    0 returned 100%
+branch  1 taken 80%
+branch  2 taken 20% (fallthrough)
+   119712:  298:        const int nb = row[n];
+call    0 returned 100%
+   239424:  299:        if (nb >= 0 && nb < nAtoms &&
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+branch  4 taken 50% (fallthrough)
+branch  5 taken 50%
+   119712:  300:            scratch.onRing[static_cast<size_t>(nb)] != on) {
+call    0 returned 100%
+branch  1 taken 50% (fallthrough)
+branch  2 taken 50%
+    59892:  301:          stamp[static_cast<size_t>(nb)] = tick;
+call    0 returned 100%
+        -:  302:        }
+        -:  303:      }
+     7526:  304:    };
+    22578:  305:    for (int parity = 0; parity < 2; parity++) {
+branch  0 taken 67%
+branch  1 taken 33% (fallthrough)
+    15052:  306:      int arm = 0;
+    15052:  307:      int best = 0;
+    60208:  308:      for (int t = 0; t < 3; t++) {
+branch  0 taken 75%
+branch  1 taken 25% (fallthrough)
+        -:  309:        const int span =
+    45156:  310:            neighbourSpan(basal1[static_cast<size_t>((parity + 2 * t) % 6)]);
+call    0 returned 100%
+call    1 returned 100%
+    45156:  311:        if (t == 0 || span < best) {
+branch  0 taken 67% (fallthrough)
+branch  1 taken 33%
+branch  2 taken 2% (fallthrough)
+branch  3 taken 98%
+    15546:  312:          best = span;
+    15546:  313:          arm = t;
+        -:  314:        }
+        -:  315:      }
+    15052:  316:      const int tick1 = scratch.next(scratch.tick1, scratch.arm1);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+    15052:  317:      const int tick2 = scratch.next(scratch.tick2, scratch.arm2);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+    15052:  318:      stampArm(basal1[static_cast<size_t>((parity + 2 * ((arm + 1) % 3)) % 6)],
+call    0 returned 100%
+    15052:  319:               scratch.arm1, tick1);
+call    0 returned 100%
+    15052:  320:      stampArm(basal1[static_cast<size_t>((parity + 2 * ((arm + 2) % 3)) % 6)],
+call    0 returned 100%
+    15052:  321:               scratch.arm2, tick2);
+call    0 returned 100%
+    15052:  322:      const int seenTick = scratch.next(scratch.tickSeen, scratch.seen);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+    15052:  323:      const int pivot = basal1[static_cast<size_t>((parity + 2 * arm) % 6)];
+call    0 returned 100%
+    15052:  324:      if (pivot < 0 || pivot >= nAtoms) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 1%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+       10:  325:        continue;
+        -:  326:      }
+    15042:  327:      const auto &row = (*nList)[static_cast<size_t>(pivot)];
+call    0 returned 100%
+    74890:  328:      for (size_t n = 1; n < row.size(); n++) {
+call    0 returned 100%
+branch  1 taken 80%
+branch  2 taken 20% (fallthrough)
+    59848:  329:        const int nb = row[n];
+call    0 returned 100%
+   119696:  330:        if (nb < 0 || nb >= nAtoms ||
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+branch  4 taken 50% (fallthrough)
+branch  5 taken 50%
+    59848:  331:            scratch.onRing[static_cast<size_t>(nb)] == on) {
+call    0 returned 100%
+branch  1 taken 50% (fallthrough)
+branch  2 taken 50%
+    29913:  332:          continue;
+        -:  333:        }
+    29935:  334:        const RingRow through = ringsOf(nb);
+call    0 returned 100%
+   387864:  335:        for (int c = 0; c < through.n; c++) {
+branch  0 taken 92%
+branch  1 taken 8% (fallthrough)
+   357929:  336:          const int candidate = through.p[c];
+   357929:  337:          if (scratch.seen[static_cast<size_t>(candidate)] == seenTick) {
+call    0 returned 100%
+branch  1 taken 8% (fallthrough)
+branch  2 taken 92%
+    29820:  338:            continue;
+        -:  339:          }
+   328109:  340:          scratch.seen[static_cast<size_t>(candidate)] = seenTick;
+call    0 returned 100%
+   328109:  341:          bool share = false;
+   328109:  342:          bool hit1 = false;
+   328109:  343:          bool hit2 = false;
+   328109:  344:          if (allHex) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 1%
+   328089:  345:            const int *atoms = flat6.data() + static_cast<std::ptrdiff_t>(candidate) * 6;
+call    0 returned 100%
+  1656015:  346:            for (int t = 0; t < 6; t++) {
+branch  0 taken 89%
+branch  1 taken 11% (fallthrough)
+  1477062:  347:              const int atom = atoms[t];
+  1477062:  348:              if (static_cast<unsigned>(atom) >= static_cast<unsigned>(nAtoms)) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+        9:  349:                continue;
+        -:  350:              }
+  1477053:  351:              if (scratch.onRing[static_cast<size_t>(atom)] == on) {
+call    0 returned 100%
+branch  1 taken 10% (fallthrough)
+branch  2 taken 90%
+   149136:  352:                share = true;
+   149136:  353:                break;
+        -:  354:              }
+  1327917:  355:              hit1 = hit1 || scratch.arm1[static_cast<size_t>(atom)] == tick1;
+branch  0 taken 99% (fallthrough)
+branch  1 taken 1%
+call    2 returned 100%
+branch  3 taken 1% (fallthrough)
+branch  4 taken 99%
+  1327917:  356:              hit2 = hit2 || scratch.arm2[static_cast<size_t>(atom)] == tick2;
+branch  0 taken 99% (fallthrough)
+branch  1 taken 1%
+call    2 returned 100%
+branch  3 taken 1% (fallthrough)
+branch  4 taken 99%
+        -:  357:            }
+        -:  358:          } else {
+       88:  359:            for (const int atom : (*rings)[static_cast<size_t>(candidate)]) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 86%
+branch  7 taken 14% (fallthrough)
+       76:  360:              if (atom < 0 || atom >= nAtoms) {
+branch  0 taken 89% (fallthrough)
+branch  1 taken 11%
+branch  2 taken 6% (fallthrough)
+branch  3 taken 94%
+       12:  361:                continue;
+        -:  362:              }
+       64:  363:              if (scratch.onRing[static_cast<size_t>(atom)] == on) {
+call    0 returned 100%
+branch  1 taken 12% (fallthrough)
+branch  2 taken 88%
+        8:  364:                share = true;
+        8:  365:                break;
+        -:  366:              }
+       56:  367:              hit1 = hit1 || scratch.arm1[static_cast<size_t>(atom)] == tick1;
+branch  0 taken 43% (fallthrough)
+branch  1 taken 57%
+call    2 returned 100%
+branch  3 taken 50% (fallthrough)
+branch  4 taken 50%
+       56:  368:              hit2 = hit2 || scratch.arm2[static_cast<size_t>(atom)] == tick2;
+branch  0 taken 43% (fallthrough)
+branch  1 taken 57%
+call    2 returned 100%
+branch  3 taken 50% (fallthrough)
+branch  4 taken 50%
+        -:  369:            }
+        -:  370:          }
+   328109:  371:          if (!share && hit1 && hit2) {
+branch  0 taken 55% (fallthrough)
+branch  1 taken 45%
+branch  2 taken 4% (fallthrough)
+branch  3 taken 96%
+branch  4 taken 50% (fallthrough)
+branch  5 taken 50%
+     3891:  372:            out.push_back(candidate);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  373:          }
+        -:  374:        }
+        -:  375:      }
+        -:  376:    }
+     7526:  377:    std::sort(out.begin(), out.end());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+     7526:  378:    out.erase(std::unique(out.begin(), out.end()), out.end());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+call    8 returned 100%
+branch  9 taken 100% (fallthrough)
+branch 10 taken 0% (throw)
+     7526:  379:    return out;
+    =====:  380:  }
+call    0 never executed
+        -:  381:
+        -:  382:  mutable BasalScratch lazyScratch;
+        -:  383:
+function _ZNK12_GLOBAL__N_112FrameContext15basalCandidatesEi called 5481 returned 100% blocks executed 100%
+     5481:  384:  [[nodiscard]] const std::vector<int> &basalCandidates(int i) const {
+     5481:  385:    if (!basalReady[static_cast<std::size_t>(i)]) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+     5481:  386:      basalCand[static_cast<std::size_t>(i)] =
+call    0 returned 100%
+    10962:  387:          collectBasalCandidates(i, lazyScratch);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+     5481:  388:      basalReady[static_cast<std::size_t>(i)] = 1;
+call    0 returned 100%
+        -:  389:    }
+     5481:  390:    return basalCand[static_cast<std::size_t>(i)];
+call    0 returned 100%
+        -:  391:  }
+        -:  392:
+        -:  393:  //! Prismatic rings of the ordered passing pair (i, j)
+function _ZN12_GLOBAL__N_112FrameContext11prismaticOfEii called 288 returned 100% blocks executed 100%
+      288:  394:  std::vector<int> prismaticOf(int i, int j) {
+      288:  395:    return prismaticOf(i, j, scratchListHC, scratchType);
+call    0 returned 100%
+        -:  396:  }
+        -:  397:
+        -:  398:  //! As above, on caller-owned scratch, so threads can share the context
+function _ZNK12_GLOBAL__N_112FrameContext11prismaticOfEiiRSt6vectorIiSaIiEERS1_IN4ring9strucTypeESaIS6_EE called 3870 returned 100% blocks executed 83%
+     3870:  399:  std::vector<int> prismaticOf(int i, int j, std::vector<int> &listHC,
+        -:  400:                               std::vector<ring::strucType> &types) const {
+     3870:  401:    std::vector<int> prismatic;
+     3870:  402:    listHC.clear();
+call    0 returned 100%
+     3870:  403:    (void)ring::findPrismatic(*rings, listHC, types, i, j, prismatic, index);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+     3870:  404:    return prismatic;
+    =====:  405:  }
+call    0 never executed
+        -:  406:
+        -:  407:  //! The equatorial-conditions test of findDDC without the claim skip; on a
+        -:  408:  //! pass, fills every ring that is a peripheral in some valid assignment
+function _ZNK12_GLOBAL__N_112FrameContext14equatorialPassEibRSt6vectorIiSaIiEE called 5836 returned 100% blocks executed 100%
+     5836:  409:  bool equatorialPass(int i, bool hcAffiliated,
+        -:  410:                      std::vector<int> &peripherals) const {
+     5836:  411:    peripherals.clear();
+call    0 returned 100%
+     5836:  412:    if (hcAffiliated) {
+branch  0 taken 98% (fallthrough)
+branch  1 taken 2%
+     5739:  413:      return false;
+        -:  414:    }
+       97:  415:    return ring::equatorialConditions(*rings, i, index, &peripherals);
+call    0 returned 100%
+        -:  416:  }
+        -:  417:};
+        -:  418:
+        -:  419:} // namespace
+        -:  420:
+        -:  421:namespace {
+        -:  422:
+function _ZN12_GLOBAL__N_110batchSweepERKNS_12FrameContextE called 24 returned 100% blocks executed 64%
+       24:  423:ring::CageAffiliation batchSweep(const FrameContext &ctx) {
+       24:  424:  const std::vector<std::vector<int>> &rings = *ctx.rings;
+       24:  425:  ring::CageAffiliation result;
+       24:  426:  const size_t nRings = rings.size();
+call    0 returned 100%
+       24:  427:  result.hc.assign(nRings, false);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       24:  428:  result.ddc.assign(nRings, false);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       24:  429:  if (nRings == 0) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  430:    return result;
+        -:  431:  }
+       24:  432:  const int nR = static_cast<int>(nRings);
+        -:  433:  // nvc++ -mp=gpu (SEAMS_HAS_OFFLOAD) SIGSEGVs host parallel-fors in libnvomp
+        -:  434:#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
+      24*:  435:  const bool threaded = nR >= 1024 && !omp_in_parallel();
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+        -:  436:#else
+        -:  437:  const bool threaded = false;
+        -:  438:#endif
+        -:  439:
+        -:  440:  // A flag only turns on. Once every ring is on, later pairs cannot change
+        -:  441:  // the result, and on a ring-rich graph those pairs are most of the sweep.
+        -:  442:  {
+       24:  443:    std::vector<char> on(static_cast<std::size_t>(nR), 0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       24:  444:    int left = nR;
+function _ZZN12_GLOBAL__N_110batchSweepERKNS_12FrameContextEENKUliE_clEi called 12840 returned 100% blocks executed 100%
+    12840:  445:    auto mark = [&](int m) {
+    12840:  446:      char &slot = on[static_cast<std::size_t>(m)];
+call    0 returned 100%
+    12840:  447:      if (slot != 0) {
+branch  0 taken 60% (fallthrough)
+branch  1 taken 40%
+     7677:  448:        return;
+        -:  449:      }
+     5163:  450:      slot = 1;
+     5163:  451:      result.hc[static_cast<std::size_t>(m)] = true;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+     5163:  452:      --left;
+       24:  453:    };
+       24:  454:    std::vector<int> listHC;
+       24:  455:    std::vector<ring::strucType> types(nRings, ring::strucType::unclassified);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+     4926:  456:    for (int i = 0; i < nR && left > 0; ++i) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 1%
+branch  2 taken 100%
+branch  3 taken 1% (fallthrough)
+     7479:  457:      for (const int j : ctx.basalCandidates(i)) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+branch  8 taken 34%
+branch  9 taken 66% (fallthrough)
+     2577:  458:        if (left == 0) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  459:          break;
+        -:  460:        }
+     2577:  461:        if (!ctx.basalPair(i, j)) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 1% (fallthrough)
+branch  4 taken 100%
+        9:  462:          continue;
+        -:  463:        }
+     2568:  464:        mark(i);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+     2568:  465:        mark(j);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+    10272:  466:        for (const int k : ctx.prismaticOf(i, j, listHC, types)) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+branch  8 taken 75%
+branch  9 taken 25% (fallthrough)
+     7704:  467:          mark(k);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+     2568:  468:        }
+call    0 returned 100%
+call    1 never executed
+        -:  469:      }
+        -:  470:    }
+       24:  471:  }
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+        -:  472:
+        -:  473:  // DDC affiliation: every ring passing the equatorial conditions marks
+        -:  474:  // itself and its six peripherals
+        -:  475:#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
+       24:  476:#pragma omp parallel if (threaded)
+        -:  477:#endif
+        -:  478:  {
+        -:  479:    std::vector<int> marks;
+        -:  480:    std::vector<int> peripherals;
+        -:  481:#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
+        -:  482:#pragma omp for schedule(dynamic, 256) nowait
+        -:  483:#endif
+        -:  484:    for (int i = 0; i < nR; i++) {
+        -:  485:      if (ctx.equatorialPass(i, result.hc[static_cast<std::size_t>(i)],
+        -:  486:                             peripherals)) {
+        -:  487:        marks.push_back(i);
+        -:  488:        marks.insert(marks.end(), peripherals.begin(), peripherals.end());
+        -:  489:      }
+        -:  490:    }
+        -:  491:#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
+        -:  492:#pragma omp critical(seams_cage_affiliation)
+        -:  493:#endif
+        -:  494:    for (const int m : marks) {
+        -:  495:      result.ddc[static_cast<std::size_t>(m)] = true;
+        -:  496:    }
+        -:  497:  }
+       24:  498:  return result;
+    =====:  499:}
+call    0 never executed
+        -:  500:
+        -:  501:} // namespace
+        -:  502:
+        -:  503:ring::CageAffiliation
+function _ZN4ring15cageAffiliationERKSt6vectorIS0_IiSaIiEESaIS2_EES6_ called 22 returned 100% blocks executed 47%
+       22:  504:ring::cageAffiliation(const std::vector<std::vector<int>> &rings,
+        -:  505:                      const std::vector<std::vector<int>> &nList) {
+       22:  506:  if (rings.empty()) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  507:    return batchSweep(FrameContext(rings, nList));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+        -:  508:  }
+       22:  509:  const FrameContext ctx(rings, nList);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       22:  510:  return batchSweep(ctx);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       22:  511:}
+call    0 returned 100%
+call    1 never executed
+        -:  512:
+        -:  513:ring::StackingPlanes
+function _ZN4ring14stackingPlanesERKSt6vectorIS0_IiSaIiEESaIS2_EES6_ called 3 returned 100% blocks executed 66%
+        3:  514:ring::stackingPlanes(const std::vector<std::vector<int>> &rings,
+        -:  515:                     const std::vector<std::vector<int>> &nList) {
+        3:  516:  StackingPlanes out;
+        3:  517:  const size_t nRings = rings.size();
+call    0 returned 100%
+        3:  518:  out.basal.assign(nRings, false);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        3:  519:  out.equatorial.assign(nRings, false);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        3:  520:  if (nRings == 0) {
+branch  0 taken 33% (fallthrough)
+branch  1 taken 67%
+        1:  521:    return out;
+        -:  522:  }
+        2:  523:  FrameContext ctx(rings, nList);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  524:  std::vector<bool> hc(nRings, false);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      581:  525:  for (size_t i = 0; i < nRings; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+      579:  526:    const std::vector<int> &candidates = ctx.basalCandidates(static_cast<int>(i));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      869:  527:    for (const int j : candidates) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 33%
+branch  6 taken 67% (fallthrough)
+      290:  528:      if (!ctx.basalPair(static_cast<int>(i), j)) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 1% (fallthrough)
+branch  4 taken 99%
+        2:  529:        continue;
+        -:  530:      }
+      288:  531:      out.basal[i] = true;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+      288:  532:      out.basal[static_cast<std::size_t>(j)] = true;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+      288:  533:      hc[i] = true;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+      288:  534:      hc[static_cast<std::size_t>(j)] = true;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+     1152:  535:      for (const int k : ctx.prismaticOf(static_cast<int>(i), j)) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+branch  7 taken 75%
+branch  8 taken 25% (fallthrough)
+      864:  536:        hc[static_cast<std::size_t>(k)] = true;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+      288:  537:      }
+call    0 returned 100%
+call    1 never executed
+        -:  538:    }
+        -:  539:  }
+        2:  540:  std::vector<int> peripherals;
+      581:  541:  for (size_t i = 0; i < nRings; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+      579:  542:    if (ctx.equatorialPass(static_cast<int>(i), hc[i], peripherals)) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+    #####:  543:      out.equatorial[i] = true;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+        -:  544:    }
+        -:  545:  }
+        2:  546:  return out;
+        2:  547:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+call    6 never executed
+        -:  548:
+        -:  549:// ---------------------------------------------------------------------------
+        -:  550:
+        -:  551:/**
+        -:  552: * @details Implementation state of ring::AffiliationUpdater.
+        -:  553: *
+        -:  554: *  What each answer reads. The ordered basal pair (i, j) of batchSweep, and
+        -:  555: *  the prismatic rings it marks, read the rings i and j, the neighbour rows
+        -:  556: *  of the atoms of i, and the rings sharing an atom with i; a partner j
+        -:  557: *  bonds an atom of i. The equatorial test of i reads the rings sharing an
+        -:  558: *  atom with i, and the DDC sweep runs it only on rings without an HC flag.
+        -:  559: *  The flags are unions over the passing pairs and the passing equatorial
+        -:  560: *  rings. So the update stores, per ring, its passing pairs with their
+        -:  561: *  prismatic rings and its equatorial result, and evaluates again only the
+        -:  562: *  pairs of rings that are new, hold an atom whose row changed, or hold or
+        -:  563: *  bond an atom of an added or removed ring, and the equatorial test of
+        -:  564: *  rings that are new or hold an atom of an added or removed ring. Every
+        -:  565: *  other stored answer reads the same input in both frames and carries
+        -:  566: *  over; the flags are then the same unions, which equal the batch sweep.
+        -:  567: */
+        -:  568:struct ring::AffiliationUpdater::Impl {
+        -:  569:  bool primed = false;
+        -:  570:  // Previous frame: rings flattened, neighbour rows sorted, and the answers
+        -:  571:  std::vector<int> prevAtoms;
+        -:  572:  std::vector<std::size_t> prevOffset;
+        -:  573:  bool prevSorted = false;
+        -:  574:  std::vector<std::vector<int>> prevSortedRows;
+        -:  575:  std::vector<std::vector<int>> incoming;
+        -:  576:  // False after a whole-frame cageAffiliation that did not store pairs.
+        -:  577:  bool answersValid = false;
+        -:  578:  // Once a frame has crossed into the whole-frame sweep, the next frame
+        -:  579:  // skips the row diff. The diff plus a sweep was slower than the sweep
+        -:  580:  // alone on the mid-radius shells.
+        -:  581:  bool batchHot = false;
+        -:  582:  // Reused across whole-frame passes. The cold cageAffiliation builds a
+        -:  583:  // fresh context, so this only speeds the updater.
+        -:  584:  std::unique_ptr<FrameContext> warm;
+        -:  585:
+function _ZN4ring18AffiliationUpdater4Impl15fastAffiliationERKSt6vectorIS2_IiSaIiEESaIS4_EES8_ called 2 returned 100% blocks executed 94%
+        2:  586:  void fastAffiliation(const std::vector<std::vector<int>> &rings,
+        -:  587:                       const std::vector<std::vector<int>> &nList) {
+        2:  588:    if (!warm) {
+call    0 returned 100%
+branch  1 taken 50% (fallthrough)
+branch  2 taken 50%
+        1:  589:      warm = std::make_unique<FrameContext>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 never executed
+        -:  590:    }
+        2:  591:    warm->prepare(rings, nList);
+call    0 returned 100%
+call    1 returned 100%
+        2:  592:    current = batchSweep(*warm);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+        2:  593:    lastReclassified = static_cast<int>(rings.size());
+call    0 returned 100%
+        2:  594:  }
+        -:  595:  // Passing pairs of ring i as runs [j, m, k_1 .. k_m] (partner, then its m
+        -:  596:  // prismatic rings) in pairData[pairOffset[i]] up to pairOffset[i + 1]
+        -:  597:  std::vector<int> pairData;
+        -:  598:  std::vector<std::size_t> pairOffset;
+        -:  599:  // Equatorial result per ring: -1 not evaluated (an HC ring), 0 fails,
+        -:  600:  // 1 passes with its peripherals in periData[periOffset[i]..]
+        -:  601:  std::vector<signed char> eq;
+        -:  602:  std::vector<int> periData;
+        -:  603:  std::vector<std::size_t> periOffset;
+        -:  604:  CageAffiliation current;
+        -:  605:  int lastReclassified = 0;
+        -:  606:  double batchFraction = 0.25;
+        -:  607:  // The back-off of RingUpdater: after a frame that went to batch on churn,
+        -:  608:  // the next `skip` frames run cageAffiliation with no diff state, the wait
+        -:  609:  // doubling from 1 to kMaxBackoff while frames keep going to batch
+        -:  610:  int backoff = 0;
+        -:  611:  int skip = 0;
+        -:  612:  static constexpr int kMaxBackoff = 8;
+        -:  613:
+function _ZN4ring18AffiliationUpdater4Impl8fellBackEv called 0 returned 0% blocks executed 0%
+    #####:  614:  void fellBack() {
+    #####:  615:    backoff = std::min(std::max(1, 2 * backoff), kMaxBackoff);
+call    0 never executed
+call    1 never executed
+    #####:  616:    skip = backoff;
+    #####:  617:  }
+        -:  618:
+        -:  619:  void release() {
+        -:  620:    std::vector<std::vector<int>>().swap(prevSortedRows);
+        -:  621:    std::vector<int>().swap(prevAtoms);
+        -:  622:    std::vector<std::size_t>().swap(prevOffset);
+        -:  623:    std::vector<int>().swap(pairData);
+        -:  624:    std::vector<std::size_t>().swap(pairOffset);
+        -:  625:    std::vector<signed char>().swap(eq);
+        -:  626:    std::vector<int>().swap(periData);
+        -:  627:    std::vector<std::size_t>().swap(periOffset);
+        -:  628:    primed = false;
+        -:  629:  }
+        -:  630:
+        -:  631:  // Filled in place. The outer vector and each row keep their buffers.
+function _ZNK4ring18AffiliationUpdater4Impl10fillSortedERKSt6vectorIS2_IiSaIiEESaIS4_EERS6_ called 12 returned 100% blocks executed 69%
+       12:  632:  void fillSorted(const std::vector<std::vector<int>> &nList,
+        -:  633:                  std::vector<std::vector<int>> &out) const {
+       12:  634:    const int n = static_cast<int>(nList.size());
+call    0 returned 100%
+       12:  635:    if (static_cast<int>(out.size()) != n) {
+call    0 returned 100%
+branch  1 taken 50% (fallthrough)
+branch  2 taken 50%
+        6:  636:      out.assign(static_cast<std::size_t>(n), {});
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  637:    }
+        -:  638:#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
+      12*:  639:#pragma omp parallel for schedule(static) if (n >= 1024 && !omp_in_parallel())
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+        -:  640:#endif
+        -:  641:    for (int a = 0; a < n; a++) {
+        -:  642:      auto &row = out[static_cast<std::size_t>(a)];
+        -:  643:      row.assign(nList[static_cast<std::size_t>(a)].begin(),
+        -:  644:                 nList[static_cast<std::size_t>(a)].end());
+        -:  645:      std::sort(row.begin(), row.end());
+        -:  646:    }
+       12:  647:  }
+        -:  648:
+        -:  649:  // The passing pairs (i, j) of batchSweep with their prismatic rings
+function _ZN4ring18AffiliationUpdater4Impl7pairsOfERKN12_GLOBAL__N_112FrameContextEiRSt6vectorIiSaIiEERS6_INS_9strucTypeESaISA_EES9_RNS3_12BasalScratchE called 2053 returned 100% blocks executed 76%
+     2053:  650:  static void pairsOf(const FrameContext &ctx, int i, std::vector<int> &listHC,
+        -:  651:                      std::vector<ring::strucType> &types,
+        -:  652:                      std::vector<int> &out, FrameContext::BasalScratch &scratch) {
+     2053:  653:    out.clear();
+call    0 returned 100%
+     3069:  654:    for (const int j : ctx.collectBasalCandidates(i, scratch)) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+branch  8 taken 33%
+branch  9 taken 67% (fallthrough)
+     1016:  655:      if (!ctx.basalPair(i, j)) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 1% (fallthrough)
+branch  4 taken 100%
+        2:  656:        continue;
+        -:  657:      }
+     1014:  658:      const std::vector<int> prismatic = ctx.prismaticOf(i, j, listHC, types);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+     1014:  659:      out.push_back(j);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+     1014:  660:      out.push_back(static_cast<int>(prismatic.size()));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+     1014:  661:      out.insert(out.end(), prismatic.begin(), prismatic.end());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+     3067:  662:    }
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+     2053:  663:  }
+        -:  664:
+        -:  665:  // Evaluate the pairs of the rings in `which` into per-ring runs
+        -:  666:  static std::vector<std::vector<int>>
+function _ZN4ring18AffiliationUpdater4Impl13evaluatePairsERKN12_GLOBAL__N_112FrameContextERKSt6vectorIiSaIiEE called 11 returned 100% blocks executed 83%
+       11:  667:  evaluatePairs(const FrameContext &ctx, const std::vector<int> &which) {
+       11:  668:    const int n = static_cast<int>(which.size());
+call    0 returned 100%
+       11:  669:    std::vector<std::vector<int>> out(which.size());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  670:#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
+       11:  671:#pragma omp parallel if (!omp_in_parallel())
+call    0 returned 100%
+        -:  672:#endif
+        -:  673:    {
+        -:  674:      std::vector<int> listHC;
+        -:  675:      std::vector<ring::strucType> types(ctx.rings->size(),
+        -:  676:                                         ring::strucType::unclassified);
+        -:  677:      FrameContext::BasalScratch scratch;
+        -:  678:#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
+        -:  679:#pragma omp for schedule(dynamic, 64)
+        -:  680:#endif
+        -:  681:      for (int k = 0; k < n; k++) {
+        -:  682:        pairsOf(ctx, which[static_cast<std::size_t>(k)], listHC, types,
+        -:  683:                out[static_cast<std::size_t>(k)], scratch);
+        -:  684:      }
+        -:  685:    }
+       11:  686:    return out;
+        -:  687:  }
+        -:  688:
+        -:  689:  // HC flags from the stored pairs; then the equatorial test of every ring
+        -:  690:  // without one that has no stored result, and the DDC flags
+function _ZN4ring18AffiliationUpdater4Impl5flagsERKN12_GLOBAL__N_112FrameContextERi called 11 returned 100% blocks executed 64%
+       11:  691:  void flags(const FrameContext &ctx, int &evaluated) {
+       11:  692:    const std::size_t nR = ctx.rings->size();
+call    0 returned 100%
+       11:  693:    current.hc.assign(nR, false);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       11:  694:    current.ddc.assign(nR, false);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+     3478:  695:    for (std::size_t i = 0; i < nR; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+     3467:  696:      std::size_t p = pairOffset[i];
+call    0 returned 100%
+     3467:  697:      const std::size_t end = pairOffset[i + 1];
+call    0 returned 100%
+     3467:  698:      if (p < end) {
+branch  0 taken 25% (fallthrough)
+branch  1 taken 75%
+      861:  699:        current.hc[i] = true;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+        -:  700:      }
+     5183:  701:      while (p < end) {
+branch  0 taken 33%
+branch  1 taken 67% (fallthrough)
+     1716:  702:        current.hc[static_cast<std::size_t>(pairData[p])] = true;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+     1716:  703:        const int m = pairData[p + 1];
+call    0 returned 100%
+     6864:  704:        for (int t = 0; t < m; t++) {
+branch  0 taken 75%
+branch  1 taken 25% (fallthrough)
+     5148:  705:          current.hc[static_cast<std::size_t>(pairData[p + 2 + t])] = true;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+        -:  706:        }
+     1716:  707:        p += 2 + static_cast<std::size_t>(m);
+        -:  708:      }
+        -:  709:    }
+       11:  710:    std::vector<int> pending;
+     3478:  711:    for (std::size_t i = 0; i < nR; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+     3467:  712:      if (!current.hc[i] && eq[i] < 0) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 1% (fallthrough)
+branch  5 taken 99%
+call    6 returned 100%
+branch  7 taken 97% (fallthrough)
+branch  8 taken 3%
+branch  9 taken 1% (fallthrough)
+branch 10 taken 99%
+       31:  713:        pending.push_back(static_cast<int>(i));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  714:      }
+        -:  715:    }
+       11:  716:    const int n = static_cast<int>(pending.size());
+call    0 returned 100%
+       22:  717:    std::vector<std::vector<int>> found(pending.size());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       11:  718:    std::vector<signed char> pass(pending.size(), 0);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  719:#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
+       11:  720:#pragma omp parallel for schedule(guided) if (!omp_in_parallel())
+call    0 returned 100%
+        -:  721:#endif
+        -:  722:    for (int k = 0; k < n; k++) {
+        -:  723:      pass[static_cast<std::size_t>(k)] =
+        -:  724:          ctx.equatorialPass(pending[static_cast<std::size_t>(k)], false,
+        -:  725:                             found[static_cast<std::size_t>(k)])
+        -:  726:              ? 1
+        -:  727:              : 0;
+        -:  728:    }
+       11:  729:    evaluated += n;
+       11:  730:    if (n > 0) {
+branch  0 taken 73% (fallthrough)
+branch  1 taken 27%
+        -:  731:      // Splice the new peripheral lists in ring order
+        8:  732:      std::vector<int> data;
+        8:  733:      std::vector<std::size_t> offset(nR + 1, 0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:  734:      std::size_t k = 0;
+     1747:  735:      for (std::size_t i = 0; i < nR; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+     3175:  736:        if (k < pending.size() &&
+call    0 returned 100%
+branch  1 taken 83% (fallthrough)
+branch  2 taken 17%
+branch  3 taken 2% (fallthrough)
+branch  4 taken 98%
+     1436:  737:            static_cast<std::size_t>(pending[k]) == i) {
+call    0 returned 100%
+branch  1 taken 2% (fallthrough)
+branch  2 taken 98%
+       31:  738:          eq[i] = pass[k];
+call    0 returned 100%
+call    1 returned 100%
+       31:  739:          if (pass[k] != 0) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  740:            data.insert(data.end(), found[k].begin(), found[k].end());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+        -:  741:          }
+       31:  742:          ++k;
+        -:  743:        } else {
+     3416:  744:          data.insert(data.end(),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+     1708:  745:                      periData.begin() +
+call    0 returned 100%
+     1708:  746:                          static_cast<std::ptrdiff_t>(periOffset[i]),
+call    0 returned 100%
+     3416:  747:                      periData.begin() +
+call    0 returned 100%
+     1708:  748:                          static_cast<std::ptrdiff_t>(periOffset[i + 1]));
+call    0 returned 100%
+        -:  749:        }
+     1739:  750:        offset[i + 1] = data.size();
+call    0 returned 100%
+call    1 returned 100%
+        -:  751:      }
+        8:  752:      periData.swap(data);
+call    0 returned 100%
+        8:  753:      periOffset.swap(offset);
+call    0 returned 100%
+        8:  754:    }
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+     3478:  755:    for (std::size_t i = 0; i < nR; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+    3467*:  756:      if (current.hc[i] || eq[i] != 1) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 1% (fallthrough)
+branch  5 taken 99%
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0%
+branch  9 taken 100% (fallthrough)
+branch 10 taken 0%
+     3467:  757:        continue;
+        -:  758:      }
+    #####:  759:      current.ddc[i] = true;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+    #####:  760:      for (std::size_t p = periOffset[i]; p < periOffset[i + 1]; p++) {
+call    0 never executed
+call    1 never executed
+branch  2 never executed
+branch  3 never executed (fallthrough)
+    #####:  761:        current.ddc[static_cast<std::size_t>(periData[p])] = true;
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+        -:  762:      }
+        -:  763:    }
+       11:  764:  }
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+        -:  765:
+        -:  766:  // Whole-frame evaluation that also fills the stored answers
+function _ZN4ring18AffiliationUpdater4Impl5batchERKSt6vectorIS2_IiSaIiEESaIS4_EES8_S6_ called 6 returned 100% blocks executed 71%
+        6:  767:  void batch(const std::vector<std::vector<int>> &rings,
+        -:  768:             const std::vector<std::vector<int>> &nList,
+        -:  769:             std::vector<std::vector<int>> rows) {
+        6:  770:    const FrameContext ctx(rings, nList);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        6:  771:    const int nR = static_cast<int>(rings.size());
+call    0 returned 100%
+        6:  772:    std::vector<int> all(rings.size());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        6:  773:    std::iota(all.begin(), all.end(), 0);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        6:  774:    const auto fresh = evaluatePairs(ctx, all);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        6:  775:    pairOffset.assign(rings.size() + 1, 0);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        6:  776:    pairData.clear();
+call    0 returned 100%
+     1743:  777:    for (int i = 0; i < nR; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+     1737:  778:      pairData.insert(pairData.end(), fresh[static_cast<std::size_t>(i)].begin(),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+     1737:  779:                      fresh[static_cast<std::size_t>(i)].end());
+call    0 returned 100%
+     1737:  780:      pairOffset[static_cast<std::size_t>(i) + 1] = pairData.size();
+call    0 returned 100%
+call    1 returned 100%
+        -:  781:    }
+        6:  782:    eq.assign(rings.size(), -1);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        6:  783:    periData.clear();
+call    0 returned 100%
+        6:  784:    periOffset.assign(rings.size() + 1, 0);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        6:  785:    int evaluated = 0;
+        6:  786:    flags(ctx, evaluated);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        6:  787:    lastReclassified = nR;
+        6:  788:    remember(rings, std::move(rows));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 never executed
+        6:  789:    primed = true;
+        6:  790:  }
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+        -:  791:
+function _ZN4ring18AffiliationUpdater4Impl8rememberERKSt6vectorIS2_IiSaIiEESaIS4_EES6_ called 11 returned 100% blocks executed 97%
+       11:  792:  void remember(const std::vector<std::vector<int>> &rings,
+        -:  793:                std::vector<std::vector<int>> rows) {
+       11:  794:    prevOffset.assign(rings.size() + 1, 0);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 never executed
+     3478:  795:    for (std::size_t i = 0; i < rings.size(); i++) {
+call    0 returned 100%
+branch  1 taken 100%
+branch  2 taken 1% (fallthrough)
+     3467:  796:      prevOffset[i + 1] = prevOffset[i] + rings[i].size();
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+        -:  797:    }
+       11:  798:    prevAtoms.resize(prevOffset.back());
+call    0 returned 100%
+call    1 returned 100%
+     3478:  799:    for (std::size_t i = 0; i < rings.size(); i++) {
+call    0 returned 100%
+branch  1 taken 100%
+branch  2 taken 1% (fallthrough)
+     3467:  800:      std::copy(rings[i].begin(), rings[i].end(),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+     6934:  801:                prevAtoms.begin() + static_cast<std::ptrdiff_t>(prevOffset[i]));
+call    0 returned 100%
+call    1 returned 100%
+        -:  802:    }
+       11:  803:    prevSorted = std::is_sorted(rings.begin(), rings.end());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+       11:  804:    prevSortedRows = std::move(rows);
+call    0 returned 100%
+call    1 returned 100%
+       11:  805:  }
+        -:  806:
+        -:  807:  // prevOf[i]: the previous index of ring i, or -1 for an added ring. Two
+        -:  808:  // sorted lists (the order RingUpdater returns) are matched by a merge on
+        -:  809:  // equal atom sequences; otherwise by a fingerprint of the canonical cycle,
+        -:  810:  // confirmed atom by atom on a match.
+function _ZNK4ring18AffiliationUpdater4Impl10matchRingsERKSt6vectorIS2_IiSaIiEESaIS4_EE called 5 returned 100% blocks executed 84%
+        5:  811:  std::vector<int> matchRings(const std::vector<std::vector<int>> &rings) const {
+        5:  812:    const std::size_t nPrev = prevOffset.size() - 1;
+call    0 returned 100%
+        5:  813:    std::vector<int> prevOf(rings.size(), -1);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        5:  814:    if (prevSorted && std::is_sorted(rings.begin(), rings.end())) {
+branch  0 taken 60% (fallthrough)
+branch  1 taken 40%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0%
+branch  9 taken 60% (fallthrough)
+branch 10 taken 40%
+        3:  815:      std::size_t p = 0;
+     1731:  816:      for (std::size_t q = 0; q < rings.size() && p < nPrev;) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 1%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0%
+branch  5 taken 100%
+branch  6 taken 1% (fallthrough)
+     1728:  817:        const int *a = prevAtoms.data() + prevOffset[p];
+call    0 returned 100%
+call    1 returned 100%
+     1728:  818:        const int *aEnd = prevAtoms.data() + prevOffset[p + 1];
+call    0 returned 100%
+call    1 returned 100%
+     1728:  819:        const auto &b = rings[q];
+call    0 returned 100%
+     1728:  820:        if (std::lexicographical_compare(a, aEnd, b.begin(), b.end())) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+branch  5 taken 1% (fallthrough)
+branch  6 taken 100%
+        3:  821:          ++p;
+     1725:  822:        } else if (std::lexicographical_compare(b.begin(), b.end(), a, aEnd)) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+    #####:  823:          ++q;
+        -:  824:        } else {
+     1725:  825:          prevOf[q] = static_cast<int>(p);
+call    0 returned 100%
+     1725:  826:          ++p;
+     1725:  827:          ++q;
+        -:  828:        }
+        -:  829:      }
+        3:  830:      return prevOf;
+        -:  831:    }
+        4:  832:    std::vector<std::pair<std::uint64_t, int>> prevFP(nPrev);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  833:    std::vector<std::pair<std::uint64_t, int>> newFP(rings.size());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        7:  834:    for (std::size_t i = 0; i < nPrev; i++) {
+branch  0 taken 71%
+branch  1 taken 29% (fallthrough)
+       10:  835:      prevFP[i] = {cycleHash(prevAtoms.data() + prevOffset[i],
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+        5:  836:                             prevOffset[i + 1] - prevOffset[i]),
+call    0 returned 100%
+call    1 returned 100%
+       10:  837:                   static_cast<int>(i)};
+call    0 returned 100%
+call    1 returned 100%
+        -:  838:    }
+        7:  839:    for (std::size_t i = 0; i < rings.size(); i++) {
+call    0 returned 100%
+branch  1 taken 71%
+branch  2 taken 29% (fallthrough)
+       10:  840:      newFP[i] = {cycleHash(rings[i].data(), rings[i].size()),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+       10:  841:                  static_cast<int>(i)};
+call    0 returned 100%
+call    1 returned 100%
+        -:  842:    }
+        2:  843:    std::sort(prevFP.begin(), prevFP.end());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        2:  844:    std::sort(newFP.begin(), newFP.end());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        2:  845:    std::vector<char> prevMatched(nPrev, 0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:  846:    for (std::size_t p = 0, q = 0; p < nPrev && q < newFP.size();) {
+branch  0 taken 88% (fallthrough)
+branch  1 taken 12%
+call    2 returned 100%
+branch  3 taken 86% (fallthrough)
+branch  4 taken 14%
+branch  5 taken 75%
+branch  6 taken 25% (fallthrough)
+        6:  847:      if (prevFP[p].first < newFP[q].first) {
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 17% (fallthrough)
+branch  3 taken 83%
+        1:  848:        ++p;
+        1:  849:        continue;
+        -:  850:      }
+        5:  851:      if (newFP[q].first < prevFP[p].first) {
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 40% (fallthrough)
+branch  3 taken 60%
+        2:  852:        ++q;
+        2:  853:        continue;
+        -:  854:      }
+        3:  855:      std::size_t pEnd = p;
+        3:  856:      std::size_t qEnd = q;
+        6:  857:      while (pEnd < nPrev && prevFP[pEnd].first == prevFP[p].first) {
+branch  0 taken 83% (fallthrough)
+branch  1 taken 17%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 60% (fallthrough)
+branch  5 taken 40%
+branch  6 taken 50%
+branch  7 taken 50% (fallthrough)
+        3:  858:        ++pEnd;
+        -:  859:      }
+        6:  860:      while (qEnd < newFP.size() && newFP[qEnd].first == newFP[q].first) {
+call    0 returned 100%
+branch  1 taken 67% (fallthrough)
+branch  2 taken 33%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 75% (fallthrough)
+branch  6 taken 25%
+branch  7 taken 50%
+branch  8 taken 50% (fallthrough)
+        3:  861:        ++qEnd;
+        -:  862:      }
+        6:  863:      for (std::size_t y = q; y < qEnd; y++) {
+branch  0 taken 50%
+branch  1 taken 50% (fallthrough)
+        3:  864:        const auto &r = rings[static_cast<std::size_t>(newFP[y].second)];
+call    0 returned 100%
+call    1 returned 100%
+       3*:  865:        for (std::size_t x = p; x < pEnd; x++) {
+branch  0 taken 100%
+branch  1 taken 0% (fallthrough)
+        3:  866:          const int i = prevFP[x].second;
+call    0 returned 100%
+       6*:  867:          if (!prevMatched[static_cast<std::size_t>(i)] &&
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0%
+        3:  868:              sameCycle(r.data(), r.size(),
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+        3:  869:                        prevAtoms.data() + prevOffset[i],
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        3:  870:                        prevOffset[i + 1] - prevOffset[i])) {
+call    0 returned 100%
+call    1 returned 100%
+        3:  871:            prevMatched[static_cast<std::size_t>(i)] = 1;
+call    0 returned 100%
+        3:  872:            prevOf[static_cast<std::size_t>(newFP[y].second)] = i;
+call    0 returned 100%
+call    1 returned 100%
+        3:  873:            break;
+        -:  874:          }
+        -:  875:        }
+        -:  876:      }
+        3:  877:      p = pEnd;
+        3:  878:      q = qEnd;
+        -:  879:    }
+        2:  880:    return prevOf;
+        2:  881:  }
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+call    6 never executed
+        -:  882:};
+        -:  883:
+function _ZN4ring18AffiliationUpdaterC2Ev called 8 returned 100% blocks executed 100%
+        8:  884:ring::AffiliationUpdater::AffiliationUpdater()
+        8:  885:    : impl_(std::make_unique<Impl>()) {}
+call    0 returned 100%
+function _ZN4ring18AffiliationUpdaterD2Ev called 9 returned 100% blocks executed 100%
+        9:  886:ring::AffiliationUpdater::~AffiliationUpdater() = default;
+call    0 returned 100%
+function _ZN4ring18AffiliationUpdaterC2EOS0_ called 1 returned 100% blocks executed 100%
+        1:  887:ring::AffiliationUpdater::AffiliationUpdater(AffiliationUpdater &&) noexcept =
+call    0 returned 100%
+        -:  888:    default;
+        -:  889:ring::AffiliationUpdater &
+function _ZN4ring18AffiliationUpdateraSEOS0_ called 1 returned 100% blocks executed 100%
+        1:  890:ring::AffiliationUpdater::operator=(AffiliationUpdater &&) noexcept = default;
+call    0 returned 100%
+        -:  891:
+function _ZNK4ring18AffiliationUpdater16lastReclassifiedEv called 0 returned 0% blocks executed 0%
+    #####:  892:int ring::AffiliationUpdater::lastReclassified() const {
+    #####:  893:  return impl_->lastReclassified;
+call    0 never executed
+        -:  894:}
+        -:  895:
+function _ZN4ring18AffiliationUpdater16setBatchFractionEd called 6 returned 100% blocks executed 100%
+        6:  896:void ring::AffiliationUpdater::setBatchFraction(double fraction) {
+        6:  897:  impl_->batchFraction = fraction;
+call    0 returned 100%
+        6:  898:}
+        -:  899:
+        -:  900:const ring::CageAffiliation &
+function _ZN4ring18AffiliationUpdater6updateERKSt6vectorIS1_IiSaIiEESaIS3_EES7_ called 13 returned 100% blocks executed 72%
+       13:  901:ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
+        -:  902:                                 const std::vector<std::vector<int>> &nList) {
+       13:  903:  Impl &st = *impl_;
+call    0 returned 100%
+       13:  904:  if (rings.empty()) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  905:    // No six-ring to classify. A full context build still walks the
+        -:  906:    // neighbour list; the flags are empty either way. Drop the diff state
+        -:  907:    // so the next non-empty frame starts from a clean batch.
+    #####:  908:    st.current.hc.clear();
+call    0 never executed
+    #####:  909:    st.current.ddc.clear();
+call    0 never executed
+    #####:  910:    st.lastReclassified = 0;
+    #####:  911:    st.batchHot = false;
+    #####:  912:    st.primed = false;
+    #####:  913:    st.answersValid = false;
+    #####:  914:    return st.current;
+        -:  915:  }
+       13:  916:  if (st.skip > 0) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  917:    // A plain affiliation, keeping the sorted-row buffers for the next diff.
+    #####:  918:    st.skip--;
+    #####:  919:    st.current = ring::cageAffiliation(rings, nList);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+    #####:  920:    st.lastReclassified = static_cast<int>(rings.size());
+call    0 never executed
+    #####:  921:    st.answersValid = false;
+    #####:  922:    st.batchHot = false;
+    #####:  923:    st.fillSorted(nList, st.incoming);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  924:    st.prevSortedRows.swap(st.incoming);
+call    0 never executed
+    #####:  925:    return st.current;
+        -:  926:  }
+       13:  927:  if (st.batchHot && st.prevSortedRows.size() == nList.size()) {
+branch  0 taken 8% (fallthrough)
+branch  1 taken 92%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+branch  6 taken 8% (fallthrough)
+branch  7 taken 92%
+        1:  928:    st.fastAffiliation(rings, nList);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  929:    return st.current;
+        -:  930:  }
+       12:  931:  st.fillSorted(nList, st.incoming);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       12:  932:  auto &rows = st.incoming;
+       12:  933:  if (!st.primed || st.prevSortedRows.size() != nList.size()) {
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+branch  6 taken 50% (fallthrough)
+branch  7 taken 50%
+        6:  934:    st.batchHot = false;
+        6:  935:    st.batch(rings, nList, rows);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        6:  936:    st.answersValid = true;
+        6:  937:    return st.current;
+        -:  938:  }
+        6:  939:  const int nR = static_cast<int>(rings.size());
+call    0 returned 100%
+        6:  940:  const int nAtoms = static_cast<int>(nList.size());
+call    0 returned 100%
+        6:  941:  const auto batchLimit = static_cast<std::size_t>(st.batchFraction * nR);
+        -:  942:
+        6:  943:  std::vector<char> changedRow(static_cast<std::size_t>(nAtoms), 0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        6:  944:  std::size_t nChanged = 0;
+      900:  945:  for (int a = 0; a < nAtoms; a++) {
+branch  0 taken 99%
+branch  1 taken 1% (fallthrough)
+      894:  946:    if (rows[static_cast<std::size_t>(a)] !=
+call    0 returned 100%
+     1788:  947:        st.prevSortedRows[static_cast<std::size_t>(a)]) {
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+branch  4 taken 1% (fallthrough)
+branch  5 taken 100%
+        1:  948:      changedRow[static_cast<std::size_t>(a)] = 1;
+call    0 returned 100%
+        1:  949:      ++nChanged;
+        -:  950:    }
+        -:  951:  }
+        -:  952:  // Every ring through a changed row is evaluated again: past the limit, go
+        -:  953:  // to batch before matching rings or building any index
+        6:  954:  std::size_t throughChanged = 0;
+        6:  955:  if (static_cast<double>(nChanged) * nR <=
+        6:  956:      static_cast<double>(batchLimit) * nAtoms) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+     1737:  957:    for (const auto &r : rings) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100%
+branch  6 taken 1% (fallthrough)
+    12094:  958:      for (const int a : r) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 86%
+branch  6 taken 14% (fallthrough)
+    10366:  959:        if (a < 0 || a >= nAtoms || changedRow[static_cast<std::size_t>(a)]) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 1%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+call    4 returned 100%
+branch  5 taken 1% (fallthrough)
+branch  6 taken 100%
+branch  7 taken 1% (fallthrough)
+branch  8 taken 100%
+        4:  960:          ++throughChanged;
+        4:  961:          break;
+        -:  962:        }
+        -:  963:      }
+     1732:  964:      if (throughChanged > batchLimit) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+        1:  965:        break;
+        -:  966:      }
+        -:  967:    }
+        -:  968:  }
+        6:  969:  if (static_cast<double>(nChanged) * nR >
+        6:  970:          static_cast<double>(batchLimit) * nAtoms ||
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 17% (fallthrough)
+branch  3 taken 83%
+        -:  971:      throughChanged > batchLimit) {
+        -:  972:    // The batch pass stores every pair. On a frame this large the stored
+        -:  973:    // pairs are not reused, and building them is slower than cageAffiliation.
+        1:  974:    st.fastAffiliation(rings, nList);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  975:    st.prevSortedRows.swap(st.incoming);
+call    0 returned 100%
+        1:  976:    st.answersValid = false;
+        1:  977:    st.batchHot = true;
+        1:  978:    return st.current;
+        -:  979:  }
+        5:  980:  if (!st.answersValid) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  981:    st.batch(rings, nList, rows);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+    #####:  982:    st.answersValid = true;
+    #####:  983:    return st.current;
+        -:  984:  }
+        -:  985:
+        5:  986:  const std::vector<int> prevOf = st.matchRings(rings);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:  987:  const std::size_t nPrev = st.prevOffset.size() - 1;
+call    0 returned 100%
+        5:  988:  std::vector<int> newOf(nPrev, -1);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+     1735:  989:  for (int i = 0; i < nR; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+     1730:  990:    if (prevOf[static_cast<std::size_t>(i)] >= 0) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 1%
+     1728:  991:      newOf[static_cast<std::size_t>(prevOf[static_cast<std::size_t>(i)])] = i;
+call    0 returned 100%
+call    1 returned 100%
+        -:  992:    }
+        -:  993:  }
+       7*:  994:  if (nChanged == 0 && nPrev == rings.size() &&
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+branch  3 taken 40% (fallthrough)
+branch  4 taken 60%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+        7:  995:      std::find(prevOf.begin(), prevOf.end(), -1) == prevOf.end()) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+    #####:  996:    bool same = true;
+    #####:  997:    for (int i = 0; i < nR && same; i++) {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed (fallthrough)
+    #####:  998:      same = prevOf[static_cast<std::size_t>(i)] == i;
+call    0 never executed
+        -:  999:    }
+    #####: 1000:    if (same) {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####: 1001:      st.lastReclassified = 0;
+    #####: 1002:      st.backoff = 0;
+    #####: 1003:      return st.current;
+        -: 1004:    }
+        -: 1005:  }
+        -: 1006:
+        -: 1007:  // Atoms of added and removed rings
+        5: 1008:  std::vector<char> moved(static_cast<std::size_t>(nAtoms), 0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+function _ZZN4ring18AffiliationUpdater6updateERKSt6vectorIS1_IiSaIiEESaIS3_EES7_ENKUliE_clEi called 42 returned 100% blocks executed 100%
+       42: 1009:  auto markAtom = [&](int a) {
+       42: 1010:    if (a >= 0 && a < nAtoms) {
+branch  0 taken 98% (fallthrough)
+branch  1 taken 2%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+       41: 1011:      moved[static_cast<std::size_t>(a)] = 1;
+call    0 returned 100%
+        -: 1012:    }
+       47: 1013:  };
+     1735: 1014:  for (int i = 0; i < nR; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+     1730: 1015:    if (prevOf[static_cast<std::size_t>(i)] < 0) {
+call    0 returned 100%
+branch  1 taken 1% (fallthrough)
+branch  2 taken 100%
+       14: 1016:      for (const int a : rings[static_cast<std::size_t>(i)]) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 86%
+branch  7 taken 14% (fallthrough)
+       12: 1017:        markAtom(a);
+call    0 returned 100%
+        -: 1018:      }
+        -: 1019:    }
+        -: 1020:  }
+     1738: 1021:  for (std::size_t p = 0; p < nPrev; p++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+     1733: 1022:    if (newOf[p] < 0) {
+call    0 returned 100%
+branch  1 taken 1% (fallthrough)
+branch  2 taken 100%
+       35: 1023:      for (std::size_t k = st.prevOffset[p]; k < st.prevOffset[p + 1]; k++) {
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 86%
+branch  3 taken 14% (fallthrough)
+       30: 1024:        markAtom(st.prevAtoms[k]);
+call    0 returned 100%
+call    1 returned 100%
+        -: 1025:      }
+        -: 1026:    }
+        -: 1027:  }
+        -: 1028:
+        5: 1029:  std::vector<int> dirtyPairs;
+        5: 1030:  std::vector<char> dirtyEq(static_cast<std::size_t>(nR), 0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5: 1031:  std::vector<char> isDirty(static_cast<std::size_t>(nR), 0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+     1735: 1032:  for (int i = 0; i < nR; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+     1730: 1033:    const auto &r = rings[static_cast<std::size_t>(i)];
+call    0 returned 100%
+     1730: 1034:    bool pairs = prevOf[static_cast<std::size_t>(i)] < 0;
+call    0 returned 100%
+     1730: 1035:    bool equatorial = pairs;
+    11628: 1036:    for (const int a : r) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 86%
+branch  6 taken 14% (fallthrough)
+    10010: 1037:      if (a < 0 || a >= nAtoms) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 1%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        2: 1038:        pairs = equatorial = true;
+        2: 1039:        break;
+        -: 1040:      }
+    10008: 1041:      if (moved[static_cast<std::size_t>(a)]) {
+call    0 returned 100%
+branch  1 taken 1% (fallthrough)
+branch  2 taken 99%
+      110: 1042:        pairs = equatorial = true;
+      110: 1043:        break;
+        -: 1044:      }
+    9898*: 1045:      if (changedRow[static_cast<std::size_t>(a)]) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####: 1046:        pairs = true;
+    #####: 1047:        continue;
+        -: 1048:      }
+     9898: 1049:      if (!pairs) {
+branch  0 taken 95% (fallthrough)
+branch  1 taken 5%
+     9364: 1050:        const auto &row = nList[static_cast<std::size_t>(a)];
+call    0 returned 100%
+    46212: 1051:        for (std::size_t m = 1; m < row.size(); m++) {
+call    0 returned 100%
+branch  1 taken 80%
+branch  2 taken 20% (fallthrough)
+    37124: 1052:          const int b = row[m];
+call    0 returned 100%
+    37124: 1053:          if (b >= 0 && b < nAtoms && moved[static_cast<std::size_t>(b)]) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+call    4 returned 100%
+branch  5 taken 1% (fallthrough)
+branch  6 taken 99%
+branch  7 taken 1% (fallthrough)
+branch  8 taken 99%
+      276: 1054:            pairs = true;
+      276: 1055:            break;
+        -: 1056:          }
+        -: 1057:        }
+        -: 1058:      }
+        -: 1059:    }
+     1730: 1060:    if (pairs) {
+branch  0 taken 18% (fallthrough)
+branch  1 taken 82%
+      316: 1061:      dirtyPairs.push_back(i);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      316: 1062:      isDirty[static_cast<std::size_t>(i)] = 1;
+call    0 returned 100%
+        -: 1063:    }
+     1730: 1064:    dirtyEq[static_cast<std::size_t>(i)] = equatorial ? 1 : 0;
+branch  0 taken 6% (fallthrough)
+branch  1 taken 94%
+call    2 returned 100%
+        -: 1065:  }
+        5: 1066:  if (dirtyPairs.size() > batchLimit) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -: 1067:    // The next frames skip the diff. The call has to run before the return.
+    #####: 1068:    st.fellBack();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####: 1069:    st.fastAffiliation(rings, nList);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####: 1070:    st.prevSortedRows.swap(st.incoming);
+call    0 never executed
+    #####: 1071:    st.answersValid = false;
+    #####: 1072:    st.batchHot = true;
+    #####: 1073:    return st.current;
+        -: 1074:  }
+        -: 1075:
+        -: 1076:  // Carried answers name previous ring indices: map them, and evaluate a
+        -: 1077:  // ring again if one of them has no image
+        5: 1078:  std::vector<int> pairData;
+        5: 1079:  std::vector<std::size_t> pairOffset(rings.size() + 1, 0);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+     1735: 1080:  for (int i = 0; i < nR; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+     1730: 1081:    if (isDirty[static_cast<std::size_t>(i)]) {
+call    0 returned 100%
+branch  1 taken 18% (fallthrough)
+branch  2 taken 82%
+      316: 1082:      pairOffset[static_cast<std::size_t>(i) + 1] = pairData.size();
+call    0 returned 100%
+call    1 returned 100%
+      316: 1083:      continue;
+        -: 1084:    }
+     1414: 1085:    const auto was = static_cast<std::size_t>(prevOf[static_cast<std::size_t>(i)]);
+call    0 returned 100%
+     2116: 1086:    for (std::size_t p = st.pairOffset[was]; p < st.pairOffset[was + 1];) {
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 33%
+branch  3 taken 67% (fallthrough)
+      702: 1087:      const int j = newOf[static_cast<std::size_t>(st.pairData[p])];
+call    0 returned 100%
+call    1 returned 100%
+      702: 1088:      const int m = st.pairData[p + 1];
+call    0 returned 100%
+      702: 1089:      pairData.push_back(j);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      702: 1090:      pairData.push_back(m);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+     2808: 1091:      for (int t = 0; t < m; t++) {
+branch  0 taken 75%
+branch  1 taken 25% (fallthrough)
+     2106: 1092:        const int k = newOf[static_cast<std::size_t>(st.pairData[p + 2 + t])];
+call    0 returned 100%
+call    1 returned 100%
+     2106: 1093:        pairData.push_back(k);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -: 1094:      }
+      702: 1095:      p += 2 + static_cast<std::size_t>(m);
+        -: 1096:    }
+     1414: 1097:    pairOffset[static_cast<std::size_t>(i) + 1] = pairData.size();
+call    0 returned 100%
+call    1 returned 100%
+        -: 1098:  }
+        -: 1099:
+        5: 1100:  const FrameContext ctx(rings, nList);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5: 1101:  const auto fresh = Impl::evaluatePairs(ctx, dirtyPairs);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -: 1102:  {
+        -: 1103:    // Merge the fresh runs of the dirty rings into ring order
+        5: 1104:    std::vector<int> data;
+        5: 1105:    data.reserve(pairData.size() + 16 * dirtyPairs.size());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        5: 1106:    std::vector<std::size_t> offset(rings.size() + 1, 0);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        5: 1107:    std::size_t k = 0;
+     1735: 1108:    for (int i = 0; i < nR; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+     1730: 1109:      if (k < dirtyPairs.size() && dirtyPairs[k] == i) {
+call    0 returned 100%
+branch  1 taken 99% (fallthrough)
+branch  2 taken 1%
+call    3 returned 100%
+branch  4 taken 18% (fallthrough)
+branch  5 taken 82%
+branch  6 taken 18% (fallthrough)
+branch  7 taken 82%
+      316: 1110:        data.insert(data.end(), fresh[k].begin(), fresh[k].end());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+      316: 1111:        ++k;
+        -: 1112:      } else {
+     2828: 1113:        data.insert(data.end(),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+     1414: 1114:                    pairData.begin() + static_cast<std::ptrdiff_t>(
+call    0 returned 100%
+     1414: 1115:                                           pairOffset[static_cast<std::size_t>(i)]),
+call    0 returned 100%
+     2828: 1116:                    pairData.begin() + static_cast<std::ptrdiff_t>(
+call    0 returned 100%
+     1414: 1117:                                           pairOffset[static_cast<std::size_t>(i) + 1]));
+call    0 returned 100%
+        -: 1118:      }
+     1730: 1119:      offset[static_cast<std::size_t>(i) + 1] = data.size();
+call    0 returned 100%
+call    1 returned 100%
+        -: 1120:    }
+        5: 1121:    st.pairData.swap(data);
+call    0 returned 100%
+        5: 1122:    st.pairOffset.swap(offset);
+call    0 returned 100%
+        5: 1123:  }
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        -: 1124:
+        -: 1125:  // Equatorial answers carry over unless the ring is dirty for them
+        5: 1126:  std::vector<signed char> eq(rings.size(), -1);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        5: 1127:  std::vector<int> periData;
+        5: 1128:  std::vector<std::size_t> periOffset(rings.size() + 1, 0);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+     1735: 1129:  for (int i = 0; i < nR; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+     1730: 1130:    const auto ii = static_cast<std::size_t>(i);
+     1730: 1131:    if (!dirtyEq[ii]) {
+call    0 returned 100%
+branch  1 taken 94% (fallthrough)
+branch  2 taken 6%
+     1618: 1132:      const auto was = static_cast<std::size_t>(prevOf[ii]);
+call    0 returned 100%
+     1618: 1133:      eq[ii] = st.eq[was];
+call    0 returned 100%
+call    1 returned 100%
+    1618*: 1134:      for (std::size_t p = st.periOffset[was]; p < st.periOffset[was + 1]; p++) {
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 0%
+branch  3 taken 100% (fallthrough)
+    #####: 1135:        const int k = newOf[static_cast<std::size_t>(st.periData[p])];
+call    0 never executed
+call    1 never executed
+    #####: 1136:        periData.push_back(k);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -: 1137:      }
+        -: 1138:    }
+     1730: 1139:    periOffset[ii + 1] = periData.size();
+call    0 returned 100%
+call    1 returned 100%
+        -: 1140:  }
+        5: 1141:  st.eq.swap(eq);
+call    0 returned 100%
+        5: 1142:  st.periData.swap(periData);
+call    0 returned 100%
+        5: 1143:  st.periOffset.swap(periOffset);
+call    0 returned 100%
+        -: 1144:
+        5: 1145:  int evaluated = 0;
+        5: 1146:  st.flags(ctx, evaluated);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -: 1147:  // The equatorial flag is set only together with the pairs flag,
+        -: 1148:  // so the pairs flag already counts every ring that test will rerun.
+        5: 1149:  std::size_t touched = 0;
+     1735: 1150:  for (int i = 0; i < nR; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+     1730: 1151:    touched += isDirty[static_cast<std::size_t>(i)] ? 1 : 0;
+call    0 returned 100%
+branch  1 taken 18% (fallthrough)
+branch  2 taken 82%
+        -: 1152:  }
+        5: 1153:  st.lastReclassified = static_cast<int>(touched);
+        5: 1154:  st.remember(rings, rows);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        5: 1155:  st.answersValid = true;
+        5: 1156:  st.backoff = 0;
+        5: 1157:  return st.current;
+        6: 1158:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+call   12 returned 100%
+call   13 returned 100%
+call   14 never executed
+call   15 never executed
+call   16 never executed
+call   17 never executed
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+call   26 never executed
+call   27 never executed
+        -: 1159:
+function _ZN4ring21seededCageAffiliationERKSt6vectorIS0_IiSaIiEESaIS2_EES6_S6_S6_b called 1 returned 100% blocks executed 64%
+        1: 1160:ring::SeededAtomLabels ring::seededCageAffiliation(
+        -: 1161:    const std::vector<std::vector<int>> &strictRings,
+        -: 1162:    const std::vector<std::vector<int>> &strictNList,
+        -: 1163:    const std::vector<std::vector<int>> &permissiveRings,
+        -: 1164:    const std::vector<std::vector<int>> &permissiveNList,
+        -: 1165:    bool ringAdjacentCompletion) {
+        -: 1166:  return seededCageAffiliation(
+        2: 1167:      strictRings, cageAffiliation(strictRings, strictNList), permissiveRings,
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        1: 1168:      cageAffiliation(permissiveRings, permissiveNList), permissiveNList,
+call    0 returned 100%
+call    1 never executed
+        3: 1169:      ringAdjacentCompletion);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        -: 1170:}
+        -: 1171:
+function _ZN4ring21seededCageAffiliationERKSt6vectorIS0_IiSaIiEESaIS2_EERKNS_15CageAffiliationES6_S9_S6_b called 1 returned 100% blocks executed 54%
+        1: 1172:ring::SeededAtomLabels ring::seededCageAffiliation(
+        -: 1173:    const std::vector<std::vector<int>> &strictRings,
+        -: 1174:    const CageAffiliation &strictAffiliation,
+        -: 1175:    const std::vector<std::vector<int>> &permissiveRings,
+        -: 1176:    const CageAffiliation &permissiveAffiliation,
+        -: 1177:    const std::vector<std::vector<int>> &permissiveNList,
+        -: 1178:    bool ringAdjacentCompletion) {
+        1: 1179:  const int nAtoms = static_cast<int>(permissiveNList.size());
+call    0 returned 100%
+        1: 1180:  SeededAtomLabels out;
+        1: 1181:  out.hc.assign(nAtoms, false);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1: 1182:  out.ddc.assign(nAtoms, false);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1: 1183:  if (nAtoms == 0) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 1184:    return out;
+call    0 never executed
+        -: 1185:  }
+        -: 1186:
+function _ZZN4ring21seededCageAffiliationERKSt6vectorIS0_IiSaIiEESaIS2_EERKNS_15CageAffiliationES6_S9_S6_bENKUlS6_S9_E_clES6_S9_ called 2 returned 100% blocks executed 59%
+        2: 1187:  const auto toAtoms = [nAtoms](const std::vector<std::vector<int>> &rings,
+        -: 1188:                                const CageAffiliation &affiliation) {
+        -: 1189:    std::pair<std::vector<bool>, std::vector<bool>> flags{
+        4: 1190:        std::vector<bool>(nAtoms, false), std::vector<bool>(nAtoms, false)};
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+call    9 never executed
+call   10 never executed
+        8: 1191:    for (size_t i = 0; i < rings.size(); i++) {
+call    0 returned 100%
+branch  1 taken 75%
+branch  2 taken 25% (fallthrough)
+       40: 1192:      for (const int atom : rings[i]) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 85%
+branch  7 taken 15% (fallthrough)
+       34: 1193:        if (atom < 0 || atom >= nAtoms) {
+branch  0 taken 94% (fallthrough)
+branch  1 taken 6%
+branch  2 taken 6% (fallthrough)
+branch  3 taken 94%
+        4: 1194:          continue;
+        -: 1195:        }
+       30: 1196:        if (affiliation.hc[i]) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+    #####: 1197:          flags.first[atom] = true;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+        -: 1198:        }
+       30: 1199:        if (affiliation.ddc[i]) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+    #####: 1200:          flags.second[atom] = true;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+        -: 1201:        }
+        -: 1202:      }
+        -: 1203:    }
+        2: 1204:    return flags;
+    #####: 1205:  };
+call    0 never executed
+        -: 1206:
+        1: 1207:  const auto [hcS, ddcS] = toAtoms(strictRings, strictAffiliation);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+        1: 1208:  const auto [hcP, ddcP] = toAtoms(permissiveRings, permissiveAffiliation);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+        -: 1209:
+        -: 1210:  // One flood per cage type: an HC seed must not keep a DDC-only atom
+        -: 1211:  // that happens to sit in the same permissive H-bond component.
+function _ZZN4ring21seededCageAffiliationERKSt6vectorIS0_IiSaIiEESaIS2_EERKNS_15CageAffiliationES6_S9_S6_bENKUlRKS0_IbSaIbEESD_E_clESD_SD_ called 2 returned 100% blocks executed 23%
+        2: 1212:  auto flood = [&](const std::vector<bool> &seeds,
+        -: 1213:                   const std::vector<bool> &affiliated) {
+        2: 1214:    std::vector<bool> kept(nAtoms, false);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2: 1215:    std::vector<int> stack;
+       28: 1216:    for (int a = 0; a < nAtoms; a++) {
+branch  0 taken 93%
+branch  1 taken 7% (fallthrough)
+      26*: 1217:      if (!seeds[a] || kept[a]) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+branch 11 taken 100% (fallthrough)
+branch 12 taken 0%
+       26: 1218:        continue;
+        -: 1219:      }
+    #####: 1220:      stack.push_back(a);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####: 1221:      kept[a] = true;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+    #####: 1222:      while (!stack.empty()) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed (fallthrough)
+    #####: 1223:        const int u = stack.back();
+call    0 never executed
+    #####: 1224:        stack.pop_back();
+call    0 never executed
+    #####: 1225:        if (u < 0 || static_cast<size_t>(u) >= permissiveNList.size()) {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+    #####: 1226:          continue;
+        -: 1227:        }
+    #####: 1228:        for (size_t m = 1; m < permissiveNList[u].size(); m++) {
+call    0 never executed
+call    1 never executed
+branch  2 never executed
+branch  3 never executed (fallthrough)
+    #####: 1229:          const int v = permissiveNList[u][m];
+call    0 never executed
+call    1 never executed
+    #####: 1230:          if (v >= 0 && v < nAtoms && affiliated[v] && !kept[v]) {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+branch  7 never executed (fallthrough)
+branch  8 never executed
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed
+    #####: 1231:            kept[v] = true;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+    #####: 1232:            stack.push_back(v);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -: 1233:          }
+        -: 1234:        }
+        -: 1235:      }
+        -: 1236:    }
+        2: 1237:    return kept;
+        3: 1238:  };
+call    0 returned 100%
+call    1 never executed
+call    2 never executed
+        -: 1239:
+        1: 1240:  std::vector<bool> affiliatedHC(nAtoms, false);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1: 1241:  std::vector<bool> affiliatedDDC(nAtoms, false);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       14: 1242:  for (int a = 0; a < nAtoms; a++) {
+branch  0 taken 93%
+branch  1 taken 7% (fallthrough)
+      13*: 1243:    affiliatedHC[a] = hcS[a] || hcP[a];
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+branch  8 taken 0% (fallthrough)
+branch  9 taken 100%
+call   10 returned 100%
+branch 11 taken 100% (fallthrough)
+branch 12 taken 0% (throw)
+call   13 returned 100%
+      13*: 1244:    affiliatedDDC[a] = ddcS[a] || ddcP[a];
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+branch  8 taken 0% (fallthrough)
+branch  9 taken 100%
+call   10 returned 100%
+branch 11 taken 100% (fallthrough)
+branch 12 taken 0% (throw)
+call   13 returned 100%
+        -: 1245:  }
+        1: 1246:  const auto keptHC = flood(hcS, affiliatedHC);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1: 1247:  const auto keptDDC = flood(ddcS, affiliatedDDC);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -: 1248:
+       14: 1249:  for (int a = 0; a < nAtoms; a++) {
+branch  0 taken 93%
+branch  1 taken 7% (fallthrough)
+       13: 1250:    if (keptHC[a]) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+    #####: 1251:      const bool fromStrict = hcS[a];
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####: 1252:      const bool fromPermissive = hcP[a];
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####: 1253:      if (fromStrict || fromPermissive) {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+    #####: 1254:        out.hc[a] = true;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+        -: 1255:      }
+        -: 1256:    }
+       13: 1257:    if (keptDDC[a]) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+    #####: 1258:      const bool fromStrict = ddcS[a];
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####: 1259:      const bool fromPermissive = ddcP[a];
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####: 1260:      if (fromStrict || fromPermissive) {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+    #####: 1261:        out.ddc[a] = true;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+        -: 1262:      }
+        -: 1263:    }
+        -: 1264:  }
+        1: 1265:  if (ringAdjacentCompletion) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 1266:    return ring::ringAdjacentCompletion(out, permissiveRings);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -: 1267:  }
+        1: 1268:  return out;
+call    0 returned 100%
+        1: 1269:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 never executed
+call    8 never executed
+call    9 never executed
+call   10 never executed
+call   11 never executed
+call   12 never executed
+call   13 never executed
+        -: 1270:
+        -: 1271:ring::SeededAtomLabels
+function _ZN4ring22ringAdjacentCompletionERKNS_16SeededAtomLabelsERKSt6vectorIS3_IiSaIiEESaIS5_EE called 1 returned 100% blocks executed 74%
+        1: 1272:ring::ringAdjacentCompletion(const SeededAtomLabels &labels,
+        -: 1273:                             const std::vector<std::vector<int>> &rings) {
+        1: 1274:  SeededAtomLabels out = labels;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1: 1275:  const int nAtoms = static_cast<int>(out.hc.size());
+call    0 returned 100%
+        1: 1276:  const int nRings = static_cast<int>(rings.size());
+call    0 returned 100%
+        1: 1277:  if (nAtoms == 0 || nRings == 0) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+    #####: 1278:    return out;
+        -: 1279:  }
+        -: 1280:  // Rings through each atom, so that accepting one vertex only revisits
+        -: 1281:  // the rings it belongs to
+        1: 1282:  std::vector<std::vector<int>> ringsOf(static_cast<std::size_t>(nAtoms));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2: 1283:  for (int r = 0; r < nRings; r++) {
+branch  0 taken 50%
+branch  1 taken 50% (fallthrough)
+        5: 1284:    for (const int a : rings[r]) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 80%
+branch  7 taken 20% (fallthrough)
+        4: 1285:      if (a >= 0 && a < nAtoms) {
+branch  0 taken 75% (fallthrough)
+branch  1 taken 25%
+branch  2 taken 67% (fallthrough)
+branch  3 taken 33%
+        2: 1286:        ringsOf[static_cast<std::size_t>(a)].push_back(r);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -: 1287:      }
+        -: 1288:    }
+        -: 1289:  }
+        -: 1290:  // A ring with every vertex but one labelled is a cage ring with a
+        -: 1291:  // vacancy in the label, not a liquid ring at the interface: a liquid
+        -: 1292:  // six-ring touching a nucleus has at most a few labelled vertices.
+        -: 1293:  // Requiring all but one keeps the completion from walking into the
+        -: 1294:  // liquid, where a single shared edge would let it flood.
+function _ZZN4ring22ringAdjacentCompletionERKNS_16SeededAtomLabelsERKSt6vectorIS3_IiSaIiEESaIS5_EEENKUlRS3_IbSaIbEEE_clESC_ called 2 returned 100% blocks executed 57%
+        2: 1295:  auto complete = [&](std::vector<bool> &flag) {
+        2: 1296:    std::vector<int> frontier;
+        2: 1297:    frontier.reserve(static_cast<std::size_t>(nRings));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4: 1298:    for (int r = 0; r < nRings; r++) {
+branch  0 taken 50%
+branch  1 taken 50% (fallthrough)
+        2: 1299:      frontier.push_back(r);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -: 1300:    }
+        2: 1301:    std::vector<char> queued(static_cast<std::size_t>(nRings), 1);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4: 1302:    while (!frontier.empty()) {
+call    0 returned 100%
+branch  1 taken 50%
+branch  2 taken 50% (fallthrough)
+        2: 1303:      const int r = frontier.back();
+call    0 returned 100%
+        2: 1304:      frontier.pop_back();
+call    0 returned 100%
+        2: 1305:      queued[static_cast<std::size_t>(r)] = 0;
+call    0 returned 100%
+        2: 1306:      int missing = -1;
+        2: 1307:      int nMissing = 0;
+        6: 1308:      for (const int a : rings[r]) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100%
+branch  7 taken 0% (fallthrough)
+        6: 1309:        if (a < 0 || a >= nAtoms) {
+branch  0 taken 67% (fallthrough)
+branch  1 taken 33%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        2: 1310:          nMissing = 2;
+        2: 1311:          break;
+        -: 1312:        }
+        4: 1313:        if (!flag[static_cast<std::size_t>(a)]) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+        4: 1314:          ++nMissing;
+        4: 1315:          missing = a;
+        -: 1316:        }
+        -: 1317:      }
+        2: 1318:      if (nMissing != 1) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        2: 1319:        continue;
+        -: 1320:      }
+    #####: 1321:      flag[static_cast<std::size_t>(missing)] = true;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+    #####: 1322:      for (const int s : ringsOf[static_cast<std::size_t>(missing)]) {
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+branch  6 never executed
+branch  7 never executed (fallthrough)
+    #####: 1323:        if (!queued[static_cast<std::size_t>(s)]) {
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####: 1324:          queued[static_cast<std::size_t>(s)] = 1;
+call    0 never executed
+    #####: 1325:          frontier.push_back(s);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -: 1326:        }
+        -: 1327:      }
+        -: 1328:    }
+        2: 1329:  };
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        1: 1330:  complete(out.hc);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1: 1331:  complete(out.ddc);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1: 1332:  return out;
+        1: 1333:}
+call    0 returned 100%
+call    1 never executed
+call    2 never executed

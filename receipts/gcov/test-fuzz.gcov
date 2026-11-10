@@ -1,0 +1,1424 @@
+        -:    0:Source:../tests/fuzz_cage_invariance.cpp
+        -:    0:Graph:tests/fuzz_cage_invariance.p/fuzz_cage_invariance.cpp.gcno
+        -:    0:Data:tests/fuzz_cage_invariance.p/fuzz_cage_invariance.cpp.gcda
+        -:    0:Runs:1
+        -:    1:/*
+        -:    2:** This file is part of d-SEAMS.
+        -:    3:**
+        -:    4:** SPDX-License-Identifier: MIT
+        -:    5:**
+        -:    6:** Shift-and-permute fuzz of the cage count. For every frame of every
+        -:    7:** LAMMPS dump in a directory, the hexagonal and double-diamond cage counts
+        -:    8:** are compared with the unshifted frame under
+        -:    9:**
+        -:   10:**   - every half-box translation (each axis 0 or 1/2),
+        -:   11:**   - N random translations, rewrapped into the box,
+        -:   12:**   - N random permutations of the atoms.
+        -:   13:**
+        -:   14:** A translation keeps atom indices, so the cage set must match, not only
+        -:   15:** the count. A permutation changes the atom-index key that selects one
+        -:   16:** maximum packing among several, so the count must match and the
+        -:   17:** particular cages may differ.
+        -:   18:**
+        -:   19:**   fuzz_cage_invariance TRAJ_DIR [trials]
+        -:   20:**
+        -:   21:** Exits 0 when every frame agrees, 1 on a mismatch, 2 when TRAJ_DIR
+        -:   22:** cannot be read.
+        -:   23:*/
+        -:   24:
+        -:   25:#include <cage.hpp>
+        -:   26:#include <chill_plus_scheme.hpp>
+        -:   27:#include <franzblau.hpp>
+        -:   28:#include <generic.hpp>
+        -:   29:#include <mol_sys.hpp>
+        -:   30:#include <neighbours.hpp>
+        -:   31:#include <seams_input.hpp>
+        -:   32:#include <topo_bulk.hpp>
+        -:   33:
+        -:   34:#include <csetjmp>
+        -:   35:#include <csignal>
+        -:   36:#include <unistd.h>
+        -:   37:
+        -:   38:#include <algorithm>
+        -:   39:#include <atomic>
+        -:   40:#include <cmath>
+        -:   41:#include <cstdint>
+        -:   42:#include <cstdlib>
+        -:   43:#include <filesystem>
+        -:   44:#include <fstream>
+        -:   45:#include <iostream>
+        -:   46:#include <map>
+        -:   47:#include <numeric>
+        -:   48:#include <random>
+        -:   49:#include <sstream>
+        -:   50:#include <string>
+        -:   51:#include <thread>
+        -:   52:#include <utility>
+        -:   53:#include <vector>
+        -:   54:
+        -:   55:#ifdef SEAMS_HAS_OPENMP
+        -:   56:#include <omp.h>
+        -:   57:#endif
+        -:   58:
+        -:   59:namespace fs = std::filesystem;
+        -:   60:
+        -:   61:namespace {
+        -:   62:
+        -:   63:using Cloud = molSys::PointCloud<molSys::Point<double>, double>;
+        -:   64:using Rings = std::vector<std::vector<int>>;
+        -:   65:
+        -:   66:struct Result {
+        -:   67:  int cages = 0;
+        -:   68:  int hc = 0;
+        -:   69:  int ddc = 0;
+        -:   70:  int six = 0;
+        -:   71:  bool sized = true;
+        -:   72:  std::vector<std::pair<int, std::vector<std::vector<int>>>> keys;
+        -:   73:};
+        -:   74:
+function _ZN12_GLOBAL__N_112majorityTypeERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEi called 1 returned 100% blocks executed 71%
+        1:   75:int majorityType(const std::string &path, int frame) {
+        1:   76:  std::ifstream in(path);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   77:  std::string line;
+call    0 returned 100%
+        1:   78:  int seen = 0;
+        1:   79:  while (std::getline(in, line)) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+branch  6 taken 100%
+branch  7 taken 0% (fallthrough)
+       1*:   80:    if (line.rfind("ITEM: TIMESTEP", 0) != 0) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+    #####:   81:      continue;
+        -:   82:    }
+        1:   83:    seen++;
+        1:   84:    std::getline(in, line);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   85:    std::getline(in, line);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   86:    std::getline(in, line);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   87:    const int n = std::stoi(line);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   88:    if (seen != frame) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:   89:      for (int i = 0; i < n + 5; i++) {
+branch  0 never executed
+branch  1 never executed (fallthrough)
+    #####:   90:        std::getline(in, line);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   91:      }
+    #####:   92:      continue;
+    #####:   93:    }
+        5:   94:    for (int i = 0; i < 4; i++) {
+branch  0 taken 80%
+branch  1 taken 20% (fallthrough)
+        4:   95:      std::getline(in, line);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   96:    }
+        1:   97:    std::getline(in, line);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   98:    std::istringstream hdr(line);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   99:    std::string tok;
+call    0 returned 100%
+        1:  100:    hdr >> tok >> tok;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        1:  101:    int typeCol = -1;
+        1:  102:    int col = 0;
+        6:  103:    while (hdr >> tok) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+branch  6 taken 83%
+branch  7 taken 17% (fallthrough)
+        5:  104:      if (tok == "type") {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 20% (fallthrough)
+branch  4 taken 80%
+        1:  105:        typeCol = col;
+        -:  106:      }
+        5:  107:      col++;
+        -:  108:    }
+        1:  109:    std::map<int, int> count;
+call    0 returned 100%
+      129:  110:    for (int i = 0; i < n; i++) {
+branch  0 taken 99%
+branch  1 taken 1% (fallthrough)
+      128:  111:      std::getline(in, line);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+     128*:  112:      if (typeCol < 0) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  113:        continue;
+        -:  114:      }
+      128:  115:      std::istringstream row(line);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      128:  116:      std::string field;
+call    0 returned 100%
+      384:  117:      for (int c = 0; c <= typeCol; c++) {
+branch  0 taken 67%
+branch  1 taken 33% (fallthrough)
+      256:  118:        row >> field;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  119:      }
+      128:  120:      count[std::stoi(field)]++;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+      128:  121:    }
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        1:  122:    int bestType = 1;
+        1:  123:    int best = -1;
+        2:  124:    for (const auto &kv : count) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 50%
+branch  6 taken 50% (fallthrough)
+        1:  125:      if (kv.second > best) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  126:        best = kv.second;
+        1:  127:        bestType = kv.first;
+        -:  128:      }
+        -:  129:    }
+        1:  130:    return bestType;
+        1:  131:  }
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+    #####:  132:  return 1;
+        1:  133:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        -:  134:
+function _ZN12_GLOBAL__N_110frameCountERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 1 returned 100% blocks executed 79%
+        1:  135:int frameCount(const std::string &path) {
+        1:  136:  std::ifstream in(path);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  137:  std::string line;
+call    0 returned 100%
+        1:  138:  int n = 0;
+      138:  139:  while (std::getline(in, line)) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+branch  6 taken 99%
+branch  7 taken 1% (fallthrough)
+      137:  140:    if (line.rfind("ITEM: TIMESTEP", 0) == 0) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 1% (fallthrough)
+branch  4 taken 99%
+        1:  141:      n++;
+        -:  142:    }
+        -:  143:  }
+        1:  144:  return n;
+        1:  145:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        -:  146:
+        -:  147:struct GraphSize {
+        -:  148:  long edges = 0;
+        -:  149:  int maxDegree = 0;
+        -:  150:};
+        -:  151:
+function _ZN12_GLOBAL__N_19graphSizeERN6molSys10PointCloudINS0_5PointIdEEdEEdi called 1 returned 100% blocks executed 85%
+        1:  152:GraphSize graphSize(Cloud &cloud, double cutoff, int atomType) {
+        1:  153:  GraphSize g;
+        1:  154:  if (cloud.nop <= 0) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  155:    return g;
+        -:  156:  }
+        1:  157:  const auto nl = nneigh::neighListO(cutoff, cloud, atomType);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  158:  const auto idx = nneigh::neighbourListByIndex(cloud, nl);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      129:  159:  for (const auto &row : idx) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 99%
+branch  6 taken 1% (fallthrough)
+     128*:  160:    const int d = static_cast<int>(row.size()) > 0 ? static_cast<int>(row.size()) - 1 : 0;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+call    3 returned 100%
+      128:  161:    if (d > g.maxDegree) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 99%
+        1:  162:      g.maxDegree = d;
+        -:  163:    }
+      128:  164:    if (d > 0) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      128:  165:      g.edges += d;
+        -:  166:    }
+        -:  167:  }
+        1:  168:  g.edges /= 2;
+        1:  169:  return g;
+        1:  170:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+        -:  171:
+function _ZN12_GLOBAL__N_18evaluateERN6molSys10PointCloudINS0_5PointIdEEdEEdi called 11 returned 100% blocks executed 66%
+       11:  172:Result evaluate(Cloud &cloud, double cutoff, int atomType) {
+       11:  173:  Result out;
+       11:  174:  if (cloud.nop <= 0) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  175:    return out;
+        -:  176:  }
+       11:  177:  const auto nl = nneigh::neighListO(cutoff, cloud, atomType);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       11:  178:  const auto idx = nneigh::neighbourListByIndex(cloud, nl);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       11:  179:  Rings six;
+     2827:  180:  for (const auto &r : primitive::ringNetwork(idx, 6)) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+branch  8 taken 100%
+branch  9 taken 1% (fallthrough)
+     2816:  181:    if (r.size() == 6) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+     2816:  182:      six.push_back(r);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  183:    }
+       11:  184:  }
+call    0 returned 100%
+call    1 never executed
+       11:  185:  out.six = static_cast<int>(six.size());
+call    0 returned 100%
+       11:  186:  if (six.empty()) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  187:    return out;
+        -:  188:  }
+       11:  189:  const auto index = ring::buildRingSearchIndex(six, cloud);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       11:  190:  std::vector<ring::strucType> types(six.size(), ring::strucType::unclassified);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       11:  191:  std::vector<cage::Cage> cages;
+       11:  192:  const auto listHC = ring::findHC(six, types, idx, cages, index);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       11:  193:  const auto listDDC = ring::findDDC(six, types, listHC, cages, index);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+function _ZZN12_GLOBAL__N_18evaluateERN6molSys10PointCloudINS0_5PointIdEEdEEdiENKUlRKSt6vectorIiSaIiEEE_clESA_ called 22 returned 100% blocks executed 87%
+       22:  194:  const auto inRange = [&](const std::vector<int> &ids) {
+     2838:  195:    for (const int id : ids) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 99%
+branch  6 taken 1% (fallthrough)
+    2816*:  196:      if (id < 0 || id >= static_cast<int>(six.size())) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+    #####:  197:        return false;
+        -:  198:      }
+        -:  199:    }
+       22:  200:    return true;
+       11:  201:  };
+      11*:  202:  if (!inRange(listHC) || !inRange(listDDC)) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+    #####:  203:    out.cages = -1;
+    #####:  204:    out.sized = false;
+    #####:  205:    return out;
+        -:  206:  }
+       11:  207:  out.cages = static_cast<int>(cages.size());
+call    0 returned 100%
+      715:  208:  for (const auto &cg : cages) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 98%
+branch  6 taken 2% (fallthrough)
+      704:  209:    const bool hc = cg.type == cage::cageType::HexC;
+     704*:  210:    (hc ? out.hc : out.ddc)++;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      704:  211:    std::vector<std::vector<int>> faces;
+     4224:  212:    for (const int ri : cg.rings) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 83%
+branch  6 taken 17% (fallthrough)
+     3520:  213:      auto face = six[static_cast<size_t>(ri)];
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+     3520:  214:      std::sort(face.begin(), face.end());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+     3520:  215:      faces.push_back(std::move(face));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+     3520:  216:    }
+call    0 returned 100%
+call    1 never executed
+      704:  217:    std::sort(faces.begin(), faces.end());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+     704*:  218:    out.keys.emplace_back(hc ? 0 : 1, std::move(faces));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+      704:  219:  }
+call    0 returned 100%
+call    1 never executed
+       11:  220:  std::sort(out.keys.begin(), out.keys.end());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       11:  221:  return out;
+       11:  222:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+call    8 never executed
+call    9 never executed
+call   10 never executed
+call   11 never executed
+call   12 never executed
+call   13 never executed
+call   14 never executed
+call   15 never executed
+call   16 never executed
+        -:  223:
+function _ZN12_GLOBAL__N_110shiftCloudERN6molSys10PointCloudINS0_5PointIdEEdEEddd called 17 returned 100% blocks executed 90%
+       17:  224:void shiftCloud(Cloud &cloud, double fx, double fy, double fz) {
+        -:  225:  // Lattice translation, then wrap in fractional coordinates. An
+        -:  226:  // orthorhombic box reduces to an independent wrap of each axis. A
+        -:  227:  // triclinic box does not: the dump spans are bounding edges, and a
+        -:  228:  // Cartesian wrap of those spans is not a symmetry of the cell.
+       17:  229:  const gen::FracBox b = gen::makeFracBox(cloud);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       17:  230:  if (!b.ok) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  231:    return;
+        -:  232:  }
+       17:  233:  const double add[3] = {fx, fy, fz};
+     1329:  234:  for (int i = 0; i < cloud.nop; i++) {
+branch  0 taken 99%
+branch  1 taken 1% (fallthrough)
+     1312:  235:    auto &p = cloud.pts[static_cast<size_t>(i)];
+call    0 returned 100%
+     1312:  236:    double sz = (p.z - b.oz) / b.lz;
+     1312:  237:    double sy = (p.y - b.oy - b.yz * sz) / b.ly;
+     1312:  238:    double sx = (p.x - b.ox - b.xy * sy - b.xz * sz) / b.lx;
+     1312:  239:    const double s[3] = {sx + add[0], sy + add[1], sz + add[2]};
+     1312:  240:    sx = s[0] - std::floor(s[0]);
+     1312:  241:    sy = s[1] - std::floor(s[1]);
+     1312:  242:    sz = s[2] - std::floor(s[2]);
+     1312:  243:    p.x = b.ox + b.lx * sx + b.xy * sy + b.xz * sz;
+     1312:  244:    p.y = b.oy + b.ly * sy + b.yz * sz;
+     1312:  245:    p.z = b.oz + b.lz * sz;
+        -:  246:  }
+        -:  247:}
+        -:  248:
+function _ZN12_GLOBAL__N_112permuteCloudERKN6molSys10PointCloudINS0_5PointIdEEdEERKSt6vectorIiSaIiEE called 9 returned 100% blocks executed 89%
+        9:  249:Cloud permuteCloud(const Cloud &cloud, const std::vector<int> &perm) {
+        9:  250:  Cloud out = cloud;
+call    0 returned 100%
+        9:  251:  const int n = cloud.nop;
+      297:  252:  for (int a = 0; a < n; a++) {
+branch  0 taken 97%
+branch  1 taken 3% (fallthrough)
+      288:  253:    out.pts[static_cast<size_t>(perm[static_cast<size_t>(a)])] = cloud.pts[static_cast<size_t>(a)];
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        -:  254:  }
+        9:  255:  out.idIndexMap.clear();
+call    0 returned 100%
+      297:  256:  for (int i = 0; i < n; i++) {
+branch  0 taken 97%
+branch  1 taken 3% (fallthrough)
+      288:  257:    out.pts[static_cast<size_t>(i)].atomID = i + 1;
+call    0 returned 100%
+      288:  258:    out.idIndexMap[i + 1] = i;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  259:  }
+        9:  260:  return out;
+    =====:  261:}
+call    0 never executed
+        -:  262:
+function _ZN12_GLOBAL__N_19sameCountERKNS_6ResultES2_ called 10 returned 100% blocks executed 88%
+       10:  263:bool sameCount(const Result &a, const Result &b) {
+      10*:  264:  return a.cages == b.cages && a.hc == b.hc && a.ddc == b.ddc && a.six == b.six;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0%
+        -:  265:}
+        -:  266:
+        -:  267:sigjmp_buf ruleJump;
+        -:  268:
+function _ZN12_GLOBAL__N_19ruleAlarmEi called 0 returned 0% blocks executed 0%
+    #####:  269:void ruleAlarm(int) { siglongjmp(ruleJump, 1); }
+        -:  270:
+function _ZN12_GLOBAL__N_113sparseLatticeEid called 4 returned 100% blocks executed 67%
+        4:  271:Cloud sparseLattice(int n, double spacing) {
+        4:  272:  Cloud cloud;
+call    0 returned 100%
+        4:  273:  const double box = spacing * 8.0 + 10.0;
+        4:  274:  cloud.box = {box, box, box};
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:  275:  cloud.boxLow = {0.0, 0.0, 0.0};
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:  276:  const int side = 4;
+       84:  277:  for (int i = 0; i < n; i++) {
+branch  0 taken 95%
+branch  1 taken 5% (fallthrough)
+       80:  278:    molSys::Point<double> pt;
+       80:  279:    pt.type = 1;
+       80:  280:    pt.atomID = i + 1;
+        -:  281:    // A tiny unique offset keeps neighbour distances from tying, and stays
+        -:  282:    // far from the 3.5 angstrom cutoff so a shift cannot move a pair across it.
+       80:  283:    pt.x = spacing * static_cast<double>(i % side) + 0.001 * (i + 1);
+       80:  284:    pt.y = spacing * static_cast<double>((i / side) % side) + 0.0007 * (i + 1);
+       80:  285:    pt.z = spacing * static_cast<double>(i / (side * side)) + 0.0005 * (i + 1);
+       80:  286:    cloud.pts.push_back(pt);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       80:  287:    cloud.idIndexMap[pt.atomID] = i;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       80:  288:  }
+call    0 returned 100%
+call    1 never executed
+        4:  289:  cloud.nop = n;
+        4:  290:  return cloud;
+    =====:  291:}
+call    0 never executed
+        -:  292:
+function _ZN12_GLOBAL__N_110ruleLabelsEN6molSys10PointCloudINS0_5PointIdEEdEEN5chill13ChillPlusRuleE called 24 returned 100% blocks executed 73%
+       24:  293:std::vector<int> ruleLabels(Cloud cloud, chill::ChillPlusRule rule) {
+      24*:  294:  const int typ = cloud.pts.empty() ? 1 : cloud.pts.front().type;
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+call    3 returned 100%
+       24:  295:  const auto rows = nneigh::neighListO(3.5, cloud, typ);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       24:  296:  chill::applyChillPlus(cloud, rows, rule, false);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       24:  297:  std::vector<int> labels;
+       24:  298:  labels.reserve(cloud.pts.size());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+      504:  299:  for (const auto &pt : cloud.pts) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 95%
+branch  5 taken 5% (fallthrough)
+      480:  300:    labels.push_back(static_cast<int>(pt.iceType));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+        -:  301:  }
+       24:  302:  return labels;
+       24:  303:}
+call    0 returned 100%
+call    1 never executed
+call    2 never executed
+        -:  304:
+        -:  305:// One frame of the published rule and of ovito-chill+. A shift keeps the
+        -:  306:// per-atom labels. A permutation keeps the histogram. The alarm is the
+        -:  307:// per-case limit.
+function _ZN12_GLOBAL__N_110ruleAgreesEN6molSys10PointCloudINS0_5PointIdEEdEEi called 4 returned 100% blocks executed 60%
+        4:  308:bool ruleAgrees(Cloud cloud, int seconds) {
+        4:  309:  std::signal(SIGALRM, ruleAlarm);
+call    0 returned 100%
+        4:  310:  if (sigsetjmp(ruleJump, 1) != 0) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  311:    alarm(0);
+call    0 never executed
+    #####:  312:    return false;
+        -:  313:  }
+        4:  314:  alarm(static_cast<unsigned>(seconds));
+call    0 returned 100%
+       12:  315:  for (const auto rule : {chill::ChillPlusRule::Published, chill::ChillPlusRule::Ovito}) {
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 67%
+branch  3 taken 33% (fallthrough)
+        8:  316:    const auto ref = ruleLabels(cloud, rule);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        8:  317:    Cloud moved = cloud;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:  318:    shiftCloud(moved, 0.02, 0.01, 0.015);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:  319:    const auto shifted = ruleLabels(moved, rule);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        8:  320:    if (shifted != ref) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+    #####:  321:      std::printf("RULE shift mismatch %s n %d\n", chill::chillPlusRuleName(rule), cloud.nop);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+    #####:  322:      alarm(0);
+call    0 never executed
+    #####:  323:      return false;
+        -:  324:    }
+        8:  325:    const int n = cloud.nop;
+        8:  326:    std::vector<int> perm(static_cast<size_t>(n));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:  327:    std::iota(perm.begin(), perm.end(), 0);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        8:  328:    std::reverse(perm.begin(), perm.end());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        8:  329:    Cloud permuted = permuteCloud(cloud, perm);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:  330:    auto got = ruleLabels(permuted, rule);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        8:  331:    auto want = ref;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:  332:    std::sort(got.begin(), got.end());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        8:  333:    std::sort(want.begin(), want.end());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        8:  334:    if (got != want) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+    #####:  335:      std::printf("RULE perm mismatch %s n %d\n", chill::chillPlusRuleName(rule), cloud.nop);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+    #####:  336:      alarm(0);
+call    0 never executed
+    #####:  337:      return false;
+        -:  338:    }
+        8:  339:  }
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0%
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0%
+call   12 returned 100%
+branch 13 taken 100% (fallthrough)
+branch 14 taken 0%
+call   15 returned 100%
+branch 16 taken 100% (fallthrough)
+branch 17 taken 0%
+call   18 returned 100%
+branch 19 taken 100% (fallthrough)
+branch 20 taken 0%
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+call   26 never executed
+call   27 never executed
+        4:  340:  alarm(0);
+call    0 returned 100%
+        4:  341:  return true;
+        -:  342:}
+        -:  343:
+        -:  344:} // namespace
+        -:  345:
+function main called 1 returned 100% blocks executed 54%
+        1:  346:int main(int argc, char **argv) {
+        1:  347:  if (argc < 2) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  348:    std::fprintf(stderr, "fuzz_cage_invariance TRAJ_DIR [trials]\n");
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  349:    return 2;
+        -:  350:  }
+        1:  351:  const fs::path dir(argv[1]);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  352:  const int trials = argc > 2 ? std::atoi(argv[2]) : 1000;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  353:  const double cutoff = 3.5;
+        1:  354:  if (!fs::is_directory(dir)) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+    #####:  355:    std::fprintf(stderr, "fuzz_cage_invariance: %s is not a directory\n", dir.c_str());
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  356:    return 2;
+        -:  357:  }
+        1:  358:  std::vector<fs::path> dumps;
+        2:  359:  for (const auto &ent : fs::directory_iterator(dir)) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+call    9 returned 100%
+call   10 returned 100%
+branch 11 taken 100% (fallthrough)
+branch 12 taken 0% (throw)
+call   13 returned 100%
+branch 14 taken 50%
+branch 15 taken 50% (fallthrough)
+        1:  360:    if (ent.path().extension() == ".lammpstrj") {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+call    8 returned 100%
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0%
+call   12 never executed
+        1:  361:      dumps.push_back(ent.path());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  362:    }
+        1:  363:  }
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+        1:  364:  std::sort(dumps.begin(), dumps.end());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        1:  365:  if (dumps.empty()) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  366:    std::fprintf(stderr, "fuzz_cage_invariance: no dumps in %s\n", dir.c_str());
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  367:    return 2;
+        -:  368:  }
+        -:  369:#ifdef SEAMS_HAS_OPENMP
+        -:  370:  // One OpenMP thread inside a trial. The trial pool is separate: tying
+        -:  371:  // it to OMP_NUM_THREADS made a coverage run walk every frame serially.
+        1:  372:  omp_set_num_threads(1);
+call    0 returned 100%
+        -:  373:#endif
+        1:  374:  unsigned nThreads = std::max(1u, std::thread::hardware_concurrency());
+call    0 returned 100%
+call    1 returned 100%
+        1:  375:  if (const char *env = std::getenv("SEAMS_FUZZ_THREADS")) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  376:    char *end = nullptr;
+    #####:  377:    const long requested = std::strtol(env, &end, 10);
+call    0 never executed
+    #####:  378:    if (end != env && requested > 0) {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+    #####:  379:      nThreads = static_cast<unsigned>(requested);
+        -:  380:    }
+        -:  381:  }
+        -:  382:
+        1:  383:  int failures = 0;
+        1:  384:  int frames = 0;
+        1:  385:  int checked = 0;
+        1:  386:  int skipped = 0;
+        5:  387:  for (int n = 8; n <= 32; n += 8) {
+branch  0 taken 80%
+branch  1 taken 20% (fallthrough)
+        4:  388:    frames++;
+        4:  389:    Cloud made = sparseLattice(n, 2.8);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:  390:    checked++;
+        4:  391:    if (!ruleAgrees(made, 5)) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+    #####:  392:      failures++;
+    #####:  393:      std::printf("generated n %d RULE FAIL\n", n);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  394:    } else {
+        4:  395:      std::printf("generated n %d RULE OK\n", n);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  396:    }
+        4:  397:  }
+call    0 returned 100%
+call    1 never executed
+        1:  398:  std::uint64_t shiftTrials = 0;
+        1:  399:  std::uint64_t permTrials = 0;
+        2:  400:  for (const auto &path : dumps) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 50%
+branch  6 taken 50% (fallthrough)
+        1:  401:    const int nFrames = frameCount(path.string());
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        2:  402:    for (int frame = 1; frame <= nFrames; frame++) {
+branch  0 taken 50%
+branch  1 taken 50% (fallthrough)
+        1:  403:      frames++;
+        1:  404:      const int atomType = majorityType(path.string(), frame);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  405:      Cloud cloud;
+call    0 returned 100%
+        1:  406:      cloud = sinp::readLammpsTrjO(path.string(), frame, cloud, atomType);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+call    9 never executed
+       1*:  407:      if (cloud.nop <= 0) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  408:        std::printf("%s frame %d type %d EMPTY\n", path.filename().c_str(), frame, atomType);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+call    8 never executed
+    #####:  409:        continue;
+        -:  410:      }
+        1:  411:      const GraphSize g0 = graphSize(cloud, cutoff, atomType);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  412:      // A cutoff graph this dense is not an ice cage frame: ring enumeration
+        -:  413:      // either does not return within half a minute or emits on the order of
+        -:  414:      // a million six-rings. 1000 enumerations are not a cage-count test.
+        1:  415:      if (g0.maxDegree > 40) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  416:        checked++;
+    #####:  417:        const bool ok = ruleAgrees(cloud, 8);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+    #####:  418:        if (!ok) {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  419:          failures++;
+        -:  420:        }
+    #####:  421:        std::printf("%s frame %d type %d nop %d maxdeg %d edges %ld DENSE rule %s\n",
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+    #####:  422:                    path.filename().c_str(), frame, atomType, cloud.nop, g0.maxDegree, g0.edges,
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+        -:  423:                    ok ? "OK" : "FAIL");
+    #####:  424:        std::fflush(stdout);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  425:        continue;
+    #####:  426:      }
+        1:  427:      checked++;
+        1:  428:      const Result ref = evaluate(cloud, cutoff, atomType);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  429:      bool ok = true;
+        1:  430:      if (!ref.sized) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  431:        ok = false;
+    #####:  432:        std::printf("FAIL %s frame %d ring index out of range\n", path.filename().c_str(), frame);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+call    8 never executed
+        -:  433:      }
+        3:  434:      for (int ix = 0; ix < 2 && ok; ix++) {
+branch  0 taken 67% (fallthrough)
+branch  1 taken 33%
+branch  2 taken 100%
+branch  3 taken 0% (fallthrough)
+        6:  435:        for (int iy = 0; iy < 2 && ok; iy++) {
+branch  0 taken 67% (fallthrough)
+branch  1 taken 33%
+branch  2 taken 100%
+branch  3 taken 0% (fallthrough)
+       12:  436:          for (int iz = 0; iz < 2 && ok; iz++) {
+branch  0 taken 67% (fallthrough)
+branch  1 taken 33%
+branch  2 taken 100%
+branch  3 taken 0% (fallthrough)
+        8:  437:            Cloud moved = cloud;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:  438:            shiftCloud(moved, 0.5 * ix, 0.5 * iy, 0.5 * iz);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:  439:            const Result got = evaluate(moved, cutoff, atomType);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:  440:            shiftTrials++;
+       8*:  441:            if (!sameCount(ref, got) || got.keys != ref.keys) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+branch  8 taken 0% (fallthrough)
+branch  9 taken 100%
+    #####:  442:              std::printf("FAIL %s frame %d half %d%d%d cages %d/%d (hc %d/%d ddc %d/%d) six %d/%d set %s\n",
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  443:                          path.filename().c_str(), frame, ix, iy, iz, ref.cages, got.cages, ref.hc,
+call    0 never executed
+call    1 never executed
+    #####:  444:                          got.hc, ref.ddc, got.ddc, ref.six, got.six,
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  445:                          got.keys == ref.keys ? "same" : "DIFFERS");
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+branch  3 never executed (fallthrough)
+branch  4 never executed
+    #####:  446:              ok = false;
+        -:  447:            }
+        8:  448:          }
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        -:  449:        }
+        -:  450:      }
+        1:  451:      std::atomic<int> bad{0};
+function _ZZ4mainENKUliiE_clEii called 1 returned 100% blocks executed 52%
+        1:  452:      auto runRange = [&](int begin, int end) {
+        3:  453:        for (int t = begin; t < end && bad.load() == 0; t++) {
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0%
+branch  5 taken 50%
+branch  6 taken 50% (fallthrough)
+        1:  454:          std::mt19937 rng(20261101u + static_cast<unsigned>(frames) * 9973u +
+        1:  455:                           static_cast<unsigned>(t) * 10007u);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  456:          std::uniform_real_distribution<double> unit(0.0, 1.0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  457:          Cloud moved = cloud;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  458:          shiftCloud(moved, unit(rng), unit(rng), unit(rng));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+        1:  459:          const Result got = evaluate(moved, cutoff, atomType);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  460:          if (!sameCount(ref, got) || got.keys != ref.keys) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+branch  8 taken 0% (fallthrough)
+branch  9 taken 100%
+    #####:  461:            std::printf("FAIL %s frame %d shift trial %d cages %d/%d (hc %d/%d ddc %d/%d)\n",
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  462:                        path.filename().c_str(), frame, t, ref.cages, got.cages, ref.hc, got.hc,
+call    0 never executed
+call    1 never executed
+    #####:  463:                        ref.ddc, got.ddc);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  464:            bad.store(1);
+call    0 never executed
+    #####:  465:            return;
+        -:  466:          }
+        1:  467:          const int n = cloud.nop;
+        1:  468:          std::vector<int> perm(static_cast<size_t>(n));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  469:          std::iota(perm.begin(), perm.end(), 0);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        1:  470:          std::shuffle(perm.begin(), perm.end(), rng);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        1:  471:          Cloud permuted = permuteCloud(cloud, perm);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  472:          const Result pgot = evaluate(permuted, cutoff, atomType);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  473:          if (!sameCount(ref, pgot)) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  474:            std::printf("FAIL %s frame %d perm trial %d cages %d/%d (hc %d/%d ddc %d/%d) six %d/%d\n",
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  475:                        path.filename().c_str(), frame, t, ref.cages, pgot.cages, ref.hc, pgot.hc,
+call    0 never executed
+call    1 never executed
+    #####:  476:                        ref.ddc, pgot.ddc, ref.six, pgot.six);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  477:            bad.store(1);
+call    0 never executed
+    #####:  478:            return;
+        -:  479:          }
+        1:  480:        }
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0%
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0%
+call   12 returned 100%
+branch 13 taken 100% (fallthrough)
+branch 14 taken 0%
+call   15 never executed
+call   16 never executed
+call   17 never executed
+call   18 never executed
+call   19 never executed
+        1:  481:      };
+        1:  482:      std::vector<std::thread> pool;
+        1:  483:      const int chunk = std::max(1, (trials + static_cast<int>(nThreads) - 1) / static_cast<int>(nThreads));
+call    0 returned 100%
+        2:  484:      for (unsigned w = 0; w < nThreads; w++) {
+branch  0 taken 100%
+branch  1 taken 0% (fallthrough)
+        2:  485:        const int begin = static_cast<int>(w) * chunk;
+        2:  486:        const int end = std::min(trials, begin + chunk);
+call    0 returned 100%
+        2:  487:        if (begin >= end) {
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        1:  488:          break;
+        -:  489:        }
+        1:  490:        pool.emplace_back(runRange, begin, end);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  491:      }
+        2:  492:      for (auto &th : pool) {
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 50%
+branch  6 taken 50% (fallthrough)
+        1:  493:        th.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  494:      }
+        1:  495:      shiftTrials += static_cast<std::uint64_t>(trials);
+        1:  496:      permTrials += static_cast<std::uint64_t>(trials);
+call    0 returned 100%
+        1:  497:      if (bad.load() != 0) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  498:        ok = false;
+        -:  499:      }
+        1:  500:      if (!ok) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  501:        failures++;
+        -:  502:      }
+       2*:  503:      std::printf("%s frame %d type %d nop %d six %d cages %d (hc %d ddc %d) %s\n",
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        1:  504:                  path.filename().c_str(), frame, atomType, cloud.nop, ref.six, ref.cages, ref.hc,
+call    0 returned 100%
+call    1 never executed
+        1:  505:                  ref.ddc, ok ? "OK" : "FAIL");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  506:      std::fflush(stdout);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  507:    }
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0%
+call    5 never executed
+call    6 never executed
+call    7 never executed
+        -:  508:  }
+        1:  509:  std::printf("frames %d checked %d skipped %d failures %d shiftTrials %llu permTrials %llu\n",
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  510:              frames, checked, skipped, failures,
+        -:  511:              static_cast<unsigned long long>(shiftTrials),
+        -:  512:              static_cast<unsigned long long>(permTrials));
+        1:  513:  if (skipped != 0) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  514:    failures += skipped;
+        -:  515:  }
+        1:  516:  return failures == 0 ? 0 : 1;
+        1:  517:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
