@@ -229,20 +229,19 @@ with tempfile.TemporaryDirectory() as tmp:
         lambda: run(["rings", str(water), "--cutoff", "not-a-number"], expect=2, message="not-the-message"),
         "missing reject message",
     )
-    try:
-        demand_message(lambda: None, "x")
-    except SystemExit as exc:
-        if "cutoff check did not fire" not in str(exc):
-            raise
-    else:
-        raise SystemExit("silent arm returned")
-    try:
-        demand_message(lambda: (_ for _ in ()).throw(SystemExit("nope")), "other")
-    except SystemExit as exc:
-        if str(exc) != "nope":
-            raise
-    else:
-        raise SystemExit("mismatch arm returned")
+    def show_arm(fn, needle):
+        try:
+            fn()
+        except SystemExit as exc:
+            if needle not in str(exc):
+                raise SystemExit("arm %r" % str(exc))
+            return
+        raise SystemExit("arm returned")
+
+    show_arm(lambda: demand_message(lambda: None, "x"), "cutoff check did not fire")
+    show_arm(lambda: demand_message(lambda: (_ for _ in ()).throw(SystemExit("nope")), "other"), "nope")
+    show_arm(lambda: show_arm(lambda: None, "x"), "arm returned")
+    show_arm(lambda: show_arm(lambda: (_ for _ in ()).throw(SystemExit("nope")), "other"), "arm ")
     ok = run(["rings", str(water), "--cutoff", "not-a-number"], expect=2, message="Usage:") and ok
     def with_offload():
         off = os.environ.get("SEAMS_OFFLOAD")
