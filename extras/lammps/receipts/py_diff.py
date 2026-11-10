@@ -45,7 +45,7 @@ def main():
     log_path = Path(os.environ["PY_LOG"])
     xml = Path(os.environ["PY_XML"])
     diff_log = Path(os.environ["DIFF_LOG"])
-    base = os.environ.get("DIFF_BASE", "d763dd35")
+    base = os.environ.get("DIFF_BASE", "7f310225")
     py = os.environ.get("DSEAMS_PYTHON", sys.executable)
     lammps = Path(os.environ["SRC_LAMMPS"])
     log = streamlog.Log(log_path)

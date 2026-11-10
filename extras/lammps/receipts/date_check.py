@@ -57,7 +57,7 @@ def main():
     lammps = Path(os.environ["SRC_LAMMPS"])
     roots = sys.argv[1:]
     series = [
-        ("seams", commits(seams, "be748d7a26957fd91bd0371b2dfefdd326feda3d")),
+        ("seams", commits(seams, "7f310225b7ea6c9e9e79d48d2b3547ef0f66610c")),
         ("lammps", commits(lammps, "098ffdefa525cabc82272925de02e9884f58c657")),
     ]
     cited = logs(roots)

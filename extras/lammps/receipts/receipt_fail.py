@@ -215,7 +215,7 @@ def check_evidence(work):
 def check_dates(work):
     seams = os.environ["SRC_SEAMS"]
     lammps = os.environ["SRC_LAMMPS"]
-    hashes = subprocess.check_output(["git", "-C", seams, "log", "--format=%H", "be748d7a..HEAD"], text=True)
+    hashes = subprocess.check_output(["git", "-C", seams, "log", "--format=%H", "7f310225..HEAD"], text=True)
     hashes += subprocess.check_output(["git", "-C", lammps, "log", "--format=%H", "098ffdef..HEAD"], text=True)
     lines = hashes.split()
     root = work / "logs"
@@ -651,7 +651,7 @@ def main():
     os.environ["GCOVR_XML"] = ""
     os.environ["GCOVR_DIFF_LOG"] = ""
     import py_diff
-    assert not (py_diff.gcovr_diff(Path("."), Path("."), "python3", "d763dd35", os.environ.copy()) != 0), "gcovr skip"
+    assert not (py_diff.gcovr_diff(Path("."), Path("."), "python3", "7f310225", os.environ.copy()) != 0), "gcovr skip"
     py_diff.raise_status(0)
     require_message(lambda: py_diff.raise_status(1), "1")
     check_record(work)
