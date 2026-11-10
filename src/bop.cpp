@@ -318,9 +318,6 @@ double nlmNorm(int l, int m) {
 void spheriHarmoGeneral(int orderL, std::array<double, 2> angles,
                         std::vector<std::complex<double>> &out) {
   out.assign(static_cast<std::size_t>(2 * orderL + 1), {0.0, 0.0});
-  if (orderL < 0) {
-    return;
-  }
   std::vector<double> p;
   associatedP(orderL, std::cos(angles[1]), p);
   const double phi = angles[0];
