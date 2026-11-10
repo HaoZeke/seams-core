@@ -727,9 +727,7 @@ int cmdDomains(std::ostream &os, Cloud &cloud, double cutoff,
   for (std::size_t i = 0; i < idxList.size(); ++i) {
     idList[i].reserve(idxList[i].size());
     for (const int idx : idxList[i]) {
-      if (idx >= 0 && idx < cloud.nop) {
-        idList[i].push_back(cloud.pts[static_cast<std::size_t>(idx)].atomID);
-      }
+      idList[i].push_back(cloud.pts[static_cast<std::size_t>(idx)].atomID);
     }
   }
   const auto d = clump::largestDomain(cloud, idList, mask);
