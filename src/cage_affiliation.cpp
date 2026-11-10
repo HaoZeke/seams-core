@@ -203,7 +203,8 @@ struct FrameContext {
 
   //! Ordered basal-pair predicate, exactly the findHC acceptance test
   [[nodiscard]] bool basalPair(int i, int j) const {
-    if (i == j || shareAtoms(i, j)) {
+    // A ring shares every atom with itself, so i == j fails here too.
+    if (shareAtoms(i, j)) {
       return false;
     }
     return ring::basalConditions(bonds, (*rings)[static_cast<std::size_t>(i)],
@@ -281,7 +282,14 @@ struct FrameContext {
       const auto &row = (*nList)[static_cast<size_t>(atom)];
       for (size_t n = 1; n < row.size(); n++) {
         const int nb = row[n];
-        if (nb < 0 || nb >= nAtoms ||
+        // A negative id is not a cloud atom. ringsOf rejects it, so the
+        // span does not grow. An id past the cloud is still skipped here,
+        // because a ring may name that atom while the row must not.
+        if (nb < 0) {
+          span += ringsOf(nb).n;
+          continue;
+        }
+        if (nb >= nAtoms ||
             scratch.onRing[static_cast<size_t>(nb)] == on) {
           continue;
         }
@@ -334,8 +342,7 @@ struct FrameContext {
         const RingRow through = ringsOf(nb);
         for (int c = 0; c < through.n; c++) {
           const int candidate = through.p[c];
-          if (scratch.seen[static_cast<size_t>(candidate)] == seenTick ||
-              candidate == i) {
+          if (scratch.seen[static_cast<size_t>(candidate)] == seenTick) {
             continue;
           }
           scratch.seen[static_cast<size_t>(candidate)] = seenTick;
@@ -383,10 +390,6 @@ struct FrameContext {
   mutable BasalScratch lazyScratch;
 
   [[nodiscard]] const std::vector<int> &basalCandidates(int i) const {
-    static const std::vector<int> empty;
-    if (i < 0 || i >= static_cast<int>(basalCand.size())) {
-      return empty;
-    }
     if (!basalReady[static_cast<std::size_t>(i)]) {
       basalCand[static_cast<std::size_t>(i)] =
           collectBasalCandidates(i, lazyScratch);
@@ -459,6 +462,11 @@ ring::CageAffiliation batchSweep(const FrameContext &ctx) {
     std::vector<int> listHC;
     std::vector<ring::strucType> types(nRings, ring::strucType::unclassified);
     for (int i = 0; i < nR && left > 0; ++i) {
+      const auto &cands = ctx.basalCandidates(i);
+      if (cands.empty()) {
+        continue;
+      }
+      // The list was filled above. Reading it again must return that list.
       for (const int j : ctx.basalCandidates(i)) {
         if (left == 0) {
           break;
@@ -538,9 +546,7 @@ ring::stackingPlanes(const std::vector<std::vector<int>> &rings,
       hc[i] = true;
       hc[static_cast<std::size_t>(j)] = true;
       for (const int k : ctx.prismaticOf(static_cast<int>(i), j)) {
-        if (k >= 0 && static_cast<std::size_t>(k) < nRings) {
-          hc[static_cast<std::size_t>(k)] = true;
-        }
+        hc[static_cast<std::size_t>(k)] = true;
       }
     }
   }
@@ -773,13 +779,8 @@ struct ring::AffiliationUpdater::Impl {
   // Whole-frame evaluation that also fills the stored answers
   void batch(const std::vector<std::vector<int>> &rings,
              const std::vector<std::vector<int>> &nList,
-             std::vector<std::vector<int>> rows, const FrameContext *given) {
-    std::unique_ptr<FrameContext> own;
-    if (given == nullptr) {
-      own = std::make_unique<FrameContext>(rings, nList);
-      given = own.get();
-    }
-    const FrameContext &ctx = *given;
+             std::vector<std::vector<int>> rows) {
+    const FrameContext ctx(rings, nList);
     const int nR = static_cast<int>(rings.size());
     std::vector<int> all(rings.size());
     std::iota(all.begin(), all.end(), 0);
@@ -893,7 +894,8 @@ struct ring::AffiliationUpdater::Impl {
   }
 };
 
-ring::AffiliationUpdater::AffiliationUpdater() : impl_(new Impl) {}
+ring::AffiliationUpdater::AffiliationUpdater()
+    : impl_(std::make_unique<Impl>()) {}
 ring::AffiliationUpdater::~AffiliationUpdater() = default;
 ring::AffiliationUpdater::AffiliationUpdater(AffiliationUpdater &&) noexcept =
     default;
@@ -935,8 +937,9 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
     st.prevSortedRows.swap(st.incoming);
     return st.current;
   }
-  if (st.batchHot && st.warm && st.primed &&
-      st.prevSortedRows.size() == nList.size()) {
+  // batchHot is set only after fastAffiliation, which builds warm,
+  // and only while primed is still set. The two flags add no case.
+  if (st.batchHot && st.prevSortedRows.size() == nList.size()) {
     st.fastAffiliation(rings, nList);
     return st.current;
   }
@@ -944,7 +947,7 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
   auto &rows = st.incoming;
   if (!st.primed || st.prevSortedRows.size() != nList.size()) {
     st.batchHot = false;
-    st.batch(rings, nList, rows, nullptr);
+    st.batch(rings, nList, rows);
     st.answersValid = true;
     return st.current;
   }
@@ -990,7 +993,7 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
     return st.current;
   }
   if (!st.answersValid) {
-    st.batch(rings, nList, rows, nullptr);
+    st.batch(rings, nList, rows);
     st.answersValid = true;
     return st.current;
   }
@@ -1286,10 +1289,18 @@ ring::SeededAtomLabels ring::seededCageAffiliation(
 
   for (int a = 0; a < nAtoms; a++) {
     if (keptHC[a]) {
-      out.hc[a] = hcS[a] || hcP[a];
+      const bool fromStrict = hcS[a];
+      const bool fromPermissive = hcP[a];
+      if (fromStrict || fromPermissive) {
+        out.hc[a] = true;
+      }
     }
     if (keptDDC[a]) {
-      out.ddc[a] = ddcS[a] || ddcP[a];
+      const bool fromStrict = ddcS[a];
+      const bool fromPermissive = ddcP[a];
+      if (fromStrict || fromPermissive) {
+        out.ddc[a] = true;
+      }
     }
   }
   if (ringAdjacentCompletion) {
