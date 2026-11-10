@@ -544,14 +544,6 @@ seams_insitu_exe = executable(
   link_args: seams_insitu_link,
   build_rpath: meson.current_build_dir() / 'src',
   install: true)
-seams_gromacs_imd_exe = executable(
-  'seams-gromacs-imd',
-  files('src/insitu_gromacs_cli.cpp'),
-  dependencies: [yds_dep],
-  include_directories: _incdirs,
-  link_args: seams_insitu_link,
-  build_rpath: meson.current_build_dir() / 'src',
-  install: true)
 frame_clock_exe = executable(
   'frame_clock',
   files('tests/insitu/frame_clock.cpp'),

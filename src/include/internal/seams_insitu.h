@@ -145,12 +145,6 @@ const seams_insitu_result *seams_insitu_last(const seams_insitu_engine *eng);
 
 int seams_insitu_main(int argc, char **argv);
 
-/* Interactive molecular dynamics client. box9 is the angstrom edge box.
- * max_frames <= 0 reads until the server closes. Positions arrive in angstrom. */
-int seams_insitu_imd_session(const char *host, int port, const char *dump,
-                             const char *record, const double *box9, int max_frames);
-int seams_insitu_imd_main(int argc, char **argv);
-
 int seams_insitu_frame_bytes(void);
 int seams_insitu_options_bytes(void);
 int seams_insitu_result_bytes(void);

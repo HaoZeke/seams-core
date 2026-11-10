@@ -27,30 +27,8 @@ def require_live(code):
 def configure_live(env, build):
     """Point a live run at the engines that are actually installed."""
     build = Path(build)
-    gmx = build / "gromacs-dseams" / "bin" / "gmx_mpi"
-    md_bin = build / "md-prefix" / "bin"
-    md_bin.mkdir(parents=True, exist_ok=True)
-    if gmx.is_file():
-        env["DSEAMS_GMX"] = str(gmx)
-        env["DSEAMS_GMX_MPIRUN"] = os.environ.get("MPIRUN", os.environ.get("DSEAMS_MPIRUN", ""))
-        data = os.environ.get("GMXDATA", "")
-        if data:
-            env["GMXDATA"] = data
-        link = md_bin / "gmx"
-        if link.is_symlink() or link.exists():
-            link.unlink()
-        link.symlink_to(gmx)
-        top = Path(data) / "top" if data else Path()
-        if top.is_dir():
-            share = build / "md-prefix" / "share" / "gromacs"
-            share.mkdir(parents=True, exist_ok=True)
-            dest = share / "top"
-            if dest.is_symlink() or dest.exists():
-                dest.unlink()
-            dest.symlink_to(top)
     for name, key in (
         ("seams-insitu", "SEAMS_INSITU_EXE"),
-        ("seams-gromacs-imd", "SEAMS_GRO_IMD_EXE"),
         ("frame_clock", "DSEAMS_FRAME_CLOCK"),
     ):
         exe = build / "seams" / name
@@ -81,7 +59,6 @@ def configure_live(env, build):
     env["LD_LIBRARY_PATH"] = ":".join(
         part
         for part in (
-            str(build / "gromacs-dseams" / "lib"),
             str(build / "seams" / "src"),
             str(build / "seams" / "chemfiles-prefix" / "lib"),
             env.get("LD_LIBRARY_PATH", ""),
@@ -180,7 +157,16 @@ def main():
         [str(SRC / "extras" / "lammps" / "receipts" / "receipt_fail.py")],
         [str(SRC / "tests" / "cli_every.py"), str(BUILD / "seams" / "seams"), str(SRC)],
     ):
-        code = log.run([py, "-m", "coverage", "run", "--branch", "--append", *args], WORK, env)
+        run_env = env
+        if Path(args[0]).name == "receipt_fail.py":
+            # OVITO's Qt libraries need libGL. That directory breaks LAMMPS,
+            # so only this process, which does not launch lmp, receives it.
+            run_env = dict(env)
+            glue = "/lib/x86_64-linux-gnu"
+            current = run_env.get("LD_LIBRARY_PATH", "")
+            if glue not in current.split(":"):
+                run_env["LD_LIBRARY_PATH"] = (current + ":" + glue).strip(":")
+        code = log.run([py, "-m", "coverage", "run", "--branch", "--append", *args], WORK, run_env)
         log.line("py %s exit %d" % (Path(args[0]).name, code))
         abort(log, code)
     live_env = dict(env)
@@ -201,17 +187,26 @@ def main():
         live_env,
     )
     log.line("py test_live_cover.py exit %d" % code)
-    log.line("live_harness_exit: %d" % code)
+    log.line("live_suite_exit: %d" % code)
+    require_live(code)
     log.line("gcov_object_directory: $BUILD/work/coverage")
     fix_notes = next(plugin.rglob("fix_dseams.cpp.gcno"))
     comp_notes = next((WORK / "compute").rglob("compute_dseams.gcno"))
-    log.line("command: gcov -b " + str(fix_notes))
-    gcov_code = log.run(["gcov", "-b", str(fix_notes)], WORK, os.environ.copy())
-    log.line("command: gcov -b " + str(comp_notes))
-    gcov_code = log.run(["gcov", "-b", str(comp_notes)], WORK, os.environ.copy()) or gcov_code
     cli_notes = next(Path(os.environ["BUILD"]).joinpath("seams").rglob("*seams_cli.cpp.gcno"))
-    log.line("command: gcov -b " + str(cli_notes))
-    gcov_code = log.run(["gcov", "-b", str(cli_notes)], WORK, os.environ.copy()) or gcov_code
+    # Meson records seams_cli.cpp as ../../src/seams/... relative to the
+    # build root. gcov resolves that path from its working directory.
+    gcov_jobs = (
+        (fix_notes, WORK),
+        (comp_notes, WORK),
+        (cli_notes, BUILD / "seams"),
+    )
+    gcov_code = 0
+    for note, cwd in gcov_jobs:
+        log.line("command: gcov -b " + str(note))
+        log.line("gcov_cwd: " + str(cwd))
+        one = log.run(["gcov", "-b", str(note)], cwd, os.environ.copy())
+        log.line("gcov exit %d" % one)
+        gcov_code = one or gcov_code
     gcovr = os.environ.get("GCOVR", "gcovr")
     targets = (
         ("fix", WORK / "plugin" / "CMakeFiles" / "dseams_lammps.dir", ".*fix_dseams\\.cpp"),
@@ -229,6 +224,7 @@ def main():
                 "--txt-metric", "line", "--txt-metric", "branch",
                 *flags, *extra,
                 "--txt", str(WORK / ("gcovr-%s-%s.txt" % (label, name))),
+                "--json", str(WORK / ("gcovr-%s-%s.json" % (label, name))),
             ]
             shown = "gcovr -j 1 --exclude-throw-branches --exclude-unreachable-branches"
             if extra:

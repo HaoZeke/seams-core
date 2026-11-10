@@ -89,61 +89,9 @@ def main():
     live.lammps_plain(folder / "plain-nodump", 1, every=0)
     live.lammps_plain(folder / "plain-dump", 1, every=1, native=dump)
 
-    short = folder / "short.dcd"
-    short.write_bytes(b"1234")
-    check(expect_error(lambda: live.native_frame_count(short)))
-    check(expect_error(lambda: live.dcd_schedule(short)))
-    import struct
-    shifted = folder / "shifted.dcd"
-    shifted.write_bytes(struct.pack("<i4siiii", 84, b"CORD", 2, 10, 5, 15) + b"\0" * 64)
-    record.write_text("step 5\nrings 3:0\nstep 10\nrings 3:0\n")
-    shifted_error = False
-    try:
-        live.match_native_cli(record, shifted, type_filter=8)
-    except RuntimeError as exc:
-        shifted_error = "DCD step list differs" in str(exc)
-    check(shifted_error)
-    matched = folder / "matched.dcd"
-    matched.write_bytes(struct.pack("<i4siiii", 84, b"CORD", 2, 5, 5, 10) + b"\0" * 64)
-    check(live.dcd_schedule(matched) == [5, 10])
-    one = folder / "one.dcd"
-    one.write_bytes(struct.pack("<i4siiii", 84, b"CORD", 1, 5, 5, 5) + b"\0" * 64)
-    record.write_text("step 1\nrings 3:0\n")
-    one_error = False
-    try:
-        live.match_native_cli(record, one, type_filter=8)
-    except RuntimeError as exc:
-        one_error = "DCD step list differs" in str(exc)
-    check(one_error)
-    bad_stride = folder / "bad-stride.dcd"
-    bad_stride.write_bytes(struct.pack("<i4siiii", 84, b"CORD", 2, 5, 0, 10) + b"\0" * 64)
-    check(expect_error(lambda: live.dcd_schedule(bad_stride)))
-    check(live.native_frame_count(dump) == 1)
-
-    bad_trr = folder / "bad.trr"
-    bad_trr.write_bytes(b"\x00" * 84)
-    check(expect_error(lambda: live.trr_frames(bad_trr)))
-    import struct
-    header = bytearray(b"\x00" * 84)
-    struct.pack_into(">i", header, 0, 1993)
-    struct.pack_into(">i", header, 32, 36)
-    struct.pack_into(">i", header, 52, 0)
-    struct.pack_into(">ii", header, 64, 0, 1)
-    (folder / "trunc.trr").write_bytes(bytes(header) + b"\x00" * 40)
-    check(expect_error(lambda: live.trr_frames(folder / "trunc.trr")))
-
-    check(live.gmx_wall("Time: 1.5 2.5\n") == 2.5)
-    check(expect_error(lambda: live.gmx_wall("no time here\n")))
-
     check(expect_error(lambda: live.ladder_values("1\n2\n", "")))
     samples = live.ladder_values("\n".join(["0.1"] * 7) + "\n", "")
     check(len(samples) == 7)
-
-    check(expect_error(lambda: live.require_equal(1, 2, "mismatch")))
-    live.require_equal(3, 3, "same")
-    check(expect_error(lambda: live.require_native_frames(1, 2, 2)))
-    check(expect_error(lambda: live.require_native_frames(1, 1, 2)))
-    live.require_native_frames(4, 4, 4)
 
     rings, chill, cage = real_lines(dump)
     chill_bits = []
@@ -230,7 +178,7 @@ def main():
     stub_lmp.chmod(stub_lmp.stat().st_mode | stat.S_IEXEC)
     check(expect_error(lambda: engine_e2e.lammps_case(str(stub_lmp.resolve()), "plugin.so", work / "short-run", 1)))
 
-    for name in ("lammps-plugin-1", "lammps-plugin-2", "lammps-package", "e2e-gromacs"):
+    for name in ("lammps-plugin-1", "lammps-plugin-2", "lammps-package"):
         (work / name).mkdir(parents=True, exist_ok=True)
     check(live.SEAMS == os.environ["SEAMS_CLI"])
     from dseams_insitu.engine import Engine
@@ -240,46 +188,23 @@ def main():
     os.environ["DSEAMS_E2E_WORK"] = str(work)
     engine_e2e.main()
     check(live.type7_median([1.0, 3.0]) == 2.0)
-    gro = folder / "box.gro"
-    gro.write_text("title\n1\n    1SOL     OW    1   0.1   0.1   0.1\n   2.0   2.0   2.0\n")
-    check(live.gromacs_box(gro)[3] == 20.0)
     check(live.free_port() > 0)
-    check(len(live.ice_positions()) == 8)
     saved_exe = os.environ.get("SEAMS_INSITU_EXE")
-    saved_imd = os.environ.get("SEAMS_GRO_IMD_EXE")
     os.environ["SEAMS_INSITU_EXE"] = ""
-    os.environ["SEAMS_GRO_IMD_EXE"] = ""
     check(live.acceptance() is None)
     if saved_exe:
         os.environ["SEAMS_INSITU_EXE"] = saved_exe
     else:
         os.environ.pop("SEAMS_INSITU_EXE", None)
-    if saved_imd:
-        os.environ["SEAMS_GRO_IMD_EXE"] = saved_imd
-    else:
-        os.environ.pop("SEAMS_GRO_IMD_EXE", None)
-    for name in (
-        "run_lammps",
-        "ase_identity",
-        "run_ipi",
-        "gromacs_trr_identity",
-        "lammps_mpi_identity",
-        "gromacs_mpi_identity",
-        "openmm_identity",
-    ):
+    for name in ("run_lammps", "lammps_mpi_identity"):
         result = getattr(live, name)()
         if name == "run_lammps":
             frames = result.get("frames") if isinstance(result, dict) else None
             if isinstance(frames, bool) or not isinstance(frames, int) or frames < 1:
                 raise SystemExit(name + " returned %r" % (result,))
-        elif name in ("lammps_mpi_identity", "gromacs_mpi_identity"):
-            if not (isinstance(result, tuple) and len(result) == 2 and result[0] is True and isinstance(result[1], str)):
-                raise SystemExit(name + " returned %r" % (result,))
-        elif isinstance(result, bool) or not isinstance(result, int) or result < 1:
+        elif not (isinstance(result, tuple) and len(result) == 2 and result[0] is True and isinstance(result[1], str)):
             raise SystemExit(name + " returned %r" % (result,))
         print(name, "passed", flush=True)
-    check(live.ipi_elapsed(False) > 0)
-    check(live.ipi_elapsed(True) > 0)
     os.environ.pop("DSEAMS_SCALE_TINY", None)
     check(live.scale_plan()[0][1] == 1000)
     os.environ["DSEAMS_SCALE_TINY"] = "1"
@@ -301,28 +226,15 @@ def main():
     blank_xyz = folder / "blank.xyz"
     blank_xyz.write_text("\n1\ncomment\nO 0 0 0\n")
     check(len(live.read_multi_xyz(blank_xyz)) == 1)
-    bad_gro = folder / "bad.gro"
-    bad_gro.write_text("title\n0\n1.0\n")
-    check(expect_error(lambda: live.gromacs_box(bad_gro)))
     check(live.type7_median([4.0]) == 4.0)
     saved_main = live.main
     def boom():
         raise RuntimeError("forced")
     live.main = boom
     os.environ["SEAMS_INSITU_EXE"] = saved_exe or "present"
-    os.environ["SEAMS_GRO_IMD_EXE"] = saved_imd or "present"
     check(live.acceptance() is None)
     live.main = saved_main
     check(live.module_entry(["live.py", "--acceptance"]) == 0)
-    saved_gmx = os.environ.pop("DSEAMS_GMX", None)
-    saved_gmx_mpi = os.environ.pop("DSEAMS_GMX_MPIRUN", None)
-    check(engine_e2e.gromacs_note() is None)
-    note = live.gromacs_mpi_identity()
-    check(isinstance(note, tuple) and len(note) == 2 and note[0] is False and isinstance(note[1], str) and note[1] != "")
-    if saved_gmx is not None:
-        os.environ["DSEAMS_GMX"] = saved_gmx
-    if saved_gmx_mpi is not None:
-        os.environ["DSEAMS_GMX_MPIRUN"] = saved_gmx_mpi
     check(live.loop_time("Loop time of 1.5 on 1 procs for 2 steps\n") == 1.5)
     os.environ["DSEAMS_SCALE_TINY"] = "1"
     live.time_lammps("plain", 2, 1, live.PLUGIN)

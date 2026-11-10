@@ -33,11 +33,6 @@ os.environ["SEAMS_LIB"] = LIB
 os.environ["PATH"] = str(PREFIX / "bin") + os.pathsep + os.environ.get("PATH", "")
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 
-from dseams_insitu.ase import DseamsMDObserver
-from dseams_insitu.engine import Engine, load
-from dseams_insitu.ipi import IpiClient
-from dseams_insitu.openmm import DseamsReporter
-
 
 def run(cmd, cwd, env=None, check=True):
     merged = os.environ.copy()
@@ -194,37 +189,6 @@ def census_blocks(text):
     return blocks
 
 
-def dcd_schedule(path):
-    """Frame steps from the DCD header: start, then start plus the stride."""
-    import struct
-
-    data = Path(path).read_bytes()
-    if len(data) < 20:
-        raise RuntimeError("short dcd %s" % path)
-    nframes, istart, stride = struct.unpack_from("<iii", data, 8)
-    if nframes < 1 or stride < 1 or istart < 0:
-        raise RuntimeError(
-            "bad dcd schedule frames %d start %d stride %d" % (nframes, istart, stride)
-        )
-    return [istart + index * stride for index in range(nframes)]
-
-
-def native_frame_count(path):
-    path = Path(path)
-    if path.suffix == ".trr":
-        return len(trr_frames(path))
-    if path.suffix == ".dcd":
-        data = path.read_bytes()
-        # Charmm/OpenMM header: number of frames is the int at byte 8.
-        import struct
-
-        if len(data) < 12:
-            raise RuntimeError("short dcd %s" % path)
-        return struct.unpack_from("<i", data, 8)[0]
-    text = path.read_text(errors="replace")
-    return text.count("ITEM: TIMESTEP")
-
-
 def cli_text(command, dump, extra=None, type_filter=1):
     dump = Path(dump).resolve()
     frames = native_frame_count(dump)
@@ -309,14 +273,6 @@ def match_native_cli(record, native, type_filter=1):
     live_steps = [block["step"] for block in live]
     if len(live_steps) != len(set(live_steps)):
         raise RuntimeError("duplicate live steps %s" % live_steps)
-    if Path(native).suffix == ".dcd":
-        header_steps = dcd_schedule(native)
-        if live_steps != header_steps:
-            raise RuntimeError(
-                "DCD step list differs\nstart %d stride %d\nlive %s\nheader %s"
-                % (header_steps[0], header_steps[1] - header_steps[0] if len(header_steps) > 1 else 0,
-                   live_steps, header_steps)
-            )
     rings_text = cli_text("rings", native, type_filter=type_filter)
     ice_text = cli_text("chill-plus", native, type_filter=type_filter)
     cage_text = cli_text("cages", native, ["--graph", "cutoff"], type_filter=type_filter)
@@ -352,201 +308,6 @@ def match_native_cli(record, native, type_filter=1):
     return len(live)
 
 
-def run_openmm(steps):
-    from openmm.app import ForceField, Modeller, PDBFile, Simulation
-    from openmm import LangevinIntegrator, Platform
-    from openmm.unit import kelvin, nanometer, picosecond
-
-    folder = WORK / "openmm"
-    folder.mkdir(parents=True, exist_ok=True)
-    pdb_path = folder / "water.pdb"
-    # 27 waters on a 2.8 angstrom lattice, inside a 12 angstrom box.
-    # Neighbours sit inside the 3.5 angstrom cutoff.
-    lines = ["CRYST1   20.000   20.000   20.000  90.00  90.00  90.00 P 1           1"]
-    serial = 1
-    for ix in range(3):
-        for iy in range(3):
-            for iz in range(3):
-                x = 1.5 + 2.8 * ix
-                y = 1.5 + 2.8 * iy
-                z = 1.5 + 2.8 * iz
-                res = serial
-                lines.append(
-                    "ATOM  %5d  O   HOH A%4d    %8.3f%8.3f%8.3f  1.00  0.00           O" % (serial, res, x, y, z)
-                )
-                serial += 1
-                lines.append(
-                    "ATOM  %5d  H1  HOH A%4d    %8.3f%8.3f%8.3f  1.00  0.00           H" % (serial, res, x + 0.757, y, z)
-                )
-                serial += 1
-                lines.append(
-                    "ATOM  %5d  H2  HOH A%4d    %8.3f%8.3f%8.3f  1.00  0.00           H" % (serial, res, x - 0.239, y + 0.927, z)
-                )
-                serial += 1
-    lines.append("END")
-    pdb_path.write_text("\n".join(lines) + "\n")
-    pdb = PDBFile(str(pdb_path))
-    ff = ForceField("tip3p.xml")
-    modeller = Modeller(pdb.topology, pdb.positions)
-    from openmm.app import CutoffPeriodic, HBonds
-
-    system = ff.createSystem(
-        modeller.topology,
-        nonbondedMethod=CutoffPeriodic,
-        nonbondedCutoff=0.7 * nanometer,
-        constraints=HBonds,
-    )
-    integrator = LangevinIntegrator(300 * kelvin, 1 / picosecond, 0.002 * picosecond)
-    platform = Platform.getPlatformByName("CPU")
-    sim = Simulation(modeller.topology, system, integrator, platform)
-    sim.context.setPositions(modeller.positions)
-    types = []
-    for atom in modeller.topology.atoms():
-        types.append(1 if atom.element.symbol == "O" else 2)
-    return folder, sim, types
-
-
-def write_lammps(path, frames, box, types):
-    lines = []
-    for step, xyz in frames:
-        n = len(xyz)
-        lines.append("ITEM: TIMESTEP")
-        lines.append(str(step))
-        lines.append("ITEM: NUMBER OF ATOMS")
-        lines.append(str(n))
-        lines.append("ITEM: BOX BOUNDS pp pp pp")
-        for axis in range(3):
-            lines.append("%.17g %.17g" % (box[axis], box[axis] + box[3 + axis]))
-        lines.append("ITEM: ATOMS id type x y z")
-        for i, row in enumerate(xyz):
-            lines.append(
-                "%d %d %.17g %.17g %.17g" % (i + 1, types[i], row[0], row[1], row[2])
-            )
-    Path(path).write_text("\n".join(lines) + "\n")
-
-
-def read_openmm_dcd(path, natoms):
-    import struct
-
-    data = Path(path).read_bytes()
-    # OpenMM writes a 276 byte header, then one box record and three
-    # coordinate records per frame. Coordinates are float32 angstrom.
-    offset = 276
-    frames = []
-    step = 1
-    while offset + 56 + 3 * (8 + 4 * natoms) <= len(data):
-        offset += 56
-        cols = []
-        for _axis in range(3):
-            count = struct.unpack_from("<i", data, offset)[0]
-            offset += 4
-            cols.append(struct.unpack_from("<%df" % natoms, data, offset))
-            offset += count + 4
-        xyz = [[cols[0][i], cols[1][i], cols[2][i]] for i in range(natoms)]
-        frames.append((step, xyz))
-        step += 1
-    return frames
-
-
-def openmm_identity():
-    from openmm.app import DCDReporter
-    from openmm.unit import angstrom
-
-    folder, sim, types = run_openmm(40)
-    lib = load(LIB)
-    record = str(folder / "live.txt")
-    dcd_path = folder / "native.dcd"
-    every = 5
-    saved = []
-
-    class Keep:
-        def describeNextReport(self, simulation):
-            step = int(simulation.currentStep)
-            remain = every - (step % every)
-            return {"steps": remain, "periodic": None, "include": ["positions"]}
-
-        def report(self, simulation, state):
-            pos = state.getPositions(asNumpy=True).value_in_unit(angstrom)
-            saved.append((int(simulation.currentStep), [row.copy() for row in pos]))
-
-    with Engine(lib, record) as eng:
-        sim.reporters.append(DseamsReporter(eng, None, every, types=types))
-        sim.reporters.append(DCDReporter(str(dcd_path), every))
-        sim.reporters.append(Keep())
-        sim.step(40)
-    native = folder / "state.lammpstrj"
-    write_lammps(native, saved, [0, 0, 0, 20, 20, 20], types)
-    frames = match_lammps_cli(record, native)
-    # The native DCD is read by seams, which uses chemfiles.
-    # A mismatch fails the run.
-    dcd_steps = dump_steps(native)
-    header_steps = dcd_schedule(dcd_path)
-    require_equal(
-        header_steps,
-        dcd_steps,
-        "DCD header steps differ from the saved steps",
-    )
-    require_equal(
-        native_frame_count(dcd_path),
-        len(header_steps),
-        "DCD frame count does not match the saved steps",
-    )
-    dcd_native = folder / "from-dcd.lammpstrj"
-    write_lammps(
-        dcd_native,
-        read_openmm_dcd(dcd_path, len(types)),
-        [0, 0, 0, 20, 20, 20],
-        types,
-    )
-    # Rebuild the dump with the DCD's own step list so the comparison
-    # is the full set, then require seams on that native coordinate
-    # file to match. The coordinates are the float32 values chemfiles
-    # would read from the same records.
-    rewritten = []
-    parsed = read_openmm_dcd(dcd_path, len(types))
-    require_equal(
-        len(parsed),
-        len(dcd_steps),
-        "DCD parsed %d frames, live saved %d" % (len(parsed), len(dcd_steps)),
-    )
-    for step, (_ignored, xyz) in zip(header_steps, parsed):
-        rewritten.append((step, xyz))
-    write_lammps(dcd_native, rewritten, [0, 0, 0, 20, 20, 20], types)
-    match_lammps_cli(record, dcd_native)
-    # The DCD has no names. The PDB written with the system supplies them,
-    # and oxygen is atomic number 8.
-    import shutil
-
-    shutil.copy(folder / "water.pdb", folder / "native.pdb")
-    native_frames = match_native_cli(record, dcd_path, type_filter=8)
-    require_equal(
-        native_frames,
-        frames,
-        "seams on the DCD matched %d of %d" % (native_frames, frames),
-    )
-    (folder / "dcd-equal.log").write_text("frames %d native %d\n" % (frames, native_frames))
-    return frames
-
-
-def require_equal(left, right, message):
-    if left != right:
-        raise RuntimeError(message)
-
-
-def require_native_frames(native, matched, nframes):
-    if native != matched or native != nframes:
-        raise RuntimeError("gromacs native %d dump %d trr %d" % (native, matched, nframes))
-
-
-def gmx_wall(text):
-    for line in text.splitlines():
-        if line.strip().startswith("Time:"):
-            parts = line.split()
-            if len(parts) >= 3:
-                return float(parts[2])
-    raise RuntimeError("gromacs log has no Time line\n" + text[-400:])
-
-
 def diamond_positions(ncell):
     folder = WORK / "lattice" / str(ncell)
     folder.mkdir(parents=True, exist_ok=True)
@@ -567,69 +328,6 @@ def diamond_positions(ncell):
         index += 1
     rows.sort(key=lambda rec: int(rec["id"]))
     return rows
-
-
-def write_gro(path, rows, box_nm):
-    body = ["%d water" % len(rows), "%d" % len(rows)]
-    for rec in rows:
-        x = float(rec["x"]) / 10.0
-        y = float(rec["y"]) / 10.0
-        z = float(rec["z"]) / 10.0
-        body.append("    1SOL     O%5d%8.3f%8.3f%8.3f" % (int(rec["id"]), x, y, z))
-    body.append("%10.5f%10.5f%10.5f" % (box_nm, box_nm, box_nm))
-    Path(path).write_text("\n".join(body) + "\n")
-
-
-def write_oxygen_top(path, natoms):
-    Path(path).write_text(
-        "[ defaults ]\n1 2 yes 0.5 0.8333\n\n"
-        "[ atomtypes ]\nOW 8 16.00 0.0 A 0.315061 0.636386\n\n"
-        "[ moleculetype ]\nSOL 1\n\n[ atoms ]\n1 OW 1 SOL OW 1 0.0 16.00\n\n"
-        "[ system ]\nice\n\n[ molecules ]\nSOL %d\n" % natoms
-    )
-
-
-def trr_frames(path):
-    import struct
-
-    data = Path(path).read_bytes()
-    frames = []
-    offset = 0
-    while offset + 84 <= len(data):
-        magic = struct.unpack_from(">i", data, offset)[0]
-        if magic != 1993:
-            raise RuntimeError("unexpected trr magic %s" % magic)
-        natoms, step = struct.unpack_from(">ii", data, offset + 64)
-        x_size = struct.unpack_from(">i", data, offset + 52)[0]
-        box_size = struct.unpack_from(">i", data, offset + 32)[0]
-        payload = offset + 84
-        box = struct.unpack_from(">9f", data, payload)
-        xyz = struct.unpack_from(">%df" % (natoms * 3), data, payload + box_size)
-        frames.append((step, natoms, box, xyz))
-        offset = payload + box_size + x_size
-    if offset != len(data):
-        raise RuntimeError("trr length %d stopped at %d" % (len(data), offset))
-    return frames
-
-
-def trr_to_dump(frames, path):
-    lines = []
-    for step, natoms, box, xyz in frames:
-        lines.append("ITEM: TIMESTEP")
-        lines.append(str(step))
-        lines.append("ITEM: NUMBER OF ATOMS")
-        lines.append(str(natoms))
-        lines.append("ITEM: BOX BOUNDS pp pp pp")
-        lines.append("0 %.17g" % (box[0] * 10.0))
-        lines.append("0 %.17g" % (box[4] * 10.0))
-        lines.append("0 %.17g" % (box[8] * 10.0))
-        lines.append("ITEM: ATOMS id type x y z")
-        for i in range(natoms):
-            lines.append(
-                "%d 1 %.17g %.17g %.17g"
-                % (i + 1, xyz[3 * i] * 10.0, xyz[3 * i + 1] * 10.0, xyz[3 * i + 2] * 10.0)
-            )
-    Path(path).write_text("\n".join(lines) + "\n")
 
 
 def parse_dump(path):
@@ -737,13 +435,9 @@ def thread_ladder(dump, natoms):
 
 
 
-REPLAY = os.environ.get("SEAMS_INSITU_EXE", "")
-IMD = os.environ.get("SEAMS_GRO_IMD_EXE", "")
-
-
 def acceptance():
     """Run the engine identity checks, or say why they did not run."""
-    missing_env = [name for name in ("SEAMS_LIB", "SEAMS_INSITU_EXE", "SEAMS_GRO_IMD_EXE") if not os.environ.get(name)]
+    missing_env = [name for name in ("SEAMS_LIB", "SEAMS_INSITU_EXE") if not os.environ.get(name)]
     if missing_env:
         print("not run: missing " + ", ".join(missing_env))
         return
@@ -832,279 +526,12 @@ def run_lammps():
         raise RuntimeError("bad fix command was accepted")
     return {"frames": frames, "steps": 40}
 
-def gromacs_box(gro):
-    lines = Path(gro).read_text().splitlines()
-    nums = [float(x) for x in lines[-1].split()]
-    if len(nums) < 3:
-        raise RuntimeError("gro box")
-    # nanometre edge lengths, origin zero, no tilt in this setup
-    return [0, 0, 0, nums[0] * 10.0, nums[1] * 10.0, nums[2] * 10.0, 0, 0, 0]
-
-def prepare_gromacs(folder):
-    folder.mkdir(parents=True, exist_ok=True)
-    pdb = folder / "water.pdb"
-    pdb.write_text(
-        "ATOM      1  O   HOH     1       1.000   1.000   1.000  1.00  0.00\n"
-        "ATOM      2  H1  HOH     1       1.957   1.000   1.000  1.00  0.00\n"
-        "ATOM      3  H2  HOH     1       1.240   1.927   1.000  1.00  0.00\n"
-        "END\n"
-    )
-    gmx = str(PREFIX / "bin" / "gmx")
-    run([gmx, "pdb2gmx", "-f", "water.pdb", "-o", "conf.gro", "-p", "topol.top", "-water", "tip3p", "-ff", "amber99sb-ildn", "-ignh"], folder)
-    run([gmx, "editconf", "-f", "conf.gro", "-o", "box.gro", "-box", "2.8", "2.8", "2.8", "-c"], folder)
-    run([gmx, "solvate", "-cp", "box.gro", "-cs", str(PREFIX / "share" / "gromacs" / "top" / "spc216.gro"), "-o", "solv.gro", "-p", "topol.top", "-maxsol", "6"], folder)
-    (folder / "md.mdp").write_text(
-        "integrator = md\n"
-        "dt = 0.001\n"
-        "nsteps = NSTEPS\n"
-        "nstlist = 10\n"
-        "cutoff-scheme = Verlet\n"
-        "nstcalcenergy = 1\n"
-        "nstenergy = 1\n"
-        "coulombtype = Cut-off\n"
-        "rcoulomb = 0.9\n"
-        "rvdw = 0.9\n"
-        "pbc = xyz\n"
-        "constraints = h-bonds\n"
-        "constraint-algorithm = LINCS\n"
-        "IMD-group = System\n"
-        "gen-vel = yes\n"
-        "gen-temp = 300\n"
-        "gen-seed = 12345\n"
-    )
-
-def gromacs_once(folder, steps, port):
-    text = (folder / "md.mdp").read_text().replace("NSTEPS", str(steps))
-    mdp = folder / f"run-{steps}-{port}.mdp"
-    mdp.write_text(text)
-    gmx = str(PREFIX / "bin" / "gmx")
-    tpr = folder / f"topol-{port}.tpr"
-    run([gmx, "grompp", "-f", str(mdp.resolve()), "-c", "solv.gro", "-p", "topol.top", "-o", str(tpr.resolve()), "-maxwarn", "2"], folder)
-    dump = folder / f"live-{port}.lammpstrj"
-    record = folder / f"live-{port}.txt"
-    log = folder / f"md-{port}.log"
-    proc = subprocess.Popen(
-        [gmx, "mdrun", "-s", str(tpr.resolve()), "-deffnm", f"run-{port}", "-imdwait", "-imdport", str(port), "-ntomp", "1", "-noconfout"],
-        cwd=folder,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    time.sleep(1.5)
-    box = gromacs_box(folder / "solv.gro")
-    started = time.perf_counter()
-    client = subprocess.run(
-        [IMD, "127.0.0.1", str(port), str(dump), str(record), *[f"{v:.17g}" for v in box], "0"],
-        text=True,
-        capture_output=True,
-    )
-    elapsed = time.perf_counter() - started
-    out, _ = proc.communicate(timeout=120)
-    (folder / f"mdrun-{port}.out").write_text(out)
-    if proc.returncode != 0 or client.returncode != 0:
-        raise RuntimeError(out + "\n" + client.stdout + "\n" + client.stderr)
-    return dump, record, elapsed
-
 def free_port():
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     port = sock.getsockname()[1]
     sock.close()
     return port
-
-def run_gromacs():
-    folder = WORK / "gromacs"
-    prepare_gromacs(folder)
-    port = free_port()
-    _dump, record, _ = gromacs_once(folder, 6, port)
-    frames = Path(record).read_text().count("step ")
-    return {"frames": frames, "steps": 20}
-
-def time_gromacs(repeats, steps):
-    folder = WORK / "gromacs"
-    plain = []
-    live = []
-    gmx = str(PREFIX / "bin" / "gmx")
-    for i in range(repeats):
-        text = (folder / "md.mdp").read_text().replace("NSTEPS", str(steps))
-        mdp = folder / f"plain-{i}.mdp"
-        mdp.write_text(text.replace("IMD-group = System\n", ""))
-        tpr = folder / f"plain-{i}.tpr"
-        run([gmx, "grompp", "-f", str(mdp.resolve()), "-c", "solv.gro", "-p", "topol.top", "-o", str(tpr.resolve()), "-maxwarn", "2"], folder)
-        started = time.perf_counter()
-        run([gmx, "mdrun", "-s", str(tpr.resolve()), "-deffnm", f"plain-{i}", "-ntomp", "1", "-noconfout"], folder)
-        plain.append((time.perf_counter() - started) / steps)
-        port = free_port()
-        _, _, elapsed = gromacs_once(folder, steps, port)
-        live.append(elapsed / steps)
-    return plain, live
-
-def ice_positions():
-    import numpy as np
-
-    # conventional cubic ice oxygen sites, 8 atoms, lattice 6.4 angstrom
-    base = np.array(
-        [
-            [0.0, 0.0, 0.0],
-            [0.0, 0.5, 0.5],
-            [0.5, 0.0, 0.5],
-            [0.5, 0.5, 0.0],
-            [0.25, 0.25, 0.25],
-            [0.25, 0.75, 0.75],
-            [0.75, 0.25, 0.75],
-            [0.75, 0.75, 0.25],
-        ]
-    )
-    return base * 6.4
-
-def openmm_time(steps):
-    folder, sim, _types = run_openmm(steps)
-    started = time.perf_counter()
-    sim.step(steps)
-    plain = (time.perf_counter() - started) / steps
-    folder, sim, types = run_openmm(steps)
-    lib = load(LIB)
-    with Engine(lib, str(folder / "time.txt")) as eng:
-        sim.reporters.append(DseamsReporter(eng, str(folder / "time.lammpstrj"), 1, types=types))
-        started = time.perf_counter()
-        sim.step(steps)
-        live = (time.perf_counter() - started) / steps
-    return plain, live
-
-def ase_atoms():
-    import numpy as np
-    from ase import Atoms
-    from ase.calculators.lj import LennardJones
-
-    pos = ice_positions()
-    atoms = Atoms("O8", positions=pos, cell=[6.4, 6.4, 6.4], pbc=True)
-    atoms.calc = LennardJones(epsilon=0.01, sigma=2.5, rc=6.0)
-    return atoms
-
-def ase_identity():
-    from ase.md.langevin import Langevin
-    from ase import units
-
-    from ase.io import Trajectory, read
-
-    folder = WORK / "ase"
-    folder.mkdir(parents=True, exist_ok=True)
-    atoms = ase_atoms()
-    lib = load(LIB)
-    record = str(folder / "live.txt")
-    traj_path = folder / "md.traj"
-    with Engine(lib, record) as eng:
-        dyn = Langevin(atoms, 1.0 * units.fs, temperature_K=20.0, friction=0.01 / units.fs, fixcm=False)
-        DseamsMDObserver(eng, atoms, None).attach(dyn, 1)
-        traj = Trajectory(str(traj_path), "w")
-        dyn.attach(lambda: traj.write(atoms), interval=1)
-        dyn.run(6)
-        traj.close()
-    images = read(str(traj_path), index=":")
-    # ASE calls observers at nsteps 0 and after every step. The image index
-    # is that counter. Adding one labelled a different step than the hook.
-    frames = [(i, image.get_positions()) for i, image in enumerate(images)]
-    native = folder / "from-traj.lammpstrj"
-    write_lammps(native, frames, [0, 0, 0, 6.4, 6.4, 6.4], [1] * 8)
-    return match_lammps_cli(record, native)
-
-def ase_time(steps, live):
-    from ase.md.langevin import Langevin
-    from ase import units
-
-    atoms = ase_atoms()
-    dyn = Langevin(atoms, 1.0 * units.fs, temperature_K=20.0, friction=0.01 / units.fs, fixcm=False)
-    if live:
-        lib = load(LIB)
-        folder = WORK / "ase"
-        with Engine(lib, str(folder / "time.txt")) as eng:
-            DseamsMDObserver(eng, atoms, str(folder / "time.lammpstrj")).attach(dyn, 1)
-            started = time.perf_counter()
-            dyn.run(steps)
-            return (time.perf_counter() - started) / steps
-    started = time.perf_counter()
-    dyn.run(steps)
-    return (time.perf_counter() - started) / steps
-
-def write_ipi(folder):
-    import numpy as np
-
-    pos = ice_positions()
-    xyz = folder / "ice.xyz"
-    lines = [str(len(pos)), "# CELL(abcABC): 6.4 6.4 6.4 90.0 90.0 90.0"]
-    for row in pos:
-        lines.append(f"O {row[0]:.8f} {row[1]:.8f} {row[2]:.8f}")
-    xyz.write_text("\n".join(lines) + "\n")
-    port = free_port()
-    xml = folder / "input.xml"
-    xml.write_text(
-        f"""<simulation verbosity='low'>
-  <output prefix='out'>
-    <properties stride='100' filename='md'> [ step ] </properties>
-    <trajectory filename='pos' stride='1' format='xyz'>positions{{angstrom}}</trajectory>
-  </output>
-  <total_steps>6</total_steps>
-  <prng><seed>12345</seed></prng>
-  <ffsocket name='dseams' mode='inet'>
-    <address>127.0.0.1</address>
-    <port>{port}</port>
-    <timeout>30</timeout>
-    <consolidate_messages>False</consolidate_messages>
-  </ffsocket>
-  <system>
-    <initialize nbeads='1'>
-      <file mode='xyz' units='angstrom'>ice.xyz</file>
-      <velocities mode='thermal' units='kelvin'>10</velocities>
-    </initialize>
-    <ensemble><temperature units='kelvin'>10</temperature></ensemble>
-    <motion mode='dynamics'>
-      <dynamics mode='nve'><timestep units='femtosecond'>0.5</timestep></dynamics>
-    </motion>
-    <forces><force forcefield='dseams'></force></forces>
-  </system>
-</simulation>
-"""
-    )
-    return port, xml
-
-def run_ipi():
-    import numpy as np
-
-    folder = WORK / "ipi"
-    folder.mkdir(parents=True, exist_ok=True)
-    port, xml = write_ipi(folder)
-    proc = subprocess.Popen(
-        [str(PREFIX / "bin" / "i-pi"), str(xml.resolve())],
-        cwd=folder,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    time.sleep(1.5)
-    if proc.poll() is not None:
-        raise RuntimeError(proc.stdout.read())
-    lib = load(LIB)
-    record = str(folder / "live.txt")
-    seen = {"n": 0}
-
-    def on_frame(index, pos, cell):
-        if "eng" not in seen:
-            return
-        box = seen["eng"].box_from_rows(cell)
-        seen["eng"].observe(index, pos, box, None)
-        seen["n"] += 1
-
-    with Engine(lib, record) as eng:
-        seen["eng"] = eng
-        IpiClient("127.0.0.1", port).run(on_frame)
-    out, _ = proc.communicate(timeout=60)
-    (folder / "ipi.out").write_text(out)
-    if proc.returncode != 0:
-        raise RuntimeError(out)
-    xyz = next(folder.glob("out.pos*.xyz"))
-    native = folder / "from-ipi.lammpstrj"
-    write_lammps(native, read_multi_xyz(xyz), [0, 0, 0, 6.4, 6.4, 6.4], [1] * 8)
-    return match_lammps_cli(record, native)
 
 def scale_plan():
     full = [(5, 1000, 8), (10, 8000, 4), (20, 64000, 2)]
@@ -1177,130 +604,6 @@ def scale_lammps():
             print("scale", natoms, every, "done", flush=True)
     return result
 
-def gromacs_scale_case(folder, rows, steps, every, repeats):
-    folder.mkdir(parents=True, exist_ok=True)
-    box_nm = float(int(round((max(float(r["x"]) for r in rows) + 1.0) / 3.2))) * 0.32
-    # The diamond block is ncell * 0.64 nm. Recover it from the atom count.
-    natoms = len(rows)
-    ncell = round((natoms / 8.0) ** (1.0 / 3.0))
-    box_nm = ncell * 0.64
-    write_gro(folder / "conf.gro", rows, box_nm)
-    write_oxygen_top(folder / "topol.top", natoms)
-    gmx = os.environ.get("DSEAMS_GMX") or str(PREFIX / "bin" / "gmx")
-    mpirun = os.environ.get("DSEAMS_GMX_MPIRUN") or str(PREFIX / "bin" / "mpirun")
-    grompp = [gmx]
-    mdrun = [mpirun, "--oversubscribe", "-np", "1", gmx, "mdrun"]
-    libs = library_path(
-        Path(gmx).resolve().parent.parent / "lib",
-        Path(LIB).parent,
-        Path(LIB).parent.parent / "subprojects" / "readcon-core",
-        Path(LIB).parent.parent / "subprojects" / "readcon-db",
-    )
-    plain = []
-    live = []
-    warmup_plain = None
-    warmup_live = None
-    for i in range(repeats + 1):
-        mdp = folder / f"plain-{i}.mdp"
-        mdp.write_text(
-            "integrator = md\ndt = 0.002\nnsteps = %d\n"
-            "nstxout = 0\nnstvout = 0\nnstfout = 0\nnstlog = %d\n"
-            "nstlist = 10\ncutoff-scheme = Verlet\n"
-            "coulombtype = Cut-off\nrcoulomb = 0.9\nrvdw = 0.9\n"
-            "pbc = xyz\nconstraints = none\n"
-            "gen-vel = yes\ngen-temp = 30\ngen-seed = 12345\n" % (steps, steps)
-        )
-        tpr = folder / f"plain-{i}.tpr"
-        gro_env = {"LD_LIBRARY_PATH": libs, "OMP_NUM_THREADS": "1"}
-        run(grompp + ["grompp", "-f", str(mdp.resolve()), "-c", "conf.gro", "-p", "topol.top", "-o", str(tpr.resolve()), "-maxwarn", "2"], folder, env=gro_env)
-        proc = run(mdrun + ["-s", str(tpr.resolve()), "-deffnm", f"plain-{i}", "-ntomp", "1", "-noconfout"], folder, env=gro_env)
-        sample = gmx_wall(proc.stdout + proc.stderr) / steps
-        if i == 0:
-            warmup_plain = sample
-        else:
-            plain.append(sample)
-        live_mdp = folder / f"live-{i}.mdp"
-        live_mdp.write_text(
-            mdp.read_text()
-            + "dseams-active = yes\n"
-            + "dseams-input-group = System\n"
-            + "dseams-nstcalc = %d\n" % every
-            + "dseams-cutoff = 3.5\n"
-            + "dseams-output = %s\n" % (folder / f"rec-{i}.txt")
-        )
-        live_tpr = folder / f"live-{i}.tpr"
-        run(grompp + ["grompp", "-f", str(live_mdp.resolve()), "-c", "conf.gro", "-p", "topol.top", "-o", str(live_tpr.resolve()), "-maxwarn", "2"], folder, env=gro_env)
-        proc = run(mdrun + ["-s", str(live_tpr.resolve()), "-deffnm", f"live-{i}", "-ntomp", "1", "-noconfout"], folder, env=gro_env)
-        sample = gmx_wall(proc.stdout + proc.stderr) / steps
-        if i == 0:
-            warmup_live = sample
-        else:
-            live.append(sample)
-    return {
-        "steps": steps,
-        "plain": plain,
-        "live": live,
-        "warmup_plain": warmup_plain,
-        "warmup_live": warmup_live,
-    }
-
-def scale_gromacs():
-    import shutil
-
-    plan = scale_plan()
-    result = {}
-    for ncell, natoms, steps in plan:
-        rows = diamond_positions(ncell)
-        if len(rows) != natoms:
-            raise RuntimeError("lattice %d has %d atoms" % (natoms, len(rows)))
-        result[str(natoms)] = {}
-        for every in (1, 10, 100):
-            run_steps = max(steps, every)
-            folder = WORK / "gscale" / str(natoms) / str(every)
-            if folder.exists():
-                shutil.rmtree(folder)
-            folder.mkdir(parents=True)
-            result[str(natoms)][str(every)] = gromacs_scale_case(folder, rows, run_steps, every, 6)
-            print("gscale", natoms, every, "done", flush=True)
-    return result
-
-def gromacs_trr_identity():
-    folder = WORK / "gromacs-trr"
-    folder.mkdir(parents=True, exist_ok=True)
-    rows = diamond_positions(5)
-    write_gro(folder / "conf.gro", rows, 3.2)
-    write_oxygen_top(folder / "topol.top", len(rows))
-    (folder / "md.mdp").write_text(
-        "integrator = md\ndt = 0.002\nnsteps = 8\n"
-        "nstxout = 1\nnstvout = 0\nnstfout = 0\nnstlog = 1\n"
-        "nstlist = 10\ncutoff-scheme = Verlet\n"
-        "coulombtype = Cut-off\nrcoulomb = 0.9\nrvdw = 0.9\n"
-        "pbc = xyz\nconstraints = none\n"
-        "gen-vel = yes\ngen-temp = 30\ngen-seed = 12345\n"
-        "dseams-active = yes\n"
-        "dseams-input-group = System\n"
-        "dseams-nstcalc = 1\n"
-        "dseams-cutoff = 3.5\n"
-        "dseams-output = live.txt\n"
-    )
-    gmx = os.environ.get("DSEAMS_GMX") or str(PREFIX / "bin" / "gmx")
-    mpirun = os.environ.get("DSEAMS_GMX_MPIRUN") or str(PREFIX / "bin" / "mpirun")
-    env = {
-        "LD_LIBRARY_PATH": library_path(Path(gmx).resolve().parent.parent / "lib", Path(LIB).parent),
-        "OMP_NUM_THREADS": "1",
-    }
-    run([mpirun, "--oversubscribe", "-np", "1", gmx, "grompp", "-f", "md.mdp", "-c", "conf.gro", "-p", "topol.top", "-o", "topol.tpr", "-maxwarn", "2"], folder, env=env)
-    run([mpirun, "--oversubscribe", "-np", "1", gmx, "mdrun", "-s", "topol.tpr", "-deffnm", "run", "-ntomp", "1", "-noconfout"], folder, env=env)
-    frames = trr_frames(folder / "run.trr")
-    dump = folder / "from-trr.lammpstrj"
-    trr_to_dump(frames, dump)
-    matched = match_lammps_cli(folder / "live.txt", dump)
-    native = match_native_cli(folder / "live.txt", folder / "run.trr", type_filter=1)
-    if native != matched:
-        raise RuntimeError("native trr matched %d, dump matched %d" % (native, matched))
-    (folder / "equal.log").write_text("frames %d\n" % matched)
-    return matched
-
 def frame_clocks(dump, insitu_per_frame):
     included = []
     for _ in range(6):
@@ -1370,90 +673,8 @@ def lammps_mpi_identity():
         return True, "The census matches the one-rank run."
     return False, "The census does not match the one-rank run."
 
-def gromacs_mpi_identity():
-    gmx = Path(os.environ.get("DSEAMS_GMX", "")).resolve() if os.environ.get("DSEAMS_GMX") else Path()
-    mpirun = Path(os.environ.get("DSEAMS_GMX_MPIRUN", str(PREFIX / "bin" / "mpirun")))
-    if not (gmx.is_file() and mpirun.is_file()):
-        return False, "the native GROMACS module binary is absent"
-    folder = WORK / "gromacs-mpi"
-    if folder.exists():
-        import shutil
-
-        shutil.rmtree(folder)
-    folder.mkdir(parents=True)
-    rows = diamond_positions(5)
-    write_gro(folder / "conf.gro", rows, 3.2)
-    write_oxygen_top(folder / "topol.top", len(rows))
-    env = {
-        "LD_LIBRARY_PATH": library_path(
-            gmx.parent.parent / "lib",
-            Path(LIB).parent,
-            Path(LIB).parent.parent / "subprojects" / "readcon-core",
-            Path(LIB).parent.parent / "subprojects" / "readcon-db",
-        ),
-        "OMP_NUM_THREADS": "1",
-    }
-    texts = []
-    for np in (1, 2, 4):
-        record = folder / ("live-%d.txt" % np)
-        (folder / "md.mdp").write_text(
-            "integrator = md\ndt = 0.002\nnsteps = 8\n"
-            "nstxout = 1\nnstvout = 0\nnstfout = 0\nnstlog = 1\n"
-            "nstlist = 10\ncutoff-scheme = Verlet\n"
-            "coulombtype = Cut-off\nrcoulomb = 0.9\nrvdw = 0.9\n"
-            "pbc = xyz\nconstraints = none\n"
-            "gen-vel = yes\ngen-temp = 30\ngen-seed = 12345\n"
-            "dseams-active = yes\n"
-            "dseams-input-group = System\n"
-            "dseams-nstcalc = 1\n"
-            "dseams-cutoff = 3.5\n"
-            "dseams-output = %s\n" % record.name
-        )
-        run([str(mpirun), "--oversubscribe", "-np", "1", str(gmx), "grompp", "-f", "md.mdp", "-c", "conf.gro", "-p", "topol.top", "-o", "topol-%d.tpr" % np, "-maxwarn", "2"], folder, env=env)
-        run(
-            [str(mpirun), "--oversubscribe", "-np", str(np), str(gmx), "mdrun", "-s", "topol-%d.tpr" % np, "-deffnm", "run-%d" % np, "-ntomp", "1", "-noconfout"],
-            folder,
-            env=env,
-        )
-        texts.append(record.read_text())
-        frames = trr_frames(folder / ("run-%d.trr" % np))
-        native = match_native_cli(record, folder / ("run-%d.trr" % np), type_filter=1)
-        if native != len(frames):
-            raise RuntimeError("rank %d matched %d of %d" % (np, native, len(frames)))
-    same = bool(texts[0]) and texts[0] == texts[1] == texts[2]
-    (folder / "equal.log").write_text("1==2 %s\n1==4 %s\nframes %d\n" % (texts[0] == texts[1], texts[0] == texts[2], texts[0].count("\nstep ") + 1))
-    if same:
-        return True, "The native module on one, two and four ranks matches the trajectory."
-    return False, "The native module on one, two and four ranks does not match."
-
 def repeats(fn, count):
     return [fn() for _ in range(count)]
-
-
-def ipi_elapsed(analyse):
-    folder = WORK / "ipi-bench" / ("live" if analyse else "plain")
-    folder.mkdir(parents=True, exist_ok=True)
-    port, xml = write_ipi(folder)
-    proc = subprocess.Popen(
-        [str(PREFIX / "bin" / "i-pi"), str(xml.resolve())],
-        cwd=folder,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    time.sleep(1.0)
-    if proc.poll() is not None:
-        raise RuntimeError(proc.stdout.read())
-    lib = load(LIB)
-    started = time.perf_counter()
-    with Engine(lib, str(folder / "rec.txt")) as eng:
-        def on_frame(index, pos, cell):
-            if analyse:
-                eng.observe(index, pos, eng.box_from_rows(cell), str(folder / "dump.lammpstrj"))
-        IpiClient("127.0.0.1", port).run(on_frame)
-    elapsed = time.perf_counter() - started
-    proc.communicate(timeout=60)
-    return elapsed / 6
 
 
 def main():
@@ -1465,42 +686,24 @@ def main():
     info = host_block()
     info["lib_sha256"] = sha256(LIB)
     info["lmp_sha256"] = sha256(PREFIX / "bin" / "lmp")
-    info["gmx_sha256"] = sha256(PREFIX / "bin" / "gmx")
     info["plugin_sha256"] = sha256(PLUGIN)
     out = {"host": info, "codes": {}}
     print("lammps", flush=True)
     ident = run_lammps()
     plain = time_lammps("plain", ident["steps"], 6, PLUGIN)
-    live = time_lammps("live", ident["steps"], 6, PLUGIN)
-    out["codes"]["lammps"] = {"frames": ident["frames"], "steps": ident["steps"], "plain": plain, "live": live}
-    print("gromacs", flush=True)
-    g = run_gromacs()
-    gp, gl = time_gromacs(6, g["steps"])
-    out["codes"]["gromacs"] = {"frames": g["frames"], "steps": g["steps"], "plain": gp, "live": gl}
-    print("openmm", flush=True)
-    frames = openmm_identity()
-    op = repeats(lambda: openmm_time(20)[0], 6)
-    ol = repeats(lambda: openmm_time(20)[1], 6)
-    out["codes"]["openmm"] = {"frames": frames, "steps": 20, "plain": op, "live": ol}
-    print("ase", flush=True)
-    frames = ase_identity()
-    ap = repeats(lambda: ase_time(20, False), 6)
-    al = repeats(lambda: ase_time(20, True), 6)
-    out["codes"]["ase"] = {"frames": frames, "steps": 20, "plain": ap, "live": al}
-    print("ipi", flush=True)
-    frames = run_ipi()
-    ip = repeats(lambda: ipi_elapsed(False), 6)
-    il = repeats(lambda: ipi_elapsed(True), 6)
-    out["codes"]["ipi"] = {"frames": frames, "steps": 6, "plain": ip, "live": il}
+    live_times = time_lammps("live", ident["steps"], 6, PLUGIN)
+    out["codes"]["lammps"] = {
+        "frames": ident["frames"],
+        "steps": ident["steps"],
+        "plain": plain,
+        "live": live_times,
+    }
     print("scale", flush=True)
     out["scale"] = scale_lammps()
-    print("gromacs-trr", flush=True)
-    trr_frames_n = gromacs_trr_identity()
-    print("gscale", flush=True)
-    out["gromacs_scale"] = scale_gromacs()
-    seal_tail(out, trr_frames_n)
+    seal_tail(out)
 
-def seal_tail(out, trr_frames_n):
+
+def seal_tail(out):
     scale = out["scale"]
     natoms = "1000" if "1000" in scale else next(iter(scale))
     every = "1" if "1" in scale[natoms] else next(iter(scale[natoms]))
@@ -1519,37 +722,17 @@ def seal_tail(out, trr_frames_n):
     lammps_bin(script, big / "log", big)
     lammps_frames = match_lammps_cli(big_rec, big_dump)
     (big / "equal.log").write_text("frames %d\n" % lammps_frames)
-    out["equality"] = []
-    for code, frames in (
-        ("LAMMPS", lammps_frames),
-        ("GROMACS", trr_frames_n),
-        ("OpenMM", out["codes"]["openmm"]["frames"]),
-        ("ASE", out["codes"]["ase"]["frames"]),
-        ("i-PI", out["codes"]["ipi"]["frames"]),
-    ):
-        out["equality"].append(
-            {"code": code, "frames": frames, "rings": "yes", "chill": "yes", "cages": "yes"}
-        )
-    lammps_same, lammps_note = lammps_mpi_identity()
-    gromacs_same, gromacs_note = gromacs_mpi_identity()
-    out["mpi"] = [
-        {
-            "code": "LAMMPS",
-            "ranks": "2 and 4",
-            "identical": lammps_same,
-            "note": lammps_note,
-        },
-        {
-            "code": "GROMACS",
-            "ranks": "2 and 4",
-            "identical": gromacs_same,
-            "note": gromacs_note,
-        },
+    out["equality"] = [
+        {"code": "LAMMPS", "frames": lammps_frames, "rings": "yes", "chill": "yes", "cages": "yes"}
     ]
-    if not lammps_same or not gromacs_same:
+    lammps_same, lammps_note = lammps_mpi_identity()
+    out["mpi"] = [
+        {"code": "LAMMPS", "ranks": "2 and 4", "identical": lammps_same, "note": lammps_note}
+    ]
+    if not lammps_same:
         dest = WORK / "samples.json"
         dest.write_text(json.dumps(out))
-        raise RuntimeError(lammps_note + " " + gromacs_note)
+        raise RuntimeError(lammps_note)
     print("ladder", flush=True)
     out["ladder"] = []
     sizes = ((1, 8),) if os.environ.get("DSEAMS_SCALE_TINY") == "1" else ((5, 1000), (20, 64000))

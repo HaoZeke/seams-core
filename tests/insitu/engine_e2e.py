@@ -57,100 +57,15 @@ def lammps_case(binary, plugin, folder, ranks):
     return matched
 
 
-def gromacs_case():
-    binary = need("DSEAMS_GMX")
-    mpirun = need("DSEAMS_GMX_MPIRUN")
-    folder = live.WORK / "e2e-gromacs"
-    if folder.exists():
-        shutil.rmtree(folder)
-    folder.mkdir(parents=True)
-    rows = live.diamond_positions(3)
-    live.write_gro(folder / "conf.gro", rows, 1.92)
-    live.write_oxygen_top(folder / "topol.top", len(rows))
-    (folder / "md.mdp").write_text(
-        "integrator = md\n"
-        "dt = 0.001\n"
-        "nsteps = 40\n"
-        "nstxout = 5\n"
-        "nstvout = 0\n"
-        "nstfout = 0\n"
-        "nstlog = 5\n"
-        "nstlist = 10\n"
-        "cutoff-scheme = Verlet\n"
-        "coulombtype = Cut-off\n"
-        "rcoulomb = 0.9\n"
-        "rvdw = 0.9\n"
-        "pbc = xyz\n"
-        "constraints = none\n"
-        "gen-vel = yes\n"
-        "gen-temp = 30\n"
-        "gen-seed = 12345\n"
-        "dseams-active = yes\n"
-        "dseams-input-group = System\n"
-        "dseams-nstcalc = 5\n"
-        "dseams-cutoff = 3.5\n"
-        "dseams-output = live.txt\n"
-    )
-    env = lib_env(str(Path(binary).resolve().parent.parent / "lib"))
-    live.run(
-        [mpirun, "--oversubscribe", "-np", "1", binary, "grompp", "-f", "md.mdp", "-c", "conf.gro", "-p", "topol.top", "-o", "topol.tpr", "-maxwarn", "2"],
-        folder,
-        env=env,
-    )
-    live.run(
-        [mpirun, "--oversubscribe", "-np", "1", binary, "mdrun", "-s", "topol.tpr", "-deffnm", "run", "-noconfout"],
-        folder,
-        env=env,
-    )
-    trr = folder / "run.trr"
-    frames = live.trr_frames(trr)
-    # seams reads the TRR through chemfiles. The atoms are oxygen, so
-    # the type filter is atomic number 8.
-    dump = folder / "from-trr.lammpstrj"
-    live.trr_to_dump(frames, dump)
-    matched = live.match_lammps_cli(folder / "live.txt", dump, type_filter=1)
-    trr_rings = [
-        ln
-        for ln in live.cli_text("rings", trr, type_filter=1).splitlines()
-        if ln.startswith("rings ")
-    ]
-    dump_rings = [
-        ln
-        for ln in live.cli_text("rings", dump, type_filter=1).splitlines()
-        if ln.startswith("rings ")
-    ]
-    live.require_equal(trr_rings, dump_rings, "seams on the TRR does not match seams on the same frames")
-    native = live.match_native_cli(folder / "live.txt", trr, type_filter=1)
-    live.require_native_frames(native, matched, len(frames))
-    (folder / "equal.log").write_text("frames %d\n" % matched)
-    receipt = folder / "receipt.txt"
-    receipt.write_text(
-        "seams %s\nlib %s\ngmx %s\nmpirun %s\n"
-        % (live.SEAMS, live.LIB, binary, mpirun)
-    )
-    return matched
-
-
-def gromacs_note():
-    if os.environ.get("DSEAMS_GMX") and os.environ.get("DSEAMS_GMX_MPIRUN"):
-        return gromacs_case()
-    return None
-
-
 def main():
     need("SEAMS_LIB")
     need("SEAMS_CLI")
     work = Path(os.environ.get("DSEAMS_E2E_WORK", "var/run/dseams-e2e"))
     live.WORK = work
-    print("openmm", live.openmm_identity(), flush=True)
     print("lammps-plugin-1", lammps_case(need("DSEAMS_LMP"), need("DSEAMS_PLUGIN"), work / "lammps-plugin-1", 1), flush=True)
     print("lammps-plugin-2", lammps_case(need("DSEAMS_LMP"), need("DSEAMS_PLUGIN"), work / "lammps-plugin-2", 2), flush=True)
     print("lammps-package", lammps_case(need("DSEAMS_LMP_INTREE"), "", work / "lammps-package", 1), flush=True)
-    matched = gromacs_note()
-    if matched is None:
-        print("gromacs is not installed", flush=True)
-    else:
-        print("gromacs", matched, flush=True)
 
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    main()

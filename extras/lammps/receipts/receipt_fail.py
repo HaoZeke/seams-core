@@ -454,6 +454,13 @@ def check_neigh(work):
         groups = neigh_ref.chill_table(held, "hand")
         if 0 not in groups["A"]:
             raise SystemExit("hand atom 1 was not group A %s" % groups)
+        shifted = dict(held)
+        labels = [list(item) for item in held["labels"]]
+        labels[1][5] = 0
+        shifted["labels"] = [tuple(item) for item in labels]
+        more = neigh_ref.chill_table(shifted, "hand")
+        if 1 not in more["C"]:
+            raise SystemExit("hand atom 2 was not group C %s" % more)
     points = __import__("numpy").array([[1.0, 1.0, 1.0]])
     shells, _distances, vectors = neigh_ref.full_shells(points, held["box"], 3.5)
     if len(shells[0]) != 0:

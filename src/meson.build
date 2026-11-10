@@ -38,7 +38,6 @@ ydslib_sources = files(
   'shapeMatch.cpp',
   'seams_c_api.cpp',
   'insitu.cpp',
-  'insitu_imd.cpp',
   'site.cpp',
   'steinhardt_parallel.cpp',
   'topo_bulk.cpp',
@@ -126,8 +125,6 @@ pkgconfig.generate(
 # auto skips a missing dependency. enabled requires it.
 # Live analysis does not go through PLUMED, so this tree builds no
 # PLUMED action. The neighbour-index fix stays in its own tree.
-# The GROMACS client is seams-gromacs-imd and links no GROMACS library,
-# so it is built with the core. OpenMM is the Python reporter.
 lammps_adapter = false
 plumed_adapter = false
 if not get_option('lammps').disabled()
