@@ -31,24 +31,35 @@ DATA = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else
 H2H = DATA / "h2h"
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 SOURCE = ROOT / "src"
-SEED = 20261103
-DRAWS = 10000
-COVERAGE = 0.95
+CAMPAIGN_SH = "paper/tex/repro/campaign.sh"
+
+
+def campaign_number(name):
+    """One assignment in the campaign driver. The text does not read stats.py."""
+    text = (ROOT / CAMPAIGN_SH).read_text()
+    match = re.search(rf"^{name}=([0-9.]+)$", text, re.M)
+    if match is None:
+        raise SystemExit(f"{CAMPAIGN_SH} does not set {name}")
+    return match.group(1)
+
+
+SEED = int(campaign_number("SEED"))
+DRAWS = int(campaign_number("DRAWS"))
+COVERAGE = float(campaign_number("COVERAGE"))
 TAIL = (1.0 - COVERAGE) / 2.0
-# scripts/h2h.py names CUT and REPS. The measurement settings it does not
-# name are these constants, which the text prints, or the scripts and
-# drivers that do name them. They have to agree with each other and with
-# the records.
+# scripts/h2h.py names CUT and REPS. The other measurement settings are
+# assignments in the campaign driver. stats.py reads them and does not
+# keep a second copy.
 Q6_THRESHOLD = 0.558
 PTM_RMSD = 0.1
 SIGNIFICANCE = 0.05
 PALMER_MAX_NEIGHBOURS = 128
-WORKER_MEMORY_GIB = 12
-WARMUP = 2
-EXPENSIVE_TARGET_S = 120
-EXPENSIVE_MIN_REPEATS = 6
-RINGS_WARMUP = 1
-RINGS_REPEATS = 6
+WORKER_MEMORY_GIB = int(campaign_number("WORKER_MEMORY_GIB"))
+WARMUP = int(campaign_number("WARMUP"))
+EXPENSIVE_TARGET_S = float(campaign_number("EXPENSIVE_TARGET_S"))
+EXPENSIVE_MIN_REPEATS = int(campaign_number("EXPENSIVE_MIN_REPEATS"))
+RINGS_WARMUP = int(campaign_number("RINGS_WARMUP"))
+RINGS_REPEATS = int(campaign_number("RINGS_REPEATS"))
 # Warm-up and timed calls of the OVITO ring comparison. The largest scale
 # is the key with the greatest value; every smaller scale shares one plan.
 PLAN = {"1e3": (5, 30), "1e4": (5, 30), "1e5": (5, 30), "1e6": (1, 10)}
@@ -100,7 +111,6 @@ CUTOFF_SOURCES = (
     ("scripts/baseline_dseams1.cpp", r"neighListO\(([0-9.]+),"),
 )
 CAMPAIGN = "scripts/h2h.py"
-CAMPAIGN_SH = "paper/tex/repro/campaign.sh"
 VERSIONS_SH = "paper/tex/repro/versions.sh"
 UPDATES_SH = "paper/tex/repro/updates.sh"
 STATS = "paper/tex/figures/stats.py"
@@ -112,26 +122,24 @@ SETTINGS = (
     ("bond", (("paper/tex/figures/worked_example.py", r"^BOND_A = ([0-9.]+)$"),)),
     ("q6", ((CAMPAIGN, r"^Q6_THRESHOLD = ([0-9.]+)$"),), 3),
     ("ptm", ((CAMPAIGN, r"^PTM_RMSD = ([0-9.]+)$"),)),
-    ("coverage", ((STATS, r"^COVERAGE = ([0-9.]+)$"),)),
-    ("draws", ((STATS, r"^DRAWS = (\d+)$"),)),
-    ("seed", ((STATS, r"^SEED = (\d+)$"),)),
+    ("coverage", ((CAMPAIGN_SH, r"^COVERAGE=([0-9.]+)$"),)),
+    ("draws", ((CAMPAIGN_SH, r"^DRAWS=(\d+)$"),)),
+    ("seed", ((CAMPAIGN_SH, r"^SEED=(\d+)$"),)),
     ("significance", ((CAMPAIGN, r"^SIGNIFICANCE = ([0-9.]+)$"),)),
     ("palmer", ((CAMPAIGN, r"^PALMER_MAX_NEIGHBOURS = (\d+)$"),)),
-    ("minring", ((STATS, r"^MIN_RING = (\d+)$"),
-                 ("paper/tex/figures/worked_example.py", r"^MIN_RING = (\d+)$"))),
-    ("maxring", ((STATS, r"^MAX_RING = (\d+)$"),
-                 ("paper/tex/figures/worked_example.py", r"^MAX_RING = (\d+)$"))),
+    ("minring", (("paper/tex/figures/worked_example.py", r"^MIN_RING = (\d+)$"),)),
+    ("maxring", (("paper/tex/figures/worked_example.py", r"^MAX_RING = (\d+)$"),)),
     ("core", (("paper/tex/repro/build.sh", r"^CORE=(\d+)$"),)),
-    ("memory", ((STATS, r"^WORKER_MEMORY_GIB = (\d+)$"),)),
-    ("warmup", ((STATS, r"^WARMUP = (\d+)$"),)),
+    ("memory", ((CAMPAIGN_SH, r"^WORKER_MEMORY_GIB=(\d+)$"),)),
+    ("warmup", ((CAMPAIGN_SH, r"^WARMUP=(\d+)$"),)),
     ("repeats", ((CAMPAIGN_SH, r"^REPEATS=(\d+)$"),)),
     ("repeats@largest", ((CAMPAIGN_SH, r"^REPEATS_LARGEST=(\d+)$"),)),
-    ("target", ((STATS, r"^EXPENSIVE_TARGET_S = ([0-9.]+)$"),)),
-    ("minrepeats", ((STATS, r"^EXPENSIVE_MIN_REPEATS = (\d+)$"),)),
+    ("target", ((CAMPAIGN_SH, r"^EXPENSIVE_TARGET_S=([0-9.]+)$"),)),
+    ("minrepeats", ((CAMPAIGN_SH, r"^EXPENSIVE_MIN_REPEATS=(\d+)$"),)),
     ("timeout", ((CAMPAIGN_SH, r"^CASE_TIMEOUT_S=(\d+)$"),)),
     ("ringtimeout", ((CAMPAIGN_SH, r"^RING_CASE_TIMEOUT_S=(\d+)$"),)),
-    ("rings@warmup", ((STATS, r"^RINGS_WARMUP = (\d+)$"),)),
-    ("rings@repeats", ((STATS, r"^RINGS_REPEATS = (\d+)$"),)),
+    ("rings@warmup", ((CAMPAIGN_SH, r"^RINGS_WARMUP=(\d+)$"),)),
+    ("rings@repeats", ((CAMPAIGN_SH, r"^RINGS_REPEATS=(\d+)$"),)),
     ("runtimeout", ((CAMPAIGN_SH, r"^RINGS_RUN_TIMEOUT_S=(\d+)$"),)),
     ("v@warmup", ((VERSIONS_SH, r"^WARMUP=(\d+)$"),)),
     ("v@repeats", ((VERSIONS_SH, r"^REPEATS=(\d+)$"),)),

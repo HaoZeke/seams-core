@@ -1,6 +1,16 @@
 # Timed calls of a case. Both scales use at least six calls, with no best of them.
 REPEATS=6
 REPEATS_LARGEST=6
+# Bootstrap and worker settings printed by the text. stats.py reads these.
+SEED=20261103
+DRAWS=10000
+COVERAGE=0.95
+WORKER_MEMORY_GIB=12
+WARMUP=2
+EXPENSIVE_TARGET_S=120
+EXPENSIVE_MIN_REPEATS=6
+RINGS_WARMUP=1
+RINGS_REPEATS=6
 # Seconds before a case of a classifier or of the CHILL+ library, a ring case
 # and one run of RINGS stop.
 CASE_TIMEOUT_S=900
