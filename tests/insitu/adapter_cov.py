@@ -351,6 +351,13 @@ def census_line(text, key):
     return ""
 
 
+def require_rings_prefix(text):
+    line = census_line(text, "rings")
+    if not line.startswith("rings "):
+        raise SystemExit("subset rings missing")
+    return line
+
+
 def type_dump(src, dest, type_id):
     lines = Path(src).read_text().splitlines()
     out = []
@@ -423,9 +430,10 @@ def subset_case(work, lmp, mpirun, plugin, env):
     run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"], folder, env)
     type_dump(folder / "dump.lammpstrj", folder / "type1.lammpstrj", 1)
     live = (folder / "live.txt").read_text()
-    live_rings = census_line(live, "rings")
-    if not live_rings.startswith("rings "):
-        raise SystemExit("subset rings missing")
+    live_rings = require_rings_prefix(live)
+    host = (folder / "host.txt").read_text()
+    require_absent(host, "rings")
+    must_raise(lambda: require_rings_prefix(host), "subset rings missing")
     must_raise(lambda: require_absent(live_rings, "rings"), "census line")
     cli_rings = cli_census(seams, folder / "type1.lammpstrj", "rings", [])
     require_same("subset rings", live_rings, cli_rings)
@@ -626,6 +634,11 @@ def main():
             )
 
     ensure_cache()
+    cache = build / "CMakeCache.txt"
+    written = cache.stat().st_mtime_ns
+    ensure_cache()
+    if cache.stat().st_mtime_ns != written:
+        raise SystemExit("cache rewritten")
     run(["cmake", "--build", str(build), "-j", "4"], work)
     plugin = str(build / "libdseams_lammps.so")
     libdir = str(Path(seams_lib).parent)

@@ -91,6 +91,7 @@ def main():
     for args in (
         [str(SRC / "tests" / "insitu" / "test_shipped_in_dseams.py")],
         [str(SRC / "extras" / "lammps" / "receipts" / "import_checks.py")],
+        [str(SRC / "extras" / "lammps" / "receipts" / "receipt_fail.py")],
         [str(SRC / "tests" / "cli_every.py"), str(BUILD / "seams" / "seams"), str(SRC)],
     ):
         code = log.run([py, "-m", "coverage", "run", "--branch", "--append", *args], WORK, env)

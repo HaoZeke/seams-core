@@ -20,12 +20,14 @@ def messages(repo):
     return [part.strip() + "\n" for part in text.split("\0") if part.strip()]
 
 
-def guard_cmd(profile, fields):
+def guard_cmd(profile, fields, zone=None):
     cmd = [
         os.environ["PROSEGUARD"], "field", "--no-llm",
         "--profile", profile,
         "--styles-path", os.environ["PROSE_STYLES"],
     ]
+    if zone:
+        cmd.extend(["--zone", zone])
     for spec in fields:
         cmd.extend(["--field", spec])
     return cmd
@@ -94,10 +96,12 @@ def main():
             failed += 1
         if proc.returncode != 0:
             failed += 1
-        proc = run_guard(guard_cmd(paper, ["body=@%s" % path]))
-        log_proc(log, "rohit-paper %s" % path.name, proc)
-        if other_findings((proc.stdout or "") + (proc.stderr or ""), False) or proc.returncode != 0:
-            failed += 1
+        for zone in (None, "results"):
+            proc = run_guard(guard_cmd(paper, ["body=@%s" % path], zone))
+            label = "rohit-paper %s" % path.name if zone is None else "rohit-paper results %s" % path.name
+            log_proc(log, label, proc)
+            if other_findings((proc.stdout or "") + (proc.stderr or ""), False) or proc.returncode != 0:
+                failed += 1
         core = note_core(log)
         if core:
             proc = run_guard(guard_cmd(core, ["body=@%s" % path]))

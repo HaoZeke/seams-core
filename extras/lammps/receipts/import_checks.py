@@ -41,11 +41,35 @@ def main():
         "reject was",
     )
     show_fail(lambda: shipped.need("DSEAMS_NOT_SET"), "set DSEAMS_NOT_SET")
-    show_fail(lambda: show_fail(lambda: None, "nope"), "did not fail")
-    show_fail(
-        lambda: show_fail(lambda: (_ for _ in ()).throw(SystemExit("other")), "needle"),
-        "raised",
-    )
+
+    def caught(fn, needle):
+        try:
+            show_fail(fn, needle)
+        except SystemExit as exc:
+            return str(exc)
+        return ""
+
+    got_ok = caught(lambda: shipped.need("DSEAMS_NOT_SET"), "set ")
+    got_miss = caught(lambda: shipped.need("PATH"), "nope")
+    got_needle = caught(lambda: shipped.need("DSEAMS_NOT_SET"), "not-the-needle")
+    def require_arms(arms, want):
+        if arms != want:
+            raise SystemExit("show_fail arms %s" % arms)
+
+    arms = [got_ok == "", got_miss.startswith("did not fail"), got_needle.startswith("raised ")]
+    def keep(exc, needle):
+        if needle not in str(exc):
+            raise SystemExit("bad arm")
+
+    require_arms(arms, [True, True, True])
+    try:
+        require_arms([False], [True])
+    except SystemExit as exc:
+        keep(exc, "show_fail arms")
+        try:
+            keep(exc, "absent-needle")
+        except SystemExit:
+            pass
     print("import checks exit 0", flush=True)
 
 
