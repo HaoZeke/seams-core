@@ -446,6 +446,30 @@ TEST_CASE("AffiliationUpdater matches an unsorted ring list and an empty frame",
   const auto &cleared = updater.update(none, idx);
   REQUIRE(cleared.hc.empty());
   REQUIRE(cleared.ddc.empty());
+
+  // A tiny batch fraction sends a real edit through the backoff, then the
+  // following frame skips the diff.
+  ring::AffiliationUpdater backoff;
+  backoff.setBatchFraction(0.001);
+  (void)backoff.update(six, idx);
+  auto cut = idx;
+  if (cut.size() > 2 && cut[0].size() > 1) {
+    const int other = cut[0][1];
+    cut[0].resize(1);
+    cut[static_cast<std::size_t>(other)].erase(
+        std::remove(cut[static_cast<std::size_t>(other)].begin(),
+                    cut[static_cast<std::size_t>(other)].end(), 0),
+        cut[static_cast<std::size_t>(other)].end());
+  }
+  auto sixCut = sixMembered(primitive::ringNetwork(cut, 7));
+  const auto &churn = backoff.update(sixCut, cut);
+  const auto churnBatch = ring::cageAffiliation(sixCut, cut);
+  REQUIRE(churn.hc == churnBatch.hc);
+  REQUIRE(churn.ddc == churnBatch.ddc);
+  const auto &skipped = backoff.update(six, idx);
+  const auto skipBatch = ring::cageAffiliation(six, idx);
+  REQUIRE(skipped.hc == skipBatch.hc);
+  REQUIRE(skipped.ddc == skipBatch.ddc);
 }
 
 TEST_CASE("cage membership is not a function of the four-neighbour star",

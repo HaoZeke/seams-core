@@ -457,9 +457,6 @@ ring::CageAffiliation batchSweep(const FrameContext &ctx) {
     std::vector<char> on(static_cast<std::size_t>(nR), 0);
     int left = nR;
     auto mark = [&](int m) {
-      if (m < 0 || m >= nR) {
-        return;
-      }
       char &slot = on[static_cast<std::size_t>(m)];
       if (slot != 0) {
         return;
