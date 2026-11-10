@@ -1,5 +1,8 @@
 # Copyright (c) d-SEAMS developers
-"""Run a command and print each mapped liblammps or plugin path."""
+"""Run a command and print each liblammps or plugin path it loaded.
+
+The loader log is the source. A maps poll misses a run that exits first.
+"""
 
 import hashlib
 import os
@@ -65,20 +68,48 @@ def mapped(pid):
     return paths
 
 
+def paths_from_loader(line):
+    found = []
+    for token in ("libdseams_lammps.so", "liblammps.so"):
+        start = 0
+        while True:
+            at = line.find(token, start)
+            if at < 0:
+                break
+            slash = line.rfind("/", 0, at)
+            if slash >= 0:
+                end = at + len(token)
+                while end < len(line) and line[end] not in " \t\n":
+                    end += 1
+                found.append(line[slash:end])
+            start = at + len(token)
+    return found
+
+
 def main():
-    proc = subprocess.Popen(sys.argv[1:])
+    env = os.environ.copy()
+    env["LD_DEBUG"] = "libs"
+    proc = subprocess.Popen(sys.argv[1:], env=env, stderr=subprocess.PIPE)
     seen = set()
     stop = False
+
+    def take(path):
+        if path.startswith("/") and os.path.exists(path):
+            seen.add(path)
 
     def watch():
         while not stop:
             for pid in descendants(proc.pid):
                 for path in mapped(pid):
-                    seen.add(path)
+                    take(path)
             time.sleep(0.01)
 
     thread = threading.Thread(target=watch)
     thread.start()
+    assert proc.stderr is not None
+    for raw in proc.stderr:
+        for path in paths_from_loader(raw.decode("utf-8", "replace")):
+            take(path)
     code = proc.wait()
     stop = True
     thread.join()

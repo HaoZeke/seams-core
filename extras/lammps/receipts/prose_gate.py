@@ -20,17 +20,42 @@ def messages(repo):
     return [part.strip() + "\n" for part in text.split("\0") if part.strip()]
 
 
+def guard_cmd(profile, fields):
+    cmd = [
+        os.environ["PROSEGUARD"], "field", "--no-llm",
+        "--profile", profile,
+        "--styles-path", os.environ["PROSE_STYLES"],
+        "--zone", "results",
+    ]
+    for spec in fields:
+        cmd.extend(["--field", spec])
+    return cmd
+
+
+def note_core(log):
+    core = os.environ.get("PAPER_CORE", "")
+    if core and Path(core).is_file():
+        return core
+    if not getattr(note_core, "said", False):
+        note_core.said = True
+        log.line(
+            "paper-core is not on this machine. The profile file is absent, so this VM does not run that check."
+        )
+    return ""
+
+
 def main():
     snapper = os.environ["SNAPPER"]
-    guard = os.environ["PROSEGUARD"]
     paper = os.environ["ROHIT_PAPER"]
-    core = os.environ.get("PAPER_CORE", "")
     commit_profile = os.environ["COMMIT_PROFILE"]
     log = streamlog.Log(os.environ["PROSE_LOG"])
     log.line("start: " + streamlog.date_is())
     root = Path(os.environ["SRC_SEAMS"])
     log.line("HEAD_SEAMS: " + subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip())
     log.line("TREE_SEAMS: " + subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD^{tree}"], text=True).strip())
+    lammps = Path(os.environ["SRC_LAMMPS"])
+    log.line("HEAD_LAMMPS: " + subprocess.check_output(["git", "-C", str(lammps), "rev-parse", "HEAD"], text=True).strip())
+    log.line("TREE_LAMMPS: " + subprocess.check_output(["git", "-C", str(lammps), "rev-parse", "HEAD^{tree}"], text=True).strip())
     version = subprocess.check_output([snapper, "--version"], text=True).strip()
     log.line("snapper: " + version)
     kit = Path(os.environ["KIT"])
@@ -40,43 +65,57 @@ def main():
         log.line("snapper %s exit %d" % (path.name, proc.returncode))
         if proc.stdout:
             log.line(proc.stdout.rstrip())
+        if "would reformat" in proc.stdout:
+            failed += 1
         if proc.returncode != 0:
             failed += 1
-        for profile, label in ((paper, "rohit-paper"), (core, "paper-core")):
-            if not profile:
-                log.line("%s %s skipped" % (label, path.name))
-                continue
-            proc = subprocess.run(
-                [guard, "field", "--no-llm", "--profile", profile, "--", str(path)],
-                text=True, capture_output=True,
-            )
-            log.line("%s %s exit %d" % (label, path.name, proc.returncode))
+        proc = subprocess.run(guard_cmd(paper, ["body=@%s" % path]), text=True, capture_output=True)
+        log.line("rohit-paper %s exit %d" % (path.name, proc.returncode))
+        if proc.returncode != 0:
+            failed += 1
+            log.line((proc.stdout or proc.stderr)[-500:])
+        core = note_core(log)
+        if core:
+            proc = subprocess.run(guard_cmd(core, ["body=@%s" % path]), text=True, capture_output=True)
+            log.line("paper-core %s exit %d" % (path.name, proc.returncode))
             if proc.returncode != 0:
                 failed += 1
-                log.line(proc.stdout[-500:])
-    repos = [root, Path(os.environ["SRC_LAMMPS"])]
+    repos = [root, lammps]
     for repo in repos:
         os.environ["SERIES_BASE"] = os.environ["SEAMS_BASE"] if repo == root else os.environ["LAMMPS_BASE"]
         for index, body in enumerate(messages(repo), 1):
             target = Path(os.environ["BUILD"]) / "work" / ("msg-%s-%d.txt" % (repo.name, index))
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(body)
-            for tool, args, label in (
-                (snapper, ["-f", "plaintext", "-w", "72", "--check", str(target)], "snapper"),
-                (guard, ["field", "--no-llm", "--profile", commit_profile, "--", str(target)], "commit-msg"),
-                (guard, ["field", "--no-llm", "--profile", paper, "--", str(target)], "rohit-paper"),
-            ):
-                proc = subprocess.run([tool, *args], text=True, capture_output=True)
-                log.line("%s %s %d exit %d" % (label, repo.name, index, proc.returncode))
-                if proc.returncode != 0:
-                    failed += 1
-                    log.line(body.splitlines()[0] if body else "")
-                    log.line((proc.stdout or proc.stderr)[-400:])
+            lines = body.splitlines()
+            subject = lines[0] if lines else ""
+            rest = "\n".join(lines[2:]) + "\n"
+            body_path = target.with_suffix(".body")
+            body_path.write_text(rest)
+            proc = subprocess.run([snapper, "-f", "plaintext", "-w", "72", "--check", str(target)], text=True, capture_output=True)
+            log.line("snapper %s %d exit %d" % (repo.name, index, proc.returncode))
+            if proc.returncode != 0 or "would reformat" in (proc.stdout or ""):
+                failed += 1
+                log.line(subject)
+                log.line((proc.stdout or "")[-400:])
+            proc = subprocess.run(
+                guard_cmd(commit_profile, ["Subject=%s" % subject, "Body=@%s" % body_path]),
+                text=True, capture_output=True,
+            )
+            log.line("commit-msg %s %d exit %d" % (repo.name, index, proc.returncode))
+            if proc.returncode != 0:
+                failed += 1
+                log.line(subject)
+                log.line((proc.stdout or proc.stderr)[-400:])
+            proc = subprocess.run(guard_cmd(paper, ["body=@%s" % target]), text=True, capture_output=True)
+            log.line("rohit-paper %s %d exit %d" % (repo.name, index, proc.returncode))
+            if proc.returncode != 0:
+                failed += 1
+                log.line(subject)
+                log.line((proc.stdout or proc.stderr)[-400:])
+            core = note_core(log)
             if core:
-                proc = subprocess.run(
-                    [guard, "field", "--no-llm", "--profile", core, "--", str(target)],
-                    text=True, capture_output=True,
-                )
+                proc = subprocess.run(guard_cmd(core, ["body=@%s" % target]), text=True, capture_output=True)
                 log.line("paper-core %s %d exit %d" % (repo.name, index, proc.returncode))
                 if proc.returncode != 0:
                     failed += 1

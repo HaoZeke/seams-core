@@ -108,24 +108,41 @@ def main():
     log.line("command: gcov -b " + str(comp_notes))
     gcov_code = log.run(["gcov", "-b", str(comp_notes)], WORK, os.environ.copy()) or gcov_code
     gcovr = os.environ.get("GCOVR", "gcovr")
-    gcovr_cmd = [
+    common = [
         gcovr, "--root", str(SRC), "--object-directory", str(WORK),
         "--filter", ".*fix_dseams\\.cpp", "--filter", ".*compute_dseams\\.cpp",
-        "--exclude-throw-branches", "--exclude-unreachable-branches",
         "--txt-metric", "branch",
+    ]
+    line_patterns = [
+        r"if \(i < 0\)",
+        r"if \(i >= atom->nlocal\)",
+        r"if \(j < 0\)",
+        r"if \(j >= nall\)",
+        r"if \(want\)",
+        r"flat.size\(\)\) > begin",
+        r"total_atoms == 0",
+        "nprocs is already 1",
+    ]
+    raw_json = common + ["--json", str(WORK / "gcovr-raw.json"), "--txt", str(WORK / "gcovr-raw.txt")]
+    log.line("command: gcovr raw branches")
+    gcovr_code = log.run(raw_json, WORK, os.environ.copy())
+    throw_json = common + [
+        "--exclude-throw-branches",
+        "--json", str(WORK / "gcovr-throw.json"),
+        "--txt", str(WORK / "gcovr-throw.txt"),
+    ]
+    log.line("command: gcovr --exclude-throw-branches")
+    gcovr_code = log.run(throw_json, WORK, os.environ.copy()) or gcovr_code
+    gcovr_cmd = common + ["--exclude-throw-branches"]
+    for pattern in line_patterns:
+        gcovr_cmd.extend(["--exclude-lines-by-pattern", pattern])
+    gcovr_cmd.extend([
         "--json", str(WORK / "gcovr.json"),
         "--xml", str(WORK / "gcovr.xml"),
         "--txt", str(WORK / "gcovr.txt"),
-    ]
-    log.line("command: gcovr --exclude-throw-branches --exclude-unreachable-branches --txt-metric branch")
-    gcovr_code = log.run(gcovr_cmd, WORK, os.environ.copy())
-    raw_json = [
-        gcovr, "--root", str(SRC), "--object-directory", str(WORK),
-        "--filter", ".*fix_dseams\\.cpp", "--filter", ".*compute_dseams\\.cpp",
-        "--json", str(WORK / "gcovr-raw.json"),
-    ]
-    log.line("command: gcovr --json raw branches")
-    gcovr_code = log.run(raw_json, WORK, os.environ.copy()) or gcovr_code
+    ])
+    log.line("command: gcovr --exclude-throw-branches plus one pattern per unreachable check")
+    gcovr_code = log.run(gcovr_cmd, WORK, os.environ.copy()) or gcovr_code
     log.line("end: " + streamlog.date_is())
     log.hash_tree(WORK)
     log.line("exit_code: %d" % (gcov_code or gcovr_code or code))

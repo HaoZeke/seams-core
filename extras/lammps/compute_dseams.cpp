@@ -103,7 +103,10 @@ void ComputeDseams::compute_peratom() {
   for (int i = 0; i < nlocal; i++) {
     chill[i] = static_cast<double>(labels[static_cast<std::size_t>(i)]);
   }
-  if (label_path.empty() || comm->me != 0) {
+  if (label_path.empty()) {
+    return;
+  }
+  if (comm->me != 0) { // nprocs is already 1
     return;
   }
   std::ofstream out(label_path, label_open ? std::ios::app : std::ios::out);

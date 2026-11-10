@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -123,9 +124,24 @@ def exercise_rejects():
         lambda: require_cages("plugin", "cage hc:1 ddc:0 both:0 water:0", "nop 1 x 0 hexagonal 0 cubic 0 both 0 water 0"),
         "plugin cages cage hc:1 ddc:0 both:0 water:0 vs nop 1 x 0 hexagonal 0 cubic 0 both 0 water 0",
     )
-    blocks = census("step 0\nrings a\nstep 1\nrings b\n")
-    if [block["step"] for block in blocks] != [0, 1]:
-        raise SystemExit("two steps")
+    def require_steps_of(text, steps):
+        got = [block["step"] for block in census(text)]
+        if got != steps:
+            raise SystemExit("two steps")
+
+    def require_empty_preamble(text):
+        if census(text) != []:
+            raise SystemExit("preamble census")
+
+    require_empty_preamble("note\n")
+    assert_reject(lambda: require_empty_preamble("step 0\nrings a\n"), "preamble census")
+    require_steps_of("note\nstep 0\nrings a\n", [0])
+    require_steps_of("step 0\nrings a\nstep 1\nrings b\n", [0, 1])
+    assert_reject(lambda: require_steps_of("step 9\n", [0, 1]), "two steps")
+    note = Path(tempfile.mkdtemp()) / "note.sh"
+    note.write_text("#!/bin/sh\necho note\n")
+    note.chmod(0o755)
+    assert_reject(lambda: cli_line(str(note), Path("."), "rings", []), "rings wrote no census line")
 
 
 def run_route(name, binary, plugin, work):

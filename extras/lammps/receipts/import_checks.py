@@ -41,6 +41,11 @@ def main():
         "reject was",
     )
     show_fail(lambda: shipped.need("DSEAMS_NOT_SET"), "set DSEAMS_NOT_SET")
+    show_fail(lambda: show_fail(lambda: None, "nope"), "did not fail")
+    show_fail(
+        lambda: show_fail(lambda: (_ for _ in ()).throw(SystemExit("other")), "needle"),
+        "raised",
+    )
     print("import checks exit 0", flush=True)
 
 

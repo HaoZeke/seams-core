@@ -7,6 +7,8 @@ import d-SEAMS. Atomic style has one atom per molecule, so the
 per-molecule neighbour set is the per-atom set.
 """
 
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -394,9 +396,21 @@ def chill_table(frame, source):
     return groups
 
 
+def print_repo(label, repo):
+    if not repo or not Path(repo).exists():
+        print("%s absent" % label, flush=True)
+        return
+    head = subprocess.check_output(["git", "-C", repo, "rev-parse", "HEAD"], text=True).strip()
+    tree = subprocess.check_output(["git", "-C", repo, "rev-parse", "HEAD^{tree}"], text=True).strip()
+    print("HEAD_%s %s" % (label, head), flush=True)
+    print("TREE_%s %s" % (label, tree), flush=True)
+
+
 def main():
     if freud is None:
         raise SystemExit("freud is not installed")
+    print_repo("seams", os.environ.get("SRC_SEAMS", ""))
+    print_repo("lammps", os.environ.get("SRC_LAMMPS", ""))
     print("freud %s" % freud.__version__, flush=True)
     print("numpy %s" % np.__version__, flush=True)
     print("python %s" % sys.version.split()[0], flush=True)

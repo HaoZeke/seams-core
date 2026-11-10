@@ -423,9 +423,10 @@ def subset_case(work, lmp, mpirun, plugin, env):
     run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"], folder, env)
     type_dump(folder / "dump.lammpstrj", folder / "type1.lammpstrj", 1)
     live = (folder / "live.txt").read_text()
-    require_absent("", "rings")
-    require_absent(live, "absent")
     live_rings = census_line(live, "rings")
+    if not live_rings.startswith("rings "):
+        raise SystemExit("subset rings missing")
+    must_raise(lambda: require_absent(live_rings, "rings"), "census line")
     cli_rings = cli_census(seams, folder / "type1.lammpstrj", "rings", [])
     require_same("subset rings", live_rings, cli_rings)
     other = cli_census(seams, folder / "type1.lammpstrj", "rings", ["--cutoff", "1.0"])

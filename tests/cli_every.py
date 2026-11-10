@@ -223,11 +223,41 @@ with tempfile.TemporaryDirectory() as tmp:
             return
         raise SystemExit("cutoff check did not fire")
 
+    def trap(fn):
+        try:
+            fn()
+        except SystemExit as exc:
+            return str(exc)
+        return ""
+
+    def require_trap(fn, want):
+        got = trap(fn)
+        if got != want:
+            raise SystemExit("trap %s" % got)
+
+    def show_trap(fn, needle):
+        try:
+            fn()
+        except SystemExit as exc:
+            if needle not in str(exc):
+                raise SystemExit("trap raised %s" % exc)
+            return
+        raise SystemExit("trap did not fail")
+
     want_code = "rings %s --cutoff not-a-number exit 2 want 0" % water
     demand_message(lambda: run(["rings", str(water), "--cutoff", "not-a-number"], expect=0), want_code)
     demand_message(
         lambda: run(["rings", str(water), "--cutoff", "not-a-number"], expect=2, message="not-the-message"),
         "missing reject message",
+    )
+    require_trap(lambda: None, "")
+    require_trap(lambda: demand_message(lambda: (_ for _ in ()).throw(SystemExit("nope")), "other"), "nope")
+    require_trap(lambda: demand_message(lambda: None, "x"), "cutoff check did not fire")
+    show_trap(lambda: require_trap(lambda: None, "nope"), "trap")
+    show_trap(lambda: show_trap(lambda: None, "nope"), "did not fail")
+    show_trap(
+        lambda: show_trap(lambda: require_trap(lambda: None, "nope"), "absent"),
+        "trap raised",
     )
     ok = run(["rings", str(water), "--cutoff", "not-a-number"], expect=2, message="Usage:") and ok
     def with_offload():
