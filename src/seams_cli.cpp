@@ -634,7 +634,7 @@ void countIonTypes(const Cloud &ions, int &nCation, int &nAnion) {
   for (const auto &pt : ions.pts) {
     if (pt.type == 1) {
       ++nCation;
-    } else if (pt.type == 2) {
+    } else {
       ++nAnion;
     }
   }
