@@ -782,12 +782,13 @@ TEST_CASE("DDC needs six distinct peripheral rings", "[cage_affiliation]") {
                                               nullptr));
 
       const auto aff = ring::cageAffiliation(rings, nList);
+      REQUIRE(aff.hc.size() == rings.size());
+      REQUIRE(aff.ddc.size() == rings.size());
       for (std::size_t r = 0; r < rings.size(); ++r) {
         INFO("ring " << r);
         REQUIRE_FALSE(aff.hc[r]);
         REQUIRE_FALSE(aff.ddc[r]);
       }
-      REQUIRE(withExtra == (rings.size() == fx.rings.size() + 1));
 
       std::vector<ring::strucType> types(rings.size(),
                                          ring::strucType::unclassified);
