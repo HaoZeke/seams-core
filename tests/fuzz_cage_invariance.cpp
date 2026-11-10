@@ -191,7 +191,15 @@ Result evaluate(Cloud &cloud, double cutoff, int atomType) {
   std::vector<cage::Cage> cages;
   const auto listHC = ring::findHC(six, types, idx, cages, index);
   const auto listDDC = ring::findDDC(six, types, listHC, cages, index);
-  if (listHC.size() != six.size() || listDDC.size() != six.size()) {
+  const auto inRange = [&](const std::vector<int> &ids) {
+    for (const int id : ids) {
+      if (id < 0 || id >= static_cast<int>(six.size())) {
+        return false;
+      }
+    }
+    return true;
+  };
+  if (!inRange(listHC) || !inRange(listDDC)) {
     out.cages = -1;
     out.sized = false;
     return out;
@@ -421,7 +429,7 @@ int main(int argc, char **argv) {
       bool ok = true;
       if (!ref.sized) {
         ok = false;
-        std::printf("FAIL %s frame %d flag vector length\n", path.filename().c_str(), frame);
+        std::printf("FAIL %s frame %d ring index out of range\n", path.filename().c_str(), frame);
       }
       for (int ix = 0; ix < 2 && ok; ix++) {
         for (int iy = 0; iy < 2 && ok; iy++) {
