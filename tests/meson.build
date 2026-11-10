@@ -377,11 +377,13 @@ _device_host_cases = {
   'levi5': ['levi:5', '1'],
 }
 foreach name, args : _device_host_cases
+  # levi:5 is the PG(2,5) graph. Under -O0 with coverage it passes 300s.
+  _host_timeout = name == 'levi5' ? 900 : 300
   test('device_host_' + name, _check_device_host,
     args: args,
     workdir: meson.project_source_root() / 'input',
     env: _test_env,
-    timeout: 300)
+    timeout: _host_timeout)
 endforeach
 
 # The CUDA batch kernels on the host, no device needed
