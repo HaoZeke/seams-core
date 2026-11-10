@@ -424,8 +424,15 @@ test('invariance_empty_frame', _check_invariance,
   env: _test_env,
   should_fail: true)
 # 1000 translations and 1000 permutations on every deposited frame, plus
-# the eight half-box shifts. The cage stage is the cost.
+# the eight half-box shifts. The cage stage is the cost. A hang is a
+# failure: the limit is finite.
 test('fuzz_cage_shift_permute', _fuzz_cage,
   args: [meson.project_source_root() / 'input' / 'traj', '1000'],
   env: _test_env,
-  timeout: 0)
+  timeout: 600)
+# mW_cubic is 4096 atoms. The full 1000-trial search does not return.
+# The fuzzer must skip it and exit.
+test('fuzz_cage_skips_mw_cubic', _fuzz_cage,
+  args: [meson.project_source_root() / 'input' / 'traj' / 'mW_cubic.lammpstrj', '1000'],
+  env: _test_env,
+  timeout: 60)
