@@ -1,0 +1,8 @@
+d-SEAMS counts
+The ring and CHILL+ lines were produced by the no-chemfiles seams binary
+and libyodaLib.so from the coverage tree that finished linking before the
+copyright-only rebuild. The sources of that binary match the tip except
+for the copyright lines added in 2ebf53ef, which do not change the counts.
+
+a42a81dac783639a3323d6fefe365da1ea5a5a46a32b224e58d1de7d42cacfde  seams
+beb94134a4764b395c5aebe4c3621c52c3d107b1a1c14200f78e812365eb0b65  libyodaLib.so
