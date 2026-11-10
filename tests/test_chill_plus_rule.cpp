@@ -677,9 +677,13 @@ TEST_CASE("CHILL and CHILL+ cover the bond, harmonic and offload arms",
   REQUIRE(chill::isInterfacial(hand, nList, 1, 3, 0, true));
   REQUIRE_FALSE(chill::isInterfacial(hand, nList, 0, 4, 0, true));
   REQUIRE(sph::lookupTableQ3(-1, ang) == std::complex<double>(0.0, 0.0));
+  REQUIRE(sph::lookupTableQ3(99, ang) == std::complex<double>(0.0, 0.0));
   REQUIRE(sph::lookupTableQ4(99, ang) == std::complex<double>(0.0, 0.0));
+  REQUIRE(sph::lookupTableQ4(-1, ang) == std::complex<double>(0.0, 0.0));
   REQUIRE(sph::lookupTableQ6(99, ang) == std::complex<double>(0.0, 0.0));
+  REQUIRE(sph::lookupTableQ6(-1, ang) == std::complex<double>(0.0, 0.0));
   REQUIRE(sph::lookupTableQ8(-1, ang) == std::complex<double>(0.0, 0.0));
+  REQUIRE(sph::lookupTableQ8(99, ang) == std::complex<double>(0.0, 0.0));
 
   std::vector<double> q6(static_cast<std::size_t>(hand.nop), 0.1);
   q6[0] = 0.8;

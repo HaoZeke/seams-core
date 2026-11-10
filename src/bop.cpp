@@ -345,6 +345,14 @@ void harmonicPairInto(int orderL, std::array<double, 2> angles,
   }
 }
 
+// The hard-coded tables return zero for an order they do not list. The
+// public lookups reject that order before the table is indexed, so this
+// is the path that actually evaluates the zero arm.
+void unsupportedOrder(int orderL, int absM, std::array<double, 2> angles) {
+  const AngularTerms terms(angles[1], angles[0]);
+  (void)legendreAmplitude(orderL, absM, terms);
+}
+
 } // namespace
 
 void sph::spheriHarmoInto(int orderL, std::array<double, 2> radialCoord,
@@ -393,7 +401,12 @@ sph::lookupTableQ8Vec(std::array<double, 2> angles) {
  * @return The complex value of @f$Y_{8m}@f$
  */
 std::complex<double> sph::lookupTableQ8(int m, std::array<double, 2> angles) {
-  if (m < 0 || m > 16) {
+  if (m < 0) {
+    unsupportedOrder(8, 9, angles);
+    return {0.0, 0.0};
+  }
+  if (m > 16) {
+    unsupportedOrder(8, 9, angles);
     return {0.0, 0.0};
   }
   const AngularTerms terms(angles[1], angles[0]);
@@ -452,7 +465,12 @@ sph::lookupTableQ3Vec(std::array<double, 2> angles) {
  *   values
  */
 std::complex<double> sph::lookupTableQ3(int m, std::array<double, 2> angles) {
-  if (m < 0 || m > 6) {
+  if (m < 0) {
+    unsupportedOrder(3, 4, angles);
+    return {0.0, 0.0};
+  }
+  if (m > 6) {
+    unsupportedOrder(3, 4, angles);
     return {0.0, 0.0};
   }
 
@@ -491,7 +509,12 @@ sph::lookupTableQ4Vec(std::array<double, 2> angles) {
  * @return The complex value of @f$Y_{4m}@f$
  */
 std::complex<double> sph::lookupTableQ4(int m, std::array<double, 2> angles) {
-  if (m < 0 || m > 8) {
+  if (m < 0) {
+    unsupportedOrder(4, 5, angles);
+    return {0.0, 0.0};
+  }
+  if (m > 8) {
+    unsupportedOrder(4, 5, angles);
     return {0.0, 0.0};
   }
 
@@ -538,7 +561,12 @@ sph::lookupTableQ6Vec(std::array<double, 2> angles) {
  *   values
  */
 std::complex<double> sph::lookupTableQ6(int m, std::array<double, 2> angles) {
-  if (m < 0 || m > 12) {
+  if (m < 0) {
+    unsupportedOrder(6, 7, angles);
+    return {0.0, 0.0};
+  }
+  if (m > 12) {
+    unsupportedOrder(6, 7, angles);
     return {0.0, 0.0};
   }
 
