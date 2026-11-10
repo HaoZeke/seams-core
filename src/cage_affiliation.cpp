@@ -1268,10 +1268,18 @@ ring::SeededAtomLabels ring::seededCageAffiliation(
 
   for (int a = 0; a < nAtoms; a++) {
     if (keptHC[a]) {
-      out.hc[a] = hcS[a] || hcP[a];
+      const bool fromStrict = hcS[a];
+      const bool fromPermissive = hcP[a];
+      if (fromStrict || fromPermissive) {
+        out.hc[a] = true;
+      }
     }
     if (keptDDC[a]) {
-      out.ddc[a] = ddcS[a] || ddcP[a];
+      const bool fromStrict = ddcS[a];
+      const bool fromPermissive = ddcP[a];
+      if (fromStrict || fromPermissive) {
+        out.ddc[a] = true;
+      }
     }
   }
   if (ringAdjacentCompletion) {
