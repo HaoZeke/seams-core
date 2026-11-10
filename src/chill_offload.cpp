@@ -116,8 +116,7 @@ int classifyAtom(int nstag, int neclip, int shell, const int *neigh,
   if (nstag == 2) {
     for (int t = 0; t < 4; t++) {
       const int j = neigh[t];
-      // A shell of four has already filled every slot with a cloud index.
-      if (nstagN[j] > 2) {
+      if (j >= 0 && nstagN[j] > 2) {
         inter = true;
       }
     }
@@ -125,7 +124,7 @@ int classifyAtom(int nstag, int neclip, int shell, const int *neigh,
   if (nstag == 3 && neclip == 0) {
     for (int t = 0; t < 4; t++) {
       const int j = neigh[t];
-      if (nstagN[j] > 1) {
+      if (j >= 0 && nstagN[j] > 1) {
         inter = true;
       }
     }

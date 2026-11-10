@@ -146,12 +146,16 @@ void fill_box(const Cloud &cloud, double box9[9]) {
   for (int i = 0; i < 9; ++i) {
     box9[i] = 0.0;
   }
-  box9[0] = cloud.boxLow[0];
-  box9[1] = cloud.boxLow[1];
-  box9[2] = cloud.boxLow[2];
-  box9[3] = cloud.box[0];
-  box9[4] = cloud.box[1];
-  box9[5] = cloud.box[2];
+  if (cloud.boxLow.size() >= 3) {
+    box9[0] = cloud.boxLow[0];
+    box9[1] = cloud.boxLow[1];
+    box9[2] = cloud.boxLow[2];
+  }
+  if (cloud.box.size() >= 3) {
+    box9[3] = cloud.box[0];
+    box9[4] = cloud.box[1];
+    box9[5] = cloud.box[2];
+  }
   if (cloud.box.size() >= 6) {
     box9[6] = cloud.box[3];
     box9[7] = cloud.box[4];
@@ -356,6 +360,9 @@ int classify_chill(seams_frame *frame, double cutoff, int type,
       if (!keep_atom(point.type, type)) {
         label = static_cast<int>(molSys::atom_state_type::unclassified);
       }
+      if (label < 0 || label > 8) {
+        label = 6;
+      }
       frame->labels[static_cast<std::size_t>(i)] = label;
       if (keep_atom(point.type, type)) {
         counts[label] += 1;
@@ -424,7 +431,10 @@ int seams_frame_rings(seams_frame *frame, double cutoff, int type,
     const auto rings = primitive::ringNetwork(idx, max_depth);
     std::fill(counts, counts + counts_len, 0);
     for (const auto &ring : rings) {
-      counts[static_cast<int>(ring.size())] += 1;
+      const int size = static_cast<int>(ring.size());
+      if (size >= 0 && size < counts_len) {
+        counts[size] += 1;
+      }
     }
     return 0;
   } catch (...) {
@@ -449,6 +459,12 @@ int seams_frame_steinhardt(seams_frame *frame, double cutoff, int type,
     const int n = frame->cloud.nop;
     frame->ql = result.ql;
     frame->qlbar = result.qlBar;
+    if (static_cast<int>(frame->ql.size()) < n) {
+      frame->ql.resize(static_cast<std::size_t>(n), 0.0);
+    }
+    if (static_cast<int>(frame->qlbar.size()) < n) {
+      frame->qlbar.resize(static_cast<std::size_t>(n), 0.0);
+    }
     if (ql != nullptr && n > 0) {
       std::memcpy(ql, frame->ql.data(),
                   static_cast<std::size_t>(n) * sizeof(double));
@@ -573,10 +589,12 @@ int seams_frame_cages(seams_frame *frame, double cutoff, int type, int k,
       const auto aff = ring::cageAffiliation(six, idx);
       for (std::size_t r = 0; r < six.size(); ++r) {
         for (const int atom : six[r]) {
-          hc[static_cast<std::size_t>(atom)] =
-              hc[static_cast<std::size_t>(atom)] || aff.hc[r];
-          ddc[static_cast<std::size_t>(atom)] =
-              ddc[static_cast<std::size_t>(atom)] || aff.ddc[r];
+          if (atom >= 0 && atom < n) {
+            hc[static_cast<std::size_t>(atom)] =
+                hc[static_cast<std::size_t>(atom)] || aff.hc[r];
+            ddc[static_cast<std::size_t>(atom)] =
+                ddc[static_cast<std::size_t>(atom)] || aff.ddc[r];
+          }
         }
       }
     }
@@ -824,7 +842,10 @@ int seams_frame_monolayer(seams_frame *frame, double cutoff, int type,
     }
     std::fill(counts, counts + counts_len, 0);
     for (const auto &ring : rings) {
-      counts[static_cast<int>(ring.size())] += 1;
+      const int size = static_cast<int>(ring.size());
+      if (size >= 0 && size < counts_len) {
+        counts[size] += 1;
+      }
     }
     return 0;
   } catch (...) {

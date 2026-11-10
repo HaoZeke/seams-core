@@ -158,7 +158,7 @@ bool forEachInputFrame(const std::string &path, int first, int last,
   }
 
   if (source == FrameSource::serial) {
-    const int stop = last;
+    const int stop = last <= 0 ? first : last;
     for (int frame = std::max(1, first); frame <= stop; ++frame) {
       Cloud cloud = load(path, frame, typeFilter);
       if (cloud.nop == 0 && frame != std::max(1, first)) {
@@ -472,7 +472,9 @@ void printCounts(std::ostream &os, const Cloud &cloud,
   }
   os << colorizer.heading("nop") << " " << scored;
   for (const auto &[name, n] : hist) {
-    os << " " << iceColor(name) << " " << n;
+    if (n > 0) {
+      os << " " << iceColor(name) << " " << n;
+    }
   }
   os << "\n";
 }
@@ -634,7 +636,7 @@ void countIonTypes(const Cloud &ions, int &nCation, int &nAnion) {
   for (const auto &pt : ions.pts) {
     if (pt.type == 1) {
       ++nCation;
-    } else {
+    } else if (pt.type == 2) {
       ++nAnion;
     }
   }
@@ -720,14 +722,18 @@ int cmdDomains(std::ostream &os, Cloud &cloud, double cutoff,
                const site::Table &table, site::Kind subset) {
   std::vector<bool> mask(static_cast<std::size_t>(cloud.nop), false);
   for (const int i : site::indicesOf(cloud, table, subset)) {
-    mask[static_cast<std::size_t>(i)] = true;
+    if (i >= 0 && i < cloud.nop) {
+      mask[static_cast<std::size_t>(i)] = true;
+    }
   }
   const auto idxList = nneigh::getNewNeighbourListByIndex(cloud, cutoff);
   std::vector<std::vector<int>> idList(idxList.size());
   for (std::size_t i = 0; i < idxList.size(); ++i) {
     idList[i].reserve(idxList[i].size());
     for (const int idx : idxList[i]) {
-      idList[i].push_back(cloud.pts[static_cast<std::size_t>(idx)].atomID);
+      if (idx >= 0 && idx < cloud.nop) {
+        idList[i].push_back(cloud.pts[static_cast<std::size_t>(idx)].atomID);
+      }
     }
   }
   const auto d = clump::largestDomain(cloud, idList, mask);
@@ -1252,6 +1258,9 @@ std::vector<cage::Signature> parseSignatures(const std::string &spec) {
   while (std::getline(in, part, '+')) {
     sigs.push_back(cage::Signature::parse(part));
   }
+  if (sigs.empty()) {
+    sigs.push_back(cage::Signature::parse(spec));
+  }
   return sigs;
 }
 
@@ -1506,10 +1515,12 @@ int cmdCages(std::ostream &os, FrameCarry &carry, Cloud &cloud, double cutoff,
       std::vector<bool> ddc(static_cast<std::size_t>(cloud.nop), false);
       for (std::size_t r = 0; r < six.size(); ++r) {
         for (const int a : six[r]) {
-          hc[static_cast<std::size_t>(a)] =
-              hc[static_cast<std::size_t>(a)] || aff.hc[r];
-          ddc[static_cast<std::size_t>(a)] =
-              ddc[static_cast<std::size_t>(a)] || aff.ddc[r];
+          if (a >= 0 && a < cloud.nop) {
+            hc[static_cast<std::size_t>(a)] =
+                hc[static_cast<std::size_t>(a)] || aff.hc[r];
+            ddc[static_cast<std::size_t>(a)] =
+                ddc[static_cast<std::size_t>(a)] || aff.ddc[r];
+          }
         }
       }
       tallyAtoms(hc, ddc);
@@ -2340,10 +2351,18 @@ int main(int argc, char *argv[]) {
       (jobs == 1 || frameSource(file) != FrameSource::dump)) {
     walkCarry = std::make_unique<FrameCarry>(true);
   }
+  bool ranged = false;
   try {
-    forEachInputFrame(file, lo, hi, typeFilter, jobs, processFrame, part, parts);
+    ranged = forEachInputFrame(file, lo, hi, typeFilter, jobs, processFrame,
+                               part, parts);
   } catch (...) {
     std::cerr << colorizer.error(exceptionText()) << "\n";
+    return 2;
+  }
+  if (!ranged) {
+    std::cerr << colorizer.error(
+                     "frame ranges are unsupported for this input format")
+              << "\n";
     return 2;
   }
 #ifdef SEAMS_HAS_MPI

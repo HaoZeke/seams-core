@@ -279,6 +279,9 @@ std::vector<int> nearestNeighbourIndices(
 
 void associatedP(int L, double x, std::vector<double> &p) {
   p.assign(static_cast<std::size_t>(L) + 1, 0.0);
+  if (L < 0) {
+    return;
+  }
   const double s = std::sqrt(std::max(0.0, 1.0 - x * x));
   double pmm = 1.0;
   for (int m = 0; m <= L; m++) {
@@ -318,6 +321,9 @@ double nlmNorm(int l, int m) {
 void spheriHarmoGeneral(int orderL, std::array<double, 2> angles,
                         std::vector<std::complex<double>> &out) {
   out.assign(static_cast<std::size_t>(2 * orderL + 1), {0.0, 0.0});
+  if (orderL < 0) {
+    return;
+  }
   std::vector<double> p;
   associatedP(orderL, std::cos(angles[1]), p);
   const double phi = angles[0];
@@ -1479,6 +1485,9 @@ bool chill::isInterfacial(
   if (num_staggrd == 2) {
     // Loop over the four nearest neighbours, the same star as c_ij
     for (int jatomIndex : nearest) {
+      if (jatomIndex < 0 || jatomIndex >= yCloud.nop) {
+        continue;
+      }
       neighStaggered = chill::numStaggered(yCloud, nList, jatomIndex);
       if (neighStaggered > 2) {
         return true;
@@ -1489,6 +1498,9 @@ bool chill::isInterfacial(
   // and at least one neighbor with two staggered bonds
   if (num_staggrd == 3 && num_eclipsd == 0) {
     for (int jatomIndex : nearest) {
+      if (jatomIndex < 0 || jatomIndex >= yCloud.nop) {
+        continue;
+      }
       neighStaggered = chill::numStaggered(yCloud, nList, jatomIndex);
       if (chillPlus) {
         if (neighStaggered > 1) {
