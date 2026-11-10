@@ -456,6 +456,25 @@ def compute_cases(work, lmp, cxx, include, env):
         "-I" + str(src),
     ]
     run(common + [str(src / "compute_dseams.cpp"), "-o", str(out / "compute_dseams.o")], out, env)
+    run(common + [str(ROOT / "tests" / "insitu" / "narg_drive.cpp"), "-o", str(out / "narg_drive.o")], out, env)
+    libdir = str(Path(lmp).parent)
+    chem = str(Path(env["SEAMS_LIB"]).parents[1] / "chemfiles-prefix" / "lib")
+    run(
+        [
+            cxx, "--coverage",
+            str(out / "narg_drive.o"), str(out / "compute_dseams.o"),
+            "-L" + libdir, "-llammps",
+            "-L" + str(Path(env["SEAMS_LIB"]).parent), "-lyodaLib",
+            "-L" + chem, "-lchemfiles",
+            "-o", str(out / "narg_drive"),
+        ],
+        out,
+        env,
+    )
+    drive_env = dict(env)
+    drive_env["LD_LIBRARY_PATH"] = libdir + ":" + chem + ":" + drive_env.get("LD_LIBRARY_PATH", "")
+    run([str(out / "narg_drive")], out, drive_env)
+    print("compute narg guard exit 0", flush=True)
     run(common + [str(src / "plugin_dseams.cpp"), "-o", str(out / "plugin_dseams.o")], out, env)
     run(
         [

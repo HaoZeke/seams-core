@@ -16,12 +16,18 @@
 
 using namespace LAMMPS_NS;
 
+namespace LAMMPS_NS {
+void require_dseams_narg(LAMMPS *lmp, int narg) {
+  if (narg < 3) {
+    lmp->error->all(FLERR, "Illegal compute dseams command");
+  }
+}
+}
+
 ComputeDseams::ComputeDseams(LAMMPS *lmp, int narg, char **arg)
     : Compute(lmp, narg, arg), nmax(0), chill(nullptr), cutoff(3.5),
       graph("cutoff"), label_open(0) {
-  if (narg < 3) {
-    error->all(FLERR, "Illegal compute dseams command");
-  }
+  require_dseams_narg(lmp, narg);
   for (int iarg = 3; iarg < narg; iarg += 2) {
     if (iarg + 1 >= narg) {
       error->all(FLERR, "Illegal compute dseams command");
