@@ -98,7 +98,8 @@ foreach name, src : test_sources
   if name == 'cage_enum' or name == 'domain'
     _timeout = 600
   elif name == 'bulkTUM'
-    _timeout = 900
+    # The last case is PG(2, 5). Atomic counters push it past 900s.
+    _timeout = 3600
   elif name == 'bop' and offload_enabled
     _timeout = 600
   endif
