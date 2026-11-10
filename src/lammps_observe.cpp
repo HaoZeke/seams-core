@@ -295,9 +295,6 @@ std::vector<std::vector<int>> rows_from_flat(const Cloud &cloud, const std::vect
   std::vector<std::vector<int>> rows(static_cast<std::size_t>(cloud.nop));
   std::size_t cursor = 0;
   for (const int count : counts) {
-    if (count < 1 || cursor >= flat.size()) {
-      break;
-    }
     const int self = flat[cursor];
     const auto at = cloud.idIndexMap.find(self);
     if (at != cloud.idIndexMap.end()) {
