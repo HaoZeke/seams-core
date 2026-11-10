@@ -1229,35 +1229,6 @@ TEST_CASE("Affiliation reads a backward cycle and an index outside the cloud",
   REQUIRE(resized.hc == ring::cageAffiliation(hex, changed).hc);
   REQUIRE(resized.ddc == ring::cageAffiliation(hex, changed).ddc);
 
-  ring::AffiliationUpdater sized;
-  sized.setBatchFraction(1.0);
-  const auto primedSized = sized.update(hex, hotRows);
-  REQUIRE(primedSized.hc == ring::cageAffiliation(hex, hotRows).hc);
-  REQUIRE(primedSized.ddc == ring::cageAffiliation(hex, hotRows).ddc);
-  auto longer = hotRows;
-  longer.push_back({1});
-  REQUIRE(sized.update(hex, longer).hc == ring::cageAffiliation(hex, longer).hc);
-
-#ifdef SEAMS_HAS_OPENMP
-  std::vector<std::vector<int>> manyRows(1024);
-  for (int a = 0; a < 1024; ++a) {
-    manyRows[static_cast<std::size_t>(a)] = {a % 6};
-  }
-  ring::AffiliationUpdater inside;
-  inside.setBatchFraction(1.0);
-  const auto primedInside = inside.update(hex, manyRows);
-  REQUIRE(primedInside.hc.size() == 1u);
-  REQUIRE(primedInside.ddc.size() == 1u);
-  int inner = 0;
-#pragma omp parallel
-  {
-    if (omp_get_thread_num() == 0) {
-      inner = static_cast<int>(inside.update(hex, manyRows).hc.size());
-    }
-  }
-  REQUIRE(inner == 1);
-#endif
-
   // Strict and permissive clouds label different atoms. An empty label
   // vector returns before the walk, and a ring atom past the cloud does not.
   ring::CageAffiliation strictOnly;
@@ -1290,6 +1261,42 @@ TEST_CASE("Affiliation reads a backward cycle and an index outside the cloud",
   REQUIRE(past.hc.size() == 2);
   REQUIRE(past.hc[0]);
   REQUIRE(!past.hc[1]);
+}
+
+TEST_CASE("a sized warm start matches a fresh affiliation", "[cage_affiliation]") {
+  std::vector<std::vector<int>> hotRows(6);
+  for (int a = 0; a < 6; ++a) {
+    hotRows[static_cast<std::size_t>(a)] = {a};
+  }
+  const std::vector<std::vector<int>> hex = {{0, 1, 2, 3, 4, 5}};
+  ring::AffiliationUpdater sized;
+  sized.setBatchFraction(1.0);
+  const auto primedSized = sized.update(hex, hotRows);
+  REQUIRE(primedSized.hc == ring::cageAffiliation(hex, hotRows).hc);
+  REQUIRE(primedSized.ddc == ring::cageAffiliation(hex, hotRows).ddc);
+  auto longer = hotRows;
+  longer.push_back({1});
+  REQUIRE(sized.update(hex, longer).hc == ring::cageAffiliation(hex, longer).hc);
+
+#ifdef SEAMS_HAS_OPENMP
+  std::vector<std::vector<int>> manyRows(1024);
+  for (int a = 0; a < 1024; ++a) {
+    manyRows[static_cast<std::size_t>(a)] = {a % 6};
+  }
+  ring::AffiliationUpdater inside;
+  inside.setBatchFraction(1.0);
+  const auto primedInside = inside.update(hex, manyRows);
+  REQUIRE(primedInside.hc.size() == 1u);
+  REQUIRE(primedInside.ddc.size() == 1u);
+  int inner = 0;
+#pragma omp parallel
+  {
+    if (omp_get_thread_num() == 0) {
+      inner = static_cast<int>(inside.update(hex, manyRows).hc.size());
+    }
+  }
+  REQUIRE(inner == 1);
+#endif
 }
 
 TEST_CASE("Affiliation reads a pivot past the cloud and a one-sided seed",
