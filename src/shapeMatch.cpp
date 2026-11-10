@@ -274,19 +274,22 @@ bool match::matchPrismBlock(
       pntToPnt::createPrismBlock(yCloud, refPoints, ringSize, basal1, basal2);
   // ----------------------------------------------------
 
-  targetPrismBlock =
-      pntToPnt::fillPointSetPrismBlock(yCloud, basal1, basal2, 0);
-  if (ira::orient(refPrismBlock, targetPrismBlock, quat, rmsd)) {
-    beginIndex = 0;
-    return rmsd <= 6.0;
-  }
-
-  // Loop through possible point-to-point correspondences
+  // beginIndex is the cyclic start updateRMSDRing applies
+  // (shapeMatch.cpp:220). Even rings and triangles are defined to
+  // start at zero, so an IRA match of that single ordering can return
+  // it. An odd ring is a search: {2, 3, 4, 0, 1} is a two-step shift
+  // of a pentagonal prism, and Horn's lowest RMSD is not start zero.
+  // ira::orient solves the permutation and does not name that start.
+  // Returning zero assigns the ring RMSD to the wrong atoms.
   if (ringSize % 2 == 0 || ringSize == 3) {
     startingIndex = 0;
     // Fill up the point set for the target prism block
     targetPrismBlock =
         pntToPnt::fillPointSetPrismBlock(yCloud, basal1, basal2, 0);
+    if (ira::orient(refPrismBlock, targetPrismBlock, quat, rmsd)) {
+      beginIndex = 0;
+      return rmsd <= 6.0;
+    }
     // Shape-matching
     absor::hornAbsOrientation(refPrismBlock, targetPrismBlock, quat, rmsd,
                               rmsdList,

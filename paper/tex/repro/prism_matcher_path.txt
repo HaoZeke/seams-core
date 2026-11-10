@@ -1,0 +1,29 @@
+Prism numbers in the paper do not use the shape-matcher early return.
+
+Call path for the worked-example prism counts
+paper/tex/figures/worked_example.py calls seams_frame_prisms.
+bindings/cxx/seams_lang.cpp passes doShapeMatching false into
+ring::findPrisms (the false argument on the findPrisms call).
+src/topo_one_dim.cpp calls match::matchPrism only inside the
+doShapeMatching branches. With that flag false, strict pairs are
+counted without a match, and relaxed pairs are skipped.
+src/topo_bulk.cpp leaves its match::matchPrism call commented out.
+
+Ring sizes
+paper/tex/figures/worked_example.py and stats.py set PRISM_SIZES
+to 4, 5 and 6. The tubes are square, pentagonal and hexagonal.
+No paper source mentions a heptagonal prism. The table in
+paper/tex/rg_main.tex reports prism4, prism5 and prism6 only.
+The RMSD number in the supplement is the OVITO polyhedral-template
+cutoff, not a prism-match RMSD.
+
+Shape matcher
+paper/tex/repro/build.sh configures -Dwith_ira=disabled.
+Without that library, ira::match returns 1 and ira::orient returns
+false, so matchPrismBlock does not take the early return.
+The pentagonal ring is size 5, which would be the affected odd case
+if the shape matcher were linked and shape matching were requested.
+Neither is true for the paper build.
+
+No paper result, figure, table or supplement number was regenerated.
+Old and new values are the same because that path was not run.
