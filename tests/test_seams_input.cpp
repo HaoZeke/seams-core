@@ -34,6 +34,13 @@
 
 namespace fs = std::filesystem;
 
+fs::path pidTemp(const char *name) {
+  return fs::temp_directory_path() /
+         (std::string(name) + "-" +
+          std::to_string(static_cast<long long>(::getpid())));
+}
+
+
 // -- readXYZ tests --
 
 TEST_CASE("readXYZ throws for nonexistent file", "[seams_input]") {
@@ -43,7 +50,7 @@ TEST_CASE("readXYZ throws for nonexistent file", "[seams_input]") {
 
 TEST_CASE("readXYZ creates a synthetic file and reads it back",
           "[seams_input]") {
-  std::string tmpFile = fs::temp_directory_path().append("dseams_test_readxyz.xyz").string();
+  std::string tmpFile = pidTemp("dseams_test_readxyz.xyz").string();
   {
     std::ofstream f(tmpFile);
     f << "3\n";
@@ -73,7 +80,7 @@ TEST_CASE("readXYZ creates a synthetic file and reads it back",
 }
 
 TEST_CASE("readXYZ gives each element its own type", "[seams_input]") {
-  std::string tmpFile = fs::temp_directory_path().append("dseams_test_readxyz_sin.xyz").string();
+  std::string tmpFile = pidTemp("dseams_test_readxyz_sin.xyz").string();
   {
     std::ofstream f(tmpFile);
     f << "3\n\n";
@@ -200,7 +207,7 @@ TEST_CASE("readLammpsTrjreduced with slice and type filter", "[seams_input]") {
 namespace {
 std::string writeTinyDump() {
   auto path =
-      fs::temp_directory_path() / "dseams_test_lammps_index.lammpstrj";
+      pidTemp("dseams_test_lammps_index.lammpstrj");
   std::ofstream f(path);
   for (int frame = 0; frame < 3; ++frame) {
     f << "ITEM: TIMESTEP\n" << (100 * frame) << "\n";
@@ -215,7 +222,7 @@ std::string writeTinyDump() {
 
 std::string writeUnwrappedDump() {
   auto path =
-      fs::temp_directory_path() / "dseams_test_lammps_xu.lammpstrj";
+      pidTemp("dseams_test_lammps_xu.lammpstrj");
   std::ofstream f(path);
   f << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n";
   f << "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n";
@@ -226,7 +233,7 @@ std::string writeUnwrappedDump() {
 
 std::string writeEmptyMiddleDump() {
   auto path =
-      fs::temp_directory_path() / "dseams_test_lammps_empty_frame.lammpstrj";
+      pidTemp("dseams_test_lammps_empty_frame.lammpstrj");
   std::ofstream f(path);
   const int counts[3] = {2, 0, 2};
   for (int frame = 0; frame < 3; ++frame) {
@@ -405,7 +412,7 @@ TEST_CASE("readLammpsTrj binds xu yu zu when x y z are absent",
 
 TEST_CASE("readLammpsTrjO parses scientific-notation dump coordinates",
           "[seams_input]") {
-  auto path = fs::temp_directory_path() / "dseams_test_lammps_sci.lammpstrj";
+  auto path = pidTemp("dseams_test_lammps_sci.lammpstrj");
   {
     std::ofstream f(path);
     f << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n2\n";
@@ -436,7 +443,7 @@ TEST_CASE("readBonds returns empty for nonexistent file", "[seams_input]") {
 }
 
 TEST_CASE("readBonds reads synthetic bond file", "[seams_input]") {
-  std::string tmpFile = fs::temp_directory_path().append("dseams_test_bonds.dat").string();
+  std::string tmpFile = pidTemp("dseams_test_bonds.dat").string();
   {
     std::ofstream f(tmpFile);
     f << "3 Bonds\n";
@@ -531,7 +538,7 @@ TEST_CASE("readChemfiles matches the hand-rolled LAMMPS reader", "[seams_input]"
 TEST_CASE("readLammpsTrj assigns ids when the dump has no id column",
           "[seams_input]") {
   const auto path =
-      fs::temp_directory_path() / "dseams_test_noid.lammpstrj";
+      pidTemp("dseams_test_noid.lammpstrj");
   {
     std::ofstream f(path);
     f << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n3\n"
@@ -553,7 +560,7 @@ TEST_CASE("readLammpsTrj assigns ids when the dump has no id column",
 TEST_CASE("readLammpsTrj keeps a mol column that sits in column 0",
           "[seams_input]") {
   const auto path =
-      fs::temp_directory_path() / "dseams_test_molfirst.lammpstrj";
+      pidTemp("dseams_test_molfirst.lammpstrj");
   {
     std::ofstream f(path);
     f << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n2\n"
@@ -574,7 +581,7 @@ TEST_CASE("readLammpsTrj keeps a mol column that sits in column 0",
 TEST_CASE("readLammpsTrj sets nop from the atoms when the count overflows",
           "[seams_input]") {
   const auto path =
-      fs::temp_directory_path() / "dseams_test_huge.lammpstrj";
+      pidTemp("dseams_test_huge.lammpstrj");
   {
     std::ofstream f(path);
     f << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n999999999999\n"
@@ -590,7 +597,7 @@ TEST_CASE("readLammpsTrj sets nop from the atoms when the count overflows",
 }
 
 TEST_CASE("readXYZ rejects a short frame", "[seams_input]") {
-  const auto path = fs::temp_directory_path() / "dseams_test_short.xyz";
+  const auto path = pidTemp("dseams_test_short.xyz");
   {
     std::ofstream f(path);
     f << "5\ncomment\nO 0 0 0\nO 1 0 0\n";
@@ -605,7 +612,7 @@ TEST_CASE("readXYZ rejects a short frame", "[seams_input]") {
 }
 
 TEST_CASE("readXYZ rejects a coordinate that is not a number", "[seams_input]") {
-  const auto path = fs::temp_directory_path() / "dseams_test_bad.xyz";
+  const auto path = pidTemp("dseams_test_bad.xyz");
   {
     std::ofstream f(path);
     f << "2\ncomment\nO 0 0 0\nO foo bar baz\n";
@@ -620,7 +627,7 @@ TEST_CASE("readXYZ rejects a coordinate that is not a number", "[seams_input]") 
 }
 
 TEST_CASE("readBonds drops a constant trailing 0/1 flag", "[seams_input]") {
-  const auto path = fs::temp_directory_path() / "dseams_test_ringsflag.dat";
+  const auto path = pidTemp("dseams_test_ringsflag.dat");
   {
     std::ofstream f(path);
     f << "2 Bonds\n272 214 906 1361 388 1\n388 1361 1042 1548 237 1\n";
@@ -688,7 +695,7 @@ std::string conText(const char *cell, const char *angles, const char *ids) {
 } // namespace
 
 TEST_CASE("dump and bond readers take the rejected inputs", "[seams_input]") {
-  const auto dir = fs::temp_directory_path() / "dseams-input-edges";
+  const auto dir = pidTemp("dseams-input-edges");
   fs::remove_all(dir);
   fs::create_directories(dir);
   molSys::PointCloud<molSys::Point<double>, double> cloud;
@@ -784,7 +791,7 @@ TEST_CASE("dump and bond readers take the rejected inputs", "[seams_input]") {
 
 #ifdef SEAMS_HAS_READCON
 TEST_CASE("con cells and the corpus errors", "[seams_input]") {
-  const auto dir = fs::temp_directory_path() / "dseams-con-edges";
+  const auto dir = pidTemp("dseams-con-edges");
   fs::remove_all(dir);
   fs::create_directories(dir);
   molSys::PointCloud<molSys::Point<double>, double> cloud;
@@ -849,7 +856,7 @@ TEST_CASE("con cells and the corpus errors", "[seams_input]") {
 
 TEST_CASE("a dump without a timestep and a raced missing frame",
           "[seams_input]") {
-  const auto dir = fs::temp_directory_path() / "dseams-dump-race";
+  const auto dir = pidTemp("dseams-dump-race");
   fs::remove_all(dir);
   fs::create_directories(dir);
   molSys::PointCloud<molSys::Point<double>, double> cloud;
@@ -991,7 +998,7 @@ TEST_CASE("a dump without a timestep and a raced missing frame",
 #ifdef SEAMS_HAS_READCON_DB
 TEST_CASE("a corpus that cannot be opened or holds a long frame",
           "[seams_input]") {
-  const auto dir = fs::temp_directory_path() / "dseams-corpus-long";
+  const auto dir = pidTemp("dseams-corpus-long");
   fs::remove_all(dir);
   fs::create_directories(dir);
   const auto locked = dir / "locked";
@@ -1060,7 +1067,7 @@ std::string captureCerr(const std::function<void()> &fn);
 std::string captureFd(int fd, const std::function<void()> &fn);
 
 TEST_CASE("a directory and a truncated timestep header", "[seams_input]") {
-  const auto dir = fs::temp_directory_path() / "dseams-input-edges";
+  const auto dir = pidTemp("dseams-input-edges");
   fs::remove_all(dir);
   fs::create_directories(dir);
   molSys::PointCloud<molSys::Point<double>, double> cloud;
@@ -1122,7 +1129,7 @@ std::string captureFd(int fd, const std::function<void()> &fn) {
 
 TEST_CASE("a dump larger than the address-space limit is not mapped",
           "[seams_input]") {
-  const auto dir = fs::temp_directory_path() / "dseams-unmap";
+  const auto dir = pidTemp("dseams-unmap");
   fs::remove_all(dir);
   fs::create_directories(dir);
   const auto dump = dir / "wide.lammpstrj";
@@ -1155,7 +1162,7 @@ TEST_CASE("a dump larger than the address-space limit is not mapped",
 #ifdef SEAMS_HAS_READCON
 TEST_CASE("a corpus frame past the text buffer and a frame that will not decode",
           "[seams_input]") {
-  const auto dir = fs::temp_directory_path() / "dseams-corpus-body";
+  const auto dir = pidTemp("dseams-corpus-body");
   fs::remove_all(dir);
   fs::create_directories(dir);
   molSys::PointCloud<molSys::Point<double>, double> cloud;
@@ -1249,7 +1256,7 @@ TEST_CASE("a corpus frame past the text buffer and a frame that will not decode"
 }
 
 TEST_CASE("a corpus directory vanishes before the second open", "[seams_input]") {
-  const auto dir = fs::temp_directory_path() / "dseams-corpus-race";
+  const auto dir = pidTemp("dseams-corpus-race");
   fs::remove_all(dir);
   fs::create_directories(dir);
   const auto good = dir / "good.con";
@@ -1336,7 +1343,7 @@ TEST_CASE("dump helpers reject a bad edge and a flat cell", "[seams_input]") {
 }
 
 TEST_CASE("a short xyz names the missing atoms", "[seams_input]") {
-  const auto path = fs::temp_directory_path() / "dseams_short.xyz";
+  const auto path = pidTemp("dseams_short.xyz");
   {
     std::ofstream out(path);
     out << "3\ncomment\nO 0 0 0\n";
@@ -1352,7 +1359,7 @@ TEST_CASE("a short xyz names the missing atoms", "[seams_input]") {
 }
 
 TEST_CASE("an empty xyz names the header", "[seams_input]") {
-  const auto path = fs::temp_directory_path() / "dseams_empty.xyz";
+  const auto path = pidTemp("dseams_empty.xyz");
   {
     std::ofstream out(path);
     out << "";
@@ -1367,7 +1374,7 @@ TEST_CASE("an empty xyz names the header", "[seams_input]") {
 }
 
 TEST_CASE("a junk xyz header names the failure", "[seams_input]") {
-  const auto path = fs::temp_directory_path() / "dseams_junk.xyz";
+  const auto path = pidTemp("dseams_junk.xyz");
   {
     std::ofstream out(path);
     out << "this is not an xyz file\n";
@@ -1382,7 +1389,7 @@ TEST_CASE("a junk xyz header names the failure", "[seams_input]") {
 }
 
 TEST_CASE("a multi-frame xyz returns the first frame", "[seams_input]") {
-  const auto path = fs::temp_directory_path() / "dseams_multi.xyz";
+  const auto path = pidTemp("dseams_multi.xyz");
   {
     std::ofstream out(path);
     out << "1\nframe\nO 1 2 3\n1\nframe\nO 4 5 6\n";
@@ -1394,7 +1401,7 @@ TEST_CASE("a multi-frame xyz returns the first frame", "[seams_input]") {
 }
 
 TEST_CASE("a short lammps dump names the missing atoms", "[seams_input]") {
-  const auto path = fs::temp_directory_path() / "dseams_short.lammpstrj";
+  const auto path = pidTemp("dseams_short.lammpstrj");
   {
     std::ofstream out(path);
     out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n3\n"
@@ -1414,7 +1421,7 @@ TEST_CASE("a short lammps dump names the missing atoms", "[seams_input]") {
 }
 
 TEST_CASE("an orthogonal lattice keeps three lengths", "[seams_input]") {
-  const auto path = fs::temp_directory_path() / "dseams_ortho.xyz";
+  const auto path = pidTemp("dseams_ortho.xyz");
   {
     std::ofstream out(path);
     out << "1\nLattice=\"20 0 0 0 18 0 0 0 16\"\nO 1 1 1\n";
@@ -1429,7 +1436,7 @@ TEST_CASE("an orthogonal lattice keeps three lengths", "[seams_input]") {
 }
 
 TEST_CASE("a broken lattice is named", "[seams_input]") {
-  const auto bare = fs::temp_directory_path() / "dseams_bare.xyz";
+  const auto bare = pidTemp("dseams_bare.xyz");
   {
     std::ofstream out(bare);
     out << "1\nLattice=10 0 0 0 10 0 0 0 10\nO 0 0 0\n";
@@ -1441,7 +1448,7 @@ TEST_CASE("a broken lattice is named", "[seams_input]") {
     REQUIRE(std::string(err.what()) == "XYZ Lattice is not a cell.");
   }
   fs::remove(bare);
-  const auto shear = fs::temp_directory_path() / "dseams_shear.xyz";
+  const auto shear = pidTemp("dseams_shear.xyz");
   {
     std::ofstream out(shear);
     out << "1\nLattice=\"10 1 0 0 10 0 0 0 10\"\nO 0 0 0\n";
@@ -1456,7 +1463,7 @@ TEST_CASE("a broken lattice is named", "[seams_input]") {
 }
 
 TEST_CASE("scaled dump columns and a parallel short frame", "[seams_input]") {
-  const auto path = fs::temp_directory_path() / "dseams_scaled_cols.lammpstrj";
+  const auto path = pidTemp("dseams_scaled_cols.lammpstrj");
   {
     std::ofstream out(path);
     out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
@@ -1471,7 +1478,7 @@ TEST_CASE("scaled dump columns and a parallel short frame", "[seams_input]") {
   fs::remove(path);
   sinp::dropLammpsDumpIndex(path.string());
 
-  const auto only = fs::temp_directory_path() / "dseams_xsu.lammpstrj";
+  const auto only = pidTemp("dseams_xsu.lammpstrj");
   {
     std::ofstream out(only);
     out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
@@ -1487,7 +1494,7 @@ TEST_CASE("scaled dump columns and a parallel short frame", "[seams_input]") {
 }
 
 TEST_CASE("reader edges on real files", "[seams_input]") {
-  const auto dir = fs::temp_directory_path() / "dseams-reader-edges";
+  const auto dir = pidTemp("dseams-reader-edges");
   fs::remove_all(dir);
   fs::create_directories(dir);
 
@@ -1632,7 +1639,7 @@ TEST_CASE("reader edges on real files", "[seams_input]") {
 }
 
 TEST_CASE("one tilt axis is still a reduced cell", "[seams_input]") {
-  const auto dir = fs::temp_directory_path() / "dseams-one-tilt";
+  const auto dir = pidTemp("dseams-one-tilt");
   fs::remove_all(dir);
   fs::create_directories(dir);
   const char *lattices[] = {"10 0 0 1 8 0 0 0 9", "10 0 0 0 8 0 1 0 9",
@@ -1650,7 +1657,7 @@ TEST_CASE("one tilt axis is still a reduced cell", "[seams_input]") {
 }
 
 TEST_CASE("a lattice axis that is not positive is rejected", "[seams_input]") {
-  const auto dir = fs::temp_directory_path() / "dseams-axis";
+  const auto dir = pidTemp("dseams-axis");
   fs::remove_all(dir);
   fs::create_directories(dir);
   auto expectThrow = [](const fs::path &path) {
@@ -1675,7 +1682,7 @@ TEST_CASE("a lattice axis that is not positive is rejected", "[seams_input]") {
 }
 
 TEST_CASE("an unreadable xyz and a partial symbol", "[seams_input]") {
-  const auto dir = fs::temp_directory_path() / "dseams-xyz-mode";
+  const auto dir = pidTemp("dseams-xyz-mode");
   fs::remove_all(dir);
   fs::create_directories(dir);
 
@@ -1712,7 +1719,7 @@ TEST_CASE("an unreadable xyz and a partial symbol", "[seams_input]") {
 }
 
 TEST_CASE("dump lines cover the field scanner", "[seams_input]") {
-  const auto dir = fs::temp_directory_path() / "dseams-dump-fields";
+  const auto dir = pidTemp("dseams-dump-fields");
   fs::remove_all(dir);
   fs::create_directories(dir);
   molSys::PointCloud<molSys::Point<double>, double> cloud;
@@ -2001,7 +2008,7 @@ TEST_CASE("dump lines cover the field scanner", "[seams_input]") {
 }
 
 TEST_CASE("a triclinic lattice is bounds plus tilt", "[seams_input]") {
-  const auto path = fs::temp_directory_path() / "dseams_tilt.xyz";
+  const auto path = pidTemp("dseams_tilt.xyz");
   {
     std::ofstream out(path);
     // a=(10,0,0) b=(-2,8,0) c=(-1,-3,9)

@@ -9,6 +9,7 @@
 
 // Standard
 #include <filesystem>
+#include <unistd.h>
 #include <iostream>
 
 #include <catch2/catch_test_macros.hpp>
@@ -16,6 +17,15 @@
 #include <rang.hpp>
 
 namespace fs = std::filesystem;
+
+#include <string>
+
+fs::path pidTemp(const char *name) {
+  return fs::temp_directory_path() /
+         (std::string(name) + "-" +
+          std::to_string(static_cast<long long>(::getpid())));
+}
+
 
 // Helper: build the 8-atom prism geometry (reusable)
 static void buildPrismCloud(molSys::PointCloud<molSys::Point<double>, double> &yCloud) {
@@ -142,7 +152,7 @@ TEST_CASE("prismAnalysis integration with tetragonal prism", "[topo_one_dim]") {
   auto nList = nneigh::neighListO(3.5, yCloud, 1);
   auto rings = primitive::ringNetwork(nList, 5);
 
-  std::string tmpPath = fs::temp_directory_path().append("dseams_test_prismanalysis/").string();
+  std::string tmpPath = pidTemp("dseams_test_prismanalysis").string();
   int atomID = 0;
 
   int ret = ring::prismAnalysis(tmpPath, rings, nList, yCloud, 5, atomID, 1, 1,
@@ -185,7 +195,7 @@ TEST_CASE("prismAnalysis with shape matching on tetragonal prism",
   auto nList = nneigh::neighListO(3.5, yCloud, 1);
   auto rings = primitive::ringNetwork(nList, 5);
 
-  std::string tmpPath = fs::temp_directory_path().append("dseams_test_prism_sm/").string();
+  std::string tmpPath = pidTemp("dseams_test_prism_sm").string();
   int atomID = 0;
 
   int ret = ring::prismAnalysis(tmpPath, rings, nList, yCloud, 5, atomID, 1, 1,

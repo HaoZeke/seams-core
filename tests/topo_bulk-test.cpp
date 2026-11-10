@@ -30,6 +30,7 @@
 #endif
 #include <cstdlib>
 #include <filesystem>
+#include <unistd.h>
 #include <iostream>
 #include <numeric>
 #include <random>
@@ -40,6 +41,15 @@
 #include <rang.hpp>
 
 namespace fs = std::filesystem;
+
+#include <string>
+
+fs::path pidTemp(const char *name) {
+  return fs::temp_directory_path() /
+         (std::string(name) + "-" +
+          std::to_string(static_cast<long long>(::getpid())));
+}
+
 
 // Helper: build the 12-atom HC geometry (reusable across tests)
 static void buildHCCloud(molSys::PointCloud<molSys::Point<double>, double> &yCloud) {
@@ -325,7 +335,7 @@ TEST_CASE("topoBulkAnalysis integration with HC geometry", "[topo_bulk]") {
   nList = nneigh::neighbourListByIndex(yCloud, nList);
   auto rings = primitive::ringNetwork(nList, 7);
 
-  std::string tmpPath = fs::temp_directory_path().append("dseams_test_topobulk_analysis/").string();
+  std::string tmpPath = pidTemp("dseams_test_topobulk_analysis").string();
 
   int ret = ring::topoBulkAnalysis(tmpPath, rings, nList, yCloud, 1, true);
   REQUIRE(ret == 0);
@@ -497,7 +507,7 @@ TEST_CASE("topoBulkAnalysis on mW cubic trajectory", "[topo_bulk]") {
   nList = nneigh::neighbourListByIndex(yCloud, nList);
   auto rings = primitive::ringNetwork(nList, 7);
 
-  std::string tmpPath = fs::temp_directory_path().append("dseams_test_topobulk_mw/").string();
+  std::string tmpPath = pidTemp("dseams_test_topobulk_mw").string();
   int ret = ring::topoBulkAnalysis(tmpPath, rings, nList, yCloud, 1, true);
   REQUIRE(ret == 0);
   std::error_code _ec_; fs::remove_all(tmpPath, _ec_);
@@ -512,7 +522,7 @@ TEST_CASE("bulkPolygonRingAnalysis on mW cubic trajectory", "[topo_bulk]") {
   nList = nneigh::neighbourListByIndex(yCloud, nList);
   auto rings = primitive::ringNetwork(nList, 7);
 
-  std::string tmpPath = fs::temp_directory_path().append("dseams_test_bulkpoly_mw/").string();
+  std::string tmpPath = pidTemp("dseams_test_bulkpoly_mw").string();
   int ret = ring::bulkPolygonRingAnalysis(tmpPath, rings, nList, yCloud, 7, 1);
   REQUIRE(ret == 0);
   std::error_code _ec_; fs::remove_all(tmpPath, _ec_);
@@ -1359,7 +1369,7 @@ TEST_CASE("repeated triplets exercise the large equatorial search",
   REQUIRE(std::find(typed.begin(), typed.end(), ring::strucType::bothBasal) !=
           typed.end());
 
-  const auto outDir = fs::temp_directory_path() / "dseams_topo_penta";
+  const auto outDir = pidTemp("dseams_topo_penta");
   fs::create_directories(outDir);
   auto pentagons = six;
   if (!pentagons.empty()) {
@@ -1623,7 +1633,7 @@ TEST_CASE("small cages reach the live bulk search returns", "[topo_bulk]") {
   REQUIRE(faceType[0] == ring::strucType::Prism);
   REQUIRE(faceType[1] == ring::strucType::Prism);
 
-  const auto outDir = fs::temp_directory_path() / "dseams_topo_hex_only";
+  const auto outDir = pidTemp("dseams_topo_hex_only");
   fs::create_directories(outDir);
   (void)ring::topoBulkAnalysis(outDir.string(), hcRings, hcRows, hcCloud, 1, false);
   fs::remove_all(outDir);

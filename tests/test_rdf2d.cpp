@@ -12,9 +12,19 @@
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <unistd.h>
 #include <vector>
 
 namespace fs = std::filesystem;
+
+#include <string>
+
+fs::path pidTemp(const char *name) {
+  return fs::temp_directory_path() /
+         (std::string(name) + "-" +
+          std::to_string(static_cast<long long>(::getpid())));
+}
+
 
 // Helper: build a small PointCloud with atoms at known positions
 static molSys::PointCloud<molSys::Point<double>, double>
@@ -529,7 +539,7 @@ TEST_CASE("rdf2Danalysis_AA runs without error for single frame", "[rdf2d]") {
   auto cloud = makeRdfCloud(8, 20.0);
   cloud.currentFrame = 1;
 
-  std::string tmpPath = fs::temp_directory_path().append("dseams_test_rdf2d/").string();
+  std::string tmpPath = pidTemp("dseams_test_rdf2d").string();
   fs::create_directories(tmpPath);
 
   std::vector<double> rdfValues;

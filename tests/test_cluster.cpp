@@ -11,6 +11,18 @@
 
 #include <cmath>
 #include <filesystem>
+#include <unistd.h>
+
+namespace fs = std::filesystem;
+
+#include <string>
+
+fs::path pidTemp(const char *name) {
+  return fs::temp_directory_path() /
+         (std::string(name) + "-" +
+          std::to_string(static_cast<long long>(::getpid())));
+}
+
 #include <unordered_map>
 
 // Helper: build a PointCloud with some "ice" and some "water" particles
@@ -247,7 +259,7 @@ TEST_CASE("largestIceCluster identifies clusters and writes stats",
   std::vector<int> nClusters;
   std::unordered_map<int, int> indexNumber;
 
-  std::string tmpPath = fs::temp_directory_path().append("dseams_test_largestcluster/").string();
+  std::string tmpPath = pidTemp("dseams_test_largestcluster").string();
 
   int ret = clump::largestIceCluster(tmpPath, cloud, iceCloud, iceNList, isIce,
                                       linkedList, nClusters, indexNumber, 1);
@@ -285,7 +297,7 @@ TEST_CASE("clusterAnalysis with Q6 on mW cubic trajectory", "[cluster]") {
   // clusterAnalysis expects the full yCloud and returns the largest ice cluster
   molSys::PointCloud<molSys::Point<double>, double> iceCloud;
   std::vector<std::vector<int>> iceNeighbourList;
-  std::string tmpPath = fs::temp_directory_path().append("dseams_test_clusteranalysis/").string();
+  std::string tmpPath = pidTemp("dseams_test_clusteranalysis").string();
 
   int ret = clump::clusterAnalysis(tmpPath, iceCloud, yCloud, nList,
                                     iceNeighbourList, 3.5, 1, "q6");

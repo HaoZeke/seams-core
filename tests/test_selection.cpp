@@ -7,9 +7,19 @@
 
 #include <array>
 #include <filesystem>
+#include <unistd.h>
 #include <vector>
 
 namespace fs = std::filesystem;
+
+#include <string>
+
+fs::path pidTemp(const char *name) {
+  return fs::temp_directory_path() /
+         (std::string(name) + "-" +
+          std::to_string(static_cast<long long>(::getpid())));
+}
+
 
 // Helper: build a cloud with atoms at known positions and molecule IDs
 static molSys::PointCloud<molSys::Point<double>, double>
@@ -241,7 +251,7 @@ TEST_CASE("printSliceGetEdgeMoleculesInRings runs without crash",
   std::array<double, 3> lo = {0.0, 0.0, 0.0};
   std::array<double, 3> hi = {5.0, 5.0, 5.0};
 
-  std::string tmpPath = fs::temp_directory_path().append("dseams_test_printslice/").string();
+  std::string tmpPath = pidTemp("dseams_test_printslice").string();
   fs::create_directories(tmpPath);
 
   // Should not crash; exercises the full pipeline

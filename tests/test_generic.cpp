@@ -7,6 +7,18 @@
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <unistd.h>
+
+namespace fs = std::filesystem;
+
+#include <string>
+
+fs::path pidTemp(const char *name) {
+  return fs::temp_directory_path() /
+         (std::string(name) + "-" +
+          std::to_string(static_cast<long long>(::getpid())));
+}
+
 #include <sstream>
 #include <string>
 #include <vector>
@@ -207,7 +219,7 @@ TEST_CASE("prettyPrintYoda does not crash", "[generic]") {
   auto cloud = makeTwoAtomCloud(1.0, 0.0, 0.0, 4.0, 0.0, 0.0);
   cloud.boxLow = {0.0, 0.0, 0.0};
 
-  std::string outFile = std::filesystem::temp_directory_path().append("dseams_test_prettyprint.dat").string();
+  std::string outFile = pidTemp("dseams_test_prettyprint.dat").string();
   int ret = gen::prettyPrintYoda(cloud, outFile);
   REQUIRE(ret == 0);
 

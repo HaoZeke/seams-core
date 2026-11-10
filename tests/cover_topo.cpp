@@ -21,6 +21,7 @@
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <unistd.h>
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -39,6 +40,13 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 namespace fs = std::filesystem;
+
+fs::path pidTemp(const char *name) {
+  return fs::temp_directory_path() /
+         (std::string(name) + "-" +
+          std::to_string(static_cast<long long>(::getpid())));
+}
+
 
 namespace {
 
@@ -338,7 +346,7 @@ TEST_CASE("prism analysis writes one tetragonal prism and skips empty sizes",
     squares += static_cast<int>(ring.size() == 4);
   }
   REQUIRE(squares >= 2);
-  const auto directory = fs::temp_directory_path() / "dseams-cover-topo";
+  const auto directory = pidTemp("dseams-cover-topo");
   fs::remove_all(directory);
   fs::create_directories(directory);
   const auto path = directory.string() + "/";

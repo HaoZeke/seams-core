@@ -31,6 +31,18 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <unistd.h>
+
+namespace fs = std::filesystem;
+
+#include <string>
+
+fs::path pidTemp(const char *name) {
+  return fs::temp_directory_path() /
+         (std::string(name) + "-" +
+          std::to_string(static_cast<long long>(::getpid())));
+}
+
 #include <iomanip>
 #include <limits>
 #include <numeric>
@@ -313,7 +325,7 @@ TEST_CASE("getIceType writes output and classifies atoms", "[bop]") {
   auto cloud = makeTetraCloud();
   auto nList = nneigh::neighListO(3.0, cloud, 1);
 
-  std::string tmpPath = fs::temp_directory_path().append("dseams_test_icetype/").string();
+  std::string tmpPath = pidTemp("dseams_test_icetype").string();
 
   chill::getCorrel(cloud, nList, false);
   chill::getIceType(cloud, nList, tmpPath, 1, false);
@@ -362,7 +374,7 @@ TEST_CASE("printIceType writes super chill classification", "[bop]") {
   chill::getCorrel(cloud, nList, false);
   chill::getIceTypeNoPrint(cloud, nList, false);
 
-  std::string tmpPath = fs::temp_directory_path().append("dseams_test_printice/").string();
+  std::string tmpPath = pidTemp("dseams_test_printice").string();
   int ret = chill::printIceType(cloud, tmpPath, 1, false);
   REQUIRE(ret == 0);
 
@@ -474,7 +486,7 @@ TEST_CASE("getIceTypePlus classifies with CHILL+ and writes output", "[bop]") {
   auto cloud = makeTetraCloud();
   auto nList = nneigh::neighListO(3.0, cloud, 1);
 
-  std::string tmpPath = fs::temp_directory_path().append("dseams_test_icetypeplus/").string();
+  std::string tmpPath = pidTemp("dseams_test_icetypeplus").string();
 
   chill::getCorrelPlus(cloud, nList, false);
   chill::getIceTypePlus(cloud, nList, tmpPath, 1, false);
@@ -1898,7 +1910,7 @@ TEST_CASE("ice labels, the reprint, and the water reclassification", "[bop]") {
 
   stampBonds(cloud, 2, {staggered, staggered, staggered});
   cloud.pts[2].inSlice = true;
-  const auto dir = std::filesystem::temp_directory_path() / "dseams-bop-ice";
+  const auto dir = pidTemp("dseams-bop-ice");
   std::filesystem::create_directories(dir);
   chill::getIceType(cloud, rows, dir.string() + "/", cloud.currentFrame, false, "ice.txt");
   cloud.currentFrame = 2;
