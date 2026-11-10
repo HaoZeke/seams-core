@@ -158,7 +158,7 @@ bool forEachInputFrame(const std::string &path, int first, int last,
   }
 
   if (source == FrameSource::serial) {
-    const int stop = last <= 0 ? first : last;
+    const int stop = last;
     for (int frame = std::max(1, first); frame <= stop; ++frame) {
       Cloud cloud = load(path, frame, typeFilter);
       if (cloud.nop == 0 && frame != std::max(1, first)) {
