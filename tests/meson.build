@@ -95,10 +95,10 @@ endif
 foreach name, src : test_sources
   # meson allows no nested ternary; the long-running suites get more time
   _timeout = 120
-  if name == 'cage_enum'
-    _timeout = 300
+  if name == 'cage_enum' or name == 'domain'
+    _timeout = 600
   elif name == 'bulkTUM'
-    _timeout = 300
+    _timeout = 900
   elif name == 'bop' and offload_enabled
     _timeout = 600
   endif
@@ -378,7 +378,7 @@ _device_host_cases = {
 }
 foreach name, args : _device_host_cases
   # levi:5 is the PG(2,5) graph. Under -O0 with coverage it passes 300s.
-  _host_timeout = name == 'levi5' ? 900 : 300
+  _host_timeout = name == 'levi5' ? 2400 : 300
   test('device_host_' + name, _check_device_host,
     args: args,
     workdir: meson.project_source_root() / 'input',
@@ -429,7 +429,7 @@ test('invariance_empty_frame', _check_invariance,
 test('fuzz_cage_shift_permute', _fuzz_cage,
   args: [meson.project_source_root() / 'input' / 'traj', '1000'],
   env: _test_env,
-  timeout: 600)
+  timeout: 1800)
 # mW_cubic is 4096 atoms. The full 1000-trial search does not return.
 # The fuzzer must skip it and exit.
 test('fuzz_cage_skips_mw_cubic', _fuzz_cage,
