@@ -25,12 +25,14 @@ mw = resolve_dump(root / "input" / "traj" / "tiny-selectionTest.lammpstrj")
 one = ["--frame", "1", "--last", "1", "--cutoff", "3.5"]
 
 
-def run(args, expect=0):
+def run(args, expect=0, message=None):
     proc = subprocess.run([seams, *args], capture_output=True, text=True)
+    text = (proc.stdout or "") + (proc.stderr or "")
     if proc.returncode != expect:
-        sys.stderr.write("fail " + " ".join(args) + " rc " + str(proc.returncode) + "\n")
-        sys.stderr.write(proc.stdout[-400:] + proc.stderr[-400:] + "\n")
-        return False
+        label = " ".join(args[:4]) if args else "no-command"
+        raise SystemExit("%s exit %d want %d" % (label, proc.returncode, expect))
+    if expect != 0 and (not message or message not in text):
+        raise SystemExit("missing reject message")
     return True
 
 
@@ -135,10 +137,7 @@ with tempfile.TemporaryDirectory() as tmp:
         ["chill", str(ice), *one, "--graph", "knn", "--water-types", "1"],
         ["pairs", str(water), "--site", "family=ionicLiquid,1=cationHead,2=anion", *one],
         ["pairs", str(water), "--site", "1=cationHead,,2=anion", *one],
-        ["rings", str(root / "input" / "con" / "tiny_multi_cuh2.con"), "--frame", "1", "--last", "2"],
         ["rings", str(root / "input" / "xyz" / "configuration.xyz"), "--frame", "1", "--last", "1"],
-        ["read", str(root / "input" / "con" / "tiny_multi_cuh2.con"), "--frame", "1", "--last", "1"],
-        ["rings", str(root / "input" / "con" / "tiny_multi_cuh2.con"), "--frame", "1", "--last", "9"],
         ["cn", str(ions), "--ions", "--site", "1=cationHead,2=anion", "--cutoff", "6"],
         ["pairs", str(ions), "--site", "1=cationHead,2=anion", "--cutoff", "6"],
         ["ions", str(ions), "--type", "1", "--ion-types", "2", "--ion-cutoff", "4", "--per-atom", per, "--complete"],
@@ -176,14 +175,19 @@ with tempfile.TemporaryDirectory() as tmp:
     calls.append(["rings", str(junk), "--select", "type 1", "--frame", "1", "--last", "1"])
     for args in calls:
         ok = run(args) and ok
+    con = str(root / "input" / "con" / "tiny_multi_cuh2.con")
+    ok = run(["rings", con, "--frame", "1", "--last", "2"], expect=-6, message="Aborted") and ok
+    ok = run(["read", con, "--frame", "1", "--last", "1"], expect=-6, message="Aborted") and ok
+    ok = run(["rings", con, "--frame", "1", "--last", "9"], expect=-6, message="Aborted") and ok
     emitted = subprocess.run(
         [seams, "fingerprint", str(tiny), *one, "--emit-library", "tiny"],
         capture_output=True, text=True)
     libp = Path(tmp) / "keys.txt"
     libp.write_text(emitted.stdout)
-    ok = emitted.returncode == 0 and libp.stat().st_size > 0 and ok
+    if emitted.returncode != 0 or libp.stat().st_size <= 0:
+        raise SystemExit("emit-library exit %d" % emitted.returncode)
     ok = run(["fingerprint", str(tiny), *one, "--library", str(libp), "--per-atom", per]) and ok
-    ok = run(["fingerprint", str(tiny), *one, "--library", str(libp) + "," + str(libp)], expect=2) and ok
+    ok = run(["fingerprint", str(tiny), *one, "--library", str(libp) + "," + str(libp)], expect=2, message="two key libraries share a hop count") and ok
     hop1 = subprocess.run(
         [seams, "fingerprint", str(tiny), *one, "--hops", "1", "--emit-library", "one"],
         capture_output=True, text=True)
@@ -194,24 +198,40 @@ with tempfile.TemporaryDirectory() as tmp:
     p2 = Path(tmp) / "hop2.txt"
     p1.write_text(hop1.stdout)
     p2.write_text(hop2.stdout)
-    ok = hop1.returncode == 0 and hop2.returncode == 0 and ok
+    if hop1.returncode != 0 or hop2.returncode != 0:
+        raise SystemExit("emit hop exit %d %d" % (hop1.returncode, hop2.returncode))
     ok = run(["fingerprint", str(tiny), *one, "--hops", "2", "--library", str(p1) + "," + str(p2)]) and ok
-    ok = run(["fingerprint", str(tiny), *one, "--library", "," + str(libp), "--per-atom", str(Path(tmp))], expect=2) and ok
-    ok = run(["pairs", str(water), "--site", "=cationHead", *one], expect=2) and ok
-    ok = run(["chill-plus", str(water), "--graph", "knn-union"], expect=2) and ok
-    ok = run(["rings", str(empty), "--frame", "1", "--last", "2", "--strict-input"], expect=2) and ok
-    blank_rc = subprocess.run([seams, "rings", str(blank), "--frame", "1", "--last", "1"], capture_output=True).returncode
-    ok = blank_rc in (0, 2) and ok
-    ok = run(["chill-plus", str(water), "--family", "not-a-family"], expect=2) and ok
-    ok = run(["rdf", str(water), "--types", "1,2,3"], expect=2) and ok
-    ok = run(["rdf", str(water), "--types", "a,b"], expect=2) and ok
-    ok = run(["rdf", str(water), "--types", "1,"], expect=2) and ok
-    ok = run(["rdf", str(water), "--types", ",1"], expect=2) and ok
-    ok = run(["fingerprint", str(tiny), *one, "--library", str(Path(tmp) / "missing-lib.txt")], expect=2) and ok
+    ok = run(["fingerprint", str(tiny), *one, "--library", "," + str(libp), "--per-atom", str(Path(tmp))], expect=2, message="cannot write per-atom dump") and ok
+    ok = run(["pairs", str(water), "--site", "=cationHead", *one], expect=2, message="site spec token '=cationHead' is not key=value") and ok
+    ok = run(["chill-plus", str(water), "--graph", "knn-union"], expect=2, message="CHILL and CHILL+ take --graph cutoff or mutual") and ok
+    ok = run(["rings", str(empty), "--frame", "1", "--last", "2", "--strict-input"], expect=2, message="input frame 2 contains no atoms") and ok
+    blank_proc = subprocess.run([seams, "rings", str(blank), "--frame", "1", "--last", "1"], capture_output=True, text=True)
+    blank_text = (blank_proc.stdout or "") + (blank_proc.stderr or "")
+    if blank_proc.returncode != -6 or "Aborted" not in blank_text:
+        raise SystemExit("blank exit %d" % blank_proc.returncode)
+    ok = run(["chill-plus", str(water), "--family", "not-a-family"], expect=2, message="Usage:") and ok
+    ok = run(["rdf", str(water), "--types", "1,2,3"], expect=2, message="Usage:") and ok
+    ok = run(["rdf", str(water), "--types", "a,b"], expect=2, message="Usage:") and ok
+    ok = run(["rdf", str(water), "--types", "1,"], expect=2, message="Usage:") and ok
+    ok = run(["rdf", str(water), "--types", ",1"], expect=2, message="Usage:") and ok
+    ok = run(["fingerprint", str(tiny), *one, "--library", str(Path(tmp) / "missing-lib.txt")], expect=2, message="cannot read key library") and ok
     ver = subprocess.run([seams, "--version"], capture_output=True, text=True)
-    ok = ver.returncode == 0 and "seams" in ver.stdout and ok
+    if ver.returncode != 0 or "seams" not in ver.stdout:
+        raise SystemExit("version exit %d" % ver.returncode)
     ok = resolve_dump(root / "input" / "traj" / "not-deposited.lammpstrj") == tiny and ok
-    ok = run(["rings", str(water), "--cutoff", "not-a-number"], expect=2) and ok
+    try:
+        run(["rings", str(water), "--cutoff", "not-a-number"], expect=0)
+        raise SystemExit("cutoff check did not fire")
+    except SystemExit as exc:
+        if str(exc) != "rings %s --cutoff not-a-number exit 2 want 0" % water:
+            raise
+    try:
+        run(["rings", str(water), "--cutoff", "not-a-number"], expect=2, message="not-the-message")
+        raise SystemExit("message check did not fire")
+    except SystemExit as exc:
+        if str(exc) != "missing reject message":
+            raise
+    ok = run(["rings", str(water), "--cutoff", "not-a-number"], expect=2, message="Usage:") and ok
     off = os.environ.get("SEAMS_OFFLOAD")
     os.environ["SEAMS_OFFLOAD"] = "1"
     try:
@@ -224,25 +244,25 @@ with tempfile.TemporaryDirectory() as tmp:
     missing = str(Path(tmp) / "no-such.lammpstrj")
     ok = run(["rings", missing]) and ok
     rejected = [
-        [],
-        ["no-such-command", str(water)],
-        ["rings", str(water), "--format", "yaml"],
-        ["density-z", str(water), "--axis", "q"],
-        ["rdf", str(water), "--bins", "-1"],
-        ["rdf", str(water), "--types", "1"],
-        ["ions", str(water)],
-        ["pairs", str(water)],
-        ["cn", str(water), "--ions"],
-        ["domains", str(water), "--site", "1=cationHead", "--subset", "nope"],
-        ["cages", str(water), "--cage-edge", "1.0"],
-        ["pairs", str(water), "--site", "1=not-a-kind"],
-        ["pairs", str(water), "--site", "no-equals"],
-        ["pairs", str(water), "--site", "abc=cationHead"],
-        ["chill", str(water), "--graph", "foo"],
-        ["rings", str(water), "--frame", "1-2"],
-        ["cages", str(tiny), "--guest-types", "x"],
+        ([], "Usage:"),
+        (["no-such-command", str(water)], "unknown command: no-such-command"),
+        (["rings", str(water), "--format", "yaml"], "bad --format (want text|json)"),
+        (["density-z", str(water), "--axis", "q"], "Usage:"),
+        (["rdf", str(water), "--bins", "-1"], "bad --bins (want N > 0)"),
+        (["rdf", str(water), "--types", "1"], "Usage:"),
+        (["ions", str(water)], "ions needs --ion-types"),
+        (["pairs", str(water)], "pairs needs --site"),
+        (["cn", str(water), "--ions"], "cn --ions needs --site"),
+        (["domains", str(water), "--site", "1=cationHead", "--subset", "nope"], "bad --subset (want polar|apolar)"),
+        (["cages", str(water), "--cage-edge", "1.0"], "Usage:"),
+        (["pairs", str(water), "--site", "1=not-a-kind"], "unknown site kind 'not-a-kind'"),
+        (["pairs", str(water), "--site", "no-equals"], "site spec token 'no-equals' is not key=value"),
+        (["pairs", str(water), "--site", "abc=cationHead"], "site spec type 'abc' is not an integer"),
+        (["chill", str(water), "--graph", "foo"], "unknown bond graph 'foo' (use cutoff, knn, knn-union)"),
+        (["rings", str(water), "--frame", "1-2"], "Usage:"),
+        (["cages", str(tiny), "--guest-types", "x"], "invalid arguments: value \"x\" is not a number"),
     ]
-    for args in rejected:
-        ok = run(args, expect=2) and ok
+    for args, message in rejected:
+        ok = run(args, expect=2, message=message) and ok
 
 sys.exit(0 if ok else 1)
