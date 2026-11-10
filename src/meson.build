@@ -36,6 +36,7 @@ ydslib_sources = files(
   'selection.cpp',
   'shapeMatch.cpp',
   'seams_c_api.cpp',
+  'insitu.cpp',
   'site.cpp',
   'steinhardt_parallel.cpp',
   'topo_bulk.cpp',
@@ -117,3 +118,9 @@ pkgconfig.generate(
   requires: ['eigen3 >= 3.4.0'],
   libraries: ['-L${libdir}', '-lyodaLib'],
   extra_cflags: _public_defines)
+
+# The replay check calls this wrapper. It is the in-situ main and
+# links no molecular-dynamics library.
+executable('seams-insitu', 'insitu_cli.cpp',
+  dependencies: yds_dep,
+  install: false)
