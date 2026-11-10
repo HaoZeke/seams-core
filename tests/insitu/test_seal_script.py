@@ -167,6 +167,11 @@ def test_python_gcov_and_commits(tmp_path, monkeypatch):
         "#!/bin/sh\ncat > widget.cpp.gcov << 'END'\n" + gcov_text + "END\n",
     )
     monkeypatch.setenv("DSEAMS_V30_SKIP_TEST", "1")
+    ran = tmp_path / "meson-ran.txt"
+    write_exe(
+        bindir / "meson",
+        "#!/bin/sh\necho ran >> " + str(ran) + "\nexit 0\n",
+    )
     (tmp_path / "gcov-run.log").write_text("kept\n")
     # cmd_gcov looks at out/gcov-run.log, so seed it after out is known.
     gout = tmp_path / "gout"
@@ -194,6 +199,7 @@ def test_python_gcov_and_commits(tmp_path, monkeypatch):
     args.gcov = str(bindir / "gcov")
     args.src = str(ROOT)
     seal.cmd_gcov(args)
+    assert ran.read_text().strip() == "ran"
     report = (gout / "COVERAGE_CPP.txt").read_text()
     assert "=====" not in report or name in report
     assert (gout / "COVERAGE_EXCLUDED.txt").exists()
@@ -204,7 +210,6 @@ def test_python_gcov_and_commits(tmp_path, monkeypatch):
     seal.cmd_commits(args)
     assert "failures 0" in (cout / "COMMIT_CHECK.txt").read_text()
 
-    monkeypatch.delenv("DSEAMS_V30_SKIP_TEST")
     write_exe(bindir / "meson", "#!/bin/sh\necho meson-ran\nexit 7\n")
     with pytest.raises(SystemExit):
         seal.cmd_gcov(args)
@@ -304,6 +309,7 @@ def test_remaining_arms(tmp_path, monkeypatch):
     subprocess.run(["git", "rm", "gone.hpp"], cwd=repo, check=True, capture_output=True)
     subprocess.run(["git", "-c", "core.hooksPath=/dev/null", "commit", "-m", "change"], cwd=repo, check=True, capture_output=True, env=env)
     monkeypatch.setattr(seal, "PUBLIC_BASE", base)
+    write_exe(bindir / "meson", "#!/bin/sh\necho meson\nexit 0\n")
     monkeypatch.setenv("DSEAMS_V30_SKIP_TEST", "1")
     gout = tmp_path / "gout2"
     gout.mkdir()
