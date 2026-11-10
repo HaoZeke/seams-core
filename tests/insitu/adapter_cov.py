@@ -85,6 +85,7 @@ def lammps_cases(work, plugin, lmp, mpirun, libdir):
         "bare-cutoff": (header + "fix sea all dseams record rec.txt cutoff\nrun 1\n", 1, "Illegal fix dseams command"),
         "bare-depth": (header + "fix sea all dseams record rec.txt depth\nrun 1\n", 1, "Illegal fix dseams command"),
         "bare-host": (header + "fix sea all dseams record rec.txt host\nrun 1\n", 1, "Illegal fix dseams command"),
+        "bare-neigh": (header + "fix sea all dseams record rec.txt neigh\nrun 1\n", 1, "Illegal fix dseams command"),
         "word-every": (header + "fix sea all dseams record rec.txt every abc\nrun 1\n", 1, "fix dseams: every must be a positive integer"),
         "word-cutoff": (header + "fix sea all dseams record rec.txt cutoff abc\nrun 1\n", 1, "fix dseams: cutoff must be positive"),
         "trail-cutoff": (header + "fix sea all dseams record rec.txt cutoff 2x\nrun 1\n", 1, "fix dseams: cutoff must be positive"),
@@ -147,7 +148,7 @@ def lammps_cases(work, plugin, lmp, mpirun, libdir):
     still = work / "nohost"
     still.mkdir(parents=True, exist_ok=True)
     (still / "in").write_text(
-        header + "fix sea all dseams record rec.txt every 1 cutoff 3.5 host no\nrun 2\n"
+        header + "fix sea all dseams record rec.txt neigh host.txt every 1 cutoff 3.5 host no\nrun 2\n"
     )
     run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"], still, env)
     print("lammps nohost ok", flush=True)
@@ -277,7 +278,7 @@ def subset_case(work, lmp, mpirun, plugin, env):
         "mass * 18.0\npair_style zero 4.0\npair_coeff * *\n"
         "neighbor 2.0 bin\nneigh_modify delay 0 every 1 check yes\n"
         "group oxy type 1\n"
-        "fix sea oxy dseams record live.txt every 1 cutoff 3.5\n"
+        "fix sea oxy dseams record live.txt neigh host.txt every 1 cutoff 3.5\n"
         "dump native all custom 1 dump.lammpstrj id type x y z\n"
         "dump_modify native sort id format float %%.17g\n"
         "run 0\n" % plugin
@@ -340,12 +341,14 @@ def compute_cases(work, lmp, cxx, include, env):
         "graph-cutoff": base + "compute ice all dseams graph cutoff\n" + dump + "run 0\n",
         "mutual": base + "compute ice all dseams graph mutual\n" + dump + "run 0\n",
         "tri": base + "change_box all triclinic\ncompute ice all dseams cutoff 3.2\n" + dump + "run 0\n",
+        "labels": base + "compute ice all dseams file labels.txt\n" + dump + "run 1\n",
     }
     rejects = {
         "bad-graph": (base + "compute ice all dseams graph nope\nrun 0\n", "CHILL+ compute: graph is cutoff or mutual"),
         "bad-cut": (base + "compute ice all dseams cutoff 0\nrun 0\n", "CHILL+ compute: cutoff must be positive"),
         "bad-word": (base + "compute ice all dseams nope 1\nrun 0\n", "Illegal CHILL+ compute command"),
         "bare": (base + "compute ice all dseams graph\nrun 0\n", "Illegal CHILL+ compute command"),
+        "bare-file": (base + "compute ice all dseams file\nrun 0\n", "Illegal CHILL+ compute command"),
     }
     empty = (
         "units real\natom_style atomic\nboundary p p p\n"

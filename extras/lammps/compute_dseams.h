@@ -23,6 +23,8 @@ private:
   double *chill;
   double cutoff;
   std::string graph;
+  std::string label_path;
+  int label_open;
 };
 
 } // namespace LAMMPS_NS
