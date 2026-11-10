@@ -628,6 +628,39 @@ def main():
             if probed.returncode != 2 or needle not in probed.stderr:
                 sys.stderr.write("fault " + kind + " " + str(probed.returncode) + "\n" + probed.stderr)
                 return 1
+    by_atom = run(seams, ["fingerprint", ice, "--type", "1", "--by-atom", "--hops", "1"])
+    if by_atom.returncode != 0 or "atom " not in by_atom.stdout or "coord " not in by_atom.stdout:
+        sys.stderr.write("by-atom fingerprint\n" + by_atom.stdout + by_atom.stderr)
+        return 1
+    class_dump = os.path.join(work, "classes.lammpstrj")
+    classed = run(seams, ["fingerprint", ice, "--type", "1", "--hops", "1", "--per-atom", class_dump])
+    if classed.returncode != 0 or not os.path.exists(class_dump):
+        sys.stderr.write("class dump\n" + classed.stdout + classed.stderr)
+        return 1
+    cage_dump = os.path.join(work, "cages-atom.lammpstrj")
+    cage_atoms = run(seams, ["cages", ice, "--type", "1", "--per-atom", cage_dump])
+    if cage_atoms.returncode != 0 or "hexagonal" not in cage_atoms.stdout:
+        sys.stderr.write("cage per-atom\n" + cage_atoms.stdout + cage_atoms.stderr)
+        return 1
+    signed = run(seams, ["cages", ice, "--type", "1", "--signature", "512",
+                         "--guest-types", "1", "--guest-radius", "4"])
+    if signed.returncode != 0 or "occ " not in signed.stdout:
+        sys.stderr.write("guest occupancy\n" + signed.stdout + signed.stderr)
+        return 1
+    bare_ions = run(seams, ["ions", tip, "--type", "2", "--ion-types", "1",
+                            "--site", "1=cationHead,2=anion"])
+    if bare_ions.returncode != 0 or "ions " not in bare_ions.stdout:
+        sys.stderr.write("ions without water types\n" + bare_ions.stdout + bare_ions.stderr)
+        return 1
+    typed_ions = run(seams, ["--water-types", "2", "ions", tip, "--type", "2",
+                             "--ion-types", "1", "--site", "1=cationHead,2=anion"])
+    if typed_ions.returncode != 0 or "ions " not in typed_ions.stdout:
+        sys.stderr.write("ions with water types\n" + typed_ions.stdout + typed_ions.stderr)
+        return 1
+    ranged = run(seams, ["--frame", "1", "--last", "2", "read", cubic])
+    if ranged.returncode != 0:
+        sys.stderr.write("two-frame read\n" + ranged.stderr)
+        return 1
     return 1 if failed else 0
 
 
