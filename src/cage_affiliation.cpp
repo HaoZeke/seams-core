@@ -533,9 +533,7 @@ ring::stackingPlanes(const std::vector<std::vector<int>> &rings,
       hc[i] = true;
       hc[static_cast<std::size_t>(j)] = true;
       for (const int k : ctx.prismaticOf(static_cast<int>(i), j)) {
-        if (k >= 0 && static_cast<std::size_t>(k) < nRings) {
-          hc[static_cast<std::size_t>(k)] = true;
-        }
+        hc[static_cast<std::size_t>(k)] = true;
       }
     }
   }
