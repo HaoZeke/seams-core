@@ -113,6 +113,31 @@ def open_run_log(path, route, launch, system, binary_name, command_text):
     return log
 
 
+def require_fix_input(text):
+    if "fix sea all dseams" not in text or "compute ice all dseams" in text:
+        raise SystemExit("shipped input is not the fix")
+    if "plugin load ./libdseams_lammps.so" not in text:
+        raise SystemExit("shipped input does not load the fix plugin")
+
+
+def require_ok(code, message):
+    if code != 0:
+        raise SystemExit(message)
+
+
+def quantile7(values, probability):
+    ordered = sorted(values)
+    count = len(ordered)
+    if count == 1:
+        return ordered[0]
+    position = 1.0 + (count - 1) * probability
+    lower = int(position)
+    if lower >= count:
+        return ordered[-1]
+    weight = position - lower
+    return (1.0 - weight) * ordered[lower - 1] + weight * ordered[lower]
+
+
 def wall_of(stderr):
     for line in stderr.splitlines():
         if line.startswith("wall_s "):
@@ -482,10 +507,7 @@ def main():
             print("routes", system, launch, mismatches, flush=True)
 
     shipped = LITERAL.read_text()
-    if "fix sea all dseams" not in shipped or "compute ice all dseams" in shipped:
-        raise SystemExit("shipped input is not the fix")
-    if "plugin load ./libdseams_lammps.so" not in shipped:
-        raise SystemExit("shipped input does not load the fix plugin")
+    require_fix_input(shipped)
     for route, binary, token, digest, plugin_bytes in (
         ("plugin", LMP_STOCK, "$BUILD/lammps-stock/lmp", STOCK_SHA, PLUGIN.read_bytes()),
         ("intree", LMP_INTREE, "$BUILD/lammps-intree/lmp", INTREE_SHA, None),
@@ -504,8 +526,7 @@ def main():
             binary, token, digest, folder, "serial", route, "literal-in.dseams",
             "%s-literal-in.dseams-serial.log" % route, in_name="in.dseams",
         )
-        if code != 0:
-            raise SystemExit("literal %s exit %d" % (route, code))
+        require_ok(code, "literal %s exit %d" % (route, code))
         compared = compare_live_cli("literal-in.dseams", "serial", route, folder, cli_rows)
         if compared["mismatches"] != 0 or compared["live_steps"] != [0]:
             raise SystemExit("literal %s mismatch %s" % (route, compared))
@@ -559,18 +580,6 @@ def main():
         writer = csv.DictWriter(handle, fieldnames=["system", "launch", "frames_plugin", "frames_intree", "mismatches"])
         writer.writeheader()
         writer.writerows(route_summary)
-
-    def quantile7(values, probability):
-        ordered = sorted(values)
-        count = len(ordered)
-        if count == 1:
-            return ordered[0]
-        position = 1.0 + (count - 1) * probability
-        lower = int(position)
-        if lower >= count:
-            return ordered[-1]
-        weight = position - lower
-        return (1.0 - weight) * ordered[lower - 1] + weight * ordered[lower]
 
     lscpu = subprocess.check_output(["lscpu"], text=True)
     print("lscpu_begin", flush=True)

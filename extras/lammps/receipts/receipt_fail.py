@@ -298,6 +298,76 @@ def run_main(path, argv):
         sys.argv = old
 
 
+def check_campaign(work):
+    import run_campaign
+    if run_campaign.wall_of("nope\n") != "":
+        raise SystemExit("wall empty")
+    if run_campaign.wall_of("wall_s 1.5\n") != "1.5":
+        raise SystemExit("wall")
+    run_campaign.clean("plain")
+    run_campaign.timed(["/bin/true"], work)
+    blocks = run_campaign.census("note\nstep 0\nrings a\n\n")
+    if blocks[0]["lines"].get("rings") != "rings a":
+        raise SystemExit("census")
+    mapped = run_campaign.chill_map("chill bare bar:2")
+    if mapped.get("bar") != 2:
+        raise SystemExit("chill map")
+    rows = []
+    run_campaign.compare_routes("s", "serial", [], [{"step": 0, "lines": {"rings": "a"}}], rows)
+    run_campaign.compare_routes(
+        "s", "serial",
+        [{"step": 0, "lines": {"rings": "a"}}],
+        [{"step": 1, "lines": {"rings": "b"}}],
+        rows,
+    )
+    run_campaign.compare_routes(
+        "s", "serial",
+        [{"step": 0, "lines": {"rings": "a", "chill": "", "cage": "", "n": "", "n_rings": "", "labels": "", "cages": ""}}],
+        [{"step": 0, "lines": {"rings": "b", "chill": "", "cage": "", "n": "", "n_rings": "", "labels": "", "cages": ""}}],
+        rows,
+    )
+    if run_campaign.quantile7([3.0], 0.5) != 3.0:
+        raise SystemExit("quantile one")
+    if run_campaign.quantile7([1.0, 2.0, 3.0, 4.0], 1.0) != 4.0:
+        raise SystemExit("quantile edge")
+    expect_exit(lambda: run_campaign.require_fix_input("nope"), "not the fix")
+    expect_exit(lambda: run_campaign.require_fix_input("fix sea all dseams\n"), "does not load")
+    run_campaign.require_fix_input(run_campaign.LITERAL.read_text())
+    expect_exit(lambda: run_campaign.require_ok(2, "bad 2"), "bad 2")
+    run_campaign.require_ok(0, "ok")
+    expect_exit(
+        lambda: run_campaign.run_lammps(
+            "/bin/false", "false", "0" * 64, work / "badlmp", "serial", "plugin", "bad", "bad-plugin.log"
+        ),
+        "exit",
+    )
+
+
+def check_neigh(work):
+    import neigh_ref
+    text = work / "pre.txt"
+    text.write_text(
+        "junk\nframe\nstep 0\ncutoff 3.5\nbox 0 0 0 10 10 10 0 0 0\n"
+        "host 0\natoms 2\natom 1 1 0 0 0\natom 2 1 1 0 0\nrow 1 2\n"
+        "label 1 1 0 0 0 0\nendframe\n"
+    )
+    frames = neigh_ref.parse_frames(text)
+    if len(frames) != 1:
+        raise SystemExit("frames")
+    neigh_ref.print_repo("gone", "")
+    neigh_ref.print_repo("seams", os.environ["SRC_SEAMS"])
+    points = __import__("numpy").array(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 1.0, 0.0]]
+    )
+    neigh_ref.bond_counts(points, [0, 0, 0, 10, 10, 10, 0, 0, 0], 0, 3.0)
+    old = sys.argv
+    sys.argv = ["neigh_ref.py"]
+    try:
+        expect_exit(neigh_ref.main, "missing host")
+    finally:
+        sys.argv = old
+
+
 def check_prose(work):
     if not os.environ.get("SNAPPER"):
         return
@@ -331,6 +401,8 @@ def main():
     check_evidence(work)
     check_dates(work)
     check_trace()
+    check_campaign(work)
+    check_neigh(work)
     check_prose(work)
     run_main(date_check.__file__, ["date_check.py", str(work / "logs")])
     run_main(record_build.__file__, ["record_build.py", str(work / "ok-build.log"), str(work), "true", "true"])
