@@ -1,0 +1,62 @@
+Evidence for the v32 items, checked on insitu-v34.
+
+Public range checks
+6679ed71 restores the checks on public entries.
+abbf242a restores the public equator checks.
+454ccacc restores the public pair guards.
+
+Equator loop
+tests/BRANCH_PROOFS.md records the equatorialLarge loop.
+ddcKeepRoom only drops a chain that fails ddcChainRoom.
+The file-local helpers are not in a header.
+
+Interfacial index
+tests/BRANCH_PROOFS.md records chill::isInterfacial.
+The negative-index conjunct is gone.
+The nop bound remains.
+tests/test_bop.cpp still calls isInterfacial.
+
+Point-set cage
+81807b6e keeps the hc.xyz cloud that readXYZ returns.
+
+Campaign driver
+c123c81f and 796ea592 read the settings from the campaign driver.
+stats.py campaign_number reads those assignments and exits if one is missing.
+
+Suite skip
+The campaign driver is in place.
+a4589707 and 75c535e9 then run meson test when coverage is scored.
+tests/insitu/test_seal_script.py sets DSEAMS_V30_SKIP_TEST and still expects the suite to run.
+
+Phase and directory race
+341cee21 checks the phase result and the raced directory.
+33495118 parenthesises the path-race assertion.
+
+Non-finite coordinates
+59badc64 rejects infinite coordinates as well as NaN.
+c60a0b0c rejects a non-finite cloud before libira.
+
+Copyright
+c83e838b adds the developers line to the language binding, its test,
+the command line, the rdf test, the input test, and the bulk test.
+Thirty nine sources under src, outside include/external, still lack that line.
+This item is not closed.
+
+PLUMED file
+See REPLAY.txt. d6539ae1 keeps Dseams.cpp. 813597b2 does not.
+
+Dates
+See REPLAY.txt.
+
+Paper comparator lanes
+rg_main.tex states that the liquid column was not rerun and that the
+1.3.5 ring-code archive is not in this checkout.
+This checkout has no liquid trajectory and no copy of that archive.
+The matscipy module does not import.
+Those three lanes cannot be regenerated here.
+The sentences in the paper match that fact.
+The supplement cutoff belongs to polyhedral template matching.
+
+Prism path
+paper/tex/repro/prism_matcher_path.txt.
+No paper number used the shape-matcher early return.
