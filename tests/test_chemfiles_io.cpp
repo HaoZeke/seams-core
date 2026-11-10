@@ -8,6 +8,8 @@
 #include <neighbours.hpp>
 #include <seams_input.hpp>
 
+#include <unistd.h>
+
 #include <array>
 #include <chrono>
 #include <filesystem>
@@ -21,6 +23,16 @@ namespace {
 
 namespace fs = std::filesystem;
 using Cloud = molSys::PointCloud<molSys::Point<double>, double>;
+
+// The chemfiles profiles share one temp directory. A fixed file name
+// is removed by one process while another still reads it.
+fs::path chemTemp() {
+  auto dir = fs::temp_directory_path() /
+             ("dseams-chem-" +
+              std::to_string(static_cast<long long>(::getpid())));
+  fs::create_directories(dir);
+  return dir;
+}
 
 std::map<int, int> ringSizes(Cloud cloud, int type) {
   std::map<int, int> hist;
@@ -123,7 +135,7 @@ TEST_CASE("chemfiles matches the native LAMMPS and XYZ readers",
   REQUIRE(ringSizes(via, 2) == ringSizes(native, 2));
   REQUIRE(iceCounts(via, 2) == iceCounts(native, 2));
 
-  const auto path = fs::temp_directory_path() / "dseams_chem_native.xyz";
+  const auto path = chemTemp() / "dseams_chem_native.xyz";
   {
     std::ofstream out(path);
     out << native.nop << "\nbox\n";
@@ -159,7 +171,7 @@ TEST_CASE("XTC DCD and NetCDF carry the same census as the dump",
   const std::array<double, 3> lengths = {
       native.box[0], native.box[1], native.box[2]};
   const auto nativeRings = ringSizes(native, 2);
-  const auto dir = fs::temp_directory_path();
+  const auto dir = chemTemp();
   const struct {
     const char *file;
     const char *format;
@@ -193,7 +205,7 @@ TEST_CASE("XTC DCD and NetCDF carry the same census as the dump",
 
 TEST_CASE("water names and a selection split oxygen from hydrogen",
           "[chemfiles]") {
-  const auto path = fs::temp_directory_path() / "dseams_chem_water.xyz";
+  const auto path = chemTemp() / "dseams_chem_water.xyz";
   {
     std::ofstream out(path);
     out << "3\n\nO 0 0 0\nH 1 0 0\nHW 0 1 0\n";
@@ -253,7 +265,7 @@ TEST_CASE("water names and a selection split oxygen from hydrogen",
 }
 
 TEST_CASE("a numeric dump guesses type 2 and then type 1", "[chemfiles]") {
-  const auto path = fs::temp_directory_path() / "dseams_chem_types.xyz";
+  const auto path = chemTemp() / "dseams_chem_types.xyz";
   {
     std::ofstream out(path);
     out << "3\n\n1 0 0 0\n1 1 0 0\n3 2 0 0\n";
@@ -272,8 +284,8 @@ TEST_CASE("a numeric dump guesses type 2 and then type 1", "[chemfiles]") {
 
   Cloud missing = sinp::openFrame("no/such/trajectory.lammpstrj", 1, -1);
   REQUIRE(missing.nop == 0);
-  const auto junkDump = fs::temp_directory_path() / "dseams_chem_junk.lammpstrj";
-  const auto junkXyz = fs::temp_directory_path() / "dseams_chem_junk.xyz";
+  const auto junkDump = chemTemp() / "dseams_chem_junk.lammpstrj";
+  const auto junkXyz = chemTemp() / "dseams_chem_junk.xyz";
   {
     std::ofstream out(junkDump);
     out << "this is not a dump\n";
@@ -296,7 +308,7 @@ TEST_CASE("a numeric dump guesses type 2 and then type 1", "[chemfiles]") {
 }
 
 TEST_CASE("a range walks every chemfiles step and skips CON", "[chemfiles]") {
-  const auto path = fs::temp_directory_path() / "dseams_chem_range.xyz";
+  const auto path = chemTemp() / "dseams_chem_range.xyz";
   {
     std::ofstream out(path);
     out << "1\n\nO 0 0 0\n1\n\nO 1 0 0\n1\n\nO 2 0 0\n";
@@ -348,7 +360,7 @@ TEST_CASE("a range walks every chemfiles step and skips CON", "[chemfiles]") {
 }
 
 TEST_CASE("a triclinic cell is stored with three tilt factors", "[chemfiles]") {
-  const auto path = fs::temp_directory_path() / "dseams_chem_tilt.pdb";
+  const auto path = chemTemp() / "dseams_chem_tilt.pdb";
   chemfiles::Frame frame;
   frame.set_cell(chemfiles::UnitCell(chemfiles::Vector3D(10, 10, 10),
                                      chemfiles::Vector3D(90, 90, 60)));
@@ -361,7 +373,7 @@ TEST_CASE("a triclinic cell is stored with three tilt factors", "[chemfiles]") {
   REQUIRE(cloud.box.size() == 6);
   fs::remove(path);
 
-  const auto pdb = fs::temp_directory_path() / "dseams_chem_res.pdb";
+  const auto pdb = chemTemp() / "dseams_chem_res.pdb";
   {
     std::ofstream out(pdb);
     out << "ATOM      1  OW  SOL     7       1.000   2.000   3.000  1.00  0.00\n"
@@ -375,7 +387,7 @@ TEST_CASE("a triclinic cell is stored with three tilt factors", "[chemfiles]") {
 }
 
 TEST_CASE("a dcd uses the sibling pdb names", "[chemfiles]") {
-  const auto root = fs::temp_directory_path();
+  const auto root = chemTemp();
   const auto dcd = root / "dseams_chem_names.dcd";
   const auto pdb = root / "dseams_chem_names.pdb";
   {
@@ -401,7 +413,7 @@ TEST_CASE("a dcd uses the sibling pdb names", "[chemfiles]") {
 }
 
 TEST_CASE("an extended xyz lattice is the cell", "[chemfiles]") {
-  const auto path = fs::temp_directory_path() / "dseams_chem_lattice.xyz";
+  const auto path = chemTemp() / "dseams_chem_lattice.xyz";
   {
     std::ofstream out(path);
     out << "2\n"
@@ -420,7 +432,10 @@ TEST_CASE("an extended xyz lattice is the cell", "[chemfiles]") {
 }
 
 TEST_CASE("cif and mmcif round trip with an explicit format", "[chemfiles]") {
-  const auto root = fs::temp_directory_path();
+  // chemfiles 0.10.4 mmCIFFormat::read (mmCIF.cpp:316) dereferences
+  // label_entity_id when label_seq_id is ".". The writer omits that
+  // column. openFrame must return the oxygen instead of crashing.
+  const auto root = chemTemp();
   const auto cif = root / "dseams_chem_round.cif";
   const auto mmcif = root / "dseams_chem_round.mmcif";
   {
@@ -447,7 +462,7 @@ TEST_CASE("cif and mmcif round trip with an explicit format", "[chemfiles]") {
 }
 
 TEST_CASE("an empty xyz range and a con path name the failure", "[chemfiles]") {
-  const auto empty = fs::temp_directory_path() / "dseams_empty_range.xyz";
+  const auto empty = chemTemp() / "dseams_empty_range.xyz";
   {
     std::ofstream out(empty);
     out << "";
@@ -466,7 +481,7 @@ TEST_CASE("an empty xyz range and a con path name the failure", "[chemfiles]") {
   fs::remove(empty);
 #ifndef SEAMS_HAS_READCON
   try {
-    sinp::openFrame((fs::temp_directory_path() / "missing.con").string(), 1, -1);
+    sinp::openFrame((chemTemp() / "missing.con").string(), 1, -1);
     FAIL("a con path must fail in this build");
   } catch (const std::runtime_error &err) {
     REQUIRE(std::string(err.what()).find("readcon-core") != std::string::npos);
@@ -494,7 +509,7 @@ TEST_CASE("the ice XXI cif is one cell of 152 oxygens", "[chemfiles]") {
 }
 
 TEST_CASE("water names and a rejected dump use the matching reader", "[chemfiles]") {
-  const auto pdb = fs::temp_directory_path() / "dseams_names.pdb";
+  const auto pdb = chemTemp() / "dseams_names.pdb";
   {
     std::ofstream out(pdb);
     out << "ATOM      1  OW  SOL A   1       1.000   2.000   3.000  1.00  0.00           O\n"
@@ -509,7 +524,7 @@ TEST_CASE("water names and a rejected dump use the matching reader", "[chemfiles
   REQUIRE(named.pts[1].type == 1);
   fs::remove(pdb);
 
-  const auto junk = fs::temp_directory_path() / "dseams_not_a_dump.lammpstrj";
+  const auto junk = chemTemp() / "dseams_not_a_dump.lammpstrj";
   {
     std::ofstream out(junk);
     out << "this is not a dump\n";
@@ -518,7 +533,7 @@ TEST_CASE("water names and a rejected dump use the matching reader", "[chemfiles
   REQUIRE(recovered.nop == 0);
   fs::remove(junk);
 
-  const auto xyz = fs::temp_directory_path() / "dseams_one.xyz";
+  const auto xyz = chemTemp() / "dseams_one.xyz";
   {
     std::ofstream out(xyz);
     out << "1\ncomment\nO 1 1 1\n";
@@ -531,7 +546,7 @@ TEST_CASE("water names and a rejected dump use the matching reader", "[chemfiles
   REQUIRE(seen == 0);
   fs::remove(xyz);
 
-  const auto gro = fs::temp_directory_path() / "dseams_empty.gro";
+  const auto gro = chemTemp() / "dseams_empty.gro";
   {
     std::ofstream out(gro);
     out << "";
@@ -545,7 +560,7 @@ TEST_CASE("water names and a rejected dump use the matching reader", "[chemfiles
 }
 
 TEST_CASE("name checks and the dump fallback take both sides", "[chemfiles]") {
-  const auto pdb = fs::temp_directory_path() / "dseams_oh_ho.pdb";
+  const auto pdb = chemTemp() / "dseams_oh_ho.pdb";
   {
     std::ofstream out(pdb);
     out << "ATOM      1  OH  MOL A   1       1.000   1.000   1.000  1.00  0.00\n"
@@ -558,13 +573,13 @@ TEST_CASE("name checks and the dump fallback take both sides", "[chemfiles]") {
   REQUIRE(named.pts[0].type == 8);
   fs::remove(pdb);
 
-  const auto junk = fs::temp_directory_path() / "dseams_bad_steps_dir.pdb";
+  const auto junk = chemTemp() / "dseams_bad_steps_dir.pdb";
   fs::remove_all(junk);
   fs::create_directories(junk);
   REQUIRE(sinp::chemfilesSteps(junk.string()) < 0);
   fs::remove_all(junk);
 
-  const auto emptyGro = fs::temp_directory_path() / "dseams_zero.gro";
+  const auto emptyGro = chemTemp() / "dseams_zero.gro";
   {
     std::ofstream out(emptyGro);
     out << "";
@@ -578,7 +593,7 @@ TEST_CASE("name checks and the dump fallback take both sides", "[chemfiles]") {
   REQUIRE(walked == 0);
   fs::remove(emptyGro);
 
-  const auto dump = fs::temp_directory_path() / "dseams_only_type1.dump";
+  const auto dump = chemTemp() / "dseams_only_type1.dump";
   {
     std::ofstream out(dump);
     out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
@@ -592,7 +607,7 @@ TEST_CASE("name checks and the dump fallback take both sides", "[chemfiles]") {
   fs::remove(dump);
   sinp::dropLammpsDumpIndex(dump.string());
 
-  const auto names = fs::temp_directory_path() / "dseams_oh_ho.xyz";
+  const auto names = chemTemp() / "dseams_oh_ho.xyz";
   {
     std::ofstream out(names);
     out << "3\ncomment\nOH 0 0 0\nHO 1 0 0\nAr 2 0 0\n";
@@ -601,7 +616,7 @@ TEST_CASE("name checks and the dump fallback take both sides", "[chemfiles]") {
   REQUIRE(tokens.nop >= 1);
   fs::remove(names);
 
-  const auto emptyXyz = fs::temp_directory_path() / "dseams_empty_walk.xyz";
+  const auto emptyXyz = chemTemp() / "dseams_empty_walk.xyz";
   {
     std::ofstream out(emptyXyz);
     out << "";
@@ -622,14 +637,14 @@ TEST_CASE("name checks and the dump fallback take both sides", "[chemfiles]") {
   expectEmpty([&] { sinp::readChemfiles(emptyXyz.string(), 1, guessed, -1); });
   fs::remove(emptyXyz);
 
-  const auto badDump = fs::temp_directory_path() / "dseams_not_a_dump.dump";
+  const auto badDump = chemTemp() / "dseams_not_a_dump.dump";
   fs::remove_all(badDump);
   fs::create_directories(badDump);
   Cloud fallback = sinp::openFrame(badDump.string(), 1, 0);
   REQUIRE(fallback.nop == 0);
   fs::remove_all(badDump);
 
-  const auto typed = fs::temp_directory_path() / "dseams_type2.dump";
+  const auto typed = chemTemp() / "dseams_type2.dump";
   {
     std::ofstream out(typed);
     out << "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
@@ -642,13 +657,13 @@ TEST_CASE("name checks and the dump fallback take both sides", "[chemfiles]") {
   fs::remove(typed);
   sinp::dropLammpsDumpIndex(typed.string());
 
-  const auto words = fs::temp_directory_path() / "dseams_tokens.xyz";
+  const auto words = chemTemp() / "dseams_tokens.xyz";
   {
     std::ofstream out(words);
     out << "6\ncomment\nO 0 0 0\nOW 1 0 0\nOH 2 0 0\n"
         << "H 3 0 0\nHW 4 0 0\nHO 5 0 0\n";
   }
-  const auto mixed = fs::temp_directory_path() / "dseams_mixed.pdb";
+  const auto mixed = chemTemp() / "dseams_mixed.pdb";
   {
     std::ofstream out(mixed);
     out << "ATOM      1   OH MOL A   1       0.000   0.000   0.000  1.00  0.00           C\n"
@@ -660,7 +675,7 @@ TEST_CASE("name checks and the dump fallback take both sides", "[chemfiles]") {
   REQUIRE(mixedCloud.pts[0].type == 6);
   fs::remove(mixed);
 
-  const auto smiles = fs::temp_directory_path() / "dseams_group.smi";
+  const auto smiles = chemTemp() / "dseams_group.smi";
   {
     std::ofstream out(smiles);
     out << "O\n";
@@ -676,7 +691,7 @@ TEST_CASE("name checks and the dump fallback take both sides", "[chemfiles]") {
   REQUIRE(spelled.pts[3].type == 1);
   fs::remove(words);
 
-  const auto picked = fs::temp_directory_path() / "dseams_select.xyz";
+  const auto picked = chemTemp() / "dseams_select.xyz";
   {
     std::ofstream out(picked);
     out << "2\ncomment\nO 0 0 0\nH 1 0 0\n";
@@ -687,7 +702,7 @@ TEST_CASE("name checks and the dump fallback take both sides", "[chemfiles]") {
   REQUIRE(allNamed.nop == 1);
   fs::remove(picked);
 
-  const auto locked = fs::temp_directory_path() / "dseams_locked_fallback.xyz";
+  const auto locked = chemTemp() / "dseams_locked_fallback.xyz";
   {
     std::ofstream out(locked);
     out << "1\ncomment\nO 0 0 0\n";
@@ -698,7 +713,7 @@ TEST_CASE("name checks and the dump fallback take both sides", "[chemfiles]") {
   fs::permissions(locked, fs::perms::owner_all);
   fs::remove(locked);
 
-  const auto asDir = fs::temp_directory_path() / "dseams_dir_fallback.xyz";
+  const auto asDir = chemTemp() / "dseams_dir_fallback.xyz";
   fs::remove_all(asDir);
   fs::create_directories(asDir);
   try {
@@ -711,7 +726,7 @@ TEST_CASE("name checks and the dump fallback take both sides", "[chemfiles]") {
 }
 
 TEST_CASE("dump molecule ids follow the LAMMPS atom id", "[chemfiles]") {
-  const auto dir = fs::temp_directory_path() / "dseams_mol_id";
+  const auto dir = chemTemp() / "dseams_mol_id";
   fs::remove_all(dir);
   fs::create_directories(dir);
   const auto shuf = dir / "shuf.lammpstrj";

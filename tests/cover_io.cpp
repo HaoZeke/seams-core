@@ -38,6 +38,16 @@ extern "C" void __gcov_reset() __attribute__((weak));
 
 namespace fs = std::filesystem;
 
+// Five coverage profiles run at once. A fixed temp directory is shared
+// across those processes, so each process keeps its own tree.
+fs::path coverTemp(const char *name) {
+  auto dir = fs::temp_directory_path() /
+             (std::string(name) + "-" +
+              std::to_string(static_cast<long long>(::getpid())));
+  fs::create_directories(dir);
+  return dir;
+}
+
 using Cloud = molSys::PointCloud<molSys::Point<double>, double>;
 
 namespace {
@@ -477,7 +487,7 @@ TEST_CASE("slice selection keeps mates and a second cloud", "[cover_io]") {
 }
 
 TEST_CASE("output paths and padded data files", "[cover_io]") {
-  const auto root = fs::temp_directory_path() / "dseams-cover-io";
+  const auto root = coverTemp("dseams-cover-io");
   fs::remove_all(root);
   const auto work = root / "work";
   fs::create_directories(work);
@@ -689,7 +699,7 @@ TEST_CASE("output paths and padded data files", "[cover_io]") {
 
 #ifdef SEAMS_HAS_CHEMFILES
 TEST_CASE("chemfiles names, residues, and frame slices", "[cover_io]") {
-  const auto dir = fs::temp_directory_path() / "dseams-cover-chem";
+  const auto dir = coverTemp("dseams-cover-chem");
   fs::remove_all(dir);
   fs::create_directories(dir);
   chemfiles::Frame frame;
@@ -792,7 +802,7 @@ TEST_CASE("chemfiles names, residues, and frame slices", "[cover_io]") {
 #endif
 
 TEST_CASE("in-situ nulls, phase trace, and imd client", "[cover_io]") {
-  const auto dir = fs::temp_directory_path() / "dseams-cover-insitu";
+  const auto dir = coverTemp("dseams-cover-insitu");
   fs::remove_all(dir);
   fs::create_directories(dir);
 
@@ -1101,7 +1111,7 @@ TEST_CASE("language bindings nulls and graph names", "[cover_io]") {
   REQUIRE(lang.version() != nullptr);
   REQUIRE(std::string(lang.version()).size() > 0);
   REQUIRE(lang.nframes(nullptr) == -1);
-  const auto dir = fs::temp_directory_path() / "dseams-cover-lang";
+  const auto dir = coverTemp("dseams-cover-lang");
   fs::remove_all(dir);
   fs::create_directories(dir);
   const auto dump = dir / "tiny.dump";
@@ -1229,7 +1239,7 @@ TEST_CASE("language bindings nulls and graph names", "[cover_io]") {
 }
 
 TEST_CASE("cli edges for ranges, axes, and unclassified ice", "[cover_io]") {
-  const auto dir = fs::temp_directory_path() / "dseams-cover-cli";
+  const auto dir = coverTemp("dseams-cover-cli");
   fs::remove_all(dir);
   fs::create_directories(dir);
   const auto one = dir / "one.lammpstrj";
