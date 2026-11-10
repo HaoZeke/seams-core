@@ -2052,10 +2052,15 @@ int main(int argc, char *argv[]) {
   }
 
   if (!typesFlag.empty()) {
-    if (!parseTypePair(typesFlag, rdfTypeI, rdfTypeJ)) {
-      std::cerr << colorizer.error("bad --types (want I,J)") << "\n";
-      std::cerr << colorizer.warning(parser.formatUsage(progname, colorizer))
-                << "\n";
+    try {
+      if (!parseTypePair(typesFlag, rdfTypeI, rdfTypeJ)) {
+        std::cerr << colorizer.error("bad --types (want I,J)") << "\n";
+        std::cerr << colorizer.warning(parser.formatUsage(progname, colorizer))
+                  << "\n";
+        return 2;
+      }
+    } catch (...) {
+      std::cerr << colorizer.error(exceptionText()) << "\n";
       return 2;
     }
     typesSet = true;

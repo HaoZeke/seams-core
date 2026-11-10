@@ -490,6 +490,46 @@ def main():
         if serial < 50 or counted.returncode != 0:
             sys.stderr.write("fault count\n" + counted.stderr)
             return 1
+
+        def serial_of(args):
+            env = os.environ.copy()
+            env["LD_PRELOAD"] = fault_lib
+            env["SEAMS_TEST_KIND"] = "count"
+            proc = subprocess.run([seams, *args], capture_output=True, text=True, env=env)
+            found = 0
+            for line in proc.stderr.splitlines():
+                if line.startswith("fault-serial "):
+                    found = int(line.split()[1])
+            return found, proc.returncode
+
+        def throw_at(args, at):
+            env = os.environ.copy()
+            env["LD_PRELOAD"] = fault_lib
+            env["SEAMS_TEST_KIND"] = "bad_alloc"
+            env["SEAMS_TEST_AT"] = str(at)
+            return subprocess.run([seams, *args], capture_output=True, text=True, env=env)
+
+        long_token = "n" * 64
+        windows = (
+            (["rdf", tip], ["rdf", tip, "--types", long_token + ",1"]),
+            (["pairs", tip], ["pairs", tip, "--site", long_token + "=cationHead"]),
+        )
+        for quiet_args, loud_args in windows:
+            loud, loud_rc = serial_of(loud_args)
+            if loud < 30 or loud_rc not in (0, 2):
+                sys.stderr.write("fault window " + str(loud_rc) + " " + str(loud) + "\n")
+                return 1
+            hit = False
+            # The long token is copied inside parseIntegral, which is the try
+            # that only names ParsingException. bad_alloc is the other type.
+            # That copy is one of the last allocations before the command returns.
+            for at in range(max(1, loud - 40), loud + 1):
+                probed = throw_at(loud_args, at)
+                if probed.returncode == 2 and "bad_alloc" in probed.stderr:
+                    hit = True
+            if not hit:
+                sys.stderr.write("fault mismatch " + " ".join(loud_args) + "\n")
+                return 1
         for kind, needle in (("int", "unknown error"), ("bad_alloc", "bad_alloc")):
             env = os.environ.copy()
             env["LD_PRELOAD"] = fault_lib

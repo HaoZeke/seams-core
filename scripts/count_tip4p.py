@@ -46,16 +46,25 @@ def load(path, atom_type):
     return np.asarray(pos, dtype=float), np.asarray(bounds, dtype=float)
 
 
+def report(title, labels):
+    print(title)
+    print("n", len(labels))
+    names, counts = np.unique(labels, return_counts=True)
+    for name, count in zip(names, counts):
+        print(name, int(count))
+
+
 def main():
     path = sys.argv[1]
     atom_type = int(sys.argv[2]) if len(sys.argv) > 2 else 2
     pos, box = load(path, atom_type)
-    result = classify(pos, box, "shell", "nearest", True, "plus")
-    labels = result["label"]
-    names, counts = np.unique(labels, return_counts=True)
-    print("n", len(labels))
-    for name, count in zip(names, counts):
-        print(name, int(count))
+    # The published rule scores a row only when the cutoff shell holds
+    # exactly four neighbours. The previous rule scored the four nearest
+    # neighbours even when a fifth neighbour also sat inside the cutoff.
+    published = classify(pos, box, "shell", "nearest", True, "plus")
+    previous = classify(pos, box, "nearest", "nearest", True, "plus")
+    report("published", published["label"])
+    report("previous", previous["label"])
 
 
 if __name__ == "__main__":

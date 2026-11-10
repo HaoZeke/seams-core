@@ -727,14 +727,28 @@ int main(int argc, char **argv) {
   if (seams_frame_rdf(oxygen, 6.0, 4, 1, 1, rr, gg, nullptr, &vol) == 0) {
     return fail("rdf null count");
   }
-  // A bin count of zero is one tenth of an angstrom, so 6 angstroms
-  // is 60 bins. The eight-element arrays above are for the explicit
-  // four-bin calls.
-  double wideR[64] = {};
-  double wideG[64] = {};
-  int wideC[64] = {};
-  if (seams_frame_rdf(blank2, 6.0, 0, 0, 0, wideR, wideG, wideC, &vol) != 0) {
-    return fail("rdf empty");
+  if (seams_frame_rdf(blank2, 6.0, 0, 0, 0, rr, gg, cc, &vol) == 0) {
+    return fail("rdf zero bins");
+  }
+  if (std::string(seams_last_error()).find("positive bin count") ==
+      std::string::npos) {
+    return fail("rdf zero bins");
+  }
+  const int autoBins = seams_frame_rdf_nbins(6.0, 0);
+  std::vector<double> sizedR(static_cast<std::size_t>(autoBins));
+  std::vector<double> sizedG(static_cast<std::size_t>(autoBins));
+  std::vector<int> sizedC(static_cast<std::size_t>(autoBins));
+  if (seams_frame_rdf(blank2, 6.0, autoBins, 0, 0, sizedR.data(), sizedG.data(),
+                     sizedC.data(), &vol) != 0) {
+    return fail("rdf sized bins");
+  }
+  constexpr int wideBins = 64;
+  std::vector<double> wideR(wideBins);
+  std::vector<double> wideG(wideBins);
+  std::vector<int> wideC(wideBins);
+  if (seams_frame_rdf(blank2, 6.0, wideBins, 0, 0, wideR.data(), wideG.data(),
+                     wideC.data(), &vol) != 0) {
+    return fail("rdf wide bins");
   }
   if (seams_frame_rdf2d(oxygen, 3.5, 0.5, nullptr, rr, gg) != 0) {
     return fail("rdf2d memory");

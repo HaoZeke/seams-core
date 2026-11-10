@@ -271,12 +271,12 @@ int main(int argc, char **argv) {
     return 2;
   }
 #ifdef SEAMS_HAS_OPENMP
+  // One OpenMP thread inside a trial. The trial pool is separate: tying
+  // it to OMP_NUM_THREADS made a coverage run walk every frame serially.
   omp_set_num_threads(1);
 #endif
-  // OMP_NUM_THREADS, when set, is the worker count. Coverage sets it
-  // to one so arc counters are not bounced across cores.
   unsigned nThreads = std::max(1u, std::thread::hardware_concurrency());
-  if (const char *env = std::getenv("OMP_NUM_THREADS")) {
+  if (const char *env = std::getenv("SEAMS_FUZZ_THREADS")) {
     char *end = nullptr;
     const long requested = std::strtol(env, &end, 10);
     if (end != env && requested > 0) {
