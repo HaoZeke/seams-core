@@ -472,9 +472,7 @@ void printCounts(std::ostream &os, const Cloud &cloud,
   }
   os << colorizer.heading("nop") << " " << scored;
   for (const auto &[name, n] : hist) {
-    if (n > 0) {
-      os << " " << iceColor(name) << " " << n;
-    }
+    os << " " << iceColor(name) << " " << n;
   }
   os << "\n";
 }
