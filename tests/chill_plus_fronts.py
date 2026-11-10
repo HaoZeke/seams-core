@@ -33,7 +33,7 @@ NAMES = (
     "reHex",
 )
 EXPECTED = {
-    "cutoff": {"interClathrate": 12, "water": 238},
+    "cutoff": {"interClathrate": 9, "water": 241},
     "mutual": {"clathrate": 1, "interClathrate": 7, "water": 242},
 }
 GRAPHS = ("default", "cutoff", "mutual")

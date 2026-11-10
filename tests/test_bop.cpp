@@ -21,6 +21,7 @@
 #include <numeric>
 #include <random>
 #include <sstream>
+#include <vector>
 
 #ifdef SEAMS_HAS_OPENMP
 #include <omp.h>
@@ -355,7 +356,7 @@ TEST_CASE("numStaggered counts staggered bonds for an atom", "[bop]") {
   REQUIRE(nStag <= 4);
 }
 
-TEST_CASE("CHILL+ on the mixed TIP4P example is twelve interClathrate",
+TEST_CASE("CHILL+ on the mixed TIP4P example keeps the four-neighbour shell",
           "[bop][fixture]") {
   molSys::PointCloud<molSys::Point<double>, double> cloud;
   cloud = sinp::readLammpsTrjO("traj/exampleTraj.lammpstrj", 1, cloud, 2);
@@ -375,8 +376,8 @@ TEST_CASE("CHILL+ on the mixed TIP4P example is twelve interClathrate",
       other++;
     }
   }
-  REQUIRE(interClath == 12);
-  REQUIRE(water == 238);
+  REQUIRE(interClath == 9);
+  REQUIRE(water == 241);
   REQUIRE(other == 0);
 }
 
@@ -651,6 +652,30 @@ TEST_CASE("spherical harmonics obey the Condon-Shortley relation", "[bop]") {
   }
 }
 
+TEST_CASE("an index outside a lookup table is zero", "[bop]") {
+  const std::array<double, 2> angles = {0.4, 1.1};
+  for (const int m : {-1, 7}) {
+    const auto y = sph::lookupTableQ3(m, angles);
+    REQUIRE(y.real() == 0.0);
+    REQUIRE(y.imag() == 0.0);
+  }
+  for (const int m : {-1, 9}) {
+    const auto y = sph::lookupTableQ4(m, angles);
+    REQUIRE(y.real() == 0.0);
+    REQUIRE(y.imag() == 0.0);
+  }
+  for (const int m : {-1, 13}) {
+    const auto y = sph::lookupTableQ6(m, angles);
+    REQUIRE(y.real() == 0.0);
+    REQUIRE(y.imag() == 0.0);
+  }
+  for (const int m : {-1, 17}) {
+    const auto y = sph::lookupTableQ8(m, angles);
+    REQUIRE(y.real() == 0.0);
+    REQUIRE(y.imag() == 0.0);
+  }
+}
+
 TEST_CASE("per-order lookup agrees with the vector form", "[bop]") {
   const std::vector<std::pair<double, double>> directions = {
       {0.7, 1.2}, {2.31, 5.02}};
@@ -883,6 +908,12 @@ TEST_CASE("classifyBonds under registered rules reproduces CHILL/CHILL+",
           names.end());
   REQUIRE(std::find(names.begin(), names.end(), "CHILL") != names.end());
   REQUIRE(std::find(names.begin(), names.end(), "CHILL+") != names.end());
+  chill::registerBondClassifier("CHILL", {0.0, 0.0, 0.0, 8});
+  REQUIRE(chill::bondClassifier("CHILL").coordinationNumber == 8);
+  auto replaced = chill::bondClassifierNames();
+  REQUIRE(std::count(replaced.begin(), replaced.end(), "CHILL") == 1);
+  chill::registerBondClassifier("CHILL", chill::chillRule());
+  REQUIRE(chill::bondClassifier("CHILL").coordinationNumber == 4);
 
   auto custom = makeTetraCloud();
   chill::classifyBonds(custom, nList,

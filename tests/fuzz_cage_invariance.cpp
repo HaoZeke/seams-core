@@ -23,12 +23,17 @@
 */
 
 #include <cage.hpp>
+#include <chill_plus_scheme.hpp>
 #include <franzblau.hpp>
 #include <generic.hpp>
 #include <mol_sys.hpp>
 #include <neighbours.hpp>
 #include <seams_input.hpp>
 #include <topo_bulk.hpp>
+
+#include <csetjmp>
+#include <csignal>
+#include <unistd.h>
 
 #include <algorithm>
 #include <atomic>
@@ -245,6 +250,78 @@ bool sameCount(const Result &a, const Result &b) {
   return a.cages == b.cages && a.hc == b.hc && a.ddc == b.ddc && a.six == b.six;
 }
 
+sigjmp_buf ruleJump;
+
+void ruleAlarm(int) { siglongjmp(ruleJump, 1); }
+
+Cloud sparseLattice(int n, double spacing) {
+  Cloud cloud;
+  const double box = spacing * 8.0 + 10.0;
+  cloud.box = {box, box, box};
+  cloud.boxLow = {0.0, 0.0, 0.0};
+  const int side = 4;
+  for (int i = 0; i < n; i++) {
+    molSys::Point<double> pt;
+    pt.type = 1;
+    pt.atomID = i + 1;
+    pt.x = spacing * static_cast<double>(i % side);
+    pt.y = spacing * static_cast<double>((i / side) % side);
+    pt.z = spacing * static_cast<double>(i / (side * side));
+    cloud.pts.push_back(pt);
+    cloud.idIndexMap[pt.atomID] = i;
+  }
+  cloud.nop = n;
+  return cloud;
+}
+
+std::vector<int> ruleLabels(Cloud cloud, chill::ChillPlusRule rule) {
+  const int typ = cloud.pts.empty() ? 1 : cloud.pts.front().type;
+  const auto rows = nneigh::neighListO(3.5, cloud, typ);
+  chill::applyChillPlus(cloud, rows, rule, false);
+  std::vector<int> labels;
+  labels.reserve(cloud.pts.size());
+  for (const auto &pt : cloud.pts) {
+    labels.push_back(static_cast<int>(pt.iceType));
+  }
+  return labels;
+}
+
+// One frame of the published rule and of ovito-chill+. A shift keeps the
+// per-atom labels. A permutation keeps the histogram. The alarm is the
+// per-case limit.
+bool ruleAgrees(Cloud cloud, int seconds) {
+  std::signal(SIGALRM, ruleAlarm);
+  if (sigsetjmp(ruleJump, 1) != 0) {
+    alarm(0);
+    return false;
+  }
+  alarm(static_cast<unsigned>(seconds));
+  for (const auto rule : {chill::ChillPlusRule::Published, chill::ChillPlusRule::Ovito}) {
+    const auto ref = ruleLabels(cloud, rule);
+    Cloud moved = cloud;
+    shiftCloud(moved, 0.25, 0.0, 0.5);
+    if (ruleLabels(moved, rule) != ref) {
+      alarm(0);
+      return false;
+    }
+    const int n = cloud.nop;
+    std::vector<int> perm(static_cast<size_t>(n));
+    std::iota(perm.begin(), perm.end(), 0);
+    std::reverse(perm.begin(), perm.end());
+    Cloud permuted = permuteCloud(cloud, perm);
+    auto got = ruleLabels(permuted, rule);
+    auto want = ref;
+    std::sort(got.begin(), got.end());
+    std::sort(want.begin(), want.end());
+    if (got != want) {
+      alarm(0);
+      return false;
+    }
+  }
+  alarm(0);
+  return true;
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -271,12 +348,12 @@ int main(int argc, char **argv) {
     return 2;
   }
 #ifdef SEAMS_HAS_OPENMP
+  // One OpenMP thread inside a trial. The trial pool is separate: tying
+  // it to OMP_NUM_THREADS made a coverage run walk every frame serially.
   omp_set_num_threads(1);
 #endif
-  // OMP_NUM_THREADS, when set, is the worker count. Coverage sets it
-  // to one so arc counters are not bounced across cores.
   unsigned nThreads = std::max(1u, std::thread::hardware_concurrency());
-  if (const char *env = std::getenv("OMP_NUM_THREADS")) {
+  if (const char *env = std::getenv("SEAMS_FUZZ_THREADS")) {
     char *end = nullptr;
     const long requested = std::strtol(env, &end, 10);
     if (end != env && requested > 0) {
@@ -286,6 +363,19 @@ int main(int argc, char **argv) {
 
   int failures = 0;
   int frames = 0;
+  int checked = 0;
+  int skipped = 0;
+  for (int n = 8; n <= 32; n += 8) {
+    frames++;
+    Cloud made = sparseLattice(n, 2.8);
+    checked++;
+    if (!ruleAgrees(made, 5)) {
+      failures++;
+      std::printf("generated n %d RULE FAIL\n", n);
+    } else {
+      std::printf("generated n %d RULE OK\n", n);
+    }
+  }
   std::uint64_t shiftTrials = 0;
   std::uint64_t permTrials = 0;
   for (const auto &path : dumps) {
@@ -304,11 +394,18 @@ int main(int argc, char **argv) {
       // either does not return within half a minute or emits on the order of
       // a million six-rings. 1000 enumerations are not a cage-count test.
       if (g0.maxDegree > 40) {
-        std::printf("%s frame %d type %d nop %d maxdeg %d edges %ld SKIP dense cutoff graph\n",
-                    path.filename().c_str(), frame, atomType, cloud.nop, g0.maxDegree, g0.edges);
+        checked++;
+        const bool ok = ruleAgrees(cloud, 8);
+        if (!ok) {
+          failures++;
+        }
+        std::printf("%s frame %d type %d nop %d maxdeg %d edges %ld DENSE rule %s\n",
+                    path.filename().c_str(), frame, atomType, cloud.nop, g0.maxDegree, g0.edges,
+                    ok ? "OK" : "FAIL");
         std::fflush(stdout);
         continue;
       }
+      checked++;
       const Result ref = evaluate(cloud, cutoff, atomType);
       bool ok = true;
       for (int ix = 0; ix < 2 && ok; ix++) {
@@ -386,8 +483,12 @@ int main(int argc, char **argv) {
       std::fflush(stdout);
     }
   }
-  std::printf("frames %d failures %d shiftTrials %llu permTrials %llu\n", frames, failures,
+  std::printf("frames %d checked %d skipped %d failures %d shiftTrials %llu permTrials %llu\n",
+              frames, checked, skipped, failures,
               static_cast<unsigned long long>(shiftTrials),
               static_cast<unsigned long long>(permTrials));
+  if (skipped != 0) {
+    failures += skipped;
+  }
   return failures == 0 ? 0 : 1;
 }
