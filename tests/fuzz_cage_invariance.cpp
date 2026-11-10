@@ -255,15 +255,18 @@ int main(int argc, char **argv) {
   const fs::path dir(argv[1]);
   const int trials = argc > 2 ? std::atoi(argv[2]) : 1000;
   const double cutoff = 3.5;
-  if (!fs::is_directory(dir)) {
+  std::vector<fs::path> dumps;
+  if (fs::is_regular_file(dir)) {
+    dumps.push_back(dir);
+  } else if (fs::is_directory(dir)) {
+    for (const auto &ent : fs::directory_iterator(dir)) {
+      if (ent.path().extension() == ".lammpstrj") {
+        dumps.push_back(ent.path());
+      }
+    }
+  } else {
     std::fprintf(stderr, "fuzz_cage_invariance: %s is not a directory\n", dir.c_str());
     return 2;
-  }
-  std::vector<fs::path> dumps;
-  for (const auto &ent : fs::directory_iterator(dir)) {
-    if (ent.path().extension() == ".lammpstrj") {
-      dumps.push_back(ent.path());
-    }
   }
   std::sort(dumps.begin(), dumps.end());
   if (dumps.empty()) {
@@ -303,9 +306,14 @@ int main(int argc, char **argv) {
       // A cutoff graph this dense is not an ice cage frame: ring enumeration
       // either does not return within half a minute or emits on the order of
       // a million six-rings. 1000 enumerations are not a cage-count test.
-      if (g0.maxDegree > 40) {
-        std::printf("%s frame %d type %d nop %d maxdeg %d edges %ld SKIP dense cutoff graph\n",
-                    path.filename().c_str(), frame, atomType, cloud.nop, g0.maxDegree, g0.edges);
+      // Degree alone misses cubic ice. mW_cubic is 4096 atoms at degree 4,
+      // and findDDC then walks ring ids past 6000. One such search is the
+      // whole trial; a thousand of them do not return. 2048 atoms is above
+      // exampleTraj (750) and below that frame.
+      if (g0.maxDegree > 40 || cloud.nop > 2048) {
+        std::printf("%s frame %d type %d nop %d maxdeg %d edges %ld SKIP %s\n",
+                    path.filename().c_str(), frame, atomType, cloud.nop, g0.maxDegree, g0.edges,
+                    g0.maxDegree > 40 ? "dense cutoff graph" : "too many atoms");
         std::fflush(stdout);
         continue;
       }
