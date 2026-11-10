@@ -1,13 +1,14 @@
 units real
 atom_style atomic
 boundary p p p
-plugin load ./compute_dseams.so
+plugin load ./libdseams_lammps.so
 read_data water.data
 mass 1 18.015
 pair_style zero 4.0
 pair_coeff * *
 neighbor 2.0 bin
 neigh_modify delay 0 every 1 check yes
-compute ice all dseams
-dump 1 all custom 1 dump.chill id type x y z c_ice
+fix sea all dseams record live.txt every 1 cutoff 3.5 depth 8
+dump native all custom 1 dump.lammpstrj id type x y z
+dump_modify native sort id format float %.17g
 run 0
