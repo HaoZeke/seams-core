@@ -422,8 +422,11 @@ int analyze_cloud(Engine *eng, Cloud &cloud, int64_t step, bool do_sink) {
       std::vector<int> hc(static_cast<std::size_t>(cloud.nop), 0);
       std::vector<int> ddc(static_cast<std::size_t>(cloud.nop), 0);
       for (std::size_t r = 0; r < faces.size(); ++r) {
-        const int h = (r < aff.hc.size() && aff.hc[r]) ? 1 : 0;
-        const int d = (r < aff.ddc.size() && aff.ddc[r]) ? 1 : 0;
+        // AffiliationUpdater::update sizes hc and ddc to faces.size()
+        // on every path that returns a non-empty ring list, and this
+        // loop does not run when that list is empty.
+        const int h = aff.hc[r] ? 1 : 0;
+        const int d = aff.ddc[r] ? 1 : 0;
         for (const int atom : faces[r]) {
           // RingUpdater::update stores neighbour indices, and
           // contractibleRings keeps those indices. hc is sized to nop,
