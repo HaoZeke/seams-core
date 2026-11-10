@@ -459,6 +459,22 @@ def check_neigh(work):
     if len(shells[0]) != 0:
         raise SystemExit("a lone atom found a neighbour")
     neigh_ref.q_vectors(shells, vectors, False)
+    qlm = __import__("numpy").zeros((2, 7), dtype=complex)
+    qlm[0, 0] = 1.0
+    qlm[1, 0] = -1.0
+    eclipsed, staggered = neigh_ref.eclipsed_staggered(0, [[1], [0]], qlm)
+    if eclipsed != 0 or staggered != 1:
+        raise SystemExit("anti-aligned bond %d %d" % (eclipsed, staggered))
+    qlm[1, 0] = 0.0
+    qlm[1, 1] = 1.0
+    eclipsed, staggered = neigh_ref.eclipsed_staggered(0, [[1], [0]], qlm)
+    if eclipsed != 1 or staggered != 0:
+        raise SystemExit("orthogonal bond %d %d" % (eclipsed, staggered))
+    sys.argv = ["neigh_ref.py", str(hand)]
+    try:
+        neigh_ref.main()
+    finally:
+        sys.argv = old
     hand_points = __import__("numpy").array(
         [[5.0, 5.0, 5.0], [7.0, 5.0, 5.0], [3.0, 5.0, 5.0], [5.0, 7.0, 5.0], [5.0, 3.0, 5.0], [5.0, 5.0, 7.0]]
     )

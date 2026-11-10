@@ -34,11 +34,6 @@ def measured_env(cmd, env):
     """
     base = os.environ.copy() if env is None else dict(env)
     base["OMP_NUM_THREADS"] = "1"
-    if "-np" in cmd:
-        at = cmd.index("-np")
-        if at + 1 < len(cmd) and cmd[at + 1] != "1":
-            base["GCOV_PREFIX"] = "/tmp/v53-gcov-ranks"
-            base["GCOV_PREFIX_STRIP"] = "0"
     return base
 
 
@@ -218,6 +213,49 @@ def lammps_cases(work, plugin, lmp, mpirun, libdir):
     run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"], boxed, env)
     check_dump(boxed / "host.txt", expected, cutoff)
     print("lammps box-digits exit 0", flush=True)
+    cadence = work / "cadence"
+    cadence.mkdir(parents=True, exist_ok=True)
+    (cadence / "in").write_text(header + "fix sea all dseams record rec.txt every 2\nrun 3\n")
+    run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"], cadence, env)
+    census = (cadence / "rec.txt").read_text()
+    if "step 0" not in census or "step 2" not in census or "\nstep 1\n" in census:
+        raise SystemExit("cadence\n" + census)
+    print("lammps cadence exit 0", flush=True)
+    again = work / "again"
+    again.mkdir(parents=True, exist_ok=True)
+    (again / "in").write_text(header + "fix sea all dseams record rec.txt every 1\nrun 1\nrun 1\n")
+    run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"], again, env)
+    second = (again / "rec.txt").read_text()
+    if second.count("\nstep 1\n") != 1:
+        raise SystemExit("restart wrote step 1 %d times" % second.count("\nstep 1\n"))
+    print("lammps restart exit 0", flush=True)
+    missing = work / "missing-group"
+    missing.mkdir(parents=True, exist_ok=True)
+    (missing / "in").write_text(header + "fix sea nope dseams record rec.txt every 1\nrun 0\n")
+    expect(
+        [mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"],
+        missing, env, 1, "Could not find fix group ID nope",
+    )
+    print("lammps missing-group exit 1", flush=True)
+    tilted = work / "triclinic"
+    tilted.mkdir(parents=True, exist_ok=True)
+    (tilted / "data").write_text(
+        "LAMMPS data file\n\n2 atoms\n1 atom types\n\n"
+        "0 10 xlo xhi\n0 10 ylo yhi\n0 10 zlo zhi\n1.5 0.25 -0.5 xy xz yz\n\n"
+        "Atoms\n\n1 1 1.0 1.0 1.0\n2 1 2.0 1.0 1.0\n"
+    )
+    (tilted / "in").write_text(
+        "units real\natom_style atomic\nboundary p p p\n"
+        "plugin load %s\nread_data data\nmass 1 1.0\n"
+        "pair_style zero 12.0\npair_coeff * *\nneighbor 2.0 bin\n"
+        "fix sea all dseams record live.txt neigh host.txt every 1 cutoff 3.5\n"
+        "run 0\n" % plugin
+    )
+    run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"], tilted, env)
+    host = (tilted / "host.txt").read_text()
+    if "1.5" not in host or "0.25" not in host or "-0.5" not in host:
+        raise SystemExit("triclinic box\n" + host)
+    print("lammps triclinic exit 0", flush=True)
     intree = need("DSEAMS_LMP_INTREE")
     native = work / "box-intree"
     native.mkdir(parents=True, exist_ok=True)
@@ -652,7 +690,7 @@ def main():
             "-DDSEAMS_LAMMPS_MPI=ON",
             "-DCMAKE_BUILD_TYPE=Debug",
             "-DCMAKE_CXX_COMPILER=" + cxx,
-            "-DCMAKE_CXX_FLAGS=--coverage -O0 -fprofile-update=single",
+            "-DCMAKE_CXX_FLAGS=--coverage -O0 -fprofile-update=atomic",
             "-DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined",
             "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,--allow-shlib-undefined",
             "-DCMAKE_MODULE_LINKER_FLAGS=-Wl,--allow-shlib-undefined",

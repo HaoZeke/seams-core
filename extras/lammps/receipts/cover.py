@@ -123,7 +123,7 @@ def main():
     log.line("substitution: live, longest prefix first, see PATHS.txt")
     log.line("---")
     flags = " ".join([
-        "--coverage", "-O0", "-fprofile-update=single",
+        "--coverage", "-O0", "-fprofile-update=atomic",
     ])
     plugin = WORK / "plugin"
     code = log.run(
@@ -213,36 +213,29 @@ def main():
     log.line("command: gcov -b " + str(cli_notes))
     gcov_code = log.run(["gcov", "-b", str(cli_notes)], WORK, os.environ.copy()) or gcov_code
     gcovr = os.environ.get("GCOVR", "gcovr")
-    common = [
-        gcovr, "-j", "1", "--root", str(SRC),
-        "--object-directory", str(WORK / "plugin" / "CMakeFiles" / "dseams_lammps.dir"),
-        "--object-directory", str(WORK / "compute"),
-        "--object-directory", str(BUILD / "seams" / "seams.p"),
-        "--filter", ".*fix_dseams\\.cpp", "--filter", ".*compute_dseams\\.cpp",
-        "--filter", ".*seams_cli\\.cpp",
-        "--txt-metric", "line",
-        "--txt-metric", "branch",
-    ]
-    bare = common + [
-        "--no-markers",
-        "--json", str(WORK / "gcovr-nomarkers.json"),
-        "--txt", str(WORK / "gcovr-nomarkers.txt"),
-    ]
-    log.line("command: gcovr -j 1 --no-markers")
-    gcovr_code = log.run(bare, WORK, os.environ.copy())
-    marked = common + [
-        "--json", str(WORK / "gcovr-markers.json"),
-        "--txt", str(WORK / "gcovr-markers.txt"),
-    ]
-    log.line("command: gcovr -j 1")
-    gcovr_code = log.run(marked, WORK, os.environ.copy()) or gcovr_code
-    throw_json = common + [
-        "--exclude-throw-branches",
-        "--json", str(WORK / "gcovr-throw.json"),
-        "--txt", str(WORK / "gcovr-throw.txt"),
-    ]
-    log.line("command: gcovr -j 1 --exclude-throw-branches")
-    gcovr_code = log.run(throw_json, WORK, os.environ.copy()) or gcovr_code
+    targets = (
+        ("fix", WORK / "plugin" / "CMakeFiles" / "dseams_lammps.dir", ".*fix_dseams\\.cpp"),
+        ("compute", WORK / "compute", ".*compute_dseams\\.cpp"),
+        ("cli", BUILD / "seams" / "seams.p", ".*seams_cli\\.cpp"),
+    )
+    flags = ["--exclude-throw-branches", "--exclude-unreachable-branches"]
+    gcovr_code = 0
+    for label, folder, filt in targets:
+        for name, extra in (("nomarkers", ["--no-markers"]), ("markers", [])):
+            cmd = [
+                gcovr, "-j", "1", "--root", str(SRC),
+                "--object-directory", str(folder),
+                "--filter", filt,
+                "--txt-metric", "line", "--txt-metric", "branch",
+                *flags, *extra,
+                "--txt", str(WORK / ("gcovr-%s-%s.txt" % (label, name))),
+            ]
+            shown = "gcovr -j 1 --exclude-throw-branches --exclude-unreachable-branches"
+            if extra:
+                shown += " --no-markers"
+            shown += " " + label
+            log.line("command: " + shown)
+            gcovr_code = log.run(cmd, WORK, os.environ.copy()) or gcovr_code
     log.line("end: " + streamlog.date_is())
     log.hash_tree(WORK)
     log.line("exit_code: %d" % (gcov_code or gcovr_code or code))
