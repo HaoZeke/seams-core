@@ -128,6 +128,15 @@ TEST_CASE("IRA rejects a non-finite point set", "[ira]") {
   REQUIRE(ira::match(bad, squareXY(), m) != 0);
 }
 
+TEST_CASE("SOFI rejects a non-finite cloud before libira", "[ira]") {
+  // A NaN coordinate used to enter libira_compute_all and segfault.
+  Eigen::MatrixXd bad = squareXY();
+  bad(1, 2) = std::numeric_limits<double>::quiet_NaN();
+  ira::PointGroup pg;
+  REQUIRE(ira::pointGroup(bad, pg) == 1);
+  REQUIRE(pg.nOperations == 0);
+}
+
 TEST_CASE("orient copies the quaternion of a matched square", "[ira]") {
   const Eigen::MatrixXd ref = squareXY();
   std::vector<double> quat;

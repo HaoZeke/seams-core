@@ -20,6 +20,10 @@
 
 namespace {
 
+bool coordinatesAreFinite(const Eigen::MatrixXd &pts) {
+  return pts.allFinite();
+}
+
 void flatten(const Eigen::MatrixXd &pts, std::vector<double> &coords,
              std::vector<int> &typ) {
   const int n = static_cast<int>(pts.rows());
@@ -72,7 +76,8 @@ int match(const Eigen::MatrixXd &ref, const Eigen::MatrixXd &target, Match &out,
   return 1;
 #else
   if (ref.cols() != 3 || target.cols() != 3 || ref.rows() < 1 ||
-      target.rows() < 1) {
+      target.rows() < 1 || !coordinatesAreFinite(ref) ||
+      !coordinatesAreFinite(target)) {
     return 1;
   }
   const int nat1 = static_cast<int>(ref.rows());
@@ -151,7 +156,8 @@ int pointGroup(const Eigen::MatrixXd &coords, PointGroup &out, double symThr) {
   (void)symThr;
   return 1;
 #else
-  if (coords.cols() != 3 || coords.rows() < 1) {
+  if (coords.cols() != 3 || coords.rows() < 1 ||
+      !coordinatesAreFinite(coords)) {
     return 1;
   }
   const int nat = static_cast<int>(coords.rows());
