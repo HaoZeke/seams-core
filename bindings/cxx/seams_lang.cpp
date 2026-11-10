@@ -573,12 +573,10 @@ int seams_frame_cages(seams_frame *frame, double cutoff, int type, int k,
       const auto aff = ring::cageAffiliation(six, idx);
       for (std::size_t r = 0; r < six.size(); ++r) {
         for (const int atom : six[r]) {
-          if (atom >= 0 && atom < n) {
-            hc[static_cast<std::size_t>(atom)] =
-                hc[static_cast<std::size_t>(atom)] || aff.hc[r];
-            ddc[static_cast<std::size_t>(atom)] =
-                ddc[static_cast<std::size_t>(atom)] || aff.ddc[r];
-          }
+          hc[static_cast<std::size_t>(atom)] =
+              hc[static_cast<std::size_t>(atom)] || aff.hc[r];
+          ddc[static_cast<std::size_t>(atom)] =
+              ddc[static_cast<std::size_t>(atom)] || aff.ddc[r];
         }
       }
     }
