@@ -123,84 +123,81 @@ double legendreAmplitude(int orderL, int absM, const AngularTerms &terms) {
   const auto &c = terms.cosPow;
 
   if (orderL == 3) {
-    switch (absM) {
-    case 0:
+    if (absM == 0) {
       return 5.0 * c[3] - 3.0 * c[1];
-    case 1:
-      return s[1] * (5.0 * c[2] - 1.0);
-    case 2:
-      return s[2] * c[1];
-    case 3:
-      return s[3];
-    default:
-      return 0.0;
     }
+    if (absM == 1) {
+      return s[1] * (5.0 * c[2] - 1.0);
+    }
+    if (absM == 2) {
+      return s[2] * c[1];
+    }
+    return s[3];
   }
 
   if (orderL == 4) {
-    switch (absM) {
-    case 0:
+    if (absM == 0) {
       return 35.0 * c[4] - 30.0 * c[2] + 3.0;
-    case 1:
-      return s[1] * (7.0 * c[3] - 3.0 * c[1]);
-    case 2:
-      return s[2] * (7.0 * c[2] - 1.0);
-    case 3:
-      return s[3] * c[1];
-    case 4:
-      return s[4];
-    default:
-      return 0.0;
     }
+    if (absM == 1) {
+      return s[1] * (7.0 * c[3] - 3.0 * c[1]);
+    }
+    if (absM == 2) {
+      return s[2] * (7.0 * c[2] - 1.0);
+    }
+    if (absM == 3) {
+      return s[3] * c[1];
+    }
+    return s[4];
   }
 
   if (orderL == 6) {
-    switch (absM) {
-    case 0:
+    if (absM == 0) {
       return 231.0 * c[6] - 315.0 * c[4] + 105.0 * c[2] - 5.0;
-    case 1:
+    }
+    if (absM == 1) {
       return s[1] * (33.0 * c[5] - 30.0 * c[3] + 5.0 * c[1]);
-    case 2:
+    }
+    if (absM == 2) {
       return s[2] * (33.0 * c[4] - 18.0 * c[2] + 1.0);
-    case 3:
+    }
+    if (absM == 3) {
       return s[3] * (11.0 * c[3] - 3.0 * c[1]);
-    case 4:
+    }
+    if (absM == 4) {
       return s[4] * (11.0 * c[2] - 1.0);
-    case 5:
+    }
+    if (absM == 5) {
       return s[5] * c[1];
-    case 6:
-      return s[6];
-    default:
-      return 0.0;
     }
+    return s[6];
   }
 
-  if (orderL == 8) {
-    switch (absM) {
-    case 0:
-      return (35.0 + c[2] * (-1260.0 + c[2] * (6930.0 + c[2] * (-12012.0 + c[2] * 6435.0)))) / 128.0;
-    case 1:
-      return s[1] * c[1] * (-315.0 + c[2] * (3465.0 + c[2] * (-9009.0 + c[2] * 6435.0))) / 16.0;
-    case 2:
-      return s[2] * (-315.0 + c[2] * (10395.0 + c[2] * (-45045.0 + c[2] * 45045.0))) / 16.0;
-    case 3:
-      return s[3] * c[1] * (10395.0 + c[2] * (-90090.0 + c[2] * 135135.0)) / 8.0;
-    case 4:
-      return s[4] * (10395.0 + c[2] * (-270270.0 + c[2] * 675675.0)) / 8.0;
-    case 5:
-      return s[5] * c[1] * (-135135.0 + c[2] * 675675.0) / 2.0;
-    case 6:
-      return s[6] * (-135135.0 + c[2] * 2027025.0) / 2.0;
-    case 7:
-      return s[7] * c[1] * 2027025.0;
-    case 8:
-      return s[8] * 2027025.0;
-    default:
-      return 0.0;
-    }
+  if (absM == 0) {
+    return (35.0 + c[2] * (-1260.0 + c[2] * (6930.0 + c[2] * (-12012.0 + c[2] * 6435.0)))) / 128.0;
   }
-
-  return 0.0;
+  if (absM == 1) {
+    return s[1] * c[1] * (-315.0 + c[2] * (3465.0 + c[2] * (-9009.0 + c[2] * 6435.0))) / 16.0;
+  }
+  if (absM == 2) {
+    return s[2] * (-315.0 + c[2] * (10395.0 + c[2] * (-45045.0 + c[2] * 45045.0))) / 16.0;
+  }
+  if (absM == 3) {
+    return s[3] * c[1] * (10395.0 + c[2] * (-90090.0 + c[2] * 135135.0)) / 8.0;
+  }
+  if (absM == 4) {
+    return s[4] * (10395.0 + c[2] * (-270270.0 + c[2] * 675675.0)) / 8.0;
+  }
+  if (absM == 5) {
+    return s[5] * c[1] * (-135135.0 + c[2] * 675675.0) / 2.0;
+  }
+  if (absM == 6) {
+    return s[6] * (-135135.0 + c[2] * 2027025.0) / 2.0;
+  }
+  if (absM == 7) {
+    return s[7] * c[1] * 2027025.0;
+  }
+  return s[8] * 2027025.0;
 }
 
 /**
@@ -284,12 +281,9 @@ std::vector<int> nearestNeighbourIndices(
 
 void associatedP(int L, double x, std::vector<double> &p) {
   p.assign(static_cast<std::size_t>(L) + 1, 0.0);
-  if (L < 0) {
-    return;
-  }
   const double s = std::sqrt(std::max(0.0, 1.0 - x * x));
   double pmm = 1.0;
-  for (int m = 0; m <= L; m++) {
+  for (int m = 0;; m++) {
     if (m > 0) {
       pmm *= -(2.0 * m - 1.0) * s;
     }
@@ -326,9 +320,6 @@ double nlmNorm(int l, int m) {
 void spheriHarmoGeneral(int orderL, std::array<double, 2> angles,
                         std::vector<std::complex<double>> &out) {
   out.assign(static_cast<std::size_t>(2 * orderL + 1), {0.0, 0.0});
-  if (orderL < 0) {
-    return;
-  }
   std::vector<double> p;
   associatedP(orderL, std::cos(angles[1]), p);
   const double phi = angles[0];
@@ -1199,7 +1190,7 @@ void assignIceTypePlus(
         interIce++;
       }
       // Clathrate
-      else if (num_eclipsd == 4 && num_staggrd == 0) {
+      else if (num_eclipsd == 4) {
         yCloud.pts[iatom].iceType = molSys::atom_state_type::clathrate;
         clath++;
       }
@@ -1522,7 +1513,7 @@ bool chill::isInterfacial(
   if (num_staggrd == 2) {
     // Loop over the four nearest neighbours, the same star as c_ij
     for (int jatomIndex : nearest) {
-      if (jatomIndex < 0 || jatomIndex >= yCloud.nop) {
+      if (jatomIndex >= yCloud.nop) {
         continue;
       }
       neighStaggered = chill::numStaggered(yCloud, nList, jatomIndex);
@@ -1535,7 +1526,7 @@ bool chill::isInterfacial(
   // and at least one neighbor with two staggered bonds
   if (num_staggrd == 3 && num_eclipsd == 0) {
     for (int jatomIndex : nearest) {
-      if (jatomIndex < 0 || jatomIndex >= yCloud.nop) {
+      if (jatomIndex >= yCloud.nop) {
         continue;
       }
       neighStaggered = chill::numStaggered(yCloud, nList, jatomIndex);
