@@ -139,60 +139,6 @@ The checked package binary reports the same LAMMPS version string.
 One rank is the acceptance scope for the package.
 The plugin acceptance also runs on two ranks.
 
-## GROMACS
-
-The module patch is patches/gromacs-dseams-module.patch, beside the metatomic module.
-GROMACS main is the 2027.0-dev line.
-The public upstream base is
-1ede0115a1c6cc063813d2b13085a86640e4273e.
-Configure leaves the module out when either path is empty.
-
-The configure line is:
-
-    cmake -S . -B build \
-      -DGMX_MPI=ON \
-      -DGMX_GPU=off \
-      -DBUILD_TESTING=off \
-      -DGMX_BUILD_OWN_FFTW=ON \
-      -DSEAMS_INCLUDE=seams-core/src/include/internal \
-      -DSEAMS_LIBRARY=bbdir-rel/src/libyodaLib.so
-
-Compile with `cmake --build build`.
-The acceptance invocation is one rank:
-
-    mpirun -np 1 gmx_mpi mdrun -s topol.tpr -deffnm run -ntomp 1 -noconfout
-
-`gmx_mpi --version` on the checked build names the module tip.
-That tip ships in this repository.
-Add these lines to the mdp file:
-
-    dseams-active = yes
-    dseams-input-group = System
-    dseams-nstcalc = 1
-    dseams-cutoff = 3.5
-    dseams-output = census.txt
-
-The cutoff is in Ångström.
-The engine stores coordinates in nanometres, and the module multiplies
-them by ten before the analysis.
-Keep `nstxout` equal to `dseams-nstcalc` so the trajectory has the same
-steps as the census.
-Run `gmx_mpi grompp` and then `gmx_mpi mdrun` on one rank.
-
-## OpenMM
-
-The checked import is OpenMM 8.6.1.
-The reporter is `dseams_insitu.DseamsReporter`.
-
-    from dseams_insitu import DseamsReporter, Engine
-    with Engine(library, "census.txt") as eng:
-        sim.reporters.append(DseamsReporter(eng, "frame.lammpstrj", 1, types))
-        sim.step(6)
-
-The reporter reads host positions from the context.
-Save those positions to a dump.
-Postprocess that dump with `seams`.
-
 ## Match
 
 On a shared step the ring line matches.
@@ -202,15 +148,10 @@ The comparison checks every step in that list.
 
 ## Acceptance driver
 
-The acceptance driver `tests/insitu/engine_e2e.py` runs the three
-engines.
-Set `SEAMS_LIB`, `SEAMS_CLI`, `SEAMS_INSITU_EXE` and
-`SEAMS_GRO_IMD_EXE`.
+The acceptance driver `tests/insitu/engine_e2e.py` runs the LAMMPS routes.
+Set `SEAMS_LIB`, `SEAMS_CLI` and `SEAMS_INSITU_EXE`.
 Also set `DSEAMS_MD_PREFIX`, `DSEAMS_LMP`, `DSEAMS_MPIRUN` and
 `DSEAMS_PLUGIN`.
-Also set `DSEAMS_LMP_INTREE`, `DSEAMS_GMX` and `DSEAMS_GMX_MPIRUN`.
-The driver requires the live step list to equal the trajectory step
-list.
+Also set `DSEAMS_LMP_INTREE`.
+The driver requires the live step list to equal the dump step list.
 The driver fails when a frame is missing, extra, or repeated.
-OpenMM writes a disk coordinate dump (DCD).
-The driver fails when the census of that dump mismatches.

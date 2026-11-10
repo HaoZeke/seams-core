@@ -485,12 +485,6 @@ endif
 if get_option('lammps').enabled()
   message('LAMMPS in-situ adapter requested')
 endif
-if get_option('gromacs').enabled()
-  message('GROMACS in-situ adapter requested')
-endif
-if get_option('openmm').enabled()
-  message('OpenMM in-situ adapter requested')
-endif
 if get_option('plumed').enabled()
   error('Live analysis does not use PLUMED. -Dplumed=enabled is an error.')
 endif

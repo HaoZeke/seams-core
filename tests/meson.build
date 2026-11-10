@@ -68,7 +68,6 @@ if chemfiles_libdir != ''
   _test_env.prepend('LD_LIBRARY_PATH', chemfiles_libdir)
 endif
 _test_env.set('SEAMS_INSITU_EXE', seams_insitu_exe.full_path())
-_test_env.set('SEAMS_GRO_IMD_EXE', seams_gromacs_imd_exe.full_path())
 _test_env.set('LC_ALL', 'C')
 # Coverage arc counters share a cache line. Several cores bounce that
 # line and the timed tests exceed their limit. One thread keeps the

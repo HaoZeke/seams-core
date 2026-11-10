@@ -25,10 +25,6 @@ option('lammps', type: 'feature', value: 'auto',
   description: 'Build the LAMMPS fix plugin when lammpsplugin.h is found')
 option('lammps_include', type: 'string', value: '',
   description: 'Directory that contains lammpsplugin.h when it is not on the default include path')
-option('gromacs', type: 'feature', value: 'auto',
-  description: 'Record a GROMACS request. The socket client is always built and links no GROMACS library')
-option('openmm', type: 'feature', value: 'auto',
-  description: 'Record an OpenMM request. The reporter is Python and is not compiled by Meson')
 option('plumed', type: 'feature', value: 'disabled',
   description: 'Build the PLUMED action when PLUMED is found')
 option('with_chemfiles', type: 'feature', value: 'auto',
