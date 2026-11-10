@@ -408,11 +408,9 @@ int analyze_cloud(Engine *eng, Cloud &cloud, int step, bool do_sink) {
         const int h = (r < aff.hc.size() && aff.hc[r]) ? 1 : 0;
         const int d = (r < aff.ddc.size() && aff.ddc[r]) ? 1 : 0;
         for (const int atom : faces[r]) {
-          if (atom >= 0 && atom < cloud.nop) {
-            const std::size_t a = static_cast<std::size_t>(atom);
-            hc[a] = hc[a] | h;
-            ddc[a] = ddc[a] | d;
-          }
+          const std::size_t a = static_cast<std::size_t>(atom);
+          hc[a] = hc[a] | h;
+          ddc[a] = ddc[a] | d;
         }
       }
       mark("scatter");
