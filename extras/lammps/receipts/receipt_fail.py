@@ -447,20 +447,16 @@ def check_neigh(work):
     centre = neigh_ref.freud_sets(held)[1]
     if centre != {2, 3, 4, 5, 6}:
         raise SystemExit("hand freud set %s" % sorted(centre))
-    if neigh_ref.ovito is not None:
-        ovito_centre = neigh_ref.ovito_sets(held)[1]
-        if ovito_centre != centre:
-            raise SystemExit("hand ovito set %s" % sorted(ovito_centre))
-        groups = neigh_ref.chill_table(held, "hand")
-        if 0 not in groups["A"]:
-            raise SystemExit("hand atom 1 was not group A %s" % groups)
-        shifted = dict(held)
-        labels = [list(item) for item in held["labels"]]
-        labels[1][5] = 0
-        shifted["labels"] = [tuple(item) for item in labels]
-        more = neigh_ref.chill_table(shifted, "hand")
-        if 1 not in more["C"]:
-            raise SystemExit("hand atom 2 was not group C %s" % more)
+    ovito_env = os.environ.copy()
+    ovito_env["LD_LIBRARY_PATH"] = "/lib/x86_64-linux-gnu"
+    ovito_proc = subprocess.run(
+        [sys.executable, "-m", "coverage", "run", "--branch", "--append", __file__, "--ovito-hand", str(hand)],
+        env=ovito_env,
+        capture_output=True,
+        text=True,
+    )
+    if ovito_proc.returncode != 0:
+        raise SystemExit(ovito_proc.stdout + ovito_proc.stderr)
     points = __import__("numpy").array([[1.0, 1.0, 1.0]])
     shells, _distances, vectors = neigh_ref.full_shells(points, held["box"], 3.5)
     if len(shells[0]) != 0:
@@ -485,7 +481,12 @@ def check_neigh(work):
     if eclipsed != 0 or staggered != 2:
         raise SystemExit("two staggered bonds %d %d" % (eclipsed, staggered))
     script = Path(os.environ["SRC_SEAMS"]) / "extras" / "lammps" / "receipts" / "neigh_ref.py"
-    ran = subprocess.run([sys.executable, str(script), str(hand)], capture_output=True, text=True)
+    ran = subprocess.run(
+        [sys.executable, "-m", "coverage", "run", "--branch", "--append", str(script), str(hand)],
+        capture_output=True,
+        text=True,
+        env=ovito_env,
+    )
     if ran.returncode != 0 or "exit: 0" not in ran.stdout:
         raise SystemExit("neigh_ref script exit %d" % ran.returncode)
     sys.argv = ["neigh_ref.py", str(hand)]
@@ -583,7 +584,31 @@ def check_prose(work):
         os.environ["SRC_LAMMPS"] = saved_lammps
 
 
+def ovito_hand(path):
+    import neigh_ref
+    held = neigh_ref.parse_frames(path)[0]
+    centre = neigh_ref.freud_sets(held)[1]
+    if neigh_ref.ovito is None:
+        raise SystemExit("ovito did not import")
+    ovito_centre = neigh_ref.ovito_sets(held)[1]
+    if ovito_centre != centre:
+        raise SystemExit("hand ovito set %s" % sorted(ovito_centre))
+    groups = neigh_ref.chill_table(held, "hand")
+    if 0 not in groups["A"]:
+        raise SystemExit("hand atom 1 was not group A %s" % groups)
+    shifted = dict(held)
+    labels = [list(item) for item in held["labels"]]
+    labels[1][5] = 0
+    shifted["labels"] = [tuple(item) for item in labels]
+    more = neigh_ref.chill_table(shifted, "hand")
+    if 1 not in more["C"]:
+        raise SystemExit("hand atom 2 was not group C %s" % more)
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--ovito-hand":
+        ovito_hand(sys.argv[2])
+        return
     if len(sys.argv) > 1 and sys.argv[1] == "--good-input":
         import run_campaign
         require_message(

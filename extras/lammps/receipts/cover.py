@@ -157,16 +157,7 @@ def main():
         [str(SRC / "extras" / "lammps" / "receipts" / "receipt_fail.py")],
         [str(SRC / "tests" / "cli_every.py"), str(BUILD / "seams" / "seams"), str(SRC)],
     ):
-        run_env = env
-        if Path(args[0]).name == "receipt_fail.py":
-            # OVITO's Qt libraries need libGL. That directory breaks LAMMPS,
-            # so only this process, which does not launch lmp, receives it.
-            run_env = dict(env)
-            glue = "/lib/x86_64-linux-gnu"
-            current = run_env.get("LD_LIBRARY_PATH", "")
-            if glue not in current.split(":"):
-                run_env["LD_LIBRARY_PATH"] = (current + ":" + glue).strip(":")
-        code = log.run([py, "-m", "coverage", "run", "--branch", "--append", *args], WORK, run_env)
+        code = log.run([py, "-m", "coverage", "run", "--branch", "--append", *args], WORK, env)
         log.line("py %s exit %d" % (Path(args[0]).name, code))
         abort(log, code)
     live_env = dict(env)
