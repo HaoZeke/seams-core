@@ -198,12 +198,14 @@ def main():
     gcov_code = log.run(["gcov", "-b", str(fix_notes)], WORK, os.environ.copy())
     log.line("command: gcov -b " + str(comp_notes))
     gcov_code = log.run(["gcov", "-b", str(comp_notes)], WORK, os.environ.copy()) or gcov_code
-    cli_notes = next(Path(os.environ["BUILD"]).joinpath("seams").rglob("seams_cli.cpp.gcno"))
+    cli_notes = next(Path(os.environ["BUILD"]).joinpath("seams").rglob("*seams_cli.cpp.gcno"))
     log.line("command: gcov -b " + str(cli_notes))
     gcov_code = log.run(["gcov", "-b", str(cli_notes)], WORK, os.environ.copy()) or gcov_code
     gcovr = os.environ.get("GCOVR", "gcovr")
     common = [
-        gcovr, "--root", str(SRC), "--object-directory", str(WORK),
+        gcovr, "--root", str(SRC),
+        "--object-directory", str(WORK),
+        "--object-directory", str(BUILD / "seams"),
         "--filter", ".*fix_dseams\\.cpp", "--filter", ".*compute_dseams\\.cpp",
         "--filter", ".*seams_cli\\.cpp",
         "--txt-metric", "line",
