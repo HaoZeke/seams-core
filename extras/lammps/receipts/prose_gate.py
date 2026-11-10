@@ -89,7 +89,12 @@ def main():
     log.line("snapper: " + version)
     kit = Path(os.environ["KIT"])
     failed = 0
-    for path in sorted(kit.rglob("*.md")):
+    docs = sorted(kit.glob("*.md"))
+    for name in ("PATHS.txt", "STATUS.txt", "TIP.txt"):
+        extra = kit / name
+        if extra.is_file():
+            docs.append(extra)
+    for path in docs:
         proc = subprocess.run([snapper, "-f", "plaintext", "-w", "72", "--check", str(path)], text=True, capture_output=True)
         log_proc(log, "snapper %s" % path.name, proc)
         if "would reformat" in (proc.stdout or ""):
