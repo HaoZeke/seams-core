@@ -1,0 +1,41 @@
+# Unreachable branch proofs
+
+`src/topo_one_dim.cpp`, `ring::discardExtraTetragonBlocks`, the `else` after `axialDim == 0` and `axialDim == 1` (both the basal-1 block and the basal-2 block). The removed condition is `axialDim == 2` failing, which was the only way into `std::cerr << "Could not find the axial dimension."`. `axialDim` is assigned solely by `nneigh::dumpAxialDim`. That function sets a local to 0 and then assigns 1 only when the recovered y length is strictly longer, and 2 only when the recovered z length is strictly longer than the length chosen so far. Those are the only assignments, so the return is 0, 1, or 2. Once 0 and 1 have been rejected, the value is 2 and the old final `else` cannot run. Both blocks now use `else` for that remaining value.
+
+`src/topo_one_dim.cpp`, `ring::rmAxialTranslations`, `if (axialDim < 0 || axialDim > 2)`. The same `dumpAxialDim` return is the only value stored in `axialDim`. It is never below 0 and never above 2, so the body, which only wrote 2 back, was unreachable. The axial coordinate is the value `dumpAxialDim` already returned.
+
+`src/topo_bulk.cpp`, the `take` lambda in the triple loop of `ring::equatorialConditions`, `nAtomsHere + 6 > 42`. `take` is called at most seven times: the equator, which the caller has already required to contain 6 atoms, then the three rings of each of the two chains. Atoms are appended only when the cycle length is 6, and the length test happens before the append, so `nAtomsHere` on entry is a multiple of 6 and is at most 36. `36 + 6 > 42` is false, and a rejected cycle does not increase the counter. The 42-element stack array is therefore never guarded by this comparison; a cycle that is not a hexagon is still rejected by the length test.
+
+`src/topo_bulk.cpp`, `ring::equatorialConditions`, `if (haveBest && rank != nullptr)`. `haveBest` starts false. The only write of `true` is inside `if (rank != nullptr && (chosen != nullptr || raw != nullptr))`, and `rank` is not changed after that. Whenever `haveBest` is true, `rank` is non-null, so the second comparison cannot fail. The sort of the saved ids still runs only when a best pair was stored.
+
+`src/topo_bulk.cpp`, `equatorialLarge`, the key walk that used `for (int i = 0; i < 6; ++i)`. The false arm of `i < 6` cannot run. At `i == 5` the body returns, whether or not that key matches. If an earlier key differs, the body returns or breaks before `i` advances. `i` is therefore never 6. The walk is a `for (;;)` with the same return and break, and it increments `i` only after a match below 5.
+
+`src/topo_bulk.cpp`, `ring::NeighBond::build`, `if (static_cast<size_t>(i) < nList.size())`. The loop is `for (int i = 0; i < n_; ++i)` with `n_ = static_cast<int>(nList.size())`. This coverage build converts an out-of-range `size_t` to `int` by the low 32 bits. A negative result does not enter the loop. A non-negative result is at most the vector length: below 2^31 the cast is the length itself, and at or above 2^31 a non-negative 32-bit value is less than 2^31 and so less than the length. Every `i` that enters the loop already addresses a row, which is what the true arm did.
+
+`src/order_parameter.cpp`, `b2s == 0.0` inside `dihedralCos3`. `n1` is the cross product of `b1` and `b2`, so a zero `b2` makes `n1` the zero vector and `n1s == 0.0` is already true. The `||` returns before `b2s` is read. When `n1s` and `n2s` are both nonzero, `b2` itself is nonzero, so `b2s == 0.0` is false on every evaluation that reaches it. `sqrt(b2s)` stays defined because that same nonzero `n1` excludes a zero `b2`.
+
+`src/order_parameter.cpp`, `hit->second.empty()` in `rodgerF4`. The hydrogen map is filled only by `operator[]` followed by `push_back`. A key is present only after that insertion, and the stored vector then has size at least 1. `find` never yields an empty vector.
+
+`src/order_parameter.cpp`, `hjt->second.empty()` in `rodgerF4`. The neighbour oxygen uses the same map. A successful `find` on its `molID` is that same insertion, so the vector is non-empty whenever the iterator is not `end()`.
+
+`src/shapeMatch.cpp`, `matchedBasal1.empty()` and `matchedBasal2.empty()` in `matchPrism`. Both output vectors are created empty in the function. `relOrderPrismBlock` returns 0 only after it has found a neighbour, which requires a positive ring size, and then `push_back`s that many indices onto each output. Success leaves both vectors non-empty. A nonzero status returns before those tests.
+
+`src/shapeMatch.cpp`, `matchedBasal1.empty()` and `matchedBasal2.empty()` in `matchUntetheredPrism`. The untethered overload calls the neighbour-free `relOrderPrismBlock`, which returns 0 only after pushing `ringSize` indices with `ringSize > 0`. The local result vectors start empty, so `empty()` is false whenever it is evaluated.
+
+`src/steinhardt_parallel.cpp`, `orderL > 8` in `qlmOneAtomDrPairwise`. The function is in an anonymous namespace. Its only caller is `runPass1`, and only inside `if (pairwise)`. `runPass1` returns before that expression when `orderL == 12`. `steinhardtQl` calls `runPass1` only for orders 3, 4, 6, 8, and 12, so the pairwise call always has `orderL <= 8`.
+
+`src/steinhardt_parallel.cpp`, `orderL <= 8` in `runPass1`. The same allow-list and the early return for `orderL == 12` mean the expression is evaluated only for orders 3, 4, 6, and 8. The false arm has no caller.
+
+`src/rdf2d.cpp`, `!frame.ok` in `histogramCellPairs`. The function is file-local. Its only caller is `sampleRDF_AA`, which evaluates the call only after `frame.ok` is true.
+
+`src/rdf2d.cpp`, `!(frame.wx > span && frame.wy > span && frame.wz > span)` in `histogramCellPairs`. That clause is evaluated only when `cutoff > 0`, because a non-positive cutoff returns earlier. The only caller also requires `cutoff + pad < frame.halfMin`, and `halfMin` is half the smallest of `wx`, `wy`, and `wz`, with `pad` four orders of magnitude larger than the term added to form `span`. Thus `span` is below every face separation whenever the clause would run.
+
+`src/pntCorrespondence.cpp`, `currentIatom >= ringSize` in the distance-based `relOrderPrismBlock`. The only assignment of `iatom` in that overload is `iatom = 0` after the nearest neighbour of `basal1[0]` is found. The loop then runs `i` from 0 up to but not including `ringSize`, so `iatom + i` stays inside the ring. The neighbour-list overload still wraps, because there `iatom` is the first matched vertex and can be nonzero.
+
+`src/pntCorrespondence.cpp`, `apex1 == -1 || apex2 == -1` in `relOrderDDC`. `peripheral1` receives a push only for even equatorial indices 0, 2, and 4, and the `i == 0` push assigns `apex1` in both neighbour arms. Size 3 therefore includes that push, so `apex1` is no longer -1. `peripheral2` and `apex2` are the same pattern for indices 1, 3, and 5. When both sizes are 3 the apex tests are false; when either size is not 3 the function returns before them.
+
+`src/pntCorrespondence.cpp`, `startingIndex > 1` in `changeDiaCageOrder`. The `else if` is reached only from the false arm of `startingIndex <= 1`. For an `int` that is exactly `startingIndex > 1`, so the repeated comparison cannot fail. `startingIndex <= 3` still distinguishes the two peripheral shifts.
+
+`src/ira_sofi.cpp`, line `hasN = true` inside `ira::match`. libira writes a permutation of length `nat2` whose indices start at 0 (`ira_mod.py`, the `sym_data.perm` contract: "start by index 0"). The value `nat2` is therefore not an element, so `p == nat2` is false and the assignment that sets `hasN` does not run. A square match in `tests/test_ira_sofi.cpp` returns indices inside `0 .. n-1` and includes 0, which is the same contract. Raw line unhit.
+
+`src/ira_sofi.cpp`, line `continue` after `j < 0 || j >= nat2` in `ira::match`. The same permutation is a sequence of indices of length `nat2` starting at 0, so every element is in `0 .. nat2-1`. After the shift stays 0, `j` is that element. The comparison is false and the skip does not run. Raw line unhit. The file is 142/144 lines.

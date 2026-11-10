@@ -50,6 +50,7 @@ test_sources = {
   'cover_ice': 'cover_ice.cpp',
   'cover_io': 'cover_io.cpp',
   'cover_orient': 'cover_orient.cpp',
+  'cover_topo': 'cover_topo.cpp',
 }
 
 if readcon_dep.found()

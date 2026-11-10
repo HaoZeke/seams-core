@@ -1154,4 +1154,159 @@ TEST_CASE("slab RDF clamps a short bin, resizes, and skips a bad cell pair",
                                       {0.0, 4.0, 3.0}, 1);
   REQUIRE(norm == 0);
   REQUIRE(values.size() == 2);
+
+  Cloud collapsed = makeCloud({{0.0, 0.0, 0.0}, {1.2, 0.0, 0.0}},
+                              {10.0, 10.0, -1.0});
+  const auto direct = rdf2::sampleRDF_AA(collapsed, 3.0, 0.5, 4);
+  REQUIRE(direct.size() == 4);
+  REQUIRE(direct[2] == 2);
+}
+
+TEST_CASE("F4 skips a short neighbour row and a missing second hydrogen",
+          "[orient][order]") {
+  Cloud water;
+  water.box = {20.0, 20.0, 20.0};
+  water.boxLow = {0.0, 0.0, 0.0};
+  auto add = [&](int type, int mol, int id, double x, double y, double z) {
+    molSys::Point<double> p;
+    p.type = type;
+    p.molID = mol;
+    p.atomID = id;
+    p.x = x;
+    p.y = y;
+    p.z = z;
+    water.idIndexMap[id] = static_cast<int>(water.pts.size());
+    water.pts.push_back(p);
+  };
+  add(1, 1, 10, 0.0, 0.0, 0.0);
+  add(2, 1, 11, 0.0, 0.96, 0.0);
+  add(2, 1, 12, 0.0, -0.24, 0.9);
+  add(1, 2, 20, 2.8, 0.0, 0.0);
+  add(2, 2, 21, 2.8, 0.96, 0.0);
+  add(2, 2, 22, 2.8, -0.24, 0.9);
+  water.nop = static_cast<int>(water.pts.size());
+  std::vector<std::vector<int>> shortList(1);
+  shortList[0] = {10, 20};
+  const auto skipped = topoparam::rodgerF4(water, shortList, 1, 2);
+  REQUIRE(std::isfinite(skipped[0]));
+  REQUIRE(std::isnan(skipped[3]));
+
+  water.pts[4].x = std::numeric_limits<double>::quiet_NaN();
+  water.pts[5].x = std::numeric_limits<double>::quiet_NaN();
+  std::vector<std::vector<int>> full(static_cast<std::size_t>(water.nop));
+  full[0] = {10, 20};
+  const auto missingH = topoparam::rodgerF4(water, full, 1, 2);
+  REQUIRE(std::isnan(missingH[0]));
+
+  Cloud bare;
+  bare.box = {8.0, 8.0, 8.0};
+  bare.boxLow = {0.0, 0.0, 0.0};
+  molSys::Point<double> oxygen;
+  oxygen.type = 1;
+  oxygen.molID = 4;
+  oxygen.atomID = 1;
+  bare.pts.push_back(oxygen);
+  bare.nop = 1;
+  REQUIRE(std::isnan(topoparam::jumpRotorTau90(bare, bare, 1.0, 1, 2)));
+}
+
+TEST_CASE("layer clamps and rejected stack axes land on real bins",
+          "[orient][order]") {
+  const double pi = 3.141592653589793;
+  Cloud edge;
+  edge.box = {pi, pi, pi};
+  edge.boxLow = {0.0, 0.0, 0.0};
+  molSys::Point<double> ice;
+  ice.iceType = molSys::atom_state_type::cubic;
+  ice.z = std::nextafter(pi, 0.0);
+  edge.pts.push_back(ice);
+  edge.nop = 1;
+  const auto top = topoparam::layerCubicity(edge, 2, 0.5);
+  REQUIRE(top.cubicPerLayer.size() == 6);
+  REQUIRE(top.cubicPerLayer.back() == 1);
+  REQUIRE(top.sequence.back() == 'C');
+
+  Cloud broken = edge;
+  broken.pts[0].z = std::numeric_limits<double>::quiet_NaN();
+  const auto nanLayer = topoparam::layerCubicity(broken, 2, 0.5);
+  REQUIRE(nanLayer.cubicPerLayer.front() == 1);
+  REQUIRE(nanLayer.sequence.front() == 'C');
+
+  Cloud seeded = edge;
+  seeded.nop = 5;
+  seeded.pts.resize(5);
+  seeded.pts[0] = ice;
+  const std::vector<std::vector<int>> rings = {{9, 0, 1, 2, 3, 4},
+                                               {0, -3, 1, 2, 3, 4},
+                                               {0, 0, 0, 0, 0, 0}};
+  const std::vector<bool> basal = {true, true, false};
+  const std::vector<bool> equatorial = {false, false, true};
+  const auto tumTop =
+      topoparam::tumLayerStack(edge, {{0, 0, 0, 0, 0, 0}}, {false}, {true}, 2,
+                               0.5);
+  REQUIRE(tumTop.cubicPerLayer.back() == 1);
+  const auto tumNan =
+      topoparam::tumLayerStack(broken, {{0, 0, 0, 0, 0, 0}}, {true}, {false},
+                               2, 0.5);
+  REQUIRE(tumNan.hexPerLayer.front() == 1);
+  const auto skipped =
+      topoparam::tumLayerStack(seeded, rings, basal, equatorial, 2, 0.5);
+  REQUIRE(skipped.sequence.size() == 6);
+
+  Cloud box = edge;
+  REQUIRE(topoparam::layerCubicity(box, -1, 0.5).sequence.empty());
+  box.box = {pi, pi};
+  REQUIRE(topoparam::layerCubicity(box, 2, 0.5).sequence.empty());
+  REQUIRE(topoparam::tumLayerStack(edge, rings, basal, equatorial, -2, 0.5)
+              .sequence.empty());
+  REQUIRE(topoparam::tumLayerStack(edge, rings, basal, equatorial, 5, 0.5)
+              .sequence.empty());
+  REQUIRE(topoparam::tumLayerStack(box, rings, basal, equatorial, 2, 0.5)
+              .sequence.empty());
+  Cloud flat = edge;
+  flat.box = {0.0, pi, pi};
+  REQUIRE(topoparam::tumLayerStack(flat, rings, basal, equatorial, 0, 0.5)
+              .phiC == 0.0);
+}
+
+TEST_CASE("prism wrap, rejected DDC indices, and a one-sided periphery",
+          "[orient][pnt]") {
+  Cloud cloud = makeCloud({{0, 0, 0},
+                           {1, 0, 0},
+                           {1, 1, 0},
+                           {0, 1, 0},
+                           {0, 0, 2},
+                           {1, 0, 2},
+                           {1, 1, 2},
+                           {0, 1, 2}},
+                          {12.0, 12.0, 12.0});
+  const std::vector<int> basal1 = {0, 1, 2, 3};
+  const std::vector<int> basal2 = {4, 5, 6, 7};
+  const auto nList = indexNeighbours(8, {{2, 4}});
+  std::vector<int> out1;
+  std::vector<int> out2;
+  const int rc =
+      pntToPnt::relOrderPrismBlock(cloud, basal1, basal2, nList, out1, out2);
+  REQUIRE(rc == 0);
+  REQUIRE(out1.size() == 4);
+  REQUIRE(out1[0] == 2);
+  REQUIRE(out1[2] == 0);
+  REQUIRE(out2[0] == 4);
+
+  const std::vector<int> equatorial = {0, 1, 2, 3, 4, 5};
+  std::vector<std::vector<int>> rings = {
+      equatorial,
+      {0, 20, 21, 22, 12, 6},
+      {13, 23, 24, 50, 12, 9},
+      {2, 25, 26, 27, 28, 7},
+      {50, 29, 30, 31, 32, 10},
+      {4, 33, 34, 35, 36, 8},
+      {50, 37, 38, 39, 40, 11},
+  };
+  std::vector<cage::Cage> cages(1);
+  cages[0].rings = {0, 1, 2, 3, 4, 5, 6};
+  REQUIRE(pntToPnt::relOrderDDC(equatorial, -1, rings, cages).empty());
+  REQUIRE(pntToPnt::relOrderDDC(equatorial, 4, rings, cages).empty());
+  const auto oneSide = pntToPnt::relOrderDDC(equatorial, 0, rings, cages);
+  REQUIRE(oneSide.empty());
 }
