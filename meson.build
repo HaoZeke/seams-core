@@ -38,11 +38,10 @@ if cpp_id == 'gcc' or cpp_id == 'clang'
   _args += ['-Wno-unused-result']
 endif
 
-# --coverage switches arc updates to atomics once the link includes
-# threads. The bulk and cage tests then exceed their time limit.
-# Non-atomic updates keep the same counters and the same tests.
+# A non-atomic arc update races when a test uses more than one thread.
+# The counter goes negative, and the report then drops the line.
 if get_option('b_coverage') and (cpp_id == 'gcc' or cpp_id == 'clang')
-  _args += ['-fprofile-update=single']
+  _args += ['-fprofile-update=atomic']
 endif
 
 # Platform conditionals
