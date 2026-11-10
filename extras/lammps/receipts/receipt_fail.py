@@ -470,6 +470,17 @@ def check_neigh(work):
     eclipsed, staggered = neigh_ref.eclipsed_staggered(0, [[1], [0]], qlm)
     if eclipsed != 1 or staggered != 0:
         raise SystemExit("orthogonal bond %d %d" % (eclipsed, staggered))
+    qlm3 = __import__("numpy").zeros((3, 7), dtype=complex)
+    qlm3[0, 0] = 1.0
+    qlm3[1, 0] = -1.0
+    qlm3[2, 0] = -1.0
+    eclipsed, staggered = neigh_ref.eclipsed_staggered(0, [[1, 2], [0], [0]], qlm3)
+    if eclipsed != 0 or staggered != 2:
+        raise SystemExit("two staggered bonds %d %d" % (eclipsed, staggered))
+    script = Path(os.environ["SRC_SEAMS"]) / "extras" / "lammps" / "receipts" / "neigh_ref.py"
+    ran = subprocess.run([sys.executable, str(script), str(hand)], capture_output=True, text=True)
+    if ran.returncode != 0 or "exit: 0" not in ran.stdout:
+        raise SystemExit("neigh_ref script exit %d" % ran.returncode)
     sys.argv = ["neigh_ref.py", str(hand)]
     try:
         neigh_ref.main()
