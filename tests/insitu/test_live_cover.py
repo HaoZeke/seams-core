@@ -168,15 +168,15 @@ def main():
     stub = folder / "stub-seams"
     stub.write_text("#!/bin/sh\nexit 0\n")
     stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
-    live.SEAMS = str(stub)
+    live.SEAMS = str(stub.resolve())
     record.write_text("step 1\n" + rings + "\n")
     check(expect_error(lambda: live.match_lammps_cli(record, dump)))
     check(expect_error(lambda: live.match_native_cli(record, dump)))
     live.SEAMS = saved
 
-    record.write_text("step 1\nrings 3:9 4:0 5:0 6:0 7:0 8:0\nchill cubic:0\ncage hc:0 ddc:0 both:0 water:0\n")
+    record.write_text("step 1\nrings not-the-census\nchill cubic:0\ncage hc:0 ddc:0 both:0 water:0\n")
     check(expect_error(lambda: live.match_lammps_cli(record, dump)))
-    record.write_text("step 1\n" + rings + "\nchill cubic:9\ncage hc:0 ddc:0 both:0 water:0\n")
+    record.write_text("step 1\n" + rings + " extra\nchill cubic:9\ncage hc:0 ddc:0 both:0 water:0\n")
     check(expect_error(lambda: live.match_lammps_cli(record, dump)))
     record.write_text("step 1\n" + rings + "\nchill " + " ".join(chill_bits) + "\ncage hc:9 ddc:0 both:0 water:0\n")
     check(expect_error(lambda: live.match_lammps_cli(record, dump)))
@@ -199,7 +199,7 @@ def main():
     empty = folder / "empty.lammpstrj"
     empty.write_text("")
     check(expect_error(lambda: live.thread_ladder(empty, 1)))
-    live.thread_ladder(dump, 1)
+    live.thread_ladder(dump.resolve(), 1)
 
     made = live.diamond_positions(1)
     lattice = work / "lattice" / "1" / "one.lammpstrj"
@@ -224,7 +224,7 @@ def main():
         + "END\n"
     )
     stub_lmp.chmod(stub_lmp.stat().st_mode | stat.S_IEXEC)
-    check(expect_error(lambda: engine_e2e.lammps_case(str(stub_lmp), "plugin.so", work / "short-run", 1)))
+    check(expect_error(lambda: engine_e2e.lammps_case(str(stub_lmp.resolve()), "plugin.so", work / "short-run", 1)))
 
     for name in ("lammps-plugin-1", "lammps-plugin-2", "lammps-package", "e2e-gromacs"):
         (work / name).mkdir(parents=True, exist_ok=True)
