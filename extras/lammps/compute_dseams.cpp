@@ -76,8 +76,16 @@ void ComputeDseams::compute_peratom() {
       domain->triclinic ? domain->xy : 0.0,
       domain->triclinic ? domain->xz : 0.0,
       domain->triclinic ? domain->yz : 0.0};
-  int failed = seams_chill_plus_graph_lammps(xyz.data(), nlocal, box9, cutoff,
-                                       graph.c_str(), labels.data()) != 0;
+  int local_atoms = nlocal;
+  int total_atoms = 0;
+  MPI_Allreduce(&local_atoms, &total_atoms, 1, MPI_INT, MPI_SUM, world);
+  int failed = 0;
+  if (nlocal > 0) {
+    failed = seams_chill_plus_graph_lammps(xyz.data(), nlocal, box9, cutoff,
+                                           graph.c_str(), labels.data()) != 0;
+  } else if (total_atoms == 0) {
+    failed = 1;
+  }
   int any_failed = 0;
   MPI_Allreduce(&failed, &any_failed, 1, MPI_INT, MPI_MAX, world);
   if (any_failed) {
