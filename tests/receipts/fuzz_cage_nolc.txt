@@ -1,0 +1,8 @@
+profile: no linkcell, no chemfiles
+argv: traj directory, 1000 trials
+result: exit 0
+duration_s: 38865.77
+frames: 424
+failures: 0
+shiftTrials: 22176
+permTrials: 22000
