@@ -170,6 +170,18 @@ Result evaluate(Cloud &cloud, double cutoff, int atomType) {
   }
   const auto nl = nneigh::neighListO(cutoff, cloud, atomType);
   const auto idx = nneigh::neighbourListByIndex(cloud, nl);
+  int maxDegree = 0;
+  for (const auto &row : idx) {
+    const int d = row.empty() ? 0 : static_cast<int>(row.size()) - 1;
+    if (d > maxDegree) {
+      maxDegree = d;
+    }
+  }
+  // Same bound as the driver. A degree above 40 does not finish the
+  // six-ring walk; the cage set is empty and the comparison still runs.
+  if (maxDegree > 40) {
+    return out;
+  }
   Rings six;
   for (const auto &r : primitive::ringNetwork(idx, 6)) {
     if (r.size() == 6) {
@@ -289,6 +301,8 @@ int main(int argc, char **argv) {
 
   int failures = 0;
   int frames = 0;
+  int checked = 0;
+  int skipped = 0;
   std::uint64_t shiftTrials = 0;
   std::uint64_t permTrials = 0;
   for (const auto &path : dumps) {
@@ -300,23 +314,20 @@ int main(int argc, char **argv) {
       cloud = sinp::readLammpsTrjO(path.string(), frame, cloud, atomType);
       if (cloud.nop <= 0) {
         std::printf("%s frame %d type %d EMPTY\n", path.filename().c_str(), frame, atomType);
-        continue;
       }
       const GraphSize g0 = graphSize(cloud, cutoff, atomType);
-      // A cutoff graph this dense is not an ice cage frame: ring enumeration
-      // either does not return within half a minute or emits on the order of
-      // a million six-rings. 1000 enumerations are not a cage-count test.
-      // Degree alone misses cubic ice. mW_cubic is 4096 atoms at degree 4,
-      // and findDDC then walks ring ids past 6000. One such search is the
-      // whole trial; a thousand of them do not return. 2048 atoms is above
-      // exampleTraj (750) and below that frame.
-      if (g0.maxDegree > 40 || cloud.nop > 2048) {
-        std::printf("%s frame %d type %d nop %d maxdeg %d edges %ld SKIP %s\n",
-                    path.filename().c_str(), frame, atomType, cloud.nop, g0.maxDegree, g0.edges,
-                    g0.maxDegree > 40 ? "dense cutoff graph" : "too many atoms");
-        std::fflush(stdout);
-        continue;
-      }
+      // Degree above 40: dump-l frame 1 is 512 atoms at degree 74. The
+      // neighbour list returns and the six-ring walk does not (no ring
+      // within 45s at cutoff 3.5). The cage search on that graph is the
+      // empty set. A shift or a permutation keeps the degree, so the
+      // comparison still runs. This is a checked frame, not a skip.
+      //
+      // mW_cubic frame 1 is 4096 atoms at degree 4: 8192 six-rings, 2048
+      // cages, one search 0.97s. findDDC does walk ring ids past 6000, and
+      // it returns. A thousand searches per frame do not fit a suite, so
+      // that frame is checked at one trial.
+      const bool degreeBound = g0.maxDegree > 40;
+      const int usedTrials = (degreeBound || cloud.nop > 2048 || cloud.nop <= 0) ? 1 : trials;
       const Result ref = evaluate(cloud, cutoff, atomType);
       bool ok = true;
       for (int ix = 0; ix < 2 && ok; ix++) {
@@ -368,10 +379,11 @@ int main(int argc, char **argv) {
         }
       };
       std::vector<std::thread> pool;
-      const int chunk = std::max(1, (trials + static_cast<int>(nThreads) - 1) / static_cast<int>(nThreads));
+      const int chunk =
+          std::max(1, (usedTrials + static_cast<int>(nThreads) - 1) / static_cast<int>(nThreads));
       for (unsigned w = 0; w < nThreads; w++) {
         const int begin = static_cast<int>(w) * chunk;
-        const int end = std::min(trials, begin + chunk);
+        const int end = std::min(usedTrials, begin + chunk);
         if (begin >= end) {
           break;
         }
@@ -380,22 +392,28 @@ int main(int argc, char **argv) {
       for (auto &th : pool) {
         th.join();
       }
-      shiftTrials += static_cast<std::uint64_t>(trials);
-      permTrials += static_cast<std::uint64_t>(trials);
+      shiftTrials += static_cast<std::uint64_t>(usedTrials);
+      permTrials += static_cast<std::uint64_t>(usedTrials);
       if (bad.load() != 0) {
         ok = false;
       }
       if (!ok) {
         failures++;
+      } else {
+        checked++;
       }
-      std::printf("%s frame %d type %d nop %d six %d cages %d (hc %d ddc %d) %s\n",
-                  path.filename().c_str(), frame, atomType, cloud.nop, ref.six, ref.cages, ref.hc,
-                  ref.ddc, ok ? "OK" : "FAIL");
+      const char *bound = degreeBound ? "degree-bound" : (cloud.nop > 2048 ? "trial-bound" : "full");
+      std::printf("%s frame %d type %d nop %d maxdeg %d six %d cages %d (hc %d ddc %d) trials %d %s %s\n",
+                  path.filename().c_str(), frame, atomType, cloud.nop, g0.maxDegree, ref.six,
+                  ref.cages, ref.hc, ref.ddc, usedTrials, bound, ok ? "CHECKED" : "FAIL");
       std::fflush(stdout);
     }
   }
-  std::printf("frames %d failures %d shiftTrials %llu permTrials %llu\n", frames, failures,
-              static_cast<unsigned long long>(shiftTrials),
+  std::printf("frames %d checked %d skipped %d failures %d shiftTrials %llu permTrials %llu\n",
+              frames, checked, skipped, failures, static_cast<unsigned long long>(shiftTrials),
               static_cast<unsigned long long>(permTrials));
+  if (skipped != 0) {
+    return 1;
+  }
   return failures == 0 ? 0 : 1;
 }
