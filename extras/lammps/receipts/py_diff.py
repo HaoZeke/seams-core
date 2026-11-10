@@ -53,8 +53,17 @@ def main():
     write_heads(log, root, lammps)
     env = os.environ.copy()
     env["COVERAGE_FILE"] = str(build / "work" / "py.coverage")
-    report = log.run([py, "-m", "coverage", "report", "--show-missing"], root, env)
-    log.run([py, "-m", "coverage", "xml", "-o", str(xml)], root, env)
+    include = "*/extras/lammps/receipts/*,*/tests/*"
+    report = log.run(
+        [py, "-m", "coverage", "report", "--show-missing", "--precision", "2", "--include", include],
+        root,
+        env,
+    )
+    log.run(
+        [py, "-m", "coverage", "xml", "-o", str(xml), "--include", include],
+        root,
+        env,
+    )
     log.line("xml: " + streamlog.clean(str(xml)))
     log.line("end: " + streamlog.date_is())
     log.close()

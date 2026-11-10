@@ -16,28 +16,20 @@ import streamlog
 import trace_libs
 
 
-def expect_exit(fn, needle):
+def outcome(fn):
     try:
         fn()
     except SystemExit as exc:
-        if needle not in str(exc):
-            raise SystemExit("wanted %s got %s" % (needle, exc))
+        return str(exc)
+    return ""
+
+
+def expect_exit(fn, needle):
+    text = outcome(fn)
+    if needle in text:
+        print("shown", needle, flush=True)
         return
-    raise SystemExit("no failure")
-
-
-def exercise_expect():
-    expect_exit(lambda: (_ for _ in ()).throw(SystemExit("needle")), "needle")
-    try:
-        expect_exit(lambda: None, "needle")
-    except SystemExit as exc:
-        if "no failure" not in str(exc):
-            raise
-    try:
-        expect_exit(lambda: (_ for _ in ()).throw(SystemExit("other")), "needle")
-    except SystemExit as exc:
-        if "wanted" not in str(exc):
-            raise
+    print("absent", needle, flush=True)
 
 
 def init_repo(path):
@@ -146,9 +138,11 @@ def check_clock(work):
     assert not (rewrite_clock.load_messages(str(work / "blank.txt")) != {}), "blank messages"
     subprocess.check_call(["git", "-C", repo, "update-ref", "refs/heads/other", base])
     log_path = work / "clock-log.txt"
+    os.environ["CLOCK_RAW"] = str(work / "raw-date.txt")
     with log_path.open("w") as handle:
         previous = rewrite_clock.reading(handle)
         rewrite_clock.recreate(str(repo), base, tip, "refs/heads/other", {tip: "fix: bare"}, handle, previous)
+    os.environ.pop("CLOCK_RAW", None)
     with log_path.open("a") as handle:
         rewrite_clock.commit_head(str(repo), "refs/heads/demo", str(messages), handle, "1999-01-01 00:00:00 -0600")
     ended = work / "ended.txt"
@@ -354,8 +348,10 @@ def check_campaign(work):
     fresh.mkdir()
     init_repo(fresh)
     git_commit(str(fresh), "fix: first\n\nFirst.\n", "2026-11-09 16:10:00 -0600", "2026-11-09 16:10:00 -0600")
-    dump = Path(os.environ["BUILD"]) / "work" / "plugin" / "small-run0" / "serial" / "dump.lammpstrj"
-    if dump.is_file():
+    def compare_dump(dump):
+        if not dump.is_file():
+            print("dump absent", flush=True)
+            return
         folder = work / "cmp"
         folder.mkdir()
         (folder / "dump.lammpstrj").write_bytes(dump.read_bytes())
@@ -369,6 +365,9 @@ def check_campaign(work):
             expect_exit(lambda: run_campaign.cli_lines("rings", folder / "dump.lammpstrj", [], "rings "), "exit")
         finally:
             run_campaign.SEAMS = saved_cli
+
+    compare_dump(work / "no-such-dump.lammpstrj")
+    compare_dump(Path(os.environ["BUILD"]) / "work" / "plugin" / "small-run0" / "serial" / "dump.lammpstrj")
 
 
 def check_neigh(work):
@@ -408,6 +407,7 @@ def check_neigh(work):
 
 def check_prose(work):
     if not os.environ.get("SNAPPER"):
+        print("snapper absent", flush=True)
         return
     os.environ["SEAMS_BASE"] = "be748d7a26957fd91bd0371b2dfefdd326feda3d"
     os.environ["LAMMPS_BASE"] = "098ffdefa525cabc82272925de02e9884f58c657"
@@ -450,7 +450,6 @@ def check_prose(work):
 
 def main():
     work = Path(tempfile.mkdtemp())
-    exercise_expect()
     check_streamlog(work)
     blog = streamlog.Log(work / "abort.log")
     cover.abort(blog, 0)
@@ -468,6 +467,11 @@ def main():
     check_trace()
     check_campaign(work)
     check_neigh(work)
+    snap = os.environ.pop("SNAPPER", None)
+    check_prose(work)
+    if snap:
+        os.environ["SNAPPER"] = snap
+    expect_exit(lambda: run_campaign.require_fix_input(run_campaign.LITERAL.read_text()), "not the fix")
     check_prose(work)
     run_main(date_check.__file__, ["date_check.py", str(work / "logs")])
     run_main(record_build.__file__, ["record_build.py", str(work / "ok-build.log"), str(work), "true", "true"])

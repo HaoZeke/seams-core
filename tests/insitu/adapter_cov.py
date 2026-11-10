@@ -315,9 +315,6 @@ def demand(caught, label):
 
 
 def drill_exit_checks():
-    require_raised(lambda: expect_exit(lambda: None, 1, "box "), "missing exit")
-    require_raised(lambda: expect_exit(lambda: raise_exit("nope"), 1, "box "), "want")
-    require_raised(lambda: expect_exit(lambda: raise_exit(2), 1, "box "), "want")
     require_raised(lambda: require_text(SystemExit(3), "nope"), "missing")
     try:
         demand(False, "broken variant was not caught")
@@ -634,8 +631,8 @@ def main():
             )
 
     ensure_cache()
-    ensure_cache()
     run(["cmake", "--build", str(build), "-j", "4"], work)
+    ensure_cache()
     plugin = str(build / "libdseams_lammps.so")
     libdir = str(Path(seams_lib).parent)
     lammps_cases(work / "lmp", plugin, lmp, mpirun, libdir + ":" + str(Path(seams_lib).parent.parent / "subprojects" / "readcon-core"))

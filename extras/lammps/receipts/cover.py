@@ -91,6 +91,7 @@ def main():
         [str(SRC / "extras" / "lammps" / "receipts" / "import_checks.py")],
         [str(SRC / "extras" / "lammps" / "receipts" / "receipt_fail.py")],
         [str(SRC / "tests" / "cli_every.py"), str(BUILD / "seams" / "seams"), str(SRC)],
+        [str(SRC / "tests" / "insitu" / "test_live_cover.py")],
     ):
         code = log.run([py, "-m", "coverage", "run", "--branch", "--append", *args], WORK, env)
         log.line("py %s exit %d" % (Path(args[0]).name, code))

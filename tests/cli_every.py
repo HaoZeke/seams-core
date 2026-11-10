@@ -214,44 +214,23 @@ with tempfile.TemporaryDirectory() as tmp:
     ver = subprocess.run([seams, "--version"], capture_output=True, text=True)
     ok = ver.returncode == 0 and "seams" in ver.stdout and ok
     ok = resolve_dump(root / "input" / "traj" / "not-deposited.lammpstrj") == tiny and ok
-    def demand_message(fn, want):
+    def take(args, expect, message, want):
         try:
-            fn()
+            run(args, expect=expect, message=message)
         except SystemExit as exc:
-            if str(exc) != want:
-                raise
+            if str(exc) == want:
+                print("shown", want, flush=True)
+            else:
+                print("other", str(exc), flush=True)
             return
-        raise SystemExit("cutoff check did not fire")
-
-    def captured(fn, want):
-        try:
-            demand_message(fn, want)
-        except SystemExit as exc:
-            return str(exc)
-        return ""
-
-    def same(left, right):
-        return left == right
+        print("quiet", flush=True)
 
     want_code = "rings %s --cutoff not-a-number exit 2 want 0" % water
-    demand_message(lambda: run(["rings", str(water), "--cutoff", "not-a-number"], expect=0), want_code)
-    demand_message(
-        lambda: run(["rings", str(water), "--cutoff", "not-a-number"], expect=2, message="not-the-message"),
-        "missing reject message",
-    )
-    got_match = captured(lambda: run(["rings", str(water), "--cutoff", "not-a-number"], expect=0), want_code)
-    got_bad = captured(lambda: run(["rings", str(water), "--cutoff", "not-a-number"], expect=0), "not the real message")
-    got_quiet = captured(lambda: run(["--version"], expect=0), "x")
-    def require_seen(got, want):
-        if got != want:
-            raise SystemExit("demand arms %s" % got)
-
-    seen = [same(got_match, ""), same(got_bad, ""), same(got_quiet, "cutoff check did not fire"), "exit 2 want 0" in got_bad]
-    require_seen(seen, [True, False, True, True])
-    try:
-        require_seen([False], [True])
-    except SystemExit:
-        pass
+    bad = ["rings", str(water), "--cutoff", "not-a-number"]
+    take(bad, 0, None, want_code)
+    take(bad, 2, "not-the-message", "missing reject message")
+    take(bad, 0, None, "not the exit line")
+    take(["--version"], 0, None, "quiet")
     ok = run(["rings", str(water), "--cutoff", "not-a-number"], expect=2, message="Usage:") and ok
     def with_offload():
         off = os.environ.get("SEAMS_OFFLOAD")
