@@ -425,10 +425,8 @@ def subset_case(work, lmp, mpirun, plugin, env):
     run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"], folder, env)
     type_dump(folder / "dump.lammpstrj", folder / "type1.lammpstrj", 1)
     live = (folder / "live.txt").read_text()
-    if census_line("", "rings") != "":
-        raise SystemExit("empty census line")
-    if census_line(live, "absent") != "":
-        raise SystemExit("absent census line")
+    require_absent("", "rings")
+    require_absent(live, "absent")
     live_rings = census_line(live, "rings")
     cli_rings = cli_census(seams, folder / "type1.lammpstrj", "rings", [])
     require_same("subset rings", live_rings, cli_rings)
@@ -565,11 +563,7 @@ def compute_cases(work, lmp, cxx, include, env):
         paired,
         env,
     )
-    label_text = (paired / "labels.txt").read_text()
-    if label_text.count("\nframe\n") + int(label_text.startswith("frame\n")) != 1:
-        raise SystemExit("np2 frames %d" % label_text.count("frame"))
-    if label_text.count("endframe\n") != 1:
-        raise SystemExit("np2 endframe %d" % label_text.count("endframe"))
+    require_one_frame((paired / "labels.txt").read_text())
     print("compute np2 exit 0", flush=True)
     rejected = out / "np2-bad-graph"
     rejected.mkdir(parents=True, exist_ok=True)
@@ -586,8 +580,17 @@ def compute_cases(work, lmp, cxx, include, env):
     print("compute np2 bad-graph exit 1", flush=True)
 
 
-def sys_python():
-    return os.environ.get("DSEAMS_PYTHON", "python3")
+def require_absent(text, key):
+    if census_line(text, key) != "":
+        raise SystemExit("census line")
+
+
+def require_one_frame(text):
+    frames = text.count("\nframe\n") + int(text.startswith("frame\n"))
+    if frames != 1:
+        raise SystemExit("np2 frames %d" % frames)
+    if text.count("endframe\n") != 1:
+        raise SystemExit("np2 endframe %d" % text.count("endframe"))
 
 
 def must_raise(fn, needle):
@@ -612,6 +615,7 @@ def main():
     work.mkdir(parents=True, exist_ok=True)
     build = work / "plugin"
     build.mkdir(parents=True, exist_ok=True)
+    (build / "CMakeCache.txt").unlink(missing_ok=True)
 
     def ensure_cache():
         if not (build / "CMakeCache.txt").exists():

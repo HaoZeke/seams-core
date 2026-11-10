@@ -214,18 +214,35 @@ with tempfile.TemporaryDirectory() as tmp:
     ver = subprocess.run([seams, "--version"], capture_output=True, text=True)
     ok = ver.returncode == 0 and "seams" in ver.stdout and ok
     ok = resolve_dump(root / "input" / "traj" / "not-deposited.lammpstrj") == tiny and ok
-    try:
-        run(["rings", str(water), "--cutoff", "not-a-number"], expect=0)
+    def demand_message(fn, want):
+        try:
+            fn()
+        except SystemExit as exc:
+            if str(exc) != want:
+                raise
+            return
         raise SystemExit("cutoff check did not fire")
-    except SystemExit as exc:
-        if str(exc) != "rings %s --cutoff not-a-number exit 2 want 0" % water:
-            raise
+
+    want_code = "rings %s --cutoff not-a-number exit 2 want 0" % water
+    demand_message(lambda: run(["rings", str(water), "--cutoff", "not-a-number"], expect=0), want_code)
+    demand_message(
+        lambda: run(["rings", str(water), "--cutoff", "not-a-number"], expect=2, message="not-the-message"),
+        "missing reject message",
+    )
     try:
-        run(["rings", str(water), "--cutoff", "not-a-number"], expect=2, message="not-the-message")
-        raise SystemExit("message check did not fire")
+        demand_message(lambda: None, "x")
     except SystemExit as exc:
-        if str(exc) != "missing reject message":
+        if "cutoff check did not fire" not in str(exc):
             raise
+    else:
+        raise SystemExit("silent arm returned")
+    try:
+        demand_message(lambda: (_ for _ in ()).throw(SystemExit("nope")), "other")
+    except SystemExit as exc:
+        if str(exc) != "nope":
+            raise
+    else:
+        raise SystemExit("mismatch arm returned")
     ok = run(["rings", str(water), "--cutoff", "not-a-number"], expect=2, message="Usage:") and ok
     def with_offload():
         off = os.environ.get("SEAMS_OFFLOAD")

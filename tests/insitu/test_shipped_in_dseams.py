@@ -123,13 +123,16 @@ def exercise_rejects():
         lambda: require_cages("plugin", "cage hc:1 ddc:0 both:0 water:0", "nop 1 x 0 hexagonal 0 cubic 0 both 0 water 0"),
         "plugin cages cage hc:1 ddc:0 both:0 water:0 vs nop 1 x 0 hexagonal 0 cubic 0 both 0 water 0",
     )
+    blocks = census("step 0\nrings a\nstep 1\nrings b\n")
+    if [block["step"] for block in blocks] != [0, 1]:
+        raise SystemExit("two steps %s" % blocks)
     if census("") != []:
         raise SystemExit("empty census")
 
 
 def run_route(name, binary, plugin, work):
     folder = work / name
-
+    folder.mkdir(parents=True, exist_ok=True)
     if folder.exists():
         shutil.rmtree(folder)
     folder.mkdir(parents=True)

@@ -31,10 +31,25 @@ def main():
     adapter = load(root / "tests" / "insitu" / "adapter_cov.py", "adapter_cov")
     shipped = load(root / "tests" / "insitu" / "test_shipped_in_dseams.py", "test_shipped")
     show_fail(lambda: adapter.must_raise(lambda: None, "set "), "did not raise")
+    show_fail(
+        lambda: adapter.must_raise(lambda: (_ for _ in ()).throw(SystemExit("other")), "set "),
+        "raised",
+    )
+    show_fail(lambda: adapter.require_absent("rings 1\n", "rings"), "census line")
+    show_fail(lambda: adapter.require_one_frame("frame\nendframe\nframe\n"), "np2 frames")
+    show_fail(lambda: adapter.require_one_frame("frame\n"), "np2 endframe")
     show_fail(lambda: shipped.assert_reject(lambda: None, "set X"), "reject did not fire")
+    show_fail(
+        lambda: shipped.assert_reject(lambda: (_ for _ in ()).throw(SystemExit("nope")), "other"),
+        "reject was",
+    )
     show_fail(lambda: shipped.need("DSEAMS_NOT_SET"), "set DSEAMS_NOT_SET")
+    show_fail(lambda: show_fail(lambda: None, "nope"), "did not fail")
+    show_fail(
+        lambda: show_fail(lambda: (_ for _ in ()).throw(SystemExit("other")), "needle"),
+        "raised",
+    )
     print("import checks exit 0", flush=True)
 
 
-if __name__ == "__main__":
-    main()
+main()
