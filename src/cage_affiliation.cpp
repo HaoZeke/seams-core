@@ -203,7 +203,7 @@ struct FrameContext {
 
   //! Ordered basal-pair predicate, exactly the findHC acceptance test
   [[nodiscard]] bool basalPair(int i, int j) const {
-    if (i == j || shareAtoms(i, j)) {
+    if (shareAtoms(i, j)) {
       return false;
     }
     return ring::basalConditions(bonds, (*rings)[static_cast<std::size_t>(i)],
