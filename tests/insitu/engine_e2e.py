@@ -21,7 +21,8 @@ def need(name):
 
 def lib_env(extra):
     merged = os.environ.copy()
-    parts = [extra, str(Path(live.LIB).parent), merged.get("LD_LIBRARY_PATH", "")]
+    chem = Path(live.LIB).resolve().parent.parent / "chemfiles-prefix" / "lib"
+    parts = [extra, str(Path(live.LIB).parent), str(chem), merged.get("LD_LIBRARY_PATH", "")]
     merged["LD_LIBRARY_PATH"] = os.pathsep.join(part for part in parts if part)
     merged["OMP_NUM_THREADS"] = "1"
     return merged

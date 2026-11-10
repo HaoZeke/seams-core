@@ -18,6 +18,17 @@ LIB = os.environ["SEAMS_LIB"]
 SEAMS = os.environ.get("SEAMS_CLI", str(ROOT / "bbdir-insitu" / "seams"))
 PLUGIN = Path(os.environ.get("SEAMS_LAMMPS_PLUGIN", "var/run/libfixdseams.so"))
 WORK = Path(os.environ.get("DSEAMS_LIVE_WORK", "var/run/dseams-live"))
+
+
+def library_path(*extra):
+    parts = [str(item) for item in extra if item]
+    chem = Path(LIB).resolve().parent.parent / "chemfiles-prefix" / "lib"
+    if chem.is_dir():
+        parts.append(str(chem))
+    current = os.environ.get("LD_LIBRARY_PATH", "")
+    if current:
+        parts.append(current)
+    return os.pathsep.join(parts)
 os.environ["SEAMS_LIB"] = LIB
 os.environ["PATH"] = str(PREFIX / "bin") + os.pathsep + os.environ.get("PATH", "")
 os.environ.setdefault("OMP_NUM_THREADS", "1")
@@ -1179,13 +1190,11 @@ def gromacs_scale_case(folder, rows, steps, every, repeats):
     mpirun = os.environ.get("DSEAMS_GMX_MPIRUN") or str(PREFIX / "bin" / "mpirun")
     grompp = [gmx]
     mdrun = [mpirun, "--oversubscribe", "-np", "1", gmx, "mdrun"]
-    libs = ":".join(
-        [
-            str(Path(gmx).resolve().parent.parent / "lib"),
-            str(Path(LIB).parent),
-            str(Path(LIB).parent.parent / "subprojects" / "readcon-core"),
-            str(Path(LIB).parent.parent / "subprojects" / "readcon-db"),
-        ]
+    libs = library_path(
+        Path(gmx).resolve().parent.parent / "lib",
+        Path(LIB).parent,
+        Path(LIB).parent.parent / "subprojects" / "readcon-core",
+        Path(LIB).parent.parent / "subprojects" / "readcon-db",
     )
     plain = []
     live = []
@@ -1276,7 +1285,10 @@ def gromacs_trr_identity():
     )
     gmx = os.environ.get("DSEAMS_GMX") or str(PREFIX / "bin" / "gmx")
     mpirun = os.environ.get("DSEAMS_GMX_MPIRUN") or str(PREFIX / "bin" / "mpirun")
-    env = {"LD_LIBRARY_PATH": str(Path(gmx).resolve().parent.parent / "lib") + ":" + str(Path(LIB).parent), "OMP_NUM_THREADS": "1"}
+    env = {
+        "LD_LIBRARY_PATH": library_path(Path(gmx).resolve().parent.parent / "lib", Path(LIB).parent),
+        "OMP_NUM_THREADS": "1",
+    }
     run([mpirun, "--oversubscribe", "-np", "1", gmx, "grompp", "-f", "md.mdp", "-c", "conf.gro", "-p", "topol.top", "-o", "topol.tpr", "-maxwarn", "2"], folder, env=env)
     run([mpirun, "--oversubscribe", "-np", "1", gmx, "mdrun", "-s", "topol.tpr", "-deffnm", "run", "-ntomp", "1", "-noconfout"], folder, env=env)
     frames = trr_frames(folder / "run.trr")
@@ -1373,13 +1385,11 @@ def gromacs_mpi_identity():
     write_gro(folder / "conf.gro", rows, 3.2)
     write_oxygen_top(folder / "topol.top", len(rows))
     env = {
-        "LD_LIBRARY_PATH": ":".join(
-            [
-                str(gmx.parent.parent / "lib"),
-                str(Path(LIB).parent),
-                str(Path(LIB).parent.parent / "subprojects" / "readcon-core"),
-                str(Path(LIB).parent.parent / "subprojects" / "readcon-db"),
-            ]
+        "LD_LIBRARY_PATH": library_path(
+            gmx.parent.parent / "lib",
+            Path(LIB).parent,
+            Path(LIB).parent.parent / "subprojects" / "readcon-core",
+            Path(LIB).parent.parent / "subprojects" / "readcon-db",
         ),
         "OMP_NUM_THREADS": "1",
     }
