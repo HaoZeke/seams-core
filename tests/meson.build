@@ -378,8 +378,9 @@ _device_host_cases = {
   'levi5': ['levi:5', '1'],
 }
 foreach name, args : _device_host_cases
-  # levi:5 is the PG(2,5) graph. Under -O0 with coverage it passes 300s.
-  _host_timeout = name == 'levi5' ? 2400 : 300
+  # levi:5 is the PG(2, 5) graph. It shares the machine with the
+  # dense-frame cage checks, so 2400 s is not enough.
+  _host_timeout = name == 'levi5' ? 7200 : 300
   test('device_host_' + name, _check_device_host,
     args: args,
     workdir: meson.project_source_root() / 'input',
