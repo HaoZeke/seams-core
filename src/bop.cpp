@@ -1479,9 +1479,6 @@ bool chill::isInterfacial(
   if (num_staggrd == 2) {
     // Loop over the four nearest neighbours, the same star as c_ij
     for (int jatomIndex : nearest) {
-      if (jatomIndex < 0 || jatomIndex >= yCloud.nop) {
-        continue;
-      }
       neighStaggered = chill::numStaggered(yCloud, nList, jatomIndex);
       if (neighStaggered > 2) {
         return true;
