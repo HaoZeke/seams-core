@@ -10,12 +10,16 @@
 
 #include <unistd.h>
 
+#include <cstdlib>
 #include <array>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <iostream>
+#include <iterator>
 #include <map>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -26,6 +30,42 @@ using Cloud = molSys::PointCloud<molSys::Point<double>, double>;
 
 // The chemfiles profiles share one temp directory. A fixed file name
 // is removed by one process while another still reads it.
+extern "C" const char *chfl_version(void);
+
+struct TmpDirGuard {
+  std::string previous;
+  bool had = false;
+  explicit TmpDirGuard(const fs::path &dir) {
+    const char *cur = std::getenv("TMPDIR");
+    had = cur != nullptr;
+    if (had) {
+      previous = cur;
+    }
+    REQUIRE(setenv("TMPDIR", dir.c_str(), 1) == 0);
+  }
+  ~TmpDirGuard() {
+    if (had) {
+      setenv("TMPDIR", previous.c_str(), 1);
+    } else {
+      unsetenv("TMPDIR");
+    }
+  }
+};
+
+struct CerrCapture {
+  std::stringstream buf;
+  std::streambuf *old;
+  CerrCapture() : old(std::cerr.rdbuf(buf.rdbuf())) {}
+  ~CerrCapture() { std::cerr.rdbuf(old); }
+  std::string str() const { return buf.str(); }
+};
+
+std::string readBytes(const fs::path &path) {
+  std::ifstream in(path);
+  return std::string(std::istreambuf_iterator<char>(in),
+                     std::istreambuf_iterator<char>());
+}
+
 fs::path chemTemp() {
   auto dir = fs::temp_directory_path() /
              ("dseams-chem-" +
@@ -459,6 +499,59 @@ TEST_CASE("cif and mmcif round trip with an explicit format", "[chemfiles]") {
     REQUIRE_THAT(cloud.box[2], Catch::Matchers::WithinAbs(12.0, 1e-4));
     fs::remove(path);
   }
+}
+
+TEST_CASE("chemfiles 0.10 removes the dotted mmCIF copy and keeps the user file",
+          "[chemfiles]") {
+  const auto root = chemTemp();
+  const auto scratch = root / "scratch";
+  fs::create_directories(scratch);
+  const auto user = root / "user.mmcif";
+  {
+    chemfiles::Frame frame;
+    frame.set_cell(chemfiles::UnitCell(chemfiles::Vector3D(10, 11, 12)));
+    frame.add_atom(chemfiles::Atom("O"), chemfiles::Vector3D(1, 2, 3));
+    chemfiles::Trajectory out(user.string(), 'w', "mmCIF");
+    out.write(frame);
+  }
+  const auto before = readBytes(user);
+  {
+    TmpDirGuard guard(scratch);
+    Cloud cloud = sinp::openFrame(user.string(), 1, -1);
+    REQUIRE(cloud.nop == 1);
+    REQUIRE_THAT(cloud.pts[0].x, Catch::Matchers::WithinAbs(1.0, 1e-4));
+  }
+  REQUIRE(readBytes(user) == before);
+  REQUIRE(fs::is_empty(scratch));
+  const std::string version = chfl_version();
+  REQUIRE(version.rfind("0.10.", 0) == 0);
+}
+
+TEST_CASE("a short dotted mmCIF is refused and leaves no copy", "[chemfiles]") {
+  const auto root = chemTemp();
+  const auto scratch = root / "scratch";
+  fs::create_directories(scratch);
+  const auto user = root / "short.mmcif";
+  {
+    std::ofstream out(user);
+    out << "loop_\n"
+        << "_atom_site.group_PDB\n"
+        << "_atom_site.type_symbol\n"
+        << "_atom_site.label_atom_id\n"
+        << "_atom_site.label_seq_id\n"
+        << "_atom_site.Cartn_x\n"
+        << "_atom_site.Cartn_y\n"
+        << "_atom_site.Cartn_z\n"
+        << "HETATM O O .\n";
+  }
+  const auto before = readBytes(user);
+  TmpDirGuard guard(scratch);
+  CerrCapture err;
+  Cloud cloud = sinp::openFrame(user.string(), 1, -1);
+  REQUIRE(cloud.nop == 0);
+  REQUIRE(err.str().find("label_entity_id") != std::string::npos);
+  REQUIRE(readBytes(user) == before);
+  REQUIRE(fs::is_empty(scratch));
 }
 
 TEST_CASE("an empty xyz range and a con path name the failure", "[chemfiles]") {

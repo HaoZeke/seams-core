@@ -17,11 +17,13 @@
 #include <neighbours.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cmath>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <mutex>
@@ -159,9 +161,196 @@ std::string forcedFormat(const std::string &filename) {
   return "";
 }
 
+// chemfiles 0.10.4 mmCIFFormat::read (subprojects/chemfiles/src/formats/mmCIF.cpp:316)
+// uses label_entity_id whenever label_seq_id is "." and does not check that
+// the column exists. The same library's writer omits the column and writes
+// "." for an atom with no residue. A user file of that shape hits the crash
+// through openFrame. A copy with a numeric label_entity_id is readable.
+extern "C" const char *chfl_version(void);
+
+// The missing-column crash is chemfiles 0.10.x. Later libraries are read
+// as the user wrote them.
+bool chemfilesIs010(const char *version) {
+  if (version == nullptr) {
+    return false;
+  }
+  if (std::strcmp(version, "0.10") == 0) {
+    return true;
+  }
+  return std::strncmp(version, "0.10.", 5) == 0;
+}
+
+struct MmcifSource {
+  std::string path;
+  std::filesystem::path scratch;
+  bool rewritten = false;
+  ~MmcifSource() {
+    if (!scratch.empty()) {
+      std::error_code ignored;
+      std::filesystem::remove_all(scratch, ignored);
+    }
+  }
+  MmcifSource() = default;
+  MmcifSource(const MmcifSource &) = delete;
+  MmcifSource &operator=(const MmcifSource &) = delete;
+  MmcifSource(MmcifSource &&other) noexcept
+      : path(std::move(other.path)), scratch(std::move(other.scratch)),
+        rewritten(other.rewritten) {
+    other.scratch.clear();
+    other.rewritten = false;
+  }
+  MmcifSource &operator=(MmcifSource &&other) noexcept {
+    if (this != &other) {
+      if (!scratch.empty()) {
+        std::error_code ignored;
+        std::filesystem::remove_all(scratch, ignored);
+      }
+      path = std::move(other.path);
+      scratch = std::move(other.scratch);
+      rewritten = other.rewritten;
+      other.scratch.clear();
+      other.rewritten = false;
+    }
+    return *this;
+  }
+};
+
+std::vector<std::string> whitespaceTokens(const std::string &line) {
+  std::istringstream in(line);
+  std::vector<std::string> tokens;
+  std::string token;
+  while (in >> token) {
+    tokens.push_back(token);
+  }
+  return tokens;
+}
+
+MmcifSource mmcifReadable(const std::string &filename) {
+  MmcifSource source;
+  source.path = filename;
+  if (extensionOf(filename) != "mmcif" || !chemfilesIs010(chfl_version())) {
+    return source;
+  }
+  std::ifstream input(filename);
+  if (!input) {
+    return source;
+  }
+  std::vector<std::string> lines;
+  std::string line;
+  while (std::getline(input, line)) {
+    if (!line.empty() && line.back() == '\r') {
+      line.pop_back();
+    }
+    lines.push_back(line);
+  }
+  std::vector<int> headerLines;
+  int seqColumn = -1;
+  bool hasEntity = false;
+  bool inHeaders = false;
+  for (int i = 0; i < static_cast<int>(lines.size()); i++) {
+    const auto tokens = whitespaceTokens(lines[static_cast<std::size_t>(i)]);
+    const bool header =
+        !tokens.empty() && tokens[0].rfind("_atom_site.", 0) == 0;
+    if (header) {
+      if (!inHeaders) {
+        headerLines.clear();
+        seqColumn = -1;
+        hasEntity = false;
+        inHeaders = true;
+      }
+      const auto name = tokens[0].substr(std::string("_atom_site.").size());
+      if (name == "label_seq_id") {
+        seqColumn = static_cast<int>(headerLines.size());
+      }
+      if (name == "label_entity_id") {
+        hasEntity = true;
+      }
+      headerLines.push_back(i);
+      continue;
+    }
+    if (inHeaders) {
+      break;
+    }
+  }
+  if (hasEntity || seqColumn < 0 || headerLines.empty()) {
+    return source;
+  }
+  const int nCol = static_cast<int>(headerLines.size());
+  const int dataBegin = headerLines.back() + 1;
+  bool dottedSeq = false;
+  bool widthOk = true;
+  int dataEnd = dataBegin;
+  for (int i = dataBegin; i < static_cast<int>(lines.size()); i++) {
+    const auto tokens = whitespaceTokens(lines[static_cast<std::size_t>(i)]);
+    if (tokens.empty() || tokens[0] == "loop_" || tokens[0][0] == '#' ||
+        tokens[0][0] == '_') {
+      break;
+    }
+    if (static_cast<int>(tokens.size()) != nCol || seqColumn >= nCol) {
+      widthOk = false;
+      break;
+    }
+    if (tokens[static_cast<std::size_t>(seqColumn)] == ".") {
+      dottedSeq = true;
+    }
+    dataEnd = i + 1;
+  }
+  if (!widthOk) {
+    // The header can crash 0.10.x and the body cannot be patched.
+    throw chemfiles::FormatError(
+        "mmCIF label_seq_id is '.' and label_entity_id is absent; "
+        "refusing a file chemfiles 0.10.4 crashes on");
+  }
+  if (!dottedSeq) {
+    return source;
+  }
+  lines.insert(lines.begin() + headerLines[static_cast<std::size_t>(seqColumn)] + 1,
+               "_atom_site.label_entity_id");
+  for (int i = dataBegin + 1; i < dataEnd + 1; i++) {
+    auto tokens = whitespaceTokens(lines[static_cast<std::size_t>(i)]);
+    tokens.insert(tokens.begin() + seqColumn + 1, "1");
+    std::ostringstream joined;
+    for (std::size_t t = 0; t < tokens.size(); t++) {
+      if (t != 0) {
+        joined << ' ';
+      }
+      joined << tokens[t];
+    }
+    lines[static_cast<std::size_t>(i)] = joined.str();
+  }
+  const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+  static std::atomic<int> copies{0};
+  // A new directory, never the user's path. The destructor removes it
+  // on return and on every exception after this point.
+  const auto scratch = std::filesystem::temp_directory_path() /
+                       ("dseams-mmcif-" + std::to_string(stamp) + "-" +
+                        std::to_string(copies.fetch_add(1)));
+  std::filesystem::create_directory(scratch);
+  source.scratch = scratch;
+  const auto out = scratch / "copy.mmcif";
+  std::ofstream written(out);
+  if (!written) {
+    throw chemfiles::FormatError(
+        "mmCIF label_seq_id is '.' and label_entity_id is absent; "
+        "refusing a file chemfiles 0.10.4 crashes on");
+  }
+  for (const auto &row : lines) {
+    written << row << '\n';
+  }
+  written.close();
+  if (out.string() == filename) {
+    throw chemfiles::FormatError(
+        "mmCIF rewrite refused to replace the caller's file");
+  }
+  source.path = out.string();
+  source.rewritten = true;
+  return source;
+}
+
 int sinp::chemfilesSteps(const std::string &filename) {
   try {
-    chemfiles::Trajectory trajectory(filename, 'r', forcedFormat(filename));
+    const auto mmcif = mmcifReadable(filename);
+    chemfiles::Trajectory trajectory(mmcif.path, 'r', forcedFormat(filename));
     return static_cast<int>(trajectory.nsteps());
   } catch (...) {
     chemfilesError = currentExceptionText();
@@ -190,7 +379,12 @@ sinp::readChemfiles(std::string filename,
     return yCloud;
   }
   try {
-    chemfiles::Trajectory trajectory(filename, 'r', forcedFormat(filename));
+    auto mmcif = mmcifReadable(filename);
+    if (mmcif.rewritten) {
+      std::cerr << "mmCIF: a missing label_entity_id would crash chemfiles "
+                   "0.10.4; reading a copy with that column set to 1\n";
+    }
+    chemfiles::Trajectory trajectory(mmcif.path, 'r', forcedFormat(filename));
     // A DCD has coordinates and a cell, not atom names. A sibling PDB
     // carries the names the host used to choose the analysed species.
     if (extensionIs(filename, "xyz") && trajectory.nsteps() == 0) {
@@ -585,7 +779,11 @@ sinp::openFrame(const std::string &filename, int frame, int typeI,
       }
       return cloud;
     }
-    std::cerr << "chemfiles cannot read " << filename << "\n";
+    std::cerr << "chemfiles cannot read " << filename;
+    if (!chemfilesError.empty()) {
+      std::cerr << ": " << chemfilesError;
+    }
+    std::cerr << "\n";
     return molSys::clearPointCloud(cloud);
   }
 #else
