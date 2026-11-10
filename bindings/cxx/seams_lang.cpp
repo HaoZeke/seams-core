@@ -424,10 +424,7 @@ int seams_frame_rings(seams_frame *frame, double cutoff, int type,
     const auto rings = primitive::ringNetwork(idx, max_depth);
     std::fill(counts, counts + counts_len, 0);
     for (const auto &ring : rings) {
-      const int size = static_cast<int>(ring.size());
-      if (size >= 0 && size < counts_len) {
-        counts[size] += 1;
-      }
+      counts[static_cast<int>(ring.size())] += 1;
     }
     return 0;
   } catch (...) {
