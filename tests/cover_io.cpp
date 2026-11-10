@@ -1120,7 +1120,18 @@ TEST_CASE("language bindings nulls and graph names", "[cover_io]") {
   writeText(twin, dumpText(2, "1 1 0 0 0\n2 1 1.5 0 0\n"));
   REQUIRE(lang.nframes(dump.c_str()) >= 1);
   REQUIRE(lang.nframes(twin.c_str()) >= 1);
-  REQUIRE(lang.nframes((dir / "missing.xyz").c_str()) < 0);
+  const auto missingXyz = dir / "missing.xyz";
+  const int missingFrames = lang.nframes(missingXyz.c_str());
+  if (!(missingFrames < 0)) {
+    std::cerr << "missing-xyz frames " << missingFrames
+              << " exists " << fs::exists(missingXyz)
+              << " path " << missingXyz.string() << "\n";
+    if (fs::is_regular_file(missingXyz)) {
+      std::cerr << "missing-xyz bytes " << fs::file_size(missingXyz) << "\n";
+      std::cerr << "missing-xyz body " << readFile(missingXyz) << "\n";
+    }
+  }
+  REQUIRE(missingFrames < 0);
   REQUIRE(lang.read(nullptr, 1, -1) == nullptr);
   void *read = lang.read(dump.c_str(), 1, -1);
   REQUIRE(read != nullptr);
@@ -1266,6 +1277,17 @@ TEST_CASE("cli edges for ranges, axes, and unclassified ice", "[cover_io]") {
   const auto xyz = dir / "late.xyz";
   writeText(xyz, "1\n\nO 0 0 0\n");
   auto late = runSeams({"read", xyz.string(), "--frame", "2", "--last", "3"});
+  if (!(late.exited && late.status == 2)) {
+    std::cerr << "late-xyz status " << late.status
+              << " exited " << late.exited
+              << " path " << xyz.string() << "\n";
+    std::cerr << "late-xyz out " << late.out << "\n";
+    std::cerr << "late-xyz err " << late.err << "\n";
+    if (fs::is_regular_file(xyz)) {
+      std::cerr << "late-xyz bytes " << fs::file_size(xyz) << "\n";
+      std::cerr << "late-xyz body " << readFile(xyz) << "\n";
+    }
+  }
   REQUIRE(late.exited);
   REQUIRE(late.status == 2);
   REQUIRE(late.err.find("past the last frame") != std::string::npos);

@@ -1,0 +1,22 @@
+cover_io suite failure, before the reader fix.
+
+Six profiles ran meson test together. seams_input passed.
+cover_io failed on every profile. The same binary, run by itself,
+returns an error for both calls. The failure below is from the
+no-linkcell no-chemfiles profile inside that parallel run.
+
+A one-frame xyz, bytes 11, body:
+1
+
+O 0 0 0
+seams read of that file with --frame 2 --last 3 exited 0.
+Standard output was empty. Standard error was empty.
+
+A missing xyz in the same per-process directory did not exist.
+seams_path_nframes of that path returned 1.
+
+The directory name already ended with the process id. The file body
+was the text the test wrote. No other profile replaced those bytes.
+The shared dseams-dump-race directory is a different failure, fixed
+by giving each process its own path. Hammering that directory while
+cover_io ran did not produce this result.
