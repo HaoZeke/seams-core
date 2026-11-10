@@ -122,7 +122,10 @@ int classifyAtom(int nstag, int neclip, int shell, const int *neigh,
       }
     }
   }
-  if (nstag == 3 && neclip == 0) {
+  // One eclipsed bond and three staggered already returned as
+  // hexagonal. The two counts come from one pass over four bonds, so
+  // three staggered bonds that remain have no eclipsed bond.
+  if (nstag == 3) {
     for (int t = 0; t < 4; t++) {
       const int j = neigh[t];
       if (nstagN[j] > 1) {
@@ -133,7 +136,8 @@ int classifyAtom(int nstag, int neclip, int shell, const int *neigh,
   if (inter) {
     return static_cast<int>(molSys::atom_state_type::interfacial);
   }
-  if (neclip == 4 && nstag == 0) {
+  // Four eclipsed bonds fill every slot, so none of them is staggered.
+  if (neclip == 4) {
     return static_cast<int>(molSys::atom_state_type::clathrate);
   }
   if (neclip == 3) {
