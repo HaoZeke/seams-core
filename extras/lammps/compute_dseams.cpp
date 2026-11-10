@@ -109,10 +109,6 @@ void ComputeDseams::compute_peratom() {
   if (label_path.empty()) {
     return;
   }
-  // The nprocs check has already returned, so the surviving rank is 0.
-  if (comm->me != 0) { // GCOVR_EXCL_BR_LINE
-    return; // GCOVR_EXCL_LINE this return runs only when me is not 0
-  }
   std::ofstream out(label_path, label_open ? std::ios::app : std::ios::out);
   label_open = 1;
   out << "frame\n";
