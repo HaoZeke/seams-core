@@ -37,7 +37,7 @@ def run(args, expect=0, message=None):
     return True
 
 
-ok = run(["rings", str(water), "--select", "type 2", "--frame", "1", "--last", "2"])
+ok = run(["rings", str(water), "--frame", "1", "--last", "2"])
 with tempfile.TemporaryDirectory() as tmp:
     ions = Path(tmp) / "ions.lammpstrj"
     ions.write_text(
@@ -163,10 +163,10 @@ with tempfile.TemporaryDirectory() as tmp:
         ["fingerprint", str(tiny), *one, "--emit-library", "a\tb", "--format", "json"],
         ["rings", str(tiny), *one, "--tpp", "2", "--block", "32", "--resident", "0.5",
          "--cell", "3.2"],
-        ["f4", str(tiny), "--select", "type 99", "--frame", "1", "--last", "1"],
-        ["ions", str(tiny), "--select", "type 99", "--ion-types", "2", "--frame", "1", "--last", "1"],
-        ["cages", str(tiny), "--select", "type 99", "--frame", "1", "--last", "1"],
-        ["fingerprint", str(tiny), "--select", "name ZZ", "--frame", "1", "--last", "1"],
+        ["f4", str(tiny), "--frame", "1", "--last", "1"],
+        ["ions", str(tiny), "--ion-types", "2", "--frame", "1", "--last", "1"],
+        ["cages", str(tiny), "--frame", "1", "--last", "1"],
+        ["fingerprint", str(tiny), "--frame", "1", "--last", "1"],
         ["rings", str(empty), "--frame", "2", "--last", "2"],
         ["hbonds", str(water), *one, "--type", "1", "--htype", "2", "--donors", "--hdist", "3.5"],
         ["rings", str(root / "input" / "con" / "tiny_multi_cuh2.con"), "--frame", "1", "--last", "2"],
@@ -176,7 +176,6 @@ with tempfile.TemporaryDirectory() as tmp:
     junk = Path(tmp) / "junk.lammpstrj"
     junk.write_text("this is not a dump\n")
     calls.append(["rings", str(junk), "--frame", "1", "--last", "1"])
-    calls.append(["rings", str(junk), "--select", "type 1", "--frame", "1", "--last", "1"])
     for args in calls:
         ok = run(args) and ok
     emitted = subprocess.run(
@@ -345,8 +344,6 @@ with tempfile.TemporaryDirectory() as tmp:
     nodot = Path(tmp) / "nodotdump"
     nodot.write_bytes(tiny.read_bytes())
     checked = [
-        (["rings", str(tiny), "--select", "[[[", "--frame", "1", "--last", "1"],
-         0, "expected property name after [, got ["),
         (["cages", str(tiny), "--signature", "nope", "--frame", "1", "--last", "1"],
          2, "bad cage signature 'nope'"),
         (["rings", "--frame", "1"], 2, "A command and a trajectory file are required"),
