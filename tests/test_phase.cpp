@@ -322,8 +322,8 @@ TEST_CASE("LAMMPS compute dump column is seams_chill_plus", "[phase][lammps]") {
   for (int i = 0; i < 4; i++) {
     REQUIRE(labels[i] >= 0);
   }
-  // If SEAMS_LAMMPS_DUMP names a CHILL+ column dump, the last column
-  // must match seams_chill_plus by atom id.
+  // If extras/lammps/dump.chill exists (from lmp -in in.dseams), the last
+  // column must match seams_chill_plus by atom id.
   const char *dumpPath = std::getenv("SEAMS_LAMMPS_DUMP");
   if (dumpPath == nullptr) {
     dumpPath = "../extras/lammps/dump.chill";
