@@ -191,7 +191,7 @@ def census_blocks(text):
 
 def cli_text(command, dump, extra=None, type_filter=1):
     dump = Path(dump).resolve()
-    frames = native_frame_count(dump)
+    frames = len(dump_steps(dump)) or 1
     cmd = [
         SEAMS,
         command,
