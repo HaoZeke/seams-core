@@ -319,8 +319,7 @@ std::vector<std::vector<int>> rows_from_flat(const Cloud &cloud, const std::vect
     }
     cursor += static_cast<std::size_t>(count);
   }
-  return rows;
-}
+  return rows; }
 
 void remember_build(Engine *eng, const Cloud &cloud, std::vector<std::vector<int>> wide) {
   eng->wide = std::move(wide);
