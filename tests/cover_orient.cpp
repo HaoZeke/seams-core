@@ -392,12 +392,15 @@ TEST_CASE("point-set fillers honour a wrapped start and a rejected start",
   REQUIRE_THAT(blockBig(0, 0), WithinAbs(0.0, 1e-12));
 }
 
-TEST_CASE("HC cage template read discards the cloud and still returns",
+TEST_CASE("HC cage template keeps the cloud readXYZ returns",
           "[orient][pnt]") {
   HcTemplate keep;
   const auto pts = pntToPnt::getPointSetCage(ring::strucType::HCbasal);
-  REQUIRE(pts.rows() == 0);
+  REQUIRE(pts.rows() == 12);
   REQUIRE(pts.cols() == 3);
+  REQUIRE_THAT(pts(0, 0), WithinAbs(8.995, 1e-6));
+  REQUIRE_THAT(pts(0, 1), WithinAbs(10.3859997, 1e-6));
+  REQUIRE_THAT(pts(0, 2), WithinAbs(15.0939999, 1e-6));
   const auto other = pntToPnt::getPointSetCage(ring::strucType::Prism);
   REQUIRE(other.rows() == 12);
   REQUIRE(other.cols() == 3);
