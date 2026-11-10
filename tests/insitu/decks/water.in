@@ -1,0 +1,15 @@
+units         lj
+atom_style    atomic
+boundary      p p p
+atom_modify   map yes
+region        box block 0 1 0 1 0 1
+create_box    5 box
+read_dump     paper/tex/repro/liquid/liquid.lammpstrj 54252 x y z box yes replace yes add yes
+pair_style    lj/cut 3.5
+pair_coeff    * * 1.0 1.0
+mass          * 1.0
+neighbor      1.0 bin
+neigh_modify  every 1 delay 0 check no
+plugin        load build/paper/src/libfixdseams.so
+fix           sea all dseams record build/lammps-runs/water.txt every 1 cutoff 3.5 depth 4
+run           0

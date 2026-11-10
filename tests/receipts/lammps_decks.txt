@@ -1,0 +1,34 @@
+binary: build/lammps/lmp
+banner: LAMMPS (22 Jul 2025)
+plugin: build/paper/src/libfixdseams.so
+
+water
+input: tests/insitu/decks/water.in
+trajectory: paper/tex/repro/liquid/liquid.lammpstrj
+step 54252
+n 4096
+rings 3:1050 4:1379
+n_rings 2429
+chill cubic:3 hexagonal:11 water:3477 interfacial:80 clathrate:64 interClathrate:461 unclassified:0 reCubic:0 reHex:0
+cage hc:0 ddc:0 both:0 water:4096 n_water:4096
+
+ice
+input: tests/insitu/decks/ice.in
+trajectory: input/traj/mW_cubic.lammpstrj
+step 0
+n 4096
+rings 3:0 4:0
+n_rings 0
+chill cubic:4096 hexagonal:0 water:0 interfacial:0 clathrate:0 interClathrate:0 unclassified:0 reCubic:0 reHex:0
+cage hc:0 ddc:0 both:0 water:4096 n_water:4096
+
+cage
+input: tests/insitu/decks/cage.in
+trajectory: input/traj/clathrate-thf.lammpstrj
+step 0
+n 7168
+rings 3:0 4:0
+n_rings 0
+chill cubic:0 hexagonal:0 water:0 interfacial:0 clathrate:2176 interClathrate:0 unclassified:4992 reCubic:0 reHex:0
+cage hc:0 ddc:0 both:0 water:2176 n_water:2176
+
