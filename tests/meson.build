@@ -49,6 +49,9 @@ test_sources = {
 if readcon_dep.found()
   test_sources += {'readcon': 'test_readcon.cpp'}
 endif
+if chemfiles_dep.found()
+  test_sources += {'chemfiles_io': 'test_chemfiles_io.cpp'}
+endif
 
 # Ensure test binaries load the freshly-built libyodaLib.so instead of any
 # version installed in the conda env.  The conda toolchain injects
@@ -60,6 +63,9 @@ endif
 #   3. Setting build_rpath so the binary also works when run outside meson test.
 _test_env = environment()
 _test_env.prepend('LD_LIBRARY_PATH', meson.project_build_root() / 'src')
+if chemfiles_libdir != ''
+  _test_env.prepend('LD_LIBRARY_PATH', chemfiles_libdir)
+endif
 # Coverage arc counters share a cache line. Several cores bounce that
 # line and the timed tests exceed their limit. One thread keeps the
 # counters and the tests inside the limit.
@@ -71,6 +77,9 @@ endif
 _test_rpath = '$ORIGIN/../src'
 if _readcondb_rpath != ''
   _test_rpath = _test_rpath + ':' + _readcondb_rpath
+endif
+if chemfiles_libdir != ''
+  _test_rpath = _test_rpath + ':' + chemfiles_libdir
 endif
 _test_link_args = _link_args
 if host_machine.system() == 'linux'

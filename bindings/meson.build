@@ -44,9 +44,21 @@ test(
   timeout: 180,
 )
 
+seams_frames_test = executable(
+  'test_lang_frames',
+  files('cxx/test_frames.cpp'),
+  dependencies: [seams_lang_dep],
+  include_directories: include_directories('cxx'),
+)
+test('seams_lang_frames', seams_frames_test, timeout: 60)
+
+# R is not built with the sanitizer. Loading libasan into R fails with
+# "ASan runtime does not come first". The same test passes in the
+# default suite, so the sanitizer run does not register it.
+
 # Exit 77 (skipped) when pydseamslib, R dseams, or Julia is missing; CI
 # passes --require-all after installing all three.
-if get_option('with_cli') and get_option('with_tests')
+if get_option('with_cli') and get_option('with_tests') and not get_option('b_sanitize').contains('address')
   test(
     'chill_plus_fronts_agree',
     find_program('python3', required: true),
