@@ -168,10 +168,10 @@ def main():
         if dest.is_symlink() or dest.exists():
             dest.unlink()
         dest.symlink_to(so)
-    plugin = BUILD / "plugin" / "libdseams_lammps.so"
-    if plugin.is_file():
+    plugin_so = BUILD / "plugin" / "libdseams_lammps.so"
+    if plugin_so.is_file():
         live_env["DSEAMS_LMP_MPI_PREFIX"] = str(mpi_prefix)
-        live_env["DSEAMS_LMP_MPI_PLUGIN"] = str(plugin)
+        live_env["DSEAMS_LMP_MPI_PLUGIN"] = str(plugin_so)
     live_env["LD_LIBRARY_PATH"] = ":".join(
         part
         for part in (
