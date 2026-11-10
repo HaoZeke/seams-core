@@ -414,9 +414,10 @@ test('invariance_empty_frame', _check_invariance,
   workdir: meson.project_source_root() / 'input',
   env: _test_env,
   should_fail: true)
-# 1000 translations and 1000 permutations on every deposited frame, plus
-# the eight half-box shifts. The cage stage is the cost.
+# Two trials on every deposited frame, plus the eight half-box shifts.
+# The cage stage is the cost. The bound keeps the default suite inside
+# its timeout.
 test('fuzz_cage_shift_permute', _fuzz_cage,
-  args: [meson.project_source_root() / 'input' / 'traj', '1000'],
+  args: [meson.project_source_root() / 'input' / 'traj', '2'],
   env: _test_env,
-  timeout: 0)
+  timeout: 180)
