@@ -1,0 +1,136 @@
+clock-open 2026-11-10 16:19:57 -0600
+HEAD 8394271315a15c729188aa0407e462ecc14f30b8
+TREE 27a76cf2d8fe03bd5bb00891920605f4b34e3d05
+BEGIN row
+Filters: "*every neighbour row changes*"
+Randomness seeded to: 3050785652
+===============================================================================
+All tests passed (7 assertions in 1 test case)
+
+status 0
+gcov-exit 0 cage_affiliation.cpp.gcov
+        -:    0:Source:../src/cage_affiliation.cpp
+        -:    0:Graph:src/libyodaLib.so.p/cage_affiliation.cpp.gcno
+        -:    0:Data:src/libyodaLib.so.p/cage_affiliation.cpp.gcda
+        -:    0:Runs:1
+gcov-exit 0 test_cage_affiliation.cpp.gcov
+        -:    0:Source:../tests/test_cage_affiliation.cpp
+        -:    0:Graph:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcno
+        -:    0:Data:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcda
+        -:    0:Runs:1
+END row
+BEGIN unsorted
+Filters: "*unsorted ring list*"
+Randomness seeded to: 2774947731
+===============================================================================
+All tests passed (14 assertions in 1 test case)
+
+status 0
+gcov-exit 0 cage_affiliation.cpp.gcov
+        -:    0:Source:../src/cage_affiliation.cpp
+        -:    0:Graph:src/libyodaLib.so.p/cage_affiliation.cpp.gcno
+        -:    0:Data:src/libyodaLib.so.p/cage_affiliation.cpp.gcda
+        -:    0:Runs:1
+gcov-exit 0 test_cage_affiliation.cpp.gcov
+        -:    0:Source:../tests/test_cage_affiliation.cpp
+        -:    0:Graph:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcno
+        -:    0:Data:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcda
+        -:    0:Runs:1
+END unsorted
+BEGIN edge
+Filters: "*forced HC/DDC edge flip*"
+Randomness seeded to: 2679172143
+===============================================================================
+All tests passed (12 assertions in 1 test case)
+
+status 0
+gcov-exit 0 cage_affiliation.cpp.gcov
+        -:    0:Source:../src/cage_affiliation.cpp
+        -:    0:Graph:src/libyodaLib.so.p/cage_affiliation.cpp.gcno
+        -:    0:Data:src/libyodaLib.so.p/cage_affiliation.cpp.gcda
+        -:    0:Runs:1
+gcov-exit 0 test_cage_affiliation.cpp.gcov
+        -:    0:Source:../tests/test_cage_affiliation.cpp
+        -:    0:Graph:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcno
+        -:    0:Data:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcda
+        -:    0:Runs:1
+END edge
+BEGIN moved
+Filters: "*moved owner*"
+Randomness seeded to: 2779766776
+===============================================================================
+All tests passed (30 assertions in 1 test case)
+
+status 0
+gcov-exit 0 cage_affiliation.cpp.gcov
+        -:    0:Source:../src/cage_affiliation.cpp
+        -:    0:Graph:src/libyodaLib.so.p/cage_affiliation.cpp.gcno
+        -:    0:Data:src/libyodaLib.so.p/cage_affiliation.cpp.gcda
+        -:    0:Runs:1
+gcov-exit 0 test_cage_affiliation.cpp.gcov
+        -:    0:Source:../tests/test_cage_affiliation.cpp
+        -:    0:Graph:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcno
+        -:    0:Data:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcda
+        -:    0:Runs:1
+END moved
+BEGIN peripheral
+Filters: "*six distinct peripheral*"
+Randomness seeded to: 200323929
+===============================================================================
+All tests passed (80 assertions in 1 test case)
+
+status 0
+gcov-exit 0 cage_affiliation.cpp.gcov
+        -:    0:Source:../src/cage_affiliation.cpp
+        -:    0:Graph:src/libyodaLib.so.p/cage_affiliation.cpp.gcno
+        -:    0:Data:src/libyodaLib.so.p/cage_affiliation.cpp.gcda
+        -:    0:Runs:1
+gcov-exit 0 topo_bulk.cpp.gcov
+        -:    0:Source:../src/topo_bulk.cpp
+        -:    0:Graph:src/libyodaLib.so.p/topo_bulk.cpp.gcno
+        -:    0:Data:src/libyodaLib.so.p/topo_bulk.cpp.gcda
+        -:    0:Runs:1
+gcov-exit 0 test_cage_affiliation.cpp.gcov
+        -:    0:Source:../tests/test_cage_affiliation.cpp
+        -:    0:Graph:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcno
+        -:    0:Data:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcda
+        -:    0:Runs:1
+END peripheral
+BEGIN warm
+Filters: "*sized warm start*"
+Randomness seeded to: 3752755577
+===============================================================================
+All tests passed (6 assertions in 1 test case)
+
+status 0
+gcov-exit 0 cage_affiliation.cpp.gcov
+        -:    0:Source:../src/cage_affiliation.cpp
+        -:    0:Graph:src/libyodaLib.so.p/cage_affiliation.cpp.gcno
+        -:    0:Data:src/libyodaLib.so.p/cage_affiliation.cpp.gcda
+        -:    0:Runs:1
+gcov-exit 0 test_cage_affiliation.cpp.gcov
+        -:    0:Source:../tests/test_cage_affiliation.cpp
+        -:    0:Graph:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcno
+        -:    0:Data:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcda
+        -:    0:Runs:1
+END warm
+BEGIN fuzz
+generated n 8 RULE OK
+generated n 16 RULE OK
+generated n 24 RULE OK
+generated n 32 RULE OK
+ice1h.lammpstrj frame 1 type 1 nop 128 six 256 cages 64 (hc 64 ddc 0) OK
+frames 5 checked 5 skipped 0 failures 0 shiftTrials 9 permTrials 1
+status 0
+gcov-exit 0 topo_bulk.cpp.gcov
+        -:    0:Source:../src/topo_bulk.cpp
+        -:    0:Graph:src/libyodaLib.so.p/topo_bulk.cpp.gcno
+        -:    0:Data:src/libyodaLib.so.p/topo_bulk.cpp.gcda
+        -:    0:Runs:1
+gcov-exit 0 fuzz_cage_invariance.cpp.gcov
+        -:    0:Source:../tests/fuzz_cage_invariance.cpp
+        -:    0:Graph:tests/fuzz_cage_invariance.p/fuzz_cage_invariance.cpp.gcno
+        -:    0:Data:tests/fuzz_cage_invariance.p/fuzz_cage_invariance.cpp.gcda
+        -:    0:Runs:1
+END fuzz
+clock-close 2026-11-10 16:20:14 -0600
