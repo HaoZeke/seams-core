@@ -355,7 +355,7 @@ TEST_CASE("numStaggered counts staggered bonds for an atom", "[bop]") {
   REQUIRE(nStag <= 4);
 }
 
-TEST_CASE("CHILL+ on the mixed TIP4P example is twelve interClathrate",
+TEST_CASE("CHILL+ on the mixed TIP4P example keeps the four-neighbour shell",
           "[bop][fixture]") {
   molSys::PointCloud<molSys::Point<double>, double> cloud;
   cloud = sinp::readLammpsTrjO("traj/exampleTraj.lammpstrj", 1, cloud, 2);
@@ -375,8 +375,8 @@ TEST_CASE("CHILL+ on the mixed TIP4P example is twelve interClathrate",
       other++;
     }
   }
-  REQUIRE(interClath == 12);
-  REQUIRE(water == 238);
+  REQUIRE(interClath == 9);
+  REQUIRE(water == 241);
   REQUIRE(other == 0);
 }
 
