@@ -191,7 +191,7 @@ bool dihedralCos3(const std::array<double, 3> &b1, const std::array<double, 3> &
   const double n1s = norm2(n1);
   const double n2s = norm2(n2);
   const double b2s = norm2(b2);
-  if (n1s == 0.0 || n2s == 0.0 || b2s == 0.0) {
+  if (n1s == 0.0 || n2s == 0.0) {
     return false;
   }
   const auto n1xn2 = cross3(n1, n2);
@@ -238,7 +238,7 @@ topoparam::rodgerF4(const molSys::PointCloud<molSys::Point<double>, double> &yCl
       continue;
     }
     const auto hit = hydrogens.find(pi.molID);
-    if (hit == hydrogens.end() || hit->second.empty()) {
+    if (hit == hydrogens.end()) {
       continue;
     }
     if (static_cast<std::size_t>(i) >= nList.size() ||
@@ -265,7 +265,7 @@ topoparam::rodgerF4(const molSys::PointCloud<molSys::Point<double>, double> &yCl
         continue;
       }
       const auto hjt = hydrogens.find(pj.molID);
-      if (hjt == hydrogens.end() || hjt->second.empty()) {
+      if (hjt == hydrogens.end()) {
         continue;
       }
       const int h1 = outerHydrogen(yCloud, hit->second, j);

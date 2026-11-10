@@ -393,9 +393,6 @@ void qlmOneAtomDrPairwise(int iatom, int orderL, const double *dr,
     qlmInterleaved[2 * (row + m)] = 0.0;
     qlmInterleaved[2 * (row + m) + 1] = 0.0;
   }
-  if (orderL > 8) {
-    return;
-  }
   const int j0 = offsets[iatom];
   const int j1 = offsets[iatom + 1];
   std::vector<double> bonds;
@@ -457,7 +454,7 @@ void runPass1(const NeighbourCSR &g, int orderL, int begin, int end,
   }
 #endif
   const bool pairwise =
-      seams::product::reduction() != seams::product::Reduction::Left && orderL <= 8;
+      seams::product::reduction() != seams::product::Reduction::Left;
 #ifdef SEAMS_HAS_OPENMP
   const bool useThreads = g.nop >= kParallelThreshold;
 #pragma omp parallel for schedule(static) if (useThreads)

@@ -49,7 +49,7 @@ bool match::matchPrism(
                                                   matchedBasal1, matchedBasal2);
   // -----------------------
   // If reordering failed, the basal rings could not be matched
-  if (orderResult != 0 || matchedBasal1.empty() || matchedBasal2.empty()) {
+  if (orderResult != 0) {
     return false;
   }
   // Match the basal rings with a complete prism block, given the relatively
@@ -136,7 +136,7 @@ bool match::matchUntetheredPrism(
                                                   matchedBasal1, matchedBasal2);
   // -----------------------
   // If reordering failed, the basal rings could not be matched
-  if (orderResult != 0 || matchedBasal1.empty() || matchedBasal2.empty()) {
+  if (orderResult != 0) {
     return false;
   }
   // Match the basal rings with a complete prism block, given the relatively

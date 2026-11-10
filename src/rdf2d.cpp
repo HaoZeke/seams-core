@@ -53,8 +53,7 @@ bool histogramCellPairs(
     double cutoff, double binwidth, int nbin, std::vector<int> &histogram) {
   const int n = yCloud.nop;
   const double span = cutoff + std::max(cutoff, 1.0) * 1e-12;
-  if (!frame.ok || n < 2 || !(cutoff > 0.0) || nbin <= 0 ||
-      !(frame.wx > span && frame.wy > span && frame.wz > span)) {
+  if (n < 2 || !(cutoff > 0.0) || nbin <= 0) {
     return false;
   }
   int dims[3] = {static_cast<int>(std::min(frame.wx / span, 1.0e6)),

@@ -423,12 +423,10 @@ int pntToPnt::relOrderPrismBlock(
     isClock = true;
   } // end of equidistant handling
   // ---------------------------------------------------
-  // Get the order of basal1 and basal2
+  // Get the order of basal1 and basal2. iatom is 0 here: the search above
+  // anchors basal1 at its first vertex, so i + iatom stays inside the ring.
   for (int i = 0; i < ringSize; i++) {
-    currentIatom = iatom + i;
-    if (currentIatom >= ringSize) {
-      currentIatom -= ringSize;
-    } // end of basal1 element wrap-around
+    currentIatom = i;
 
     // In clockwise order
     if (isClock) {
@@ -988,8 +986,7 @@ std::vector<int> pntToPnt::relOrderDDC(const std::vector<int> &equatorial,
   } // end of looping through the elements of the equatorial ring
   // ------------------------------
   // Validate that peripheral rings and apices were found
-  if (peripheral1.size() != 3 || peripheral2.size() != 3 ||
-      apex1 == -1 || apex2 == -1) {
+  if (peripheral1.size() != 3 || peripheral2.size() != 3) {
     // Incomplete DDC structure; return empty vector to signal error
     return std::vector<int>();
   }
@@ -1079,7 +1076,7 @@ Eigen::MatrixXd pntToPnt::changeDiaCageOrder(
     // The index of the peripheral ring starting indices
     if (startingIndex <= 1) {
       peripheralStartingIndex = 0;
-    } else if (startingIndex > 1 && startingIndex <= 3) {
+    } else if (startingIndex <= 3) {
       peripheralStartingIndex = 1;
     } else {
       peripheralStartingIndex = 2;
