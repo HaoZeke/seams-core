@@ -89,24 +89,31 @@ fs::path repoRoot() {
 }
 
 fs::path seamsBinary() {
-  if (const char *env = std::getenv("SEAMS_CLI")) {
-    return env;
-  }
+  // The binary next to this test is the one the build just produced.
+  // SEAMS_CLI is a leftover from another tree and must not win.
   const fs::path beside = exePath().parent_path().parent_path() / "seams";
   if (fs::exists(beside)) {
     return beside;
+  }
+  if (const char *env = std::getenv("SEAMS_CLI")) {
+    return env;
   }
   return "seams";
 }
 
 fs::path langLibrary() {
+  const fs::path beside =
+      exePath().parent_path().parent_path() / "bindings" / "libseams_lang.so";
+  if (fs::exists(beside)) {
+    return beside;
+  }
   if (const char *env = std::getenv("SEAMS_LANG")) {
     return env;
   }
   if (const char *cli = std::getenv("SEAMS_CLI")) {
     return fs::path(cli).parent_path() / "bindings" / "libseams_lang.so";
   }
-  return exePath().parent_path().parent_path() / "bindings" / "libseams_lang.so";
+  return beside;
 }
 
 Cloud makeCloud(int n, int mol = 0) {
