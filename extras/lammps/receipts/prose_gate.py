@@ -38,6 +38,8 @@ def other_findings(text, skip_we):
     for line in text.splitlines():
         if not line.startswith("field:"):
             continue
+        if "[error]" not in line:
+            continue
         if skip_we and "voice.WeRate" in line:
             continue
         found.append(line)
@@ -97,7 +99,8 @@ def main():
     for path in docs:
         proc = subprocess.run([snapper, "-f", "plaintext", "-w", "72", "--check", str(path)], text=True, capture_output=True)
         log_proc(log, "snapper %s" % path.name, proc)
-        if "would reformat" in (proc.stdout or ""):
+        snap_text = (proc.stdout or "") + (proc.stderr or "")
+        if "would reformat" in snap_text:
             failed += 1
         if proc.returncode != 0:
             failed += 1

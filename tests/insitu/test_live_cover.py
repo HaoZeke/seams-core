@@ -234,7 +234,14 @@ def main():
         eng.observe(0, [[0.0, 0.0, 0.0], [2.8, 0.0, 0.0], [0.0, 2.8, 0.0], [1.4, 1.4, 2.0]],
                     [0.0, 0.0, 0.0, 20.0, 20.0, 20.0, 0.0, 0.0, 0.0], None, [1, 1, 1, 1])
     os.environ["DSEAMS_E2E_WORK"] = str(work)
-    engine_e2e.main()
+    try:
+        import openmm  # noqa: F401
+    except ImportError:
+        openmm = None
+    if openmm is not None:
+        engine_e2e.main()
+    else:
+        print("openmm absent", flush=True)
     check(live.type7_median([1.0, 3.0]) == 2.0)
     gro = folder / "box.gro"
     gro.write_text("title\n1\n    1SOL     OW    1   0.1   0.1   0.1\n   2.0   2.0   2.0\n")

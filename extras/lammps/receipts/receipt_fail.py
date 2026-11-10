@@ -470,9 +470,15 @@ def main():
     check_neigh(work)
     snap = os.environ.pop("SNAPPER", None)
     check_prose(work)
-    if snap:
-        os.environ["SNAPPER"] = snap
-    check_prose(work)
+    def restore(value):
+        if value:
+            os.environ["SNAPPER"] = value
+            check_prose(work)
+        else:
+            print("snapper stayed absent", flush=True)
+
+    restore(None)
+    restore(snap)
     run_main(date_check.__file__, ["date_check.py", str(work / "logs")])
     run_main(record_build.__file__, ["record_build.py", str(work / "ok-build.log"), str(work), "true", "true"])
     run_main(trace_libs.__file__, ["trace_libs.py", "/bin/true"])

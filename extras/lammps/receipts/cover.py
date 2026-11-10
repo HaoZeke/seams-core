@@ -103,6 +103,7 @@ def main():
         live_env,
     )
     log.line("py test_live_cover.py exit %d" % code)
+    import receipt_fail  # noqa: F401
     if code != 0:
         log.line("test_live_cover.py stopped where openmm is not installed")
     log.line("gcov_object_directory: $BUILD/work/coverage")
