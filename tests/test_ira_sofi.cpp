@@ -5,6 +5,7 @@
 
 #include <Eigen/Dense>
 #include <cmath>
+#include <limits>
 
 TEST_CASE("ira::available matches the compile-time flag", "[ira]") {
 #ifdef SEAMS_HAS_IRA
@@ -94,6 +95,48 @@ TEST_CASE("SOFI reports a non-C1 group for a square", "[ira]") {
   REQUIRE(pg.nOperations >= 2);
   REQUIRE(pg.symbol != "C1");
   REQUIRE(pg.symbol != "C1 ");
+}
+
+TEST_CASE("IRA rejects a matrix that is not a point set", "[ira]") {
+  ira::Match m;
+  Eigen::MatrixXd wide(2, 2);
+  wide.setZero();
+  REQUIRE(ira::match(wide, wide, m) == 1);
+  Eigen::MatrixXd empty(0, 3);
+  REQUIRE(ira::match(empty, squareXY(), m) == 1);
+  ira::PointGroup pg;
+  REQUIRE(ira::pointGroup(wide, pg) == 1);
+  REQUIRE(ira::pointGroup(empty, pg) == 1);
+}
+
+TEST_CASE("IRA matches a triangle onto a larger set", "[ira]") {
+  Eigen::MatrixXd ref(3, 3);
+  ref << 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0;
+  Eigen::MatrixXd target(4, 3);
+  target << 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 5.0, 5.0, 0.0;
+  ira::Match m;
+  const int rc = ira::match(ref, target, m);
+  REQUIRE(rc == 0);
+  REQUIRE(m.assignment.size() == 4);
+  REQUIRE(m.rmsd >= 0.0);
+}
+
+TEST_CASE("IRA rejects a non-finite point set", "[ira]") {
+  Eigen::MatrixXd bad = squareXY();
+  bad(0, 0) = std::numeric_limits<double>::quiet_NaN();
+  ira::Match m;
+  REQUIRE(ira::match(bad, squareXY(), m) != 0);
+}
+
+TEST_CASE("orient copies the quaternion of a matched square", "[ira]") {
+  const Eigen::MatrixXd ref = squareXY();
+  std::vector<double> quat;
+  double rmsd = -1.0;
+  REQUIRE(ira::orient(ref, ref, quat, rmsd));
+  REQUIRE(quat.size() == 4);
+  REQUIRE_THAT(rmsd, Catch::Matchers::WithinAbs(0.0, 1e-6));
+  Eigen::MatrixXd bad(1, 2);
+  REQUIRE_FALSE(ira::orient(bad, bad, quat, rmsd));
 }
 
 #endif
