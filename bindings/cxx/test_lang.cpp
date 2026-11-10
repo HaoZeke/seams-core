@@ -583,6 +583,9 @@ int main(int argc, char **argv) {
     return fail("bare frames");
   }
   const std::string xyzPath = root + "/input/xyz/configuration.xyz";
+  if (seams_path_nframes(xyzPath.c_str()) != 1) {
+    return fail("xyz frames");
+  }
   seams_frame *xyzFrame = seams_frame_read(xyzPath.c_str(), 1, 1);
   if (xyzFrame != nullptr) {
     double xyzBox[9] = {};
@@ -733,6 +736,9 @@ int main(int argc, char **argv) {
   if (std::string(seams_last_error()).find("positive bin count") ==
       std::string::npos) {
     return fail("rdf zero bins");
+  }
+  if (seams_frame_rdf_nbins(6.0, 12) != 12) {
+    return fail("rdf bin query");
   }
   const int autoBins = seams_frame_rdf_nbins(6.0, 0);
   std::vector<double> sizedR(static_cast<std::size_t>(autoBins));
