@@ -14,6 +14,7 @@
 
 // Internal
 #include <bop.hpp>
+#include <seams_input.hpp>
 #include <bulkTUM.hpp>
 #include <cage.hpp>
 #include <cage_affiliation.hpp>
@@ -38,6 +39,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+
+#ifdef SEAMS_HAS_OPENMP
+#include <omp.h>
+#endif
 
 namespace fs = std::filesystem;
 
@@ -947,4 +952,231 @@ TEST_CASE("Voronoi weights certify a tetrahedron and reject a bad degree",
   auto fromCloud = chill::steinhardtQlVoronoi(cube, 6.0, 6);
   REQUIRE(fromCloud.ql.size() == 7);
   REQUIRE(fromCloud.ql[0] > 0.0);
+}
+
+TEST_CASE("CHILL+ marks an interfacial atom and a neighbour past nop",
+          "[cover_ice][bop]") {
+  Cloud cloud = makeCloud({{0, 0, 0}, {1.2, 0, 0}, {0, 1.2, 0}, {0, 0, 1.2}, {2, 2, 2}},
+                          {20, 20, 20});
+  std::vector<std::vector<int>> nList = selfRows(5);
+  link(nList, 0, 1);
+  link(nList, 0, 2);
+  link(nList, 0, 3);
+  link(nList, 0, 4);
+  // Three staggered bonds and no eclipsed bond, with a neighbour that itself
+  // has two staggered bonds: the CHILL+ interfacial test.
+  pushBonds(cloud.pts[0], 3, 0, 1, -0.9);
+  pushBonds(cloud.pts[1], 2, 0, 2, -0.7);
+  pushBonds(cloud.pts[2], 4, 0, 0, -0.9);
+  pushBonds(cloud.pts[3], 0, 4, 0, 0.1);
+  pushBonds(cloud.pts[4], 0, 0, 4, 0.0);
+  chill::getIceTypePlusNoPrint(cloud, nList, false);
+  REQUIRE(cloud.pts[0].iceType == molSys::atom_state_type::interfacial);
+
+  cloud.nop = 4;
+  cloud.idIndexMap[9] = 4;
+  std::vector<std::vector<int>> past = {{0, 9, 1, 2}, {1, 0}, {2, 0}, {3}, {4}};
+  REQUIRE(chill::isInterfacial(cloud, past, 0, 2, 0, false));
+  REQUIRE(chill::isInterfacial(cloud, past, 0, 3, 0, true));
+}
+
+TEST_CASE("host cage counts see a pentagon and a double-diamond cage",
+          "[cover_ice][tum]") {
+  std::vector<std::vector<int>> pent = selfRows(20);
+  for (int copy = 0; copy < 4; copy++) {
+    const int base = copy * 5;
+    for (int step = 0; step < 5; step++) {
+      link(pent, base + step, base + (step + 1) % 5);
+    }
+  }
+  auto five = tum::hostCageCounts(pent);
+  REQUIRE(five.nSix == 0);
+  REQUIRE(five.nDdcRings == 0);
+
+  Cloud ice;
+  ice = sinp::readLammpsTrjO("traj/nucleation_f1.lammpstrj", 1, ice, 1);
+  REQUIRE(ice.nop > 0);
+  auto byId = nneigh::neighListO(3.5, ice, 1);
+  auto rows = nneigh::neighbourListByIndex(ice, byId);
+  auto counted = tum::hostCageCounts(rows);
+  REQUIRE(counted.nDdcRings > 0);
+  REQUIRE(counted.nDdcAtoms > 0);
+
+  auto rings = primitive::ringNetwork(rows, 6);
+  std::vector<std::vector<int>> six;
+  for (auto &ring : rings) {
+    if (ring.size() == 6) {
+      six.push_back(std::move(ring));
+    }
+  }
+  auto planes = ring::stackingPlanes(six, rows);
+  int equatorial = 0;
+  for (bool flag : planes.equatorial) {
+    equatorial += flag ? 1 : 0;
+  }
+  REQUIRE(equatorial > 0);
+}
+
+TEST_CASE("a short ring walks the non-hex candidate and a shared out-of-range atom",
+          "[cover_ice][cage]") {
+  // Pentagon first, so a later short ring is indexed only up to its own length.
+  std::vector<std::vector<int>> rings = {{12, 13, 14, 15, -1},
+                                         {0, 1, 2, 3, 4, -1},
+                                         {6, 7, 8, 9, 10, -1}};
+  std::vector<std::vector<int>> rows = selfRows(16);
+  for (int i = 0; i < 6; i++) {
+    link(rows, i, (i + 1) % 6);
+    link(rows, 6 + i, 6 + (i + 1) % 6);
+  }
+  link(rows, 0, 6);
+  link(rows, 2, 8);
+  link(rows, 4, 10);
+  auto aff = ring::cageAffiliation(rings, rows);
+  REQUIRE(aff.hc.size() == 3);
+  REQUIRE_FALSE(aff.hc[1]);
+
+  // Two hexes that share only an atom past the neighbour-list length. The
+  // candidate filter skips that atom, and the basal test then sees it.
+  std::vector<std::vector<int>> shared = {{0, 1, 2, 3, 4, 100},
+                                          {6, 7, 8, 9, 10, 100}};
+  auto sharedAff = ring::cageAffiliation(shared, rows);
+  REQUIRE(sharedAff.hc.size() == 2);
+  REQUIRE_FALSE(sharedAff.hc[0]);
+
+#ifdef SEAMS_HAS_OPENMP
+  std::vector<std::vector<int>> many(1024, {0, 1, 2, 3, 4, 5});
+  std::vector<std::vector<int>> wide = selfRows(6);
+  for (int i = 0; i < 6; i++) {
+    link(wide, i, (i + 1) % 6);
+  }
+#pragma omp parallel
+  {
+#pragma omp single
+    {
+      auto wideAff = ring::cageAffiliation(many, wide);
+      REQUIRE(wideAff.hc.size() == 1024);
+    }
+  }
+#endif
+
+  std::vector<std::vector<int>> strictRings = {{0, 1, 2}};
+  std::vector<std::vector<int>> permissiveRings = {{0, 1, 2}, {3}};
+  ring::CageAffiliation strictAff;
+  strictAff.hc = {true};
+  strictAff.ddc = {true};
+  ring::CageAffiliation permissiveAff;
+  permissiveAff.hc = {false, true};
+  permissiveAff.ddc = {false, true};
+  std::vector<std::vector<int>> permissiveRows = {{0, 1, 3, 4}, {1, 0}, {2}, {3, 0}, {4, 0}};
+  auto seeded = ring::seededCageAffiliation(strictRings, strictAff, permissiveRings,
+                                            permissiveAff, permissiveRows, false);
+  REQUIRE(seeded.hc[0]);
+  REQUIRE(seeded.hc[3]);
+  REQUIRE_FALSE(seeded.hc[4]);
+  REQUIRE(seeded.ddc[0]);
+  REQUIRE(seeded.ddc[3]);
+}
+
+TEST_CASE("affiliation update keeps a sorted frame and refuses a hot list of another length",
+          "[cover_ice][cage]") {
+  std::vector<std::vector<int>> rows = selfRows(12);
+  for (int i = 0; i < 6; i++) {
+    link(rows, i, (i + 1) % 6);
+    link(rows, 6 + i, 6 + (i + 1) % 6);
+  }
+  link(rows, 0, 6);
+  std::vector<std::vector<int>> rings = {{0, 1, 2, 3, 4, 5}, {6, 7, 8, 9, 10, 11}};
+  ring::AffiliationUpdater updater;
+  updater.setBatchFraction(1.0);
+  const auto &first = updater.update(rings, rows);
+  REQUIRE(first.hc.size() == 2);
+  const auto &same = updater.update(rings, rows);
+  REQUIRE(updater.lastReclassified() == 0);
+  REQUIRE(same.hc.size() == 2);
+
+  std::vector<std::vector<int>> grown = {{-2, 0, 1, 2, 3, 4},
+                                         {0, 1, 2, 3, 4, 5},
+                                         {6, 7, 8, 9, 10, 11}};
+  const auto &merged = updater.update(grown, rows);
+  REQUIRE(merged.hc.size() == 3);
+
+  ring::AffiliationUpdater hot;
+  hot.setBatchFraction(0.0);
+  REQUIRE(hot.update(rings, rows).hc.size() == 2);
+  rows[0].push_back(2);
+  REQUIRE(hot.update(rings, rows).hc.size() == 2);
+  auto longer = rows;
+  longer.push_back({12});
+  REQUIRE(hot.update(rings, longer).hc.size() == 2);
+
+  // A sorted frame followed by an unsorted one, then a frame that drops a ring
+  // and one that replaces a ring without touching the neighbour rows.
+  std::vector<std::vector<int>> quiet = selfRows(12);
+  for (int i = 0; i < 6; i++) {
+    link(quiet, i, (i + 1) % 6);
+    link(quiet, 6 + i, 6 + (i + 1) % 6);
+  }
+  link(quiet, 0, 6);
+  link(quiet, 2, 8);
+  link(quiet, 4, 10);
+  std::vector<std::vector<int>> ordered = {{0, 1, 2, 3, 4, 5},
+                                         {0, 1, 2, 5, 6, 7},
+                                         {6, 7, 8, 9, 10, 11}};
+  ring::AffiliationUpdater order;
+  order.setBatchFraction(1.0);
+  REQUIRE(order.update(ordered, quiet).hc.size() == 3);
+  auto swapped = ordered;
+  std::swap(swapped[0], swapped[1]);
+  REQUIRE(order.update(swapped, quiet).hc.size() == 3);
+  auto onlySecond = std::vector<std::vector<int>>{ordered[1]};
+  REQUIRE(order.update(onlySecond, quiet).hc.size() == 1);
+  ring::AffiliationUpdater dropOther;
+  dropOther.setBatchFraction(1.0);
+  REQUIRE(dropOther.update(swapped, quiet).hc.size() == 3);
+  auto onlyFirst = std::vector<std::vector<int>>{ordered[0]};
+  REQUIRE(dropOther.update(onlyFirst, quiet).hc.size() == 1);
+  ring::AffiliationUpdater replacedUpdater;
+  replacedUpdater.setBatchFraction(1.0);
+  REQUIRE(replacedUpdater.update(ordered, quiet).hc.size() == 3);
+  auto replaced = ordered;
+  replaced[0] = {0, 1, 2, 3, 4, 7};
+  REQUIRE(replacedUpdater.update(replaced, quiet).hc.size() == 3);
+
+#ifdef SEAMS_HAS_OPENMP
+  std::vector<std::vector<int>> wideRows = selfRows(1024);
+  for (int i = 0; i < 1024; i++) {
+    wideRows[static_cast<std::size_t>(i)].push_back((i + 1) % 1024);
+  }
+  std::vector<std::vector<int>> wideRings(8, {0, 1, 2, 3, 4, 5});
+  ring::AffiliationUpdater wide;
+#pragma omp parallel
+  {
+#pragma omp single
+    {
+      REQUIRE(wide.update(wideRings, wideRows).hc.size() == 8);
+    }
+  }
+#endif
+
+  Cloud ice;
+  ice = sinp::readLammpsTrjO("traj/nucleation_f1.lammpstrj", 1, ice, 1);
+  auto byId = nneigh::neighListO(3.5, ice, 1);
+  auto iceRows = nneigh::neighbourListByIndex(ice, byId);
+  auto net = primitive::ringNetwork(iceRows, 6);
+  std::vector<std::vector<int>> six;
+  for (auto &ring : net) {
+    if (ring.size() == 6) {
+      six.push_back(std::move(ring));
+    }
+  }
+  REQUIRE(six.size() > 2);
+  ring::AffiliationUpdater carried;
+  carried.setBatchFraction(1.0);
+  const auto &primed = carried.update(six, iceRows);
+  REQUIRE(primed.hc.size() == six.size());
+  REQUIRE_FALSE(primed.ddc.empty());
+  auto dropped = six;
+  dropped.erase(dropped.begin(), dropped.begin() + static_cast<std::ptrdiff_t>(dropped.size() / 2));
+  const auto &afterDrop = carried.update(dropped, iceRows);
+  REQUIRE(afterDrop.hc.size() == dropped.size());
 }
