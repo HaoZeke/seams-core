@@ -59,6 +59,13 @@ test('seams_lang_frames', seams_frames_test, timeout: 60)
 # Exit 77 (skipped) when pydseamslib, R dseams, or Julia is missing; CI
 # passes --require-all after installing all three.
 if get_option('with_cli') and get_option('with_tests') and not get_option('b_sanitize').contains('address')
+  # conda-forge Julia under the toolchain loader. juliaup faults at
+  # shutdown. R and pydseams are already on the default interpreter.
+  chill_env = environment()
+  chill_env.set('DSEAMS_ROOT', meson.project_source_root())
+  chill_env.prepend('PATH', '/var/tmp/dseams/julia-wrap')
+  chill_env.prepend('PATH', '/cvmfs/software.eessi.io/versions/2026.06/software/linux/x86_64/intel/sapphirerapids/software/R/4.6.1-gfbf-2026.1/bin')
+  chill_env.set('R_LIBS_USER', '/home/ubuntu/R/library')
   test(
     'chill_plus_fronts_agree',
     find_program('python3', required: true),
@@ -67,7 +74,7 @@ if get_option('with_cli') and get_option('with_tests') and not get_option('b_san
       seams_exe.full_path(),
       seams_lang.full_path(),
     ],
-    env: {'DSEAMS_ROOT': meson.project_source_root()},
+    env: chill_env,
     depends: [seams_exe, seams_lang],
     timeout: 600,
   )
