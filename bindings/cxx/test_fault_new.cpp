@@ -97,6 +97,9 @@ void *allocate(std::size_t n, NewFn real) {
     }
     g_skip.store(left - 1);
   }
+  if (std::getenv("SEAMS_TRACE_SIZE") != nullptr && n >= 64 && n <= 128) {
+    std::fprintf(stderr, "size-serial %ld %zu\n", serial, n);
+  }
   void *pointer = real(n);
   note_alloc();
   return pointer;
@@ -112,6 +115,8 @@ void seams_test_arm(int skip, int kind) {
 }
 
 long seams_test_live() { return g_live.load(); }
+
+long seams_test_serial() { return g_serial.load(); }
 
 long seams_test_peak() { return g_peak.load(); }
 

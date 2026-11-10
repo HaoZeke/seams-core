@@ -510,25 +510,29 @@ def main():
             return subprocess.run([seams, *args], capture_output=True, text=True, env=env)
 
         long_token = "n" * 64
-        windows = (
-            (["rdf", tip], ["rdf", tip, "--types", long_token + ",1"]),
-            (["pairs", tip], ["pairs", tip, "--site", long_token + "=cationHead"]),
+        loud_sets = (
+            ["rdf", tip, "--types", long_token + ",1"],
+            ["pairs", tip, "--site", long_token + "=cationHead"],
         )
-        for quiet_args, loud_args in windows:
-            loud, loud_rc = serial_of(loud_args)
-            if loud < 30 or loud_rc not in (0, 2):
-                sys.stderr.write("fault window " + str(loud_rc) + " " + str(loud) + "\n")
+        for loud_args in loud_sets:
+            env = os.environ.copy()
+            env["LD_PRELOAD"] = fault_lib
+            env["SEAMS_TEST_KIND"] = "count"
+            env["SEAMS_TRACE_SIZE"] = "1"
+            traced = subprocess.run([seams, *loud_args], capture_output=True, text=True, env=env)
+            sized = []
+            for line in traced.stderr.splitlines():
+                parts = line.split()
+                if len(parts) == 3 and parts[0] == "size-serial" and parts[2] == "65":
+                    sized.append(int(parts[1]))
+            if not sized:
+                sys.stderr.write("fault trace\n" + traced.stderr[-400:])
                 return 1
-            hit = False
-            # The long token is copied inside parseIntegral, which is the try
-            # that only names ParsingException. bad_alloc is the other type.
-            # That copy is one of the last allocations before the command returns.
-            for at in range(max(1, loud - 40), loud + 1):
-                probed = throw_at(loud_args, at)
-                if probed.returncode == 2 and "bad_alloc" in probed.stderr:
-                    hit = True
-            if not hit:
-                sys.stderr.write("fault mismatch " + " ".join(loud_args) + "\n")
+            probed = throw_at(loud_args, sized[-1])
+            if probed.returncode != 2 or "bad_alloc" not in probed.stderr:
+                sys.stderr.write(
+                    "fault mismatch " + str(probed.returncode) + "\n" + probed.stderr[-400:]
+                )
                 return 1
         for kind, needle in (("int", "unknown error"), ("bad_alloc", "bad_alloc")):
             env = os.environ.copy()
