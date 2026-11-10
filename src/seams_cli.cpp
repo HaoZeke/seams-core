@@ -150,7 +150,8 @@ bool forEachInputFrame(const std::string &path, int first, int last,
                        int parts = 1) {
   const FrameSource source = frameSource(path);
   if (source == FrameSource::xyz) {
-    if (first <= 1 && (last <= 0 || last >= 1)) {
+    // last is an int, so last <= 0 || last >= 1 holds for every value.
+    if (first <= 1) {
       Cloud cloud = load(path, 1, typeFilter);
       fn(1, cloud);
     }
