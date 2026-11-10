@@ -14,6 +14,10 @@ TEST_CASE("sphericart_ylm::available matches the compile-time flag",
   REQUIRE_FALSE(seams::sphericart_ylm::available());
   double dummy = 0.0;
   REQUIRE(seams::sphericart_ylm::ylmCartesian(6, &dummy, 0, &dummy) == 0);
+  const double xyz[3] = {0.3, 0.4, 0.8660254037844386};
+  double out = 0.0;
+  REQUIRE(seams::sphericart_ylm::ylmCartesian(6, xyz, 1, &out) == 1);
+  REQUIRE(seams::sphericart_ylm::ylmCartesian(5, xyz, 1, &out) == 1);
 #endif
 }
 

@@ -1,0 +1,24 @@
+Unreachable in a build without the optional library.
+Each line is file:line, then every caller.
+
+src/cage_canon.cpp: the nauty body of canonicalCertificate,
+isHexagonalPrism, sameCertificate, canonicalCertificateRooted,
+and canonicalCertificateColoured.
+Not compiled when SEAMS_HAS_NAUTY is unset.
+Callers:
+src/cage_enum.cpp:421
+src/cage_enum.cpp:1130
+src/cage_enum.cpp:1660
+src/topo_fingerprint.cpp:187
+src/topo_fingerprint.cpp:188
+tests/test_cage_canon.cpp
+tests/test_cage_enum.cpp:164
+tests/bench_cages.cpp:150
+
+src/sphericart_ylm.cpp:36 through src/sphericart_ylm.cpp:57
+Not compiled when SEAMS_HAS_SPHERICART is unset.
+Callers of ylmCartesian:
+src/steinhardt_parallel.cpp:314
+tests/test_sphericart.cpp
+The compiled arms are nVec == 0 and nVec > 0.
+Both are asserted in tests/test_sphericart.cpp.

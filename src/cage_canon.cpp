@@ -146,6 +146,7 @@ bool nautyAvailable() {
 #ifdef SEAMS_HAS_NAUTY
   return true;
 #else
+  // Callers: tests/test_cage_canon.cpp. No production caller.
   return false;
 #endif
 }

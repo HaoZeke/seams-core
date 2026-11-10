@@ -1,0 +1,27 @@
+[1/4] Compiling C++ object src/libyodaLib.so.p/sphericart_ylm.cpp.o
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+[1/4] Compiling C++ object src/libyodaLib.so.p/sphericart_ylm.cpp.o
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+NINJA:0
+Randomness seeded to: 1832146332
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+test_sphericart is a Catch2 v3.14.0 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+sphericart_ylm::available matches the compile-time flag
+-------------------------------------------------------------------------------
+...............................................................................
+
+  REQUIRE( seams::sphericart_ylm::ylmCartesian(6, &dummy, 0, &dummy) == 0 )
+with expansion:
+  1 == 0
+
+===============================================================================
+test cases: 1 | 1 failed
+assertions: 2 | 1 passed | 1 failed
+
+TEST:42

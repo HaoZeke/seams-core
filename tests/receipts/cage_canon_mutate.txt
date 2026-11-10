@@ -1,0 +1,27 @@
+[1/4] Compiling C++ object src/libyodaLib.so.p/cage_canon.cpp.o
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+[1/4] Compiling C++ object src/libyodaLib.so.p/cage_canon.cpp.o
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+NINJA:0
+Randomness seeded to: 3534376969
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+test_cage_canon is a Catch2 v3.14.0 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+nautyAvailable matches the compile-time flag
+-------------------------------------------------------------------------------
+...............................................................................
+
+  REQUIRE_FALSE( cage::nautyAvailable() )
+with expansion:
+  !true
+
+===============================================================================
+test cases: 1 | 1 failed
+assertions: 1 | 1 failed
+
+TEST:42
