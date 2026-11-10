@@ -17,29 +17,103 @@
 
 namespace {
 
-// One conflict row per candidate. The storage grows with the neighbours
-// that are actually present, and a push never drops one.
+// One conflict row per candidate. The first eight neighbours stay in the
+// row itself: ice degree is six, so the search does not allocate. A wider
+// neighbourhood spills into `more` and is still recorded. `more` is a raw
+// block so a row of an ordinary cage does not construct a heap vector.
 struct Row {
-  std::vector<int> v;
+  static constexpr int kInline = 8;
+  int head[kInline]{};
   int n = 0;
-  bool push(int x) {
-    if (n == static_cast<int>(v.size())) {
-      v.push_back(x);
-    } else {
-      v[static_cast<std::size_t>(n)] = x;
+  int *more = nullptr;
+  int moreCap = 0;
+
+  Row() = default;
+  Row(const Row &o) : n(0), more(nullptr), moreCap(0) {
+    std::copy(o.head, o.head + kInline, head);
+    for (int i = 0; i < o.n; i++) {
+      push(o[i]);
     }
+  }
+  Row &operator=(const Row &o) {
+    if (this != &o) {
+      Row tmp(o);
+      *this = std::move(tmp);
+    }
+    return *this;
+  }
+  Row(Row &&o) noexcept : n(o.n), more(o.more), moreCap(o.moreCap) {
+    std::copy(o.head, o.head + kInline, head);
+    o.more = nullptr;
+    o.moreCap = 0;
+    o.n = 0;
+  }
+  Row &operator=(Row &&o) noexcept {
+    if (this != &o) {
+      delete[] more;
+      std::copy(o.head, o.head + kInline, head);
+      n = o.n;
+      more = o.more;
+      moreCap = o.moreCap;
+      o.more = nullptr;
+      o.moreCap = 0;
+      o.n = 0;
+    }
+    return *this;
+  }
+  ~Row() { delete[] more; }
+
+  [[nodiscard]] int operator[](int i) const {
+    return i < kInline ? head[i] : more[i - kInline];
+  }
+
+  bool push(int x) {
+    if (n < kInline) {
+      head[n++] = x;
+      return true;
+    }
+    const int at = n - kInline;
+    if (at == moreCap) {
+      const int cap = moreCap == 0 ? 4 : moreCap * 2;
+      int *grown = new int[static_cast<std::size_t>(cap)];
+      if (moreCap > 0) {
+        std::copy(more, more + moreCap, grown);
+      }
+      delete[] more;
+      more = grown;
+      moreCap = cap;
+    }
+    more[at] = x;
     ++n;
     return true;
   }
+
   void sortUnique() {
-    const auto begin = v.begin();
-    const auto end = begin + n;
-    std::sort(begin, end);
-    n = static_cast<int>(std::unique(begin, end) - begin);
+    if (n <= 1) {
+      return;
+    }
+    int stack[64];
+    int *buf = stack;
+    std::vector<int> heap;
+    if (n > 64) {
+      heap.resize(static_cast<std::size_t>(n));
+      buf = heap.data();
+    }
+    const int filled = n;
+    for (int i = 0; i < filled; i++) {
+      buf[i] = (*this)[i];
+    }
+    std::sort(buf, buf + filled);
+    const int kept = static_cast<int>(std::unique(buf, buf + filled) - buf);
+    n = 0;
+    for (int i = 0; i < kept; i++) {
+      push(buf[i]);
+    }
   }
+
   [[nodiscard]] bool has(int x) const {
     for (int i = 0; i < n; i++) {
-      if (v[static_cast<std::size_t>(i)] == x) {
+      if ((*this)[i] == x) {
         return true;
       }
     }
@@ -131,7 +205,7 @@ MisOut exactMis(const std::vector<Row> &conf, const std::vector<int> &mem) {
     const int g = mem[static_cast<size_t>(i)];
     const Row &row = conf[static_cast<size_t>(g)];
     for (int k = 0; k < row.n; k++) {
-      const int j = at[static_cast<size_t>(row.v[k])];
+      const int j = at[static_cast<size_t>(row[k])];
       if (j >= 0) {
         nbr[static_cast<size_t>(i)].set(j);
       }
@@ -374,91 +448,135 @@ struct HalfEdge {
   int ring;
 };
 
-// Pair the edges at each vertex, then alternate along the cycles by pointer
-// jumping. Each split halves a positive even degree. The last split is a
-// perfect matching, and the representative of a cycle is its lowest arc, so
-// the kept edges do not depend on the thread count.
+// Pair the edges at each vertex, then walk each alternating cycle once.
+// Each split halves a positive even degree. The last split is a perfect
+// matching. The representative of a cycle is its lowest arc, so the kept
+// edges are the ones the pointer-jumping split kept, without the log passes.
+std::uint64_t gDdcMatchSteps = 0;
+
+struct EulerScratch {
+  std::vector<HalfEdge> edges;
+  std::vector<HalfEdge> next;
+  std::vector<int> leftCount, rightCount, leftOff, rightOff;
+  std::vector<int> leftAt, rightAt, leftPut, rightPut;
+  std::vector<int> partnerL, partnerR, succ;
+  std::vector<int> keptAt, keptRight, rep, arcRank, cycle;
+  std::vector<char> seen, keep;
+  std::vector<int> gotL, gotR, gotRing;
+
+  template <class T> static void fit(std::vector<T> &v, int n) {
+    if (static_cast<int>(v.size()) < n) {
+      v.resize(static_cast<std::size_t>(n));
+    }
+  }
+};
+
 bool parallelEulerMatch(int nL, int nR, const std::vector<int> &off, const std::vector<AdjE> &adj,
                         std::vector<int> &matchL, std::vector<int> &matchR,
                         std::vector<int> &matchRing) {
+  // One lookup. A thread_local reference reloaded on every field access was
+  // the whole split: __tls_get_addr on each row of the scratch.
+  thread_local EulerScratch storage;
+  EulerScratch *const scp = &storage;
+  EulerScratch &sc = *scp;
   const int m0 = static_cast<int>(adj.size());
   if (nL <= 0 || nL != nR || m0 <= 0) {
     return false;
   }
-  std::vector<HalfEdge> edges(static_cast<std::size_t>(m0));
+  EulerScratch::fit(sc.edges, m0);
   for (int u = 0; u < nL; u++) {
     for (int e = off[static_cast<std::size_t>(u)]; e < off[static_cast<std::size_t>(u + 1)]; e++) {
-      edges[static_cast<std::size_t>(e)] = {u, adj[static_cast<std::size_t>(e)].right,
-                                            adj[static_cast<std::size_t>(e)].ring};
+      sc.edges[static_cast<std::size_t>(e)] = {u, adj[static_cast<std::size_t>(e)].right,
+                                               adj[static_cast<std::size_t>(e)].ring};
     }
   }
+  int m = m0;
   int degree = off[1] - off[0];
   while (degree > 1) {
     if (degree <= 0 || (degree % 2) != 0) {
       return false;
     }
-    const int m = static_cast<int>(edges.size());
-    std::vector<int> leftCount(static_cast<std::size_t>(nL), 0);
-    std::vector<int> rightCount(static_cast<std::size_t>(nR), 0);
-    for (const HalfEdge &edge : edges) {
+    EulerScratch::fit(sc.leftCount, nL);
+    EulerScratch::fit(sc.rightCount, nR);
+    std::fill(sc.leftCount.begin(), sc.leftCount.begin() + nL, 0);
+    std::fill(sc.rightCount.begin(), sc.rightCount.begin() + nR, 0);
+    for (int e = 0; e < m; e++) {
+      const HalfEdge &edge = sc.edges[static_cast<std::size_t>(e)];
       if (edge.left < 0 || edge.left >= nL || edge.right < 0 || edge.right >= nR) {
         return false;
       }
-      leftCount[static_cast<std::size_t>(edge.left)]++;
-      rightCount[static_cast<std::size_t>(edge.right)]++;
+      sc.leftCount[static_cast<std::size_t>(edge.left)]++;
+      sc.rightCount[static_cast<std::size_t>(edge.right)]++;
     }
     for (int u = 0; u < nL; u++) {
-      if (leftCount[static_cast<std::size_t>(u)] != degree) {
+      if (sc.leftCount[static_cast<std::size_t>(u)] != degree) {
         return false;
       }
     }
     for (int r = 0; r < nR; r++) {
-      if (rightCount[static_cast<std::size_t>(r)] != degree) {
+      if (sc.rightCount[static_cast<std::size_t>(r)] != degree) {
         return false;
       }
     }
-    std::vector<int> leftOff(static_cast<std::size_t>(nL + 1), 0);
-    std::vector<int> rightOff(static_cast<std::size_t>(nR + 1), 0);
+    EulerScratch::fit(sc.leftOff, nL + 1);
+    EulerScratch::fit(sc.rightOff, nR + 1);
+    sc.leftOff[0] = 0;
+    sc.rightOff[0] = 0;
     for (int u = 0; u < nL; u++) {
-      leftOff[static_cast<std::size_t>(u + 1)] =
-          leftOff[static_cast<std::size_t>(u)] + leftCount[static_cast<std::size_t>(u)];
+      sc.leftOff[static_cast<std::size_t>(u + 1)] =
+          sc.leftOff[static_cast<std::size_t>(u)] + sc.leftCount[static_cast<std::size_t>(u)];
     }
     for (int r = 0; r < nR; r++) {
-      rightOff[static_cast<std::size_t>(r + 1)] =
-          rightOff[static_cast<std::size_t>(r)] + rightCount[static_cast<std::size_t>(r)];
+      sc.rightOff[static_cast<std::size_t>(r + 1)] =
+          sc.rightOff[static_cast<std::size_t>(r)] + sc.rightCount[static_cast<std::size_t>(r)];
     }
-    std::vector<int> leftAt(static_cast<std::size_t>(m));
-    std::vector<int> rightAt(static_cast<std::size_t>(m));
-    std::vector<int> leftPut = leftOff;
-    std::vector<int> rightPut = rightOff;
+    EulerScratch::fit(sc.leftAt, m);
+    EulerScratch::fit(sc.rightAt, m);
+    EulerScratch::fit(sc.leftPut, nL + 1);
+    EulerScratch::fit(sc.rightPut, nR + 1);
+    std::copy(sc.leftOff.begin(), sc.leftOff.begin() + nL + 1, sc.leftPut.begin());
+    std::copy(sc.rightOff.begin(), sc.rightOff.begin() + nR + 1, sc.rightPut.begin());
     for (int e = 0; e < m; e++) {
-      leftAt[static_cast<std::size_t>(leftPut[static_cast<std::size_t>(edges[static_cast<std::size_t>(e)].left)]++)] = e;
-      rightAt[static_cast<std::size_t>(rightPut[static_cast<std::size_t>(edges[static_cast<std::size_t>(e)].right)]++)] = e;
+      sc.leftAt[static_cast<std::size_t>(
+          sc.leftPut[static_cast<std::size_t>(sc.edges[static_cast<std::size_t>(e)].left)]++)] = e;
+      sc.rightAt[static_cast<std::size_t>(
+          sc.rightPut[static_cast<std::size_t>(sc.edges[static_cast<std::size_t>(e)].right)]++)] = e;
     }
     auto byRing = [&](int a, int b) {
-      const int ra = edges[static_cast<std::size_t>(a)].ring;
-      const int rb = edges[static_cast<std::size_t>(b)].ring;
+      const int ra = sc.edges[static_cast<std::size_t>(a)].ring;
+      const int rb = sc.edges[static_cast<std::size_t>(b)].ring;
       if (ra != rb) {
         return ra < rb;
       }
       return a < b;
     };
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) if (!omp_in_parallel())
-#endif
+    // Degree is a handful (four on ice). Insertion sort of that run is the
+    // same order as std::sort and does not pay for an introsort frame.
+    auto sortRun = [&](std::vector<int> &at, int lo, int hi) {
+      if (hi - lo > 16) {
+        std::sort(at.begin() + lo, at.begin() + hi, byRing);
+        return;
+      }
+      for (int i = lo + 1; i < hi; i++) {
+        const int v = at[static_cast<std::size_t>(i)];
+        int j = i;
+        while (j > lo && byRing(v, at[static_cast<std::size_t>(j - 1)])) {
+          at[static_cast<std::size_t>(j)] = at[static_cast<std::size_t>(j - 1)];
+          --j;
+        }
+        at[static_cast<std::size_t>(j)] = v;
+      }
+    };
     for (int u = 0; u < nL; u++) {
-      std::sort(leftAt.begin() + leftOff[static_cast<std::size_t>(u)],
-                leftAt.begin() + leftOff[static_cast<std::size_t>(u + 1)], byRing);
+      sortRun(sc.leftAt, sc.leftOff[static_cast<std::size_t>(u)],
+              sc.leftOff[static_cast<std::size_t>(u + 1)]);
     }
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) if (!omp_in_parallel())
-#endif
     for (int r = 0; r < nR; r++) {
-      std::sort(rightAt.begin() + rightOff[static_cast<std::size_t>(r)],
-                rightAt.begin() + rightOff[static_cast<std::size_t>(r + 1)], byRing);
+      sortRun(sc.rightAt, sc.rightOff[static_cast<std::size_t>(r)],
+              sc.rightOff[static_cast<std::size_t>(r + 1)]);
     }
-    std::vector<int> partnerL(static_cast<std::size_t>(m), -1);
-    std::vector<int> partnerR(static_cast<std::size_t>(m), -1);
+    EulerScratch::fit(sc.partnerL, m);
+    EulerScratch::fit(sc.partnerR, m);
     auto pairShore = [&](int nShore, const std::vector<int> &shoreOff, const std::vector<int> &shoreAt,
                          std::vector<int> &partner) {
       for (int u = 0; u < nShore; u++) {
@@ -476,129 +594,124 @@ bool parallelEulerMatch(int nL, int nR, const std::vector<int> &off, const std::
       }
       return true;
     };
-    if (!pairShore(nL, leftOff, leftAt, partnerL) || !pairShore(nR, rightOff, rightAt, partnerR)) {
+    if (!pairShore(nL, sc.leftOff, sc.leftAt, sc.partnerL) ||
+        !pairShore(nR, sc.rightOff, sc.rightAt, sc.partnerR)) {
       return false;
     }
     const int narcs = m * 2;
-    std::vector<int> succ(static_cast<std::size_t>(narcs));
+    EulerScratch::fit(sc.succ, narcs);
     for (int e = 0; e < m; e++) {
-      const int goRight = partnerR[static_cast<std::size_t>(e)];
-      const int goLeft = partnerL[static_cast<std::size_t>(e)];
+      const int goRight = sc.partnerR[static_cast<std::size_t>(e)];
+      const int goLeft = sc.partnerL[static_cast<std::size_t>(e)];
       if (goRight < 0 || goLeft < 0) {
         return false;
       }
-      succ[static_cast<std::size_t>(2 * e)] = 2 * goRight + 1;
-      succ[static_cast<std::size_t>(2 * e + 1)] = 2 * goLeft;
+      sc.succ[static_cast<std::size_t>(2 * e)] = 2 * goRight + 1;
+      sc.succ[static_cast<std::size_t>(2 * e + 1)] = 2 * goLeft;
     }
-    int hops = 1;
-    while ((1LL << hops) < narcs && hops < 30) {
-      ++hops;
+    EulerScratch::fit(sc.seen, narcs);
+    std::fill(sc.seen.begin(), sc.seen.begin() + narcs, 0);
+    EulerScratch::fit(sc.rep, narcs);
+    EulerScratch::fit(sc.arcRank, narcs);
+    sc.cycle.clear();
+    if (sc.cycle.capacity() < static_cast<std::size_t>(narcs)) {
+      sc.cycle.reserve(static_cast<std::size_t>(narcs));
     }
-    std::vector<int> rep(static_cast<std::size_t>(narcs));
-    std::vector<int> jump(succ);
-    std::vector<int> nextRep(static_cast<std::size_t>(narcs));
-    std::vector<int> nextJump(static_cast<std::size_t>(narcs));
-    for (int a = 0; a < narcs; a++) {
-      rep[static_cast<std::size_t>(a)] = a;
-    }
-    for (int step = 0; step < hops; step++) {
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) if (!omp_in_parallel())
-#endif
-      for (int a = 0; a < narcs; a++) {
-        const int p = jump[static_cast<std::size_t>(a)];
-        const int mine = rep[static_cast<std::size_t>(a)];
-        const int other = rep[static_cast<std::size_t>(p)];
-        nextRep[static_cast<std::size_t>(a)] = mine < other ? mine : other;
-        nextJump[static_cast<std::size_t>(a)] = jump[static_cast<std::size_t>(p)];
+    for (int start = 0; start < narcs; start++) {
+      if (sc.seen[static_cast<std::size_t>(start)]) {
+        continue;
       }
-      rep.swap(nextRep);
-      jump.swap(nextJump);
-    }
-    std::vector<int> dist(static_cast<std::size_t>(narcs), 1);
-    std::vector<int> cursor(static_cast<std::size_t>(narcs), -1);
-    for (int a = 0; a < narcs; a++) {
-      if (succ[static_cast<std::size_t>(a)] == rep[static_cast<std::size_t>(a)]) {
-        dist[static_cast<std::size_t>(a)] = 0;
-        cursor[static_cast<std::size_t>(a)] = -1;
-      } else {
-        cursor[static_cast<std::size_t>(a)] = succ[static_cast<std::size_t>(a)];
-      }
-    }
-    std::vector<int> nextDist(static_cast<std::size_t>(narcs));
-    std::vector<int> nextCursor(static_cast<std::size_t>(narcs));
-    for (int step = 0; step < hops; step++) {
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) if (!omp_in_parallel())
-#endif
-      for (int a = 0; a < narcs; a++) {
-        const int p = cursor[static_cast<std::size_t>(a)];
-        if (p < 0) {
-          nextDist[static_cast<std::size_t>(a)] = dist[static_cast<std::size_t>(a)];
-          nextCursor[static_cast<std::size_t>(a)] = -1;
-        } else {
-          nextDist[static_cast<std::size_t>(a)] =
-              dist[static_cast<std::size_t>(a)] + dist[static_cast<std::size_t>(p)];
-          nextCursor[static_cast<std::size_t>(a)] = cursor[static_cast<std::size_t>(p)];
+      sc.cycle.clear();
+      int a = start;
+      int guard = 0;
+      do {
+        if (a < 0 || a >= narcs || sc.seen[static_cast<std::size_t>(a)]) {
+          return false;
+        }
+        sc.seen[static_cast<std::size_t>(a)] = 1;
+        sc.cycle.push_back(a);
+        a = sc.succ[static_cast<std::size_t>(a)];
+        gDdcMatchSteps++;
+        if (++guard > narcs) {
+          return false;
+        }
+      } while (a != start);
+      int minArc = sc.cycle[0];
+      int minAt = 0;
+      for (int i = 1; i < static_cast<int>(sc.cycle.size()); i++) {
+        if (sc.cycle[static_cast<std::size_t>(i)] < minArc) {
+          minArc = sc.cycle[static_cast<std::size_t>(i)];
+          minAt = i;
         }
       }
-      dist.swap(nextDist);
-      cursor.swap(nextCursor);
+      const int len = static_cast<int>(sc.cycle.size());
+      for (int i = 0; i < len; i++) {
+        const int arc = sc.cycle[static_cast<std::size_t>((minAt + i) % len)];
+        sc.rep[static_cast<std::size_t>(arc)] = minArc;
+        sc.arcRank[static_cast<std::size_t>(arc)] = i;
+      }
     }
-    std::vector<char> keep(static_cast<std::size_t>(m), 0);
-    std::vector<int> keptAt(static_cast<std::size_t>(nL), 0);
-    std::vector<int> keptRight(static_cast<std::size_t>(nR), 0);
+    EulerScratch::fit(sc.keep, m);
+    std::fill(sc.keep.begin(), sc.keep.begin() + m, 0);
+    EulerScratch::fit(sc.keptAt, nL);
+    EulerScratch::fit(sc.keptRight, nR);
+    std::fill(sc.keptAt.begin(), sc.keptAt.begin() + nL, 0);
+    std::fill(sc.keptRight.begin(), sc.keptRight.begin() + nR, 0);
     for (int e = 0; e < m; e++) {
       const int a0 = 2 * e;
       const int a1 = 2 * e + 1;
-      const int chosen = rep[static_cast<std::size_t>(a0)] <= rep[static_cast<std::size_t>(a1)] ? a0 : a1;
-      const int head = rep[static_cast<std::size_t>(chosen)];
-      const int rank = dist[static_cast<std::size_t>(head)] - dist[static_cast<std::size_t>(chosen)];
-      if ((rank % 2) == 0) {
-        keep[static_cast<std::size_t>(e)] = 1;
-        keptAt[static_cast<std::size_t>(edges[static_cast<std::size_t>(e)].left)]++;
-        keptRight[static_cast<std::size_t>(edges[static_cast<std::size_t>(e)].right)]++;
+      const int chosen = sc.rep[static_cast<std::size_t>(a0)] <= sc.rep[static_cast<std::size_t>(a1)] ? a0 : a1;
+      if ((sc.arcRank[static_cast<std::size_t>(chosen)] % 2) == 0) {
+        sc.keep[static_cast<std::size_t>(e)] = 1;
+        sc.keptAt[static_cast<std::size_t>(sc.edges[static_cast<std::size_t>(e)].left)]++;
+        sc.keptRight[static_cast<std::size_t>(sc.edges[static_cast<std::size_t>(e)].right)]++;
       }
     }
     const int half = degree / 2;
     for (int u = 0; u < nL; u++) {
-      if (keptAt[static_cast<std::size_t>(u)] != half) {
+      if (sc.keptAt[static_cast<std::size_t>(u)] != half) {
         return false;
       }
     }
     for (int r = 0; r < nR; r++) {
-      if (keptRight[static_cast<std::size_t>(r)] != half) {
+      if (sc.keptRight[static_cast<std::size_t>(r)] != half) {
         return false;
       }
     }
-    std::vector<HalfEdge> nextEdges;
-    nextEdges.reserve(static_cast<std::size_t>(m / 2));
+    sc.next.clear();
+    if (sc.next.capacity() < static_cast<std::size_t>(m / 2)) {
+      sc.next.reserve(static_cast<std::size_t>(m / 2));
+    }
     for (int e = 0; e < m; e++) {
-      if (keep[static_cast<std::size_t>(e)]) {
-        nextEdges.push_back(edges[static_cast<std::size_t>(e)]);
+      if (sc.keep[static_cast<std::size_t>(e)]) {
+        sc.next.push_back(sc.edges[static_cast<std::size_t>(e)]);
       }
     }
-    edges.swap(nextEdges);
+    sc.edges.swap(sc.next);
+    m = static_cast<int>(sc.edges.size());
     degree = half;
   }
-  if (static_cast<int>(edges.size()) != nL) {
+  if (m != nL) {
     return false;
   }
-  std::vector<int> gotL(static_cast<std::size_t>(nL), -1);
-  std::vector<int> gotR(static_cast<std::size_t>(nR), -1);
-  std::vector<int> gotRing(static_cast<std::size_t>(nL), -1);
-  for (const HalfEdge &edge : edges) {
-    if (gotL[static_cast<std::size_t>(edge.left)] >= 0 ||
-        gotR[static_cast<std::size_t>(edge.right)] >= 0) {
+  EulerScratch::fit(sc.gotL, nL);
+  EulerScratch::fit(sc.gotR, nR);
+  EulerScratch::fit(sc.gotRing, nL);
+  std::fill(sc.gotL.begin(), sc.gotL.begin() + nL, -1);
+  std::fill(sc.gotR.begin(), sc.gotR.begin() + nR, -1);
+  for (int e = 0; e < m; e++) {
+    const HalfEdge &edge = sc.edges[static_cast<std::size_t>(e)];
+    if (sc.gotL[static_cast<std::size_t>(edge.left)] >= 0 ||
+        sc.gotR[static_cast<std::size_t>(edge.right)] >= 0) {
       return false;
     }
-    gotL[static_cast<std::size_t>(edge.left)] = edge.right;
-    gotR[static_cast<std::size_t>(edge.right)] = edge.left;
-    gotRing[static_cast<std::size_t>(edge.left)] = edge.ring;
+    sc.gotL[static_cast<std::size_t>(edge.left)] = edge.right;
+    sc.gotR[static_cast<std::size_t>(edge.right)] = edge.left;
+    sc.gotRing[static_cast<std::size_t>(edge.left)] = edge.ring;
   }
-  matchL.swap(gotL);
-  matchR.swap(gotR);
-  matchRing.swap(gotRing);
+  matchL.assign(sc.gotL.begin(), sc.gotL.begin() + nL);
+  matchR.assign(sc.gotR.begin(), sc.gotR.begin() + nR);
+  matchRing.assign(sc.gotRing.begin(), sc.gotRing.begin() + nL);
   return true;
 }
 
@@ -815,6 +928,80 @@ ring::PackParts gPackParts;
 
 void resetPackParts() { gPackParts = {}; }
 
+
+// Same order as sorting the rank keys. Digits are the key ints, least
+// significant first, so equal keys stay in input order and the run ids match
+// a comparison sort. Ranks above 16 bits fall back to that sort.
+void orderCliqueKeys(std::vector<int> &ord, const std::vector<PKey> &keys) {
+  const int n = static_cast<int>(ord.size());
+  auto fallback = [&]() {
+    seams::parallelStableSort(ord, [&](int a, int b) {
+      const PKey &ka = keys[static_cast<std::size_t>(a)];
+      const PKey &kb = keys[static_cast<std::size_t>(b)];
+      if (ka.k < kb.k) {
+        return true;
+      }
+      if (kb.k < ka.k) {
+        return false;
+      }
+      if (ka.ring != kb.ring) {
+        return ka.ring < kb.ring;
+      }
+      return ka.slot < kb.slot;
+    });
+  };
+  if (n < 2) {
+    return;
+  }
+  int maxId = 0;
+  for (const PKey &key : keys) {
+    if (!key.k.ok || key.k.n < 0 || key.k.n > 4) {
+      fallback();
+      return;
+    }
+    for (int d = 0; d < key.k.n; d++) {
+      if (key.k.id[d] < 0) {
+        fallback();
+        return;
+      }
+      maxId = std::max(maxId, key.k.id[d]);
+    }
+  }
+  if (maxId > 65535) {
+    fallback();
+    return;
+  }
+  const int buckets = std::max(maxId, 4) + 1;
+  std::vector<int> cnt(static_cast<std::size_t>(buckets), 0);
+  std::vector<int> out(static_cast<std::size_t>(n));
+  auto pass = [&](auto digit, int nBuckets) {
+    std::fill(cnt.begin(), cnt.begin() + nBuckets, 0);
+    for (int i = 0; i < n; i++) {
+      cnt[static_cast<std::size_t>(digit(ord[static_cast<std::size_t>(i)]))]++;
+    }
+    int sum = 0;
+    for (int b = 0; b < nBuckets; b++) {
+      const int take = cnt[static_cast<std::size_t>(b)];
+      cnt[static_cast<std::size_t>(b)] = sum;
+      sum += take;
+    }
+    for (int i = 0; i < n; i++) {
+      const int id = ord[static_cast<std::size_t>(i)];
+      out[static_cast<std::size_t>(cnt[static_cast<std::size_t>(digit(id))]++)] = id;
+    }
+    ord.swap(out);
+  };
+  pass([&](int i) { return keys[static_cast<std::size_t>(i)].k.n; }, 5);
+  for (int d = 3; d >= 0; --d) {
+    pass(
+        [&](int i) {
+          const RankKey &k = keys[static_cast<std::size_t>(i)].k;
+          return d < k.n ? k.id[d] : 0;
+        },
+        maxId + 1);
+  }
+}
+
 // Line graph of a bipartite graph on this component. Neighbourhoods split
 // into the two endpoint cliques; a maximum set of rings is a maximum matching.
 bool linePack(const std::vector<Row> &conf, const std::vector<int> &mem,
@@ -861,7 +1048,7 @@ bool linePack(const std::vector<Row> &conf, const std::vector<int> &mem,
       auto near = [&](int x, int y) {
         const Row &row = conf[static_cast<size_t>(x)];
         for (int t = 0; t < row.n; t++) {
-          if (row.v[t] == y) {
+          if (row[t] == y) {
             return true;
           }
         }
@@ -871,20 +1058,20 @@ bool linePack(const std::vector<Row> &conf, const std::vector<int> &mem,
       int B[3];
       int nA = 1;
       int nB = 0;
-      A[0] = nb.v[0];
+      A[0] = nb[0];
       bool ok = true;
       for (int t = 1; t < 6; t++) {
-        if (near(nb.v[0], nb.v[t])) {
+        if (near(nb[0], nb[t])) {
           if (nA >= 3) {
             ok = false;
             break;
           }
-          A[nA++] = nb.v[t];
+          A[nA++] = nb[t];
         } else if (nB >= 3) {
           ok = false;
           break;
         } else {
-          B[nB++] = nb.v[t];
+          B[nB++] = nb[t];
         }
       }
       if (!ok || nA != 3 || nB != 3 || !near(A[1], A[2]) || !near(B[0], B[1]) ||
@@ -938,20 +1125,20 @@ bool linePack(const std::vector<Row> &conf, const std::vector<int> &mem,
     int nB = 0;
     if (nb.n == 6) {
       nA = 1;
-      A[0] = nb.v[0];
+      A[0] = nb[0];
       bool ok = true;
       for (int i = 1; i < 6; i++) {
-        if (linked(nb.v[0], nb.v[i])) {
+        if (linked(nb[0], nb[i])) {
           if (nA >= 3) {
             ok = false;
             break;
           }
-          A[nA++] = nb.v[i];
+          A[nA++] = nb[i];
         } else if (nB >= 3) {
           ok = false;
           break;
         } else {
-          B[nB++] = nb.v[i];
+          B[nB++] = nb[i];
         }
       }
       if (!ok || nA != 3 || nB != 3 || !linked(A[1], A[2]) || !linked(B[0], B[1]) ||
@@ -976,7 +1163,7 @@ bool linePack(const std::vector<Row> &conf, const std::vector<int> &mem,
       std::uint32_t bit[8] = {};
       for (int a = 0; a < nb.n; a++) {
         for (int b = a + 1; b < nb.n; b++) {
-          if (linked(nb.v[a], nb.v[b])) {
+          if (linked(nb[a], nb[b])) {
             bit[a] |= 1u << b;
             bit[b] |= 1u << a;
           }
@@ -1046,9 +1233,9 @@ bool linePack(const std::vector<Row> &conf, const std::vector<int> &mem,
       nB = 0;
       for (int a = 0; a < nb.n; a++) {
         if ((sideA >> a) & 1u) {
-          A[nA++] = nb.v[a];
+          A[nA++] = nb[a];
         } else if ((sideB >> a) & 1u) {
-          B[nB++] = nb.v[a];
+          B[nB++] = nb[a];
         }
       }
     }
@@ -1104,20 +1291,7 @@ bool linePack(const std::vector<Row> &conf, const std::vector<int> &mem,
   const int nKeys = static_cast<int>(keys.size());
   std::vector<int> ord(static_cast<std::size_t>(nKeys));
   std::iota(ord.begin(), ord.end(), 0);
-  seams::parallelStableSort(ord, [&](int a, int b) {
-    const PKey &ka = keys[static_cast<std::size_t>(a)];
-    const PKey &kb = keys[static_cast<std::size_t>(b)];
-    if (ka.k < kb.k) {
-      return true;
-    }
-    if (kb.k < ka.k) {
-      return false;
-    }
-    if (ka.ring != kb.ring) {
-      return ka.ring < kb.ring;
-    }
-    return ka.slot < kb.slot;
-  });
+  orderCliqueKeys(ord, keys);
   std::vector<int> fresh(static_cast<std::size_t>(std::max(nKeys, 1)), 0);
 #ifdef SEAMS_HAS_OPENMP
 #pragma omp parallel for schedule(static) if (!omp_in_parallel())
@@ -1234,7 +1408,7 @@ bool linePack(const std::vector<Row> &conf, const std::vector<int> &mem,
       return false;
     }
     for (int i = 0; i < row.n; i++) {
-      if (stampV[static_cast<size_t>(row.v[i])] != era) {
+      if (stampV[static_cast<size_t>(row[i])] != era) {
         return false;
       }
     }
@@ -1552,7 +1726,7 @@ int bruteMis(const std::vector<Row> &conf, const std::vector<int> &mem) {
       const Row &row = conf[static_cast<size_t>(mem[static_cast<size_t>(i)])];
       for (int k = 0; k < row.n; k++) {
         for (int j = 0; j < n; j++) {
-          if (mem[static_cast<size_t>(j)] == row.v[k] && ((mask >> j) & 1)) {
+          if (mem[static_cast<size_t>(j)] == row[k] && ((mask >> j) & 1)) {
             ok = false;
           }
         }
@@ -1622,6 +1796,7 @@ std::vector<int> ring::maximumEquators(const std::vector<ring::EquatorChoice> &p
   }
   const auto t0 = std::chrono::steady_clock::now();
   resetPackParts();
+  gDdcMatchSteps = 0;
   const int n = static_cast<int>(periph.size());
   std::vector<Row> conf(static_cast<size_t>(n));
   int nEdges = 0;
@@ -1695,7 +1870,7 @@ std::vector<int> ring::maximumEquators(const std::vector<ring::EquatorChoice> &p
       comp.minRank = std::min(comp.minRank, rankOf[static_cast<size_t>(u)]);
       const Row &row = conf[static_cast<size_t>(u)];
       for (int k = 0; k < row.n; k++) {
-        const int w = row.v[k];
+        const int w = row[k];
         if (!seen[static_cast<size_t>(w)]) {
           seen[static_cast<size_t>(w)] = 1;
           stack.push_back(w);
@@ -1804,3 +1979,8 @@ std::vector<int> ring::maximumEquators(const std::vector<ring::EquatorChoice> &p
 }
 
 ring::PackParts ring::lastPackParts() { return gPackParts; }
+
+extern "C" __attribute__((visibility("default"), used)) std::uint64_t seams_ddc_match_steps() {
+  return gDdcMatchSteps;
+}
+

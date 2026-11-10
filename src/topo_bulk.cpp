@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <span>
 #include <chrono>
 #include <cstdint>
@@ -1830,7 +1831,14 @@ struct DdcSplitTimes {
   double write_ms = 0;
 };
 DdcSplitTimes gDdcSplit;
+// Cycle keys built by the last findDDC order. Ideal ice distinguishes rings
+// by their atoms, so this stays zero when the comparator can stop early.
+std::atomic<std::uint64_t> gDdcCycleEvals{0};
 } // namespace
+
+extern "C" __attribute__((visibility("default"), used)) std::uint64_t seams_ddc_cycle_evals() {
+  return gDdcCycleEvals.load(std::memory_order_relaxed);
+}
 
 // Cubic mW has parity product 1. Frame 148 has parity product at most 16.
 // The triple loop costs the product, so it stays in use through the square
@@ -1865,8 +1873,6 @@ std::vector<int> canonicalRingOrderByAtoms(
     if (i < nShift) {
       k.shift = index.ringShift[static_cast<size_t>(i)];
     }
-    k.cycle = bestCycle(std::span<const int>(ring.data(), ring.size()));
-    k.cycleReady = true;
   }
   int maxAtom = 0;
   for (int i = 0; i < n; i++) {
@@ -1902,10 +1908,27 @@ std::vector<int> canonicalRingOrderByAtoms(
     if (ka.shift != kb.shift) {
       return ka.shift < kb.shift;
     }
-    if (ka.cycle < kb.cycle) {
+    // The atom ids already separate almost every pair. The rotation key is
+    // built only for a tie, which is the comparison the eager pass used to
+    // skip.
+    auto ensureCycle = [&](int id) {
+      Key &key = keys[static_cast<std::size_t>(id)];
+      if (key.cycleReady) {
+        return;
+      }
+      const auto &ring = rings[static_cast<std::size_t>(id)];
+      key.cycle = bestCycle(std::span<const int>(ring.data(), ring.size()));
+      key.cycleReady = true;
+      gDdcCycleEvals.fetch_add(1, std::memory_order_relaxed);
+    };
+    ensureCycle(a);
+    ensureCycle(b);
+    const CycleKey &ca = keys[static_cast<std::size_t>(a)].cycle;
+    const CycleKey &cb = keys[static_cast<std::size_t>(b)].cycle;
+    if (ca < cb) {
       return true;
     }
-    if (kb.cycle < ka.cycle) {
+    if (cb < ca) {
       return false;
     }
     return a < b;
@@ -1944,6 +1967,7 @@ std::vector<int> ring::findDDC(const std::vector<std::vector<int>> &rings,
   // The peripheral tie-break and the emitted order use the ring key
   // (sorted atom ids, unwrapped shift). Which equators are kept is a
   // maximum non-conflicting set, so the count does not follow a claim order.
+  gDdcCycleEvals.store(0, std::memory_order_relaxed);
   const auto td0 = std::chrono::steady_clock::now();
   const std::vector<int> visitOrder = canonicalRingOrderByAtoms(rings, index);
   const auto td1 = std::chrono::steady_clock::now();
