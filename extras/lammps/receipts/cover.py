@@ -113,6 +113,7 @@ def main():
         abort(log, code)
     live_env = dict(env)
     live_env["BUILD"] = str(BUILD)
+    live_env["DSEAMS_LIVE_WORK"] = str(BUILD / "work" / "live-cover")
     live_env["SEAMS_CLI"] = str(BUILD / "seams" / "seams")
     live_env["SEAMS_LIB"] = str(BUILD / "seams" / "src" / "libyodaLib.so")
     live_env["SEAMS_LAMMPS_PLUGIN"] = str(BUILD / "plugin" / "libdseams_lammps.so")

@@ -879,12 +879,12 @@ def gromacs_once(folder, steps, port):
     mdp.write_text(text)
     gmx = str(PREFIX / "bin" / "gmx")
     tpr = folder / f"topol-{port}.tpr"
-    run([gmx, "grompp", "-f", str(mdp), "-c", "solv.gro", "-p", "topol.top", "-o", str(tpr), "-maxwarn", "2"], folder)
+    run([gmx, "grompp", "-f", str(mdp.resolve()), "-c", "solv.gro", "-p", "topol.top", "-o", str(tpr.resolve()), "-maxwarn", "2"], folder)
     dump = folder / f"live-{port}.lammpstrj"
     record = folder / f"live-{port}.txt"
     log = folder / f"md-{port}.log"
     proc = subprocess.Popen(
-        [gmx, "mdrun", "-s", str(tpr), "-deffnm", f"run-{port}", "-imdwait", "-imdport", str(port), "-ntomp", "1", "-noconfout"],
+        [gmx, "mdrun", "-s", str(tpr.resolve()), "-deffnm", f"run-{port}", "-imdwait", "-imdport", str(port), "-ntomp", "1", "-noconfout"],
         cwd=folder,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -930,9 +930,9 @@ def time_gromacs(repeats, steps):
         mdp = folder / f"plain-{i}.mdp"
         mdp.write_text(text.replace("IMD-group = System\n", ""))
         tpr = folder / f"plain-{i}.tpr"
-        run([gmx, "grompp", "-f", str(mdp), "-c", "solv.gro", "-p", "topol.top", "-o", str(tpr), "-maxwarn", "2"], folder)
+        run([gmx, "grompp", "-f", str(mdp.resolve()), "-c", "solv.gro", "-p", "topol.top", "-o", str(tpr.resolve()), "-maxwarn", "2"], folder)
         started = time.perf_counter()
-        run([gmx, "mdrun", "-s", str(tpr), "-deffnm", f"plain-{i}", "-ntomp", "1", "-noconfout"], folder)
+        run([gmx, "mdrun", "-s", str(tpr.resolve()), "-deffnm", f"plain-{i}", "-ntomp", "1", "-noconfout"], folder)
         plain.append((time.perf_counter() - started) / steps)
         port = free_port()
         _, _, elapsed = gromacs_once(folder, steps, port)
@@ -1212,8 +1212,8 @@ def gromacs_scale_case(folder, rows, steps, every, repeats):
         )
         tpr = folder / f"plain-{i}.tpr"
         gro_env = {"LD_LIBRARY_PATH": libs, "OMP_NUM_THREADS": "1"}
-        run(grompp + ["grompp", "-f", str(mdp), "-c", "conf.gro", "-p", "topol.top", "-o", str(tpr), "-maxwarn", "2"], folder, env=gro_env)
-        proc = run(mdrun + ["-s", str(tpr), "-deffnm", f"plain-{i}", "-ntomp", "1", "-noconfout"], folder, env=gro_env)
+        run(grompp + ["grompp", "-f", str(mdp.resolve()), "-c", "conf.gro", "-p", "topol.top", "-o", str(tpr.resolve()), "-maxwarn", "2"], folder, env=gro_env)
+        proc = run(mdrun + ["-s", str(tpr.resolve()), "-deffnm", f"plain-{i}", "-ntomp", "1", "-noconfout"], folder, env=gro_env)
         sample = gmx_wall(proc.stdout + proc.stderr) / steps
         if i == 0:
             warmup_plain = sample
@@ -1229,8 +1229,8 @@ def gromacs_scale_case(folder, rows, steps, every, repeats):
             + "dseams-output = %s\n" % (folder / f"rec-{i}.txt")
         )
         live_tpr = folder / f"live-{i}.tpr"
-        run(grompp + ["grompp", "-f", str(live_mdp), "-c", "conf.gro", "-p", "topol.top", "-o", str(live_tpr), "-maxwarn", "2"], folder, env=gro_env)
-        proc = run(mdrun + ["-s", str(live_tpr), "-deffnm", f"live-{i}", "-ntomp", "1", "-noconfout"], folder, env=gro_env)
+        run(grompp + ["grompp", "-f", str(live_mdp.resolve()), "-c", "conf.gro", "-p", "topol.top", "-o", str(live_tpr.resolve()), "-maxwarn", "2"], folder, env=gro_env)
+        proc = run(mdrun + ["-s", str(live_tpr.resolve()), "-deffnm", f"live-{i}", "-ntomp", "1", "-noconfout"], folder, env=gro_env)
         sample = gmx_wall(proc.stdout + proc.stderr) / steps
         if i == 0:
             warmup_live = sample
