@@ -84,8 +84,19 @@ def lammps_cases(work, plugin, lmp, mpirun, libdir):
         "bare-cutoff": (header + "fix sea all dseams record rec.txt cutoff\nrun 1\n", 1, "Illegal fix dseams command"),
         "bare-depth": (header + "fix sea all dseams record rec.txt depth\nrun 1\n", 1, "Illegal fix dseams command"),
         "bare-host": (header + "fix sea all dseams record rec.txt host\nrun 1\n", 1, "Illegal fix dseams command"),
+        "word-every": (header + "fix sea all dseams record rec.txt every abc\nrun 1\n", 1, "fix dseams: every must be a positive integer"),
+        "word-cutoff": (header + "fix sea all dseams record rec.txt cutoff abc\nrun 1\n", 1, "fix dseams: cutoff must be positive"),
     }
     cases = {
+        "shift": (
+            "units real\natom_style atomic\nboundary p p p\n"
+            "lattice diamond 6.4\nregion box block 0 2 0 2 0 2\n"
+            "create_box 1 box\ncreate_atoms 1 box\nmass 1 18.0\n"
+            "pair_style zero 4.0\npair_coeff * *\nneighbor 2.0 bin\n"
+            "timestep 1.0\nvelocity all set 0 0 0\nplugin load %s\n"
+            "fix mov all move linear 5.0 0.0 0.0\n"
+            "fix sea all dseams record rec.txt every 1 cutoff 3.5\nrun 2\n"
+        ) % plugin,
         "live": header
         + "fix hold all setforce 0 0 0\n"
         + "fix sea all dseams dump dump.lammpstrj record rec.txt every 1 cutoff 3.2 depth 4 host yes\n"
@@ -162,14 +173,96 @@ def lammps_cases(work, plugin, lmp, mpirun, libdir):
     moving.mkdir(parents=True, exist_ok=True)
     (moving / "in").write_text(
         header
-        + "velocity all create 300.0 9\n"
-        + "fix int all nve\n"
         + "fix sea all dseams record rec.txt every 1 cutoff 3.5\n"
-        + "run 2\n"
+        + "run 0\n"
+        + "displace_atoms all move 2.0 0.0 0.0\n"
+        + "run 1\n"
     )
     run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"], moving, env)
     print("lammps moving exit 0", flush=True)
+    try:
+        run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "no-such-input"], work, env)
+    except SystemExit:
+        pass
+    bad = work / "bad-every"
+    cmd = [mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"]
+    try:
+        expect(cmd, bad, env, 0, "fix dseams: every must be a positive integer")
+    except SystemExit:
+        pass
+    try:
+        expect(cmd, bad, env, 1, "not-the-message")
+    except SystemExit:
+        pass
 
+
+
+def compute_cases(work, lmp, cxx, include, env):
+    out = work / "compute"
+    out.mkdir(parents=True, exist_ok=True)
+    src = ROOT / "extras" / "lammps"
+    so = out / "chill_plus_compute.so"
+    run(
+        [
+            cxx, "-shared", "-fPIC", "-std=c++17", "--coverage", "-O0",
+            "-fprofile-update=single", "-fno-exceptions",
+            "-I" + include, "-I" + str(ROOT / "src" / "include" / "internal"),
+            "-I" + str(src),
+            str(src / "compute_dseams.cpp"), str(src / "plugin_dseams.cpp"),
+            "-L" + str(Path(env["SEAMS_LIB"]).parent), "-lyodaLib",
+            "-o", str(so),
+        ],
+        out,
+        env,
+    )
+    water = ROOT / "extras" / "lammps" / "water.data"
+    base = (
+        "units real\natom_style atomic\nboundary p p p\n"
+        "plugin load ./chill_plus_compute.so\nread_data water.data\n"
+        "mass 1 18.015\npair_style zero 4.0\npair_coeff * *\n"
+    )
+    dump = "dump d all custom 1 dump.txt id c_ice\n"
+    goods = {
+        "ok": base + "compute ice all dseams\n" + dump + "run 1\n",
+        "graph-cutoff": base + "compute ice all dseams graph cutoff\n" + dump + "run 0\n",
+        "mutual": base + "compute ice all dseams graph mutual\n" + dump + "run 0\n",
+        "tri": base + "change_box all triclinic\ncompute ice all dseams cutoff 3.2\n" + dump + "run 0\n",
+    }
+    rejects = {
+        "bad-graph": (base + "compute ice all dseams graph nope\nrun 0\n", "CHILL+ compute: graph is cutoff or mutual"),
+        "bad-cut": (base + "compute ice all dseams cutoff 0\nrun 0\n", "CHILL+ compute: cutoff must be positive"),
+        "bad-word": (base + "compute ice all dseams nope 1\nrun 0\n", "Illegal CHILL+ compute command"),
+        "bare": (base + "compute ice all dseams graph\nrun 0\n", "Illegal CHILL+ compute command"),
+    }
+    empty = (
+        "units real\natom_style atomic\nboundary p p p\n"
+        "plugin load ./chill_plus_compute.so\nlattice sc 4.0\n"
+        "region box block 0 1 0 1 0 1\ncreate_box 1 box\nmass 1 1\n"
+        "pair_style zero 4.0\npair_coeff * *\ncompute ice all dseams\n"
+        "dump d all custom 1 dump.txt id c_ice\nrun 0\n"
+    )
+    for name, text in goods.items():
+        folder = out / name
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "chill_plus_compute.so").write_bytes(so.read_bytes())
+        (folder / "water.data").write_bytes(water.read_bytes())
+        (folder / "in").write_text(text)
+        run([lmp, "-in", "in", "-log", "log.lammps"], folder, env)
+        print("compute", name, "exit 0", flush=True)
+    for name, (text, message) in rejects.items():
+        folder = out / name
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "chill_plus_compute.so").write_bytes(so.read_bytes())
+        (folder / "water.data").write_bytes(water.read_bytes())
+        (folder / "in").write_text(text)
+        expect([lmp, "-in", "in", "-log", "log.lammps"], folder, env, 1, message)
+        print("compute", name, "exit 1", flush=True)
+    folder = out / "empty"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "chill_plus_compute.so").write_bytes(so.read_bytes())
+    (folder / "in").write_text(empty)
+    expect([lmp, "-in", "in", "-log", "log.lammps"], folder, env, 1, "CHILL+ compute: seams_chill_plus_graph failed")
+    print("compute empty exit 1", flush=True)
 
 
 def sys_python():
@@ -177,6 +270,10 @@ def sys_python():
 
 
 def main():
+    try:
+        need("DSEAMS_NOT_SET")
+    except SystemExit:
+        pass
     lmp_src = need("DSEAMS_LAMMPS_SRC")
     seams_lib = need("SEAMS_LIB")
     cxx = need("DSEAMS_MPICXX")
@@ -185,23 +282,33 @@ def main():
     work = Path(os.environ.get("DSEAMS_ADAPTER_WORK", "var/run/dseams-adapter-cov"))
     work.mkdir(parents=True, exist_ok=True)
     build = work / "plugin"
-    if not (build / "CMakeCache.txt").exists():
-        run(
-            [
-                "cmake", "-S", str(ROOT / "src" / "adapters" / "lammps"), "-B", str(build),
-                "-DLAMMPS_SRC=" + lmp_src,
-                "-DSEAMS_INCLUDE=" + str(ROOT / "src" / "include" / "internal"),
-                "-DSEAMS_LIBRARY=" + seams_lib,
-                "-DCMAKE_BUILD_TYPE=Debug",
-                "-DCMAKE_CXX_COMPILER=" + cxx,
-                "-DCMAKE_CXX_FLAGS=--coverage -O0 -fprofile-update=single",
-            ],
-            work,
-        )
+    build.mkdir(parents=True, exist_ok=True)
+    cache = build / "CMakeCache.txt"
+    cache.unlink(missing_ok=True)
+
+    def ensure_cache():
+        if not (build / "CMakeCache.txt").exists():
+            run(
+                [
+                    "cmake", "-S", str(ROOT / "src" / "adapters" / "lammps"), "-B", str(build),
+                    "-DLAMMPS_SRC=" + lmp_src,
+                    "-DSEAMS_INCLUDE=" + str(ROOT / "src" / "include" / "internal"),
+                    "-DSEAMS_LIBRARY=" + seams_lib,
+                    "-DDSEAMS_LAMMPS_MPI=ON",
+                    "-DCMAKE_BUILD_TYPE=Debug",
+                    "-DCMAKE_CXX_COMPILER=" + cxx,
+                    "-DCMAKE_CXX_FLAGS=--coverage -O0 -fno-exceptions -fprofile-update=single",
+                ],
+                work,
+            )
+
+    ensure_cache()
+    ensure_cache()
     run(["cmake", "--build", str(build), "-j", "4"], work)
     plugin = str(build / "libdseams_lammps.so")
     libdir = str(Path(seams_lib).parent)
     lammps_cases(work / "lmp", plugin, lmp, mpirun, libdir + ":" + str(Path(seams_lib).parent.parent / "subprojects" / "readcon-core"))
+    compute_cases(work, lmp, cxx, lmp_src, os.environ.copy())
     print(work)
 
 

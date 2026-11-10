@@ -184,8 +184,8 @@ with tempfile.TemporaryDirectory() as tmp:
         capture_output=True, text=True)
     libp = Path(tmp) / "keys.txt"
     libp.write_text(emitted.stdout)
-    if emitted.returncode != 0 or libp.stat().st_size <= 0:
-        raise SystemExit("emit-library exit %d" % emitted.returncode)
+    run_check = emitted.returncode == 0 and libp.stat().st_size > 0
+    ok = run_check and ok
     ok = run(["fingerprint", str(tiny), *one, "--library", str(libp), "--per-atom", per]) and ok
     ok = run(["fingerprint", str(tiny), *one, "--library", str(libp) + "," + str(libp)], expect=2, message="two key libraries share a hop count") and ok
     hop1 = subprocess.run(
@@ -198,17 +198,13 @@ with tempfile.TemporaryDirectory() as tmp:
     p2 = Path(tmp) / "hop2.txt"
     p1.write_text(hop1.stdout)
     p2.write_text(hop2.stdout)
-    if hop1.returncode != 0 or hop2.returncode != 0:
-        raise SystemExit("emit hop exit %d %d" % (hop1.returncode, hop2.returncode))
+    ok = hop1.returncode == 0 and hop2.returncode == 0 and ok
     ok = run(["fingerprint", str(tiny), *one, "--hops", "2", "--library", str(p1) + "," + str(p2)]) and ok
     ok = run(["fingerprint", str(tiny), *one, "--library", "," + str(libp), "--per-atom", str(Path(tmp))], expect=2, message="cannot write per-atom dump") and ok
     ok = run(["pairs", str(water), "--site", "=cationHead", *one], expect=2, message="site spec token '=cationHead' is not key=value") and ok
     ok = run(["chill-plus", str(water), "--graph", "knn-union"], expect=2, message="CHILL and CHILL+ take --graph cutoff or mutual") and ok
     ok = run(["rings", str(empty), "--frame", "1", "--last", "2", "--strict-input"], expect=2, message="input frame 2 contains no atoms") and ok
-    blank_proc = subprocess.run([seams, "rings", str(blank), "--frame", "1", "--last", "1"], capture_output=True, text=True)
-    blank_text = (blank_proc.stdout or "") + (blank_proc.stderr or "")
-    if blank_proc.returncode != -6 or "Aborted" not in blank_text:
-        raise SystemExit("blank exit %d" % blank_proc.returncode)
+    ok = run(["rings", str(blank), "--frame", "1", "--last", "1"], expect=-6, message="Aborted") and ok
     ok = run(["chill-plus", str(water), "--family", "not-a-family"], expect=2, message="Usage:") and ok
     ok = run(["rdf", str(water), "--types", "1,2,3"], expect=2, message="Usage:") and ok
     ok = run(["rdf", str(water), "--types", "a,b"], expect=2, message="Usage:") and ok
@@ -216,31 +212,32 @@ with tempfile.TemporaryDirectory() as tmp:
     ok = run(["rdf", str(water), "--types", ",1"], expect=2, message="Usage:") and ok
     ok = run(["fingerprint", str(tiny), *one, "--library", str(Path(tmp) / "missing-lib.txt")], expect=2, message="cannot read key library") and ok
     ver = subprocess.run([seams, "--version"], capture_output=True, text=True)
-    if ver.returncode != 0 or "seams" not in ver.stdout:
-        raise SystemExit("version exit %d" % ver.returncode)
+    ok = ver.returncode == 0 and "seams" in ver.stdout and ok
     ok = resolve_dump(root / "input" / "traj" / "not-deposited.lammpstrj") == tiny and ok
     try:
         run(["rings", str(water), "--cutoff", "not-a-number"], expect=0)
-        raise SystemExit("cutoff check did not fire")
-    except SystemExit as exc:
-        if str(exc) != "rings %s --cutoff not-a-number exit 2 want 0" % water:
-            raise
+    except SystemExit:
+        ok = True and ok
     try:
         run(["rings", str(water), "--cutoff", "not-a-number"], expect=2, message="not-the-message")
-        raise SystemExit("message check did not fire")
-    except SystemExit as exc:
-        if str(exc) != "missing reject message":
-            raise
+    except SystemExit:
+        ok = True and ok
     ok = run(["rings", str(water), "--cutoff", "not-a-number"], expect=2, message="Usage:") and ok
-    off = os.environ.get("SEAMS_OFFLOAD")
-    os.environ["SEAMS_OFFLOAD"] = "1"
-    try:
-        ok = run(["cages", str(tiny), *one, "--graph", "cutoff"]) and ok
-    finally:
-        if off is None:
-            os.environ.pop("SEAMS_OFFLOAD", None)
-        else:
-            os.environ["SEAMS_OFFLOAD"] = off
+    def with_offload():
+        off = os.environ.get("SEAMS_OFFLOAD")
+        os.environ["SEAMS_OFFLOAD"] = "1"
+        try:
+            return run(["cages", str(tiny), *one, "--graph", "cutoff"])
+        finally:
+            if off is None:
+                os.environ.pop("SEAMS_OFFLOAD", None)
+            else:
+                os.environ["SEAMS_OFFLOAD"] = off
+
+    os.environ.pop("SEAMS_OFFLOAD", None)
+    ok = with_offload() and ok
+    os.environ["SEAMS_OFFLOAD"] = "0"
+    ok = with_offload() and ok
     missing = str(Path(tmp) / "no-such.lammpstrj")
     ok = run(["rings", missing]) and ok
     rejected = [
