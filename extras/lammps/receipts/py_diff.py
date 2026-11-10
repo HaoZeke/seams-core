@@ -34,6 +34,11 @@ def gcovr_diff(root, lammps, py, base, env):
     return code
 
 
+def raise_status(status):
+    if status:
+        raise SystemExit(status)
+
+
 def main():
     root = Path(os.environ["SRC_SEAMS"])
     build = Path(os.environ["BUILD"])
@@ -66,8 +71,7 @@ def main():
     diff.line("end: " + streamlog.date_is())
     diff.close()
     gcode = gcovr_diff(root, lammps, py, base, env)
-    if report != 0 or code != 0 or gcode != 0:
-        raise SystemExit(code or gcode or report)
+    raise_status(code or gcode or report)
 
 
 if __name__ == "__main__":

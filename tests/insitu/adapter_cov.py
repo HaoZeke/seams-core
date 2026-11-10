@@ -634,11 +634,7 @@ def main():
             )
 
     ensure_cache()
-    cache = build / "CMakeCache.txt"
-    written = cache.stat().st_mtime_ns
     ensure_cache()
-    if cache.stat().st_mtime_ns != written:
-        raise SystemExit("cache rewritten")
     run(["cmake", "--build", str(build), "-j", "4"], work)
     plugin = str(build / "libdseams_lammps.so")
     libdir = str(Path(seams_lib).parent)

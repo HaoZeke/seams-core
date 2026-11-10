@@ -19,6 +19,14 @@ WORK = BUILD / "work" / "coverage"
 LOG = BUILD / "kit" / "logs" / "coverage.log"
 
 
+def abort(log, code):
+    if code != 0:
+        log.line("exit_code: %d" % code)
+        log.line("end: " + streamlog.date_is())
+        log.close()
+        raise SystemExit(code)
+
+
 def main():
     WORK.mkdir(parents=True, exist_ok=True)
     log = streamlog.Log(LOG)
@@ -52,15 +60,9 @@ def main():
         WORK,
         os.environ.copy(),
     )
-    if code != 0:
-        log.line("exit_code: %d" % code)
-        log.close()
-        raise SystemExit(code)
+    abort(log, code)
     code = log.run(["cmake", "--build", str(plugin), "-j", "4"], WORK, os.environ.copy())
-    if code != 0:
-        log.line("exit_code: %d" % code)
-        log.close()
-        raise SystemExit(code)
+    abort(log, code)
     env = os.environ.copy()
     env["DSEAMS_LAMMPS_SRC"] = str(LAMMPS / "src")
     env["SEAMS_LIB"] = str(BUILD / "seams" / "src" / "libyodaLib.so")
@@ -81,11 +83,7 @@ def main():
         env,
     )
     log.line("adapter_cov_exit: %d" % code)
-    if code != 0:
-        log.line("end: " + streamlog.date_is())
-        log.line("exit_code: %d" % code)
-        log.close()
-        raise SystemExit(code)
+    abort(log, code)
     env["DSEAMS_PLUGIN"] = str(BUILD / "plugin" / "libdseams_lammps.so")
     env["DSEAMS_IN_DSEAMS_WORK"] = str(WORK / "shipped")
     for args in (
@@ -96,11 +94,7 @@ def main():
     ):
         code = log.run([py, "-m", "coverage", "run", "--branch", "--append", *args], WORK, env)
         log.line("py %s exit %d" % (Path(args[0]).name, code))
-        if code != 0:
-            log.line("end: " + streamlog.date_is())
-            log.line("exit_code: %d" % code)
-            log.close()
-            raise SystemExit(code)
+        abort(log, code)
     log.line("gcov_object_directory: $BUILD/work/coverage")
     fix_notes = next(plugin.rglob("fix_dseams.cpp.gcno"))
     comp_notes = next((WORK / "compute").rglob("compute_dseams.gcno"))
@@ -154,8 +148,7 @@ def main():
     log.hash_tree(WORK)
     log.line("exit_code: %d" % (gcov_code or gcovr_code or code))
     log.close()
-    if gcov_code or gcovr_code:
-        raise SystemExit(gcov_code or gcovr_code)
+    abort(log, gcov_code or gcovr_code)
 
 
 if __name__ == "__main__":

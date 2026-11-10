@@ -242,9 +242,16 @@ with tempfile.TemporaryDirectory() as tmp:
     got_match = captured(lambda: run(["rings", str(water), "--cutoff", "not-a-number"], expect=0), want_code)
     got_bad = captured(lambda: run(["rings", str(water), "--cutoff", "not-a-number"], expect=0), "not the real message")
     got_quiet = captured(lambda: run(["--version"], expect=0), "x")
+    def require_seen(got, want):
+        if got != want:
+            raise SystemExit("demand arms %s" % got)
+
     seen = [same(got_match, ""), same(got_bad, ""), same(got_quiet, "cutoff check did not fire"), "exit 2 want 0" in got_bad]
-    if seen != [True, False, True, True]:
-        raise SystemExit("demand arms %s" % seen)
+    require_seen(seen, [True, False, True, True])
+    try:
+        require_seen([False], [True])
+    except SystemExit:
+        pass
     ok = run(["rings", str(water), "--cutoff", "not-a-number"], expect=2, message="Usage:") and ok
     def with_offload():
         off = os.environ.get("SEAMS_OFFLOAD")

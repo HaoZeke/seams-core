@@ -7,6 +7,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import cover
 import date_check
 import date_evidence
 import record_build
@@ -297,15 +298,40 @@ def run_main(path, argv):
         sys.argv = old
 
 
+def check_prose(work):
+    if not os.environ.get("SNAPPER"):
+        return
+    os.environ["SEAMS_BASE"] = "be748d7a26957fd91bd0371b2dfefdd326feda3d"
+    os.environ["LAMMPS_BASE"] = "098ffdefa525cabc82272925de02e9884f58c657"
+    os.environ["PROSE_LOG"] = str(work / "prose.log")
+    kit = work / "badkit"
+    kit.mkdir()
+    (kit / "NOTE.md").write_text("x" * 200 + "\n")
+    os.environ["KIT"] = str(kit)
+    import prose_gate
+    expect_exit(prose_gate.main, "1")
+
+
 def main():
     work = Path(tempfile.mkdtemp())
     exercise_expect()
     check_streamlog(work)
+    blog = streamlog.Log(work / "abort.log")
+    cover.abort(blog, 0)
+    expect_exit(lambda: cover.abort(streamlog.Log(work / "abort-bad.log"), 3), "3")
+    os.environ["GCOVR_XML"] = ""
+    os.environ["GCOVR_DIFF_LOG"] = ""
+    import py_diff
+    if py_diff.gcovr_diff(Path("."), Path("."), "python3", "d763dd35", os.environ.copy()) != 0:
+        raise SystemExit("gcovr skip")
+    py_diff.raise_status(0)
+    expect_exit(lambda: py_diff.raise_status(1), "1")
     check_record(work)
     check_clock(work)
     check_evidence(work)
     check_dates(work)
     check_trace()
+    check_prose(work)
     run_main(date_check.__file__, ["date_check.py", str(work / "logs")])
     run_main(record_build.__file__, ["record_build.py", str(work / "ok-build.log"), str(work), "true", "true"])
     run_main(trace_libs.__file__, ["trace_libs.py", "/bin/true"])
