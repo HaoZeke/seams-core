@@ -186,6 +186,7 @@ def lammps_cases(work, plugin, lmp, mpirun, libdir):
     subset_case(work, lmp, mpirun, plugin, env)
     print("lammps subset exit 0", flush=True)
     low, high, _lengths, expected = odd_box()
+    cutoff = odd_cutoff()
     boxed = work / "box-digits"
     boxed.mkdir(parents=True, exist_ok=True)
     (boxed / "data").write_text(odd_data(low, high))
@@ -193,12 +194,26 @@ def lammps_cases(work, plugin, lmp, mpirun, libdir):
         "units real\natom_style atomic\nboundary p p p\n"
         "plugin load %s\nread_data data\nmass 1 1.0\n"
         "pair_style zero 20.0\npair_coeff * *\nneighbor 2.0 bin\n"
-        "fix sea all dseams record live.txt neigh host.txt every 1 cutoff 3.5\n"
-        "run 0\n" % plugin
+        "fix sea all dseams record live.txt neigh host.txt every 1 cutoff %.17g\n"
+        "run 0\n" % (plugin, cutoff)
     )
     run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"], boxed, env)
-    check_box(boxed / "host.txt", expected)
+    check_dump(boxed / "host.txt", expected, cutoff)
     print("lammps box-digits exit 0", flush=True)
+    intree = need("DSEAMS_LMP_INTREE")
+    native = work / "box-intree"
+    native.mkdir(parents=True, exist_ok=True)
+    (native / "data").write_text(odd_data(low, high))
+    (native / "in").write_text(
+        "units real\natom_style atomic\nboundary p p p\n"
+        "read_data data\nmass 1 1.0\n"
+        "pair_style zero 20.0\npair_coeff * *\nneighbor 2.0 bin\n"
+        "fix sea all dseams record live.txt neigh host.txt every 1 cutoff %.17g\n"
+        "run 0\n" % cutoff
+    )
+    run([mpirun, "--oversubscribe", "-np", "1", intree, "-in", "in", "-log", "log.lammps"], native, env)
+    check_dump(native / "host.txt", expected, cutoff)
+    print("lammps intree box-digits exit 0", flush=True)
     try:
         run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "no-such-input"], work, env)
     except SystemExit:
@@ -221,17 +236,15 @@ def require_same(label, left, right):
         raise SystemExit("%s\n%s\n%s" % (label, left, right))
 
 
-def require_box(line, expected):
-    got = [float(token) for token in line.split()[1:]]
-    if got != expected:
-        raise SystemExit("box %s" % line)
-
-
 def odd_box():
     low = (0.12345678901234568, -0.98765432109876543, 1.1111111111111112)
     high = (12.345678901234567, 9.8765432109876543, 8.1415926535897931)
     lengths = tuple(high[i] - low[i] for i in range(3))
     return low, high, lengths, list(low) + list(lengths) + [0.0, 0.0, 0.0]
+
+
+def odd_cutoff():
+    return 3.141592653589793
 
 
 def odd_data(low, high):
@@ -243,25 +256,69 @@ def odd_data(low, high):
     )
 
 
-def box_line(path):
+def require_numbers(kind, line, expected):
+    got = [float(token) for token in line.split()[1:]]
+    if got != expected:
+        raise SystemExit("%s %s" % (kind, line))
+
+
+def header_line(path, prefix):
     for line in Path(path).read_text().splitlines():
-        if line.startswith("box "):
+        if line.startswith(prefix):
             return line
-    raise SystemExit("missing box line")
+    raise SystemExit("missing %s" % prefix)
 
 
-def check_box(path, expected):
-    require_box(box_line(path), expected)
+def expect_exit(fn, code, message):
     try:
-        require_box("box 0 0 0 1 1 1 0 0 0", expected)
-    except SystemExit:
-        pass
-    missing = Path(path).with_name("no-box.txt")
-    missing.write_text("step 0\n")
+        fn()
+    except SystemExit as err:
+        status = err.code if isinstance(err.code, int) else 1
+        text = err.code if isinstance(err.code, str) else ""
+        if status != code or message not in text:
+            raise SystemExit("exit %s want %d %s" % (err.code, code, message))
+        return
+    raise SystemExit("missing exit %d %s" % (code, message))
+
+
+def require_text(err, needle):
+    text = err.code if isinstance(err.code, str) else str(err.code)
+    if needle not in text:
+        raise SystemExit("missing %s" % needle)
+
+
+def raise_exit(value):
+    raise SystemExit(value)
+
+
+def drill_exit_checks():
     try:
-        box_line(missing)
-    except SystemExit:
-        pass
+        expect_exit(lambda: None, 1, "box ")
+    except SystemExit as err:
+        require_text(err, "missing exit")
+    try:
+        expect_exit(lambda: raise_exit("nope"), 1, "box ")
+    except SystemExit as err:
+        require_text(err, "want")
+    try:
+        expect_exit(lambda: raise_exit(2), 1, "box ")
+    except SystemExit as err:
+        require_text(err, "want")
+    try:
+        require_text(SystemExit(3), "nope")
+    except SystemExit as err:
+        require_text(err, "missing")
+
+
+def check_dump(path, box, cutoff):
+    require_numbers("box", header_line(path, "box "), box)
+    require_numbers("cutoff", header_line(path, "cutoff "), [cutoff])
+    expect_exit(lambda: require_numbers("box", "box 0 0 0 1 1 1 0 0 0", box), 1, "box ")
+    expect_exit(lambda: require_numbers("cutoff", "cutoff 1", [cutoff]), 1, "cutoff ")
+    blank = Path(path).with_name("no-header.txt")
+    blank.write_text("step 0\n")
+    expect_exit(lambda: header_line(blank, "box "), 1, "missing box")
+    drill_exit_checks()
 
 
 def census_line(text, key):
@@ -437,6 +494,7 @@ def compute_cases(work, lmp, cxx, include, env):
     expect([lmp, "-in", "in", "-log", "log.lammps"], folder, env, 1, "CHILL+ compute: seams_chill_plus_graph failed")
     print("compute empty exit 1", flush=True)
     low, high, _lengths, expected = odd_box()
+    cutoff = odd_cutoff()
     boxed = out / "box-digits"
     boxed.mkdir(parents=True, exist_ok=True)
     (boxed / "chill_plus_compute.so").write_bytes(so.read_bytes())
@@ -445,11 +503,11 @@ def compute_cases(work, lmp, cxx, include, env):
         "units real\natom_style atomic\nboundary p p p\n"
         "plugin load ./chill_plus_compute.so\nread_data data\n"
         "mass 1 1.0\npair_style zero 20.0\npair_coeff * *\nneighbor 2.0 bin\n"
-        "compute ice all dseams file labels.txt cutoff 3.5\n"
-        "dump d all custom 1 dump.txt id c_ice\nrun 0\n"
+        "compute ice all dseams file labels.txt cutoff %.17g\n"
+        "dump d all custom 1 dump.txt id c_ice\nrun 0\n" % cutoff
     )
     run([lmp, "-in", "in", "-log", "log.lammps"], boxed, env)
-    check_box(boxed / "labels.txt", expected)
+    check_dump(boxed / "labels.txt", expected, cutoff)
     print("compute box-digits exit 0", flush=True)
 
 

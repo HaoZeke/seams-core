@@ -89,7 +89,9 @@ void ComputeDseams::compute_peratom() {
   label_open = 1;
   out << "frame\n";
   out << "step " << update->ntimestep << "\n";
-  out << "cutoff " << cutoff << "\n";
+  char cutoff_line[64];
+  std::snprintf(cutoff_line, sizeof(cutoff_line), "cutoff %.17g\n", cutoff);
+  out << cutoff_line;
   char box_line[320];
   std::snprintf(box_line, sizeof(box_line),
                 "box %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g\n",
