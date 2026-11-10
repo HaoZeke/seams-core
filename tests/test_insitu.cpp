@@ -155,7 +155,7 @@ TEST_CASE("bad_alloc can be caught", "[insitu]") {
 void require_live_child(pid_t pid) {
   int status = 0;
   REQUIRE(::waitpid(pid, &status, 0) == pid);
-  REQUIRE((WIFEXITED(status) && WEXITSTATUS(status) == 0));
+  CHECK((WIFEXITED(status) && WEXITSTATUS(status) == 0));
 }
 
 TEST_CASE("a signalled child fails the allocation check", "[negative]") {
