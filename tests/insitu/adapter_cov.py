@@ -531,7 +531,7 @@ def compute_cases(work, lmp, cxx, include, env):
     chem = str(Path(env["SEAMS_LIB"]).parents[1] / "chemfiles-prefix" / "lib")
     run(
         [
-            cxx, "--coverage",
+            cxx, "--coverage", "-Wl,--allow-shlib-undefined",
             str(out / "narg_drive.o"), str(out / "compute_dseams.o"),
             "-L" + libdir, "-llammps",
             "-L" + str(Path(env["SEAMS_LIB"]).parent), "-lyodaLib",
@@ -548,7 +548,7 @@ def compute_cases(work, lmp, cxx, include, env):
     run(common + [str(src / "plugin_dseams.cpp"), "-o", str(out / "plugin_dseams.o")], out, env)
     run(
         [
-            cxx, "-shared", "--coverage",
+            cxx, "-shared", "--coverage", "-Wl,--allow-shlib-undefined",
             str(out / "compute_dseams.o"), str(out / "plugin_dseams.o"),
             "-L" + str(Path(env["SEAMS_LIB"]).parent), "-lyodaLib",
             "-o", str(so),
