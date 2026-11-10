@@ -123,6 +123,11 @@ def main():
         r"\s*if \(static_cast<int>\(flat.size\(\)\) > begin\)",
         r"\s*\} else if \(total_atoms == 0\)",
         r"\s*if \(comm->me != 0\) \{ // nprocs is already 1",
+        r"\s*continue; // builder stores i at or above zero",
+        r"\s*continue; // builder stores i below nlocal",
+        r"\s*continue; // NEIGHMASK keeps j at or above zero",
+        r"\s*continue; // stencil stores j below nall",
+        r"\s*return; // the only rank left is rank 0",
     ]
     raw_json = common + ["--json", str(WORK / "gcovr-raw.json"), "--txt", str(WORK / "gcovr-raw.txt")]
     log.line("command: gcovr raw branches")

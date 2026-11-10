@@ -107,7 +107,7 @@ void ComputeDseams::compute_peratom() {
     return;
   }
   if (comm->me != 0) { // nprocs is already 1
-    return;
+    return; // the only rank left is rank 0
   }
   std::ofstream out(label_path, label_open ? std::ios::app : std::ios::out);
   label_open = 1;
