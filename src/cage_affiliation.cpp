@@ -924,8 +924,7 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
     st.prevSortedRows.swap(st.incoming);
     return st.current;
   }
-  if (st.batchHot && st.warm && st.primed &&
-      st.prevSortedRows.size() == nList.size()) {
+  if (st.batchHot && st.prevSortedRows.size() == nList.size()) {
     st.fastAffiliation(rings, nList);
     return st.current;
   }
