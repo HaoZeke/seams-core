@@ -440,7 +440,7 @@ def subset_case(work, lmp, mpirun, plugin, env):
     )
     must_raise(
         lambda: cli_census(seams, folder / "type1.lammpstrj", "--features", []),
-        "exit",
+        "--features wrote no census line",
     )
 
 
