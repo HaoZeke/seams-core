@@ -46,7 +46,7 @@ FlatGraph flattenIndexList(const std::vector<std::vector<int>> &nList) {
   for (int i = 0; i < g.nAtoms; ++i) {
     const auto &row = nList[static_cast<std::size_t>(i)];
     int kept = 0;
-    for (std::size_t t = 1; t < row.size() && kept < g.kMax; ++t) {
+    for (std::size_t t = 1; t < row.size(); ++t) {
       g.cols[static_cast<std::size_t>(i * g.kMax + kept)] = row[t];
       ++kept;
     }
@@ -339,14 +339,12 @@ tum::hostCageCounts(const std::vector<std::vector<int>> &nList) {
       ++out.nDdcRings;
     }
     for (const int a : six[r]) {
-      if (a >= 0 && a < nAtoms) {
-        ++out.atomSix[static_cast<std::size_t>(a)];
-        if (aff.hc[r]) {
-          out.atomHc[static_cast<std::size_t>(a)] = 1;
-        }
-        if (aff.ddc[r]) {
-          out.atomDdc[static_cast<std::size_t>(a)] = 1;
-        }
+      ++out.atomSix[static_cast<std::size_t>(a)];
+      if (aff.hc[r]) {
+        out.atomHc[static_cast<std::size_t>(a)] = 1;
+      }
+      if (aff.ddc[r]) {
+        out.atomDdc[static_cast<std::size_t>(a)] = 1;
       }
     }
   }
