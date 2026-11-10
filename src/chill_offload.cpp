@@ -125,7 +125,7 @@ int classifyAtom(int nstag, int neclip, int shell, const int *neigh,
   if (nstag == 3 && neclip == 0) {
     for (int t = 0; t < 4; t++) {
       const int j = neigh[t];
-      if (j >= 0 && nstagN[j] > 1) {
+      if (nstagN[j] > 1) {
         inter = true;
       }
     }
