@@ -129,6 +129,18 @@ FrameSource frameSource(const std::string &path) {
   return FrameSource::dump;
 }
 
+// A forward xyz window that starts past the file. An inverted window
+// (last before frame) is empty on purpose and is not this case.
+bool xyzWindowPastEnd(const std::string &file, int frame, int last) {
+  const auto dot = file.find_last_of('.');
+  const std::string ext = dot == std::string::npos ? "" : file.substr(dot + 1);
+  if (ext != "xyz" || frame <= 1 || (last > 0 && last < frame)) {
+    return false;
+  }
+  const int frames = sinp::countXyzFrames(file);
+  return frames < 0 || frame > frames;
+}
+
 template <typename Fn>
 void forEachInputFrame(const std::string &path, int first, int last,
                        int typeFilter, int nThreads, Fn &&fn,
@@ -2276,6 +2288,13 @@ int main(int argc, char *argv[]) {
       !waterTypes.empty();
   const int loadType = loadAll ? -1 : typeI;
 
+  if (xyzWindowPastEnd(file, frame, last)) {
+    std::cerr << colorizer.error("frame " + std::to_string(frame) +
+                                 " is past the last frame in this file")
+              << "\n";
+    return 2;
+  }
+
   try {
   if (last <= 0 || last == frame) {
 #ifdef SEAMS_HAS_MPI
@@ -2341,18 +2360,6 @@ int main(int argc, char *argv[]) {
     forEachInputFrame(file, lo, hi, typeFilter, jobs, processFrame, selection,
                       part, parts);
   }
-  bool sawFrame = false;
-  for (bool seen : outputSeen) {
-    sawFrame = sawFrame || seen;
-  }
-  // A start past the first frame that produced no row is an error.
-  // Returning success here is what a one-frame xyz did for --frame 2.
-  if (!sawFrame && frame > 1) {
-    std::cerr << colorizer.error("frame " + std::to_string(frame) +
-                                 " is past the last frame in this file")
-              << "\n";
-    return 2;
-  }
 #ifdef SEAMS_HAS_MPI
   if (ranks.size > 1 &&
       !gatherFrameResults(ranks, outputLines, outputStatus, outputSeen)) {
@@ -2364,6 +2371,24 @@ int main(int argc, char *argv[]) {
     return 2;
   }
 #endif
+  bool sawFrame = false;
+  for (bool seen : outputSeen) {
+    sawFrame = sawFrame || seen;
+  }
+  // A forward window that produced no row is past the file. An inverted
+  // window is empty on purpose. Only rank 0 reports it, after the gather.
+  if (!sawFrame && frame > 1 && last >= frame) {
+    bool report = true;
+#ifdef SEAMS_HAS_MPI
+    report = ranks.rank == 0;
+#endif
+    if (report) {
+      std::cerr << colorizer.error("frame " + std::to_string(frame) +
+                                   " is past the last frame in this file")
+                << "\n";
+      return 2;
+    }
+  }
   int rc = 0;
   for (std::size_t i = 0; i < outputLines.size(); ++i) {
     if (!outputSeen[i]) {

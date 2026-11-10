@@ -122,12 +122,19 @@ void rememberId(molSys::PointCloud<molSys::Point<double>, double> &cloud) {
 
 void applyCell(molSys::PointCloud<molSys::Point<double>, double> &cloud,
                const chemfiles::UnitCell &cell) {
+  const auto lengths = cell.lengths();
+  // A zero LAMMPS cell is a real box with a bad edge. Chemfiles reports
+  // that cell as infinite and would otherwise drop the lengths.
+  if (!(lengths[0] > 0.0 && lengths[1] > 0.0 && lengths[2] > 0.0)) {
+    cloud.box = {lengths[0], lengths[1], lengths[2]};
+    cloud.boxLow = {0.0, 0.0, 0.0};
+    return;
+  }
   if (cell.shape() == chemfiles::UnitCell::INFINITE) {
     cloud.box.clear();
     cloud.boxLow.clear();
     return;
   }
-  const auto lengths = cell.lengths();
   const auto angles = cell.angles();
   nneigh::setBoxFromLengthsAngles(cloud.box, cloud.boxLow, lengths[0],
                                  lengths[1], lengths[2], angles[0], angles[1],
@@ -779,11 +786,10 @@ sinp::openFrame(const std::string &filename, int frame, int typeI,
       }
       return cloud;
     }
-    std::cerr << "chemfiles cannot read " << filename;
+    std::cerr << "chemfiles cannot read " << filename << "\n";
     if (!chemfilesError.empty()) {
-      std::cerr << ": " << chemfilesError;
+      std::cerr << chemfilesError << "\n";
     }
-    std::cerr << "\n";
     return molSys::clearPointCloud(cloud);
   }
 #else

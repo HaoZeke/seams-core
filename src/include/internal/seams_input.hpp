@@ -116,6 +116,9 @@ molSys::PointCloud<molSys::Point<double>, double> readLammpsTrjreduced(
 //! Function for reading in atom coordinates from an XYZ file
 molSys::PointCloud<molSys::Point<double>, double> readXYZ(std::string filename);
 
+//! XYZ frames in a regular file. Missing, unread, or malformed input is -1.
+int countXyzFrames(const std::string &filename);
+
 //! Reads bonds into a vector of vectors from a file with a specific format
 std::vector<std::vector<int>> readBonds(std::string filename);
 

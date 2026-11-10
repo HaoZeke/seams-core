@@ -560,6 +560,53 @@ bool latticeCell(const std::string &comment, std::vector<double> &box,
 
 } // namespace
 
+int sinp::countXyzFrames(const std::string &filename) {
+  const int fd = ::open(filename.c_str(), O_RDONLY | O_CLOEXEC);
+  if (fd < 0) {
+    return -1;
+  }
+  struct stat st {};
+  if (::fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) {
+    ::close(fd);
+    return -1;
+  }
+  ::close(fd);
+  std::ifstream in(filename);
+  if (!in) {
+    return -1;
+  }
+  int frames = 0;
+  std::string line;
+  while (std::getline(in, line)) {
+    if (line.empty()) {
+      continue;
+    }
+    int atoms = 0;
+    try {
+      std::size_t used = 0;
+      atoms = std::stoi(line, &used);
+      if (used == 0) {
+        return -1;
+      }
+    } catch (...) {
+      return -1;
+    }
+    if (atoms < 0) {
+      return -1;
+    }
+    if (!std::getline(in, line)) {
+      return -1;
+    }
+    for (int i = 0; i < atoms; ++i) {
+      if (!std::getline(in, line)) {
+        return -1;
+      }
+    }
+    frames += 1;
+  }
+  return frames;
+}
+
 /**
  * @details Function for reading in an XYZ file
  */
