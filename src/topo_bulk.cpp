@@ -972,7 +972,8 @@ void ddcKeepRoom(const std::vector<std::vector<int>> &rings,
         key[j] = v;
       }
       if (!bestKey.empty()) {
-        for (int i = 0; i < 6; ++i) {
+        int i = 0;
+        for (;;) {
           if (key[i] != bestKey[static_cast<size_t>(i)]) {
             if (key[i] > bestKey[static_cast<size_t>(i)]) {
               return;
@@ -982,6 +983,7 @@ void ddcKeepRoom(const std::vector<std::vector<int>> &rings,
           if (i == 5) {
             return;
           }
+          ++i;
         }
       }
       if (!ddcFourteen(rings, equatorial, e, o, nAtoms)) {
@@ -2187,7 +2189,7 @@ bool ring::equatorialConditions(const std::vector<std::vector<int>> &rings,
       int nAtomsHere = 0;
       bool hexagons = true;
       auto take = [&](const std::vector<int> &cycle) {
-        if (cycle.size() != 6 || nAtomsHere + 6 > 42) {
+        if (cycle.size() != 6) {
           hexagons = false;
           return;
         }
@@ -2253,7 +2255,7 @@ bool ring::equatorialConditions(const std::vector<std::vector<int>> &rings,
         std::unique(peripheralUnion->begin(), peripheralUnion->end()),
         peripheralUnion->end());
   }
-  if (haveBest && rank != nullptr) {
+  if (haveBest) {
     std::sort(bestIds, bestIds + 6, [rank](int a, int b) {
       return (*rank)[static_cast<size_t>(a)] < (*rank)[static_cast<size_t>(b)];
     });
@@ -2763,14 +2765,12 @@ void ring::NeighBond::build(const std::vector<std::vector<int>> &nList) {
   std::vector<int> row;
   for (int i = 0; i < n_; i++) {
     row.clear();
-    if (static_cast<size_t>(i) < nList.size()) {
-      const auto &nbrs = nList[static_cast<size_t>(i)];
-      row.reserve(nbrs.size());
-      for (size_t k = 1; k < nbrs.size(); k++) {
-        const int j = nbrs[k];
-        if (j >= 0 && j < n_) {
-          row.push_back(j);
-        }
+    const auto &nbrs = nList[static_cast<size_t>(i)];
+    row.reserve(nbrs.size());
+    for (size_t k = 1; k < nbrs.size(); k++) {
+      const int j = nbrs[k];
+      if (j >= 0 && j < n_) {
+        row.push_back(j);
       }
     }
     std::sort(row.begin(), row.end());
