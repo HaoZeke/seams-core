@@ -122,9 +122,14 @@ def main():
     expect(["cages", str(ice_or_tiny()), "--frame", "1", "--last", "1",
             "--graph", "cutoff", "--signature", "512",
             "--cage-edge", "0,1"], 0, out_has="nop ")
-    expect(["cages", str(ice_or_tiny()), "--frame", "1", "--last", "1",
-            "--graph", "cutoff", "--shape"], 2,
-           err_line="point groups need libira; this build has IRA/SOFI off")
+    feat = run(["--features"])
+    if "IRA/SOFI: enabled" in feat.stdout:
+        expect(["cages", str(ice_or_tiny()), "--frame", "1", "--last", "1",
+                "--graph", "cutoff", "--shape"], 0, out_has="nop ")
+    else:
+        expect(["cages", str(ice_or_tiny()), "--frame", "1", "--last", "1",
+                "--graph", "cutoff", "--shape"], 2,
+               err_line="point groups need libira; this build has IRA/SOFI off")
 
 
 def ice_or_tiny():

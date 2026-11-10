@@ -105,8 +105,13 @@ def main():
     expect(["cages", str(mw), *one, "--cutoff", "3.0", "--graph", "cutoff",
             "--signature", "512", "--water-types", "1",
             "--cage-edge", "2.5,3.2"], 0, out_has="nop ")
-    expect(["cages", str(mw), *one, "--graph", "cutoff", "--shape"], 2,
-           err_line="point groups need libira; this build has IRA/SOFI off")
+    feat_now = run(["--features"])
+    if "IRA/SOFI: enabled" in feat_now.stdout:
+        expect(["cages", str(mw), *one, "--graph", "cutoff", "--shape"], 0,
+               out_has="nop ")
+    else:
+        expect(["cages", str(mw), *one, "--graph", "cutoff", "--shape"], 2,
+               err_line="point groups need libira; this build has IRA/SOFI off")
 
     expect(["ions", str(tiny), *one, "--type", "1", "--ion-types", "1,3",
             "--ion-cutoff", "5", "--cutoff", "3.5"], 0, out_has="ions ")

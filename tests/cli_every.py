@@ -221,7 +221,9 @@ with tempfile.TemporaryDirectory() as tmp:
     blank_rc = subprocess.run([seams, "rings", str(blank), "--frame", "1", "--last", "1"], capture_output=True).returncode
     ok = blank_rc in (0, 2) and ok
     ok = run(["chill-plus", str(water), "--family", "not-a-family"], expect=2) and ok
-    ok = run(["cages", str(tiny), *one, "--graph", "cutoff", "--shape"], expect=2) and ok
+    feat = subprocess.run([seams, "--features"], capture_output=True, text=True)
+    shape_rc = 0 if "IRA/SOFI: enabled" in feat.stdout else 2
+    ok = run(["cages", str(tiny), *one, "--graph", "cutoff", "--shape"], expect=shape_rc) and ok
     ok = run(["rdf", str(water), "--types", "1,2,3"], expect=2) and ok
     ok = run(["rdf", str(water), "--types", "a,b"], expect=2) and ok
     ok = run(["rdf", str(water), "--types", "1,"], expect=2) and ok
