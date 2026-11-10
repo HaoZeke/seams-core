@@ -420,6 +420,34 @@ TEST_CASE("AffiliationUpdater matches batch when every neighbour row changes",
   REQUIRE(updater.lastReclassified() == static_cast<int>(six.size()));
 }
 
+TEST_CASE("AffiliationUpdater matches an unsorted ring list and an empty frame",
+          "[cage_affiliation]") {
+  molSys::PointCloud<molSys::Point<double>, double> yCloud;
+  yCloud = sinp::readLammpsTrjO("traj/mW_cubic.lammpstrj", 1, yCloud, 1);
+  auto nList = nneigh::neighListO(3.5, yCloud, 1);
+  auto idx = nneigh::neighbourListByIndex(yCloud, nList);
+  auto six = sixMembered(primitive::ringNetwork(idx, 7));
+
+  ring::AffiliationUpdater updater;
+  updater.setBatchFraction(1.0);
+  const auto &first = updater.update(six, idx);
+  const auto batch = ring::cageAffiliation(six, idx);
+  REQUIRE(first.hc == batch.hc);
+  REQUIRE(first.ddc == batch.ddc);
+
+  auto flipped = six;
+  std::reverse(flipped.begin(), flipped.end());
+  const auto &second = updater.update(flipped, idx);
+  const auto batchFlip = ring::cageAffiliation(flipped, idx);
+  REQUIRE(second.hc == batchFlip.hc);
+  REQUIRE(second.ddc == batchFlip.ddc);
+
+  std::vector<std::vector<int>> none;
+  const auto &cleared = updater.update(none, idx);
+  REQUIRE(cleared.hc.empty());
+  REQUIRE(cleared.ddc.empty());
+}
+
 TEST_CASE("cage membership is not a function of the four-neighbour star",
           "[cage_affiliation]") {
   // Two configurations that agree exactly on the closed star of a vertex --

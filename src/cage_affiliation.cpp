@@ -1088,12 +1088,12 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
     dirtyEq[static_cast<std::size_t>(i)] = equatorial ? 1 : 0;
   }
   if (dirtyPairs.size() > batchLimit) {
+    // The next frames skip the diff. The call has to run before the return.
+    st.fellBack();
     st.fastAffiliation(rings, nList);
     st.prevSortedRows.swap(st.incoming);
     st.answersValid = false;
     st.batchHot = true;
-    return st.current;
-    st.fellBack();
     return st.current;
   }
 
