@@ -1,3 +1,23 @@
+Inputs
+The recorded liquid dump, SHA-256
+d02023892336c43cf409da8ee4b7dee2b8f30f94ee9e76a1c1d1ae99e646ea2b,
+matches no file in this checkout.
+figshare 10.6084/m9.figshare.11448702.v1 holds nucleation.lammpstrj only.
+figshare 10.6084/m9.figshare.11448768.v1 holds dump-240-square.lammpstrj only.
+The d-SEAMS GitHub releases do not attach that dump.
+d-SEAMS/dseams2_repro has templates/in.liquid.lammps with unsubstituted
+variables and a 512-atom data file, and this environment has no LAMMPS
+binary, so that template was not run.
+Claims that depended on the liquid column were removed from the text.
+
+RINGS 1.3.5
+URL https://sourceforge.net/projects/rings-code/files/rings-code/rings-code-v1.3.5/rings-code-v1.3.5.tar.gz/download
+SHA-256 a7cdaf60533e8b36944997692aa8f109d94a8069fbf7470f01536babe0f359ce
+matscipy 1.3.1, on the mW crystal frame of 4096 molecules at cutoff 3.5
+angstrom, maxlength 7, returned 8192 six-membered rings.
+The same call on a 2x2x2 replica of 32768 molecules returned 65536
+six-membered rings. Neither call aborted.
+
 Copyright line
 
 Each file below carries the line Copyright (c) d-SEAMS developers.

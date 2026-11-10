@@ -747,8 +747,6 @@ timing covers the same path from positions to labels.
 The frames are ideal ice~Ic and ice~Ih and the square-tube ice of a
 deposited trajectory~\cite{goswami2019nanotubedata}, each replicated
 from about a thousand to about a million molecules.
-The liquid dump is not in this checkout, so the comparator campaign has
-no liquid column.
 Table~\ref{tab:codes} lists the codes and operations, and
 Section~\sref{sec:s-protocol} gives the frames, the call counts, the
 time limits and the settings of each code.
@@ -975,12 +973,14 @@ in its own process (Table~\sref{tab:s-ovito}).}
 
 Every case that ended without a timing belongs to a comparator code
 (Table~\sref{tab:s-censored}).
-Both interfaces of matscipy end with a segmentation fault on the larger
-frames.
-The liquid dump is not in this checkout, so the liquid column of the
-comparator campaign was not rerun.
-The source archive of RINGS 1.3.5 is not in this checkout, so that lane
-was not rerun.
+matscipy~1.3.1 counts \num{8192} six-membered shortest-path rings on the
+first frame of the mW crystal (\num{4096} molecules, cutoff
+\qty{3.5}{\angstrom}) and \num{65536} on a $2\times2\times2$ replica,
+and both calls return.
+The RINGS~1.3.5 source archive is
+\url{https://sourceforge.net/projects/rings-code/files/rings-code/rings-code-v1.3.5/rings-code-v1.3.5.tar.gz/download}
+with SHA-256
+\texttt{a7cdaf60533e8b36944997692aa8f109d94a8069fbf7470f01536babe0f359ce}.
 We call cycless through the pair-list and cycle functions that GenIce
 uses.
 On the confined frame of \num{1000} molecules it returns
