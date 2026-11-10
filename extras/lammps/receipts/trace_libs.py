@@ -70,19 +70,16 @@ def mapped(pid):
 
 def paths_from_loader(line):
     found = []
-    for token in ("libdseams_lammps.so", "liblammps.so"):
-        start = 0
-        while True:
-            at = line.find(token, start)
-            if at < 0:
-                break
-            slash = line.rfind("/", 0, at)
-            if slash >= 0:
-                end = at + len(token)
-                while end < len(line) and line[end] not in " \t\n":
-                    end += 1
-                found.append(line[slash:end])
-            start = at + len(token)
+    for marker in ("trying file=", "calling init: ", "file="):
+        at = line.find(marker)
+        if at < 0:
+            continue
+        rest = line[at + len(marker):].strip()
+        if not rest:
+            continue
+        path = rest.split()[0]
+        if "libdseams_lammps.so" in path or "liblammps.so" in path:
+            found.append(path)
     return found
 
 
@@ -94,7 +91,9 @@ def main():
     stop = False
 
     def take(path):
-        if path.startswith("/") and os.path.exists(path):
+        if not os.path.isabs(path):
+            path = os.path.abspath(path)
+        if os.path.exists(path):
             seen.add(path)
 
     def watch():
