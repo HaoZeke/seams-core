@@ -204,7 +204,8 @@ def main():
     gcovr = os.environ.get("GCOVR", "gcovr")
     common = [
         gcovr, "--root", str(SRC),
-        "--object-directory", str(WORK),
+        "--object-directory", str(WORK / "plugin" / "CMakeFiles" / "dseams_lammps.dir"),
+        "--object-directory", str(WORK / "compute"),
         "--object-directory", str(BUILD / "seams"),
         "--filter", ".*fix_dseams\\.cpp", "--filter", ".*compute_dseams\\.cpp",
         "--filter", ".*seams_cli\\.cpp",
