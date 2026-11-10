@@ -315,9 +315,9 @@ void remember_build(Engine *eng, const Cloud &cloud, std::vector<std::vector<int
     eng->built_xyz[static_cast<std::size_t>(3 * i + 1)] = p.y;
     eng->built_xyz[static_cast<std::size_t>(3 * i + 2)] = p.z;
   }
-  eng->built_lx = cloud.box.size() > 0 ? cloud.box[0] : 0;
-  eng->built_ly = cloud.box.size() > 1 ? cloud.box[1] : 0;
-  eng->built_lz = cloud.box.size() > 2 ? cloud.box[2] : 0;
+  eng->built_lx = cloud.box[0];
+  eng->built_ly = cloud.box[1];
+  eng->built_lz = cloud.box[2];
 }
 
 int analyze_cloud(Engine *eng, Cloud &cloud, int step, bool do_sink) {
