@@ -42,7 +42,10 @@ endif
 # threads. The bulk and cage tests then exceed their time limit.
 # Non-atomic updates keep the same counters and the same tests.
 if get_option('b_coverage') and (cpp_id == 'gcc' or cpp_id == 'clang')
-  _args += ['-fprofile-update=single']
+  # single is not safe when a test calls the instrumented parser from
+  # two threads. That race stores a negative branch count. atomic
+  # updates do not.
+  _args += ['-fprofile-update=atomic']
 endif
 
 # Platform conditionals
