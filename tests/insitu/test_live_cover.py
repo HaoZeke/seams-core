@@ -58,7 +58,8 @@ def main():
     except SystemExit:
         pass
     check(True)
-    check(expect_error(lambda: None) is False)
+    quiet_call = expect_error(lambda: None)
+    check(quiet_call is False)
     check(expect_error(lambda: live.run(["/bin/false"], work)))
     folder = work / "unit"
     folder.mkdir(parents=True, exist_ok=True)
@@ -263,9 +264,15 @@ def main():
         "openmm_identity",
     ):
         result = getattr(live, name)()
-        ok = result[0] if isinstance(result, tuple) else result
-        if ok is False:
-            raise SystemExit(name + " failed")
+        if name == "run_lammps":
+            frames = result.get("frames") if isinstance(result, dict) else None
+            if isinstance(frames, bool) or not isinstance(frames, int) or frames < 1:
+                raise SystemExit(name + " returned %r" % (result,))
+        elif name in ("lammps_mpi_identity", "gromacs_mpi_identity"):
+            if not (isinstance(result, tuple) and len(result) == 2 and result[0] is True and isinstance(result[1], str)):
+                raise SystemExit(name + " returned %r" % (result,))
+        elif isinstance(result, bool) or not isinstance(result, int) or result < 1:
+            raise SystemExit(name + " returned %r" % (result,))
         print(name, "passed", flush=True)
     check(live.ipi_elapsed(False) > 0)
     check(live.ipi_elapsed(True) > 0)
@@ -305,7 +312,7 @@ def main():
     check(live.module_entry(["live.py", "--acceptance"]) == 0)
     saved_gmx = os.environ.pop("DSEAMS_GMX", None)
     note = live.gromacs_mpi_identity()
-    check(note[0] is False)
+    check(isinstance(note, tuple) and len(note) == 2 and note[0] is False and isinstance(note[1], str) and note[1] != "")
     if saved_gmx is not None:
         os.environ["DSEAMS_GMX"] = saved_gmx
     check(live.loop_time("Loop time of 1.5 on 1 procs for 2 steps\n") == 1.5)

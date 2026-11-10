@@ -211,7 +211,7 @@ with tempfile.TemporaryDirectory() as tmp:
     ver = subprocess.run([seams, "--version"], capture_output=True, text=True)
     ok = ver.returncode == 0 and "seams" in ver.stdout and ok
     ok = resolve_dump(root / "input" / "traj" / "not-deposited.lammpstrj") == tiny and ok
-    ok = run(["rings", str(water), "--cutoff", "not-a-number"], expect=0) is False and ok
+    ok = run(["rings", str(water), "--cutoff", "not-a-number"], expect=2) and ok
     off = os.environ.get("SEAMS_OFFLOAD")
     os.environ["SEAMS_OFFLOAD"] = "1"
     try:
