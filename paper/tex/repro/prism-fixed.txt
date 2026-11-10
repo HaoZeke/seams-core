@@ -1,0 +1,6 @@
+Filters: "a two-step shift*"
+RNG seed: 4175257971
+All tests passed (2 assertions in 1 test case)
+
+
+exit 0

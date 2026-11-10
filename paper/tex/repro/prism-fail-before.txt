@@ -1,0 +1,8 @@
+Filters: "a two-step shift*"
+RNG seed: 1674200799
+tests/cover_orient.cpp:556: failed: beginRot != 0 for: 0 != 0
+test cases: 1 | 1 failed
+assertions: 2 | 1 passed | 1 failed
+
+
+exit 42
