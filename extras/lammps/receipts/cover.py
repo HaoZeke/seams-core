@@ -111,17 +111,18 @@ def main():
     common = [
         gcovr, "--root", str(SRC), "--object-directory", str(WORK),
         "--filter", ".*fix_dseams\\.cpp", "--filter", ".*compute_dseams\\.cpp",
+        "--txt-metric", "line",
         "--txt-metric", "branch",
     ]
     line_patterns = [
-        r"if \(i < 0\)",
-        r"if \(i >= atom->nlocal\)",
-        r"if \(j < 0\)",
-        r"if \(j >= nall\)",
-        r"if \(want\)",
-        r"flat.size\(\)\) > begin",
-        r"total_atoms == 0",
-        "nprocs is already 1",
+        r"\s*if \(i < 0\)",
+        r"\s*if \(i >= atom->nlocal\)",
+        r"\s*if \(j < 0\)",
+        r"\s*if \(j >= nall\)",
+        r"\s*if \(want\)",
+        r"\s*if \(static_cast<int>\(flat.size\(\)\) > begin\)",
+        r"\s*\} else if \(total_atoms == 0\)",
+        r"\s*if \(comm->me != 0\) \{ // nprocs is already 1",
     ]
     raw_json = common + ["--json", str(WORK / "gcovr-raw.json"), "--txt", str(WORK / "gcovr-raw.txt")]
     log.line("command: gcovr raw branches")
