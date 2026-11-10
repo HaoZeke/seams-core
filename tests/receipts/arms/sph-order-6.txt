@@ -1,0 +1,42 @@
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/sphericart_ylm.cpp.o
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/sphericart_ylm.cpp.o
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+NINJA:0
+Randomness seeded to: 337880435
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+test_sphericart is a Catch2 v3.14.0 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+sphericart real Ylm have the same l=6 modulus as ylmAll
+-------------------------------------------------------------------------------
+../../tests/test_sphericart.cpp:38
+...............................................................................
+
+../../tests/test_sphericart.cpp:42: FAILED:
+  REQUIRE( seams::sphericart_ylm::ylmCartesian(6, xyz, 1, cart) == 0 )
+with expansion:
+  1 == 0
+
+-------------------------------------------------------------------------------
+sphericart accepts the implemented orders and rejects the rest
+-------------------------------------------------------------------------------
+../../tests/test_sphericart.cpp:58
+...............................................................................
+
+../../tests/test_sphericart.cpp:77: FAILED:
+  REQUIRE( seams::sphericart_ylm::ylmCartesian(6, pair, 2, both.data()) == 0 )
+with expansion:
+  1 == 0
+
+===============================================================================
+test cases:  4 |  2 passed | 2 failed
+assertions: 47 | 45 passed | 2 failed
+
+TEST:42

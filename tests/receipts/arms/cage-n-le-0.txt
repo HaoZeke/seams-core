@@ -1,0 +1,51 @@
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/cage_canon.cpp.o
+In file included from ../../src/cage_canon.cpp:19:
+   60 | #define _FILE_OFFSET_BITS 0
+      |         ^~~~~~~~~~~~~~~~~
+<command-line>: note: this is the location of the previous definition
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/cage_canon.cpp.o
+In file included from ../../src/cage_canon.cpp:19:
+   60 | #define _FILE_OFFSET_BITS 0
+      |         ^~~~~~~~~~~~~~~~~
+<command-line>: note: this is the location of the previous definition
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+NINJA:0
+Randomness seeded to: 1776085596
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+test_cage_canon is a Catch2 v3.14.0 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+rooted and coloured certificates follow the partition
+-------------------------------------------------------------------------------
+../../tests/test_cage_canon.cpp:74
+...............................................................................
+
+../../tests/test_cage_canon.cpp:81: FAILED:
+  {Unknown expression after the reported line}
+due to a fatal error condition:
+  SIGSEGV - Segmentation violation signal
+
+===============================================================================
+test cases:  6 |  5 passed | 1 failed
+assertions: 24 | 23 passed | 1 failed
+
+Stack trace (most recent call last):
+#11   Object "[0xffffffffffffffff]", at 0xffffffffffffffff, in 
+#10   Object "build/paper/tests/test_cage_canon", at 0x415c34, in 
+#9    Object "/cvmfs/software.eessi.io/versions/2026.06/compat/linux/x86_64/usr/lib64/libc.so.6", at 0x7fb5b663b318, in __libc_start_main
+#8    Object "/cvmfs/software.eessi.io/versions/2026.06/compat/linux/x86_64/usr/lib64/libc.so.6", at 0x7fb5b663b1f0, in 
+#7    Object "build/paper/tests/test_cage_canon", at 0x415bcb, in 
+#6    Object "build/paper/tests/test_cage_canon", at 0x4297b9, in 
+#5    Object "build/paper/tests/test_cage_canon", at 0x4292b8, in 
+#4    Object "build/paper/tests/test_cage_canon", at 0x4584d9, in 
+#3    Object "build/paper/tests/test_cage_canon", at 0x457dd7, in 
+#2    Object "build/paper/tests/test_cage_canon", at 0x419fd5, in 
+Segmentation fault (Signal sent by tkill() [0x3e8002d1063])
+TEST:-11

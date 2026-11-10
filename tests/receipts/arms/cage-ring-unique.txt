@@ -1,0 +1,61 @@
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/cage_canon.cpp.o
+In file included from ../../src/cage_canon.cpp:19:
+   60 | #define _FILE_OFFSET_BITS 0
+      |         ^~~~~~~~~~~~~~~~~
+<command-line>: note: this is the location of the previous definition
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/cage_canon.cpp.o
+In file included from ../../src/cage_canon.cpp:19:
+   60 | #define _FILE_OFFSET_BITS 0
+      |         ^~~~~~~~~~~~~~~~~
+<command-line>: note: this is the location of the previous definition
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+NINJA:0
+Randomness seeded to: 2540017278
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+test_cage_canon is a Catch2 v3.14.0 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+hexagonal prism certificate is stable under relabel
+-------------------------------------------------------------------------------
+../../tests/test_cage_canon.cpp:47
+...............................................................................
+
+../../tests/test_cage_canon.cpp:49: FAILED:
+  REQUIRE( cage::isHexagonalPrism(rings) )
+with expansion:
+  false
+
+-------------------------------------------------------------------------------
+no self-edge reaches the certificate
+-------------------------------------------------------------------------------
+../../tests/test_cage_canon.cpp:109
+...............................................................................
+
+../../tests/test_cage_canon.cpp:114: FAILED:
+  REQUIRE( cage::isHexagonalPrism(rings) )
+with expansion:
+  false
+
+-------------------------------------------------------------------------------
+degenerate rings keep the underlying edge
+-------------------------------------------------------------------------------
+../../tests/test_cage_canon.cpp:61
+...............................................................................
+
+../../tests/test_cage_canon.cpp:70: FAILED:
+  REQUIRE( cage::canonicalCertificate({{0, 1, 2}}) != cage::canonicalCertificate({{0}, {1}, {2}}) )
+with expansion:
+  "0-0-0" != "0-0-0"
+
+===============================================================================
+test cases:  6 |  3 passed | 3 failed
+assertions: 29 | 26 passed | 3 failed
+
+TEST:42

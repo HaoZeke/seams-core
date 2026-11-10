@@ -1,0 +1,43 @@
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/cage_canon.cpp.o
+In file included from ../../src/cage_canon.cpp:19:
+   60 | #define _FILE_OFFSET_BITS 0
+      |         ^~~~~~~~~~~~~~~~~
+<command-line>: note: this is the location of the previous definition
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+[4/4] Linking target tests/test_cage_canon
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/cage_canon.cpp.o
+In file included from ../../src/cage_canon.cpp:19:
+   60 | #define _FILE_OFFSET_BITS 0
+      |         ^~~~~~~~~~~~~~~~~
+<command-line>: note: this is the location of the previous definition
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+[4/4] Linking target tests/test_cage_canon
+NINJA:0
+Randomness seeded to: 347647396
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+test_cage_canon is a Catch2 v3.14.0 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+degenerate rings keep the underlying edge
+-------------------------------------------------------------------------------
+../../tests/test_cage_canon.cpp:61
+...............................................................................
+
+../../tests/test_cage_canon.cpp:67: FAILED:
+  REQUIRE( cage::canonicalCertificate({{0, 1}, {0}}) == edge )
+with expansion:
+  "0-0"
+  ==
+  "4000000000000000-8000000000000000"
+
+===============================================================================
+test cases:  6 |  5 passed | 1 failed
+assertions: 33 | 32 passed | 1 failed
+
+TEST:42

@@ -1,0 +1,31 @@
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/sphericart_ylm.cpp.o
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/sphericart_ylm.cpp.o
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+NINJA:0
+Randomness seeded to: 2971100516
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+test_sphericart is a Catch2 v3.14.0 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+sphericart accepts the implemented orders and rejects the rest
+-------------------------------------------------------------------------------
+../../tests/test_sphericart.cpp:58
+...............................................................................
+
+../../tests/test_sphericart.cpp:64: FAILED:
+  REQUIRE( seams::sphericart_ylm::ylmCartesian(6, nullptr, -1, nullptr) == 1 )
+due to unexpected exception with message:
+  cannot create std::vector larger than max_size()
+
+===============================================================================
+test cases: 4 | 3 passed | 1 failed
+assertions: 8 | 7 passed | 1 failed
+
+TEST:42

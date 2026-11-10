@@ -1,0 +1,41 @@
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/cage_canon.cpp.o
+In file included from ../../src/cage_canon.cpp:19:
+   60 | #define _FILE_OFFSET_BITS 0
+      |         ^~~~~~~~~~~~~~~~~
+<command-line>: note: this is the location of the previous definition
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/cage_canon.cpp.o
+In file included from ../../src/cage_canon.cpp:19:
+   60 | #define _FILE_OFFSET_BITS 0
+      |         ^~~~~~~~~~~~~~~~~
+<command-line>: note: this is the location of the previous definition
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+NINJA:0
+Randomness seeded to: 2046251081
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+test_cage_canon is a Catch2 v3.14.0 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+rooted and coloured certificates follow the partition
+-------------------------------------------------------------------------------
+../../tests/test_cage_canon.cpp:74
+...............................................................................
+
+../../tests/test_cage_canon.cpp:95: FAILED:
+  REQUIRE( ends != midColour )
+with expansion:
+  "2000000000000000-2000000000000000-c000000000000000"
+  !=
+  "2000000000000000-2000000000000000-c000000000000000"
+
+===============================================================================
+test cases:  6 |  5 passed | 1 failed
+assertions: 29 | 28 passed | 1 failed
+
+TEST:42

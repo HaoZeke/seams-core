@@ -1,0 +1,39 @@
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/cage_canon.cpp.o
+In file included from ../../src/cage_canon.cpp:19:
+   60 | #define _FILE_OFFSET_BITS 0
+      |         ^~~~~~~~~~~~~~~~~
+<command-line>: note: this is the location of the previous definition
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/cage_canon.cpp.o
+In file included from ../../src/cage_canon.cpp:19:
+   60 | #define _FILE_OFFSET_BITS 0
+      |         ^~~~~~~~~~~~~~~~~
+<command-line>: note: this is the location of the previous definition
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+NINJA:0
+Randomness seeded to: 4053929985
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+test_cage_canon is a Catch2 v3.14.0 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+an empty ring set has an empty certificate
+-------------------------------------------------------------------------------
+../../tests/test_cage_canon.cpp:54
+...............................................................................
+
+../../tests/test_cage_canon.cpp:57: FAILED:
+  REQUIRE_FALSE( cage::sameCertificate({}, {}) )
+with expansion:
+  !true
+
+===============================================================================
+test cases:  6 |  5 passed | 1 failed
+assertions: 34 | 33 passed | 1 failed
+
+TEST:42

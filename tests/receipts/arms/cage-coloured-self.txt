@@ -1,0 +1,54 @@
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/cage_canon.cpp.o
+In file included from ../../src/cage_canon.cpp:19:
+   60 | #define _FILE_OFFSET_BITS 0
+      |         ^~~~~~~~~~~~~~~~~
+<command-line>: note: this is the location of the previous definition
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/cage_canon.cpp.o
+In file included from ../../src/cage_canon.cpp:19:
+   60 | #define _FILE_OFFSET_BITS 0
+      |         ^~~~~~~~~~~~~~~~~
+<command-line>: note: this is the location of the previous definition
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+NINJA:0
+Randomness seeded to: 2978561621
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+test_cage_canon is a Catch2 v3.14.0 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+no self-edge reaches the certificate
+-------------------------------------------------------------------------------
+../../tests/test_cage_canon.cpp:109
+...............................................................................
+
+../../tests/test_cage_canon.cpp:122: FAILED:
+  REQUIRE( cage::canonicalCertificateColoured(2, withSelf, {0, 1}, 0) == cage::canonicalCertificateColoured(2, clean, {0, 1}, 0) )
+with expansion:
+  "c000000000000000-c000000000000000"
+  ==
+  "4000000000000000-8000000000000000"
+
+-------------------------------------------------------------------------------
+rooted and coloured certificates follow the partition
+-------------------------------------------------------------------------------
+../../tests/test_cage_canon.cpp:74
+...............................................................................
+
+../../tests/test_cage_canon.cpp:100: FAILED:
+  REQUIRE( cage::canonicalCertificateColoured(3, messy, {0, 0, 1}, 0) == cage::canonicalCertificateColoured(3, {{0, 1}}, {0, 0, 1}, 0) )
+with expansion:
+  "4000000000000000-c000000000000000-0"
+  ==
+  "4000000000000000-8000000000000000-0"
+
+===============================================================================
+test cases:  6 |  4 passed | 2 failed
+assertions: 31 | 29 passed | 2 failed
+
+TEST:42

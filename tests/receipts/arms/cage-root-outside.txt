@@ -1,0 +1,55 @@
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/cage_canon.cpp.o
+In file included from ../../src/cage_canon.cpp:19:
+   60 | #define _FILE_OFFSET_BITS 0
+      |         ^~~~~~~~~~~~~~~~~
+<command-line>: note: this is the location of the previous definition
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/cage_canon.cpp.o
+In file included from ../../src/cage_canon.cpp:19:
+   60 | #define _FILE_OFFSET_BITS 0
+      |         ^~~~~~~~~~~~~~~~~
+<command-line>: note: this is the location of the previous definition
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+NINJA:0
+Randomness seeded to: 2727779292
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+test_cage_canon is a Catch2 v3.14.0 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+rooted and coloured certificates follow the partition
+-------------------------------------------------------------------------------
+../../tests/test_cage_canon.cpp:74
+...............................................................................
+
+../../tests/test_cage_canon.cpp:100: FAILED:
+  {Unknown expression after the reported line}
+due to a fatal error condition:
+  SIGABRT - Abort (abnormal termination) signal
+
+===============================================================================
+test cases:  6 |  5 passed | 1 failed
+assertions: 33 | 32 passed | 1 failed
+
+/cvmfs/software.eessi.io/versions/2026.06/software/linux/x86_64/intel/sapphirerapids/software/GCCcore/15.2.0/include/c++/15.2.0/bits/stl_vector.h:1263: constexpr std::vector<_Tp, _Alloc>::reference std::vector<_Tp, _Alloc>::operator[](size_type) [with _Tp = int; _Alloc = std::allocator<int>; reference = int&; size_type = long unsigned int]: Assertion '__n < this->size()' failed.
+Stack trace (most recent call last):
+#16   Object "[0xffffffffffffffff]", at 0xffffffffffffffff, in 
+#15   Object "build/paper/tests/test_cage_canon", at 0x415c34, in 
+#14   Object "/cvmfs/software.eessi.io/versions/2026.06/compat/linux/x86_64/usr/lib64/libc.so.6", at 0x7fbfa3c3b318, in __libc_start_main
+#13   Object "/cvmfs/software.eessi.io/versions/2026.06/compat/linux/x86_64/usr/lib64/libc.so.6", at 0x7fbfa3c3b1f0, in 
+#12   Object "build/paper/tests/test_cage_canon", at 0x415bcb, in 
+#11   Object "build/paper/tests/test_cage_canon", at 0x4297b9, in 
+#10   Object "build/paper/tests/test_cage_canon", at 0x4292b8, in 
+#9    Object "build/paper/tests/test_cage_canon", at 0x4584d9, in 
+#8    Object "build/paper/tests/test_cage_canon", at 0x457dd7, in 
+#7    Object "build/paper/tests/test_cage_canon", at 0x41b244, in 
+#2    Object "/cvmfs/software.eessi.io/versions/2026.06/compat/linux/x86_64/usr/lib64/libc.so.6", at 0x7fbfa3c39360, in abort
+#1    Object "/cvmfs/software.eessi.io/versions/2026.06/compat/linux/x86_64/usr/lib64/libc.so.6", at 0x7fbfa3c512e5, in gsignal
+#0    Object "/cvmfs/software.eessi.io/versions/2026.06/compat/linux/x86_64/usr/lib64/libc.so.6", at 0x7fbfa3ca75dc, in 
+Aborted (Signal sent by tkill() 2953931 1000)
+TEST:-6
