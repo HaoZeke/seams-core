@@ -204,13 +204,22 @@ with tempfile.TemporaryDirectory() as tmp:
     ok = run(["pairs", str(water), "--site", "=cationHead", *one], expect=2, message="site spec token '=cationHead' is not key=value") and ok
     ok = run(["chill-plus", str(water), "--graph", "knn-union"], expect=2, message="CHILL and CHILL+ take --graph cutoff or mutual") and ok
     ok = run(["rings", str(empty), "--frame", "1", "--last", "2", "--strict-input"], expect=2, message="input frame 2 contains no atoms") and ok
+    def text_rejected(code, text, needle):
+        if code != 0 or needle not in text:
+            raise SystemExit(text)
+
     blank_proc = subprocess.run(
         [seams, "rings", str(blank), "--frame", "1", "--last", "1"],
         capture_output=True, text=True,
     )
     blank_text = blank_proc.stdout + blank_proc.stderr
-    if blank_proc.returncode != 0 or "Frame 1 not found" not in blank_text:
-        raise SystemExit("blank.con " + blank_text)
+    text_rejected(blank_proc.returncode, blank_text, "Frame 1 not found")
+    seen = ""
+    try:
+        text_rejected(0, "rings 3:0", "Frame 1 not found")
+    except SystemExit as err:
+        seen = str(err)
+    assert seen == "rings 3:0"
     ok = run(["chill-plus", str(water), "--family", "not-a-family"], expect=2, message="Usage:") and ok
     ok = run(["rdf", str(water), "--types", "1,2,3"], expect=2, message="Usage:") and ok
     ok = run(["rdf", str(water), "--types", "a,b"], expect=2, message="Usage:") and ok
@@ -294,8 +303,19 @@ with tempfile.TemporaryDirectory() as tmp:
     ]
     for args, needle in observed:
         proc = subprocess.run([seams, *args], capture_output=True, text=True)
-        text = proc.stdout + proc.stderr
-        if proc.returncode != 0 or needle not in text:
-            raise SystemExit("observed %s\n%s" % (args[0], text[:400]))
+        text_rejected(proc.returncode, proc.stdout + proc.stderr, needle)
+
+    missed = ""
+    try:
+        run(["rings", str(tiny), "--frame", "1", "--last", "1"], expect=2)
+    except SystemExit as err:
+        missed = str(err)
+    assert "want 2" in missed
+    missed = ""
+    try:
+        run(["domains", str(tiny)], expect=2, message="not-the-domains-text")
+    except SystemExit as err:
+        missed = str(err)
+    assert missed == "missing reject message"
 
 sys.exit(0 if ok else 1)
