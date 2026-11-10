@@ -121,7 +121,67 @@ def main():
     live_env["DSEAMS_LMP_INTREE"] = str(BUILD / "lammps-intree" / "lmp")
     live_env["DSEAMS_PLUGIN"] = str(BUILD / "plugin" / "libdseams_lammps.so")
     live_env["DSEAMS_MPIRUN"] = os.environ.get("MPIRUN", os.environ.get("DSEAMS_MPIRUN", ""))
-    live_env["LD_LIBRARY_PATH"] = str(BUILD / "lammps-intree") + ":" + str(BUILD / "seams" / "src") + ":" + live_env.get("LD_LIBRARY_PATH", "")
+    gmx = BUILD / "gromacs-dseams" / "bin" / "gmx_mpi"
+    md_bin = BUILD / "md-prefix" / "bin"
+    md_bin.mkdir(parents=True, exist_ok=True)
+    if gmx.is_file():
+        live_env["DSEAMS_GMX"] = str(gmx)
+        live_env["DSEAMS_GMX_MPIRUN"] = os.environ.get("MPIRUN", os.environ.get("DSEAMS_MPIRUN", ""))
+        data = os.environ.get("GMXDATA", "")
+        if data:
+            live_env["GMXDATA"] = data
+        link = md_bin / "gmx"
+        if link.is_symlink() or link.exists():
+            link.unlink()
+        link.symlink_to(gmx)
+        top = Path(data) / "top" if data else Path()
+        if top.is_dir():
+            share = BUILD / "md-prefix" / "share" / "gromacs"
+            share.mkdir(parents=True, exist_ok=True)
+            dest = share / "top"
+            if dest.is_symlink() or dest.exists():
+                dest.unlink()
+            dest.symlink_to(top)
+    insitu = BUILD / "seams" / "seams-insitu"
+    imd = BUILD / "seams" / "seams-gromacs-imd"
+    clock = BUILD / "seams" / "frame_clock"
+    if insitu.is_file():
+        live_env["SEAMS_INSITU_EXE"] = str(insitu)
+    if imd.is_file():
+        live_env["SEAMS_GRO_IMD_EXE"] = str(imd)
+    if clock.is_file():
+        live_env["DSEAMS_FRAME_CLOCK"] = str(clock)
+    mpi_prefix = BUILD / "lmp-mpi"
+    (mpi_prefix / "bin").mkdir(parents=True, exist_ok=True)
+    (mpi_prefix / "lib").mkdir(parents=True, exist_ok=True)
+    mpirun_bin = Path(os.environ.get("MPIRUN", os.environ.get("DSEAMS_MPIRUN", "mpirun")))
+    if mpirun_bin.is_file():
+        (mpi_prefix / "bin" / "mpirun").unlink(missing_ok=True)
+        (mpi_prefix / "bin" / "mpirun").symlink_to(mpirun_bin)
+    intree = BUILD / "lammps-intree" / "lmp"
+    if intree.is_file():
+        (mpi_prefix / "bin" / "lmp_mpi").unlink(missing_ok=True)
+        (mpi_prefix / "bin" / "lmp_mpi").symlink_to(intree)
+    for so in (BUILD / "lammps-intree").glob("*.so*"):
+        dest = mpi_prefix / "lib" / so.name
+        if dest.is_symlink() or dest.exists():
+            dest.unlink()
+        dest.symlink_to(so)
+    plugin = BUILD / "plugin" / "libdseams_lammps.so"
+    if plugin.is_file():
+        live_env["DSEAMS_LMP_MPI_PREFIX"] = str(mpi_prefix)
+        live_env["DSEAMS_LMP_MPI_PLUGIN"] = str(plugin)
+    live_env["LD_LIBRARY_PATH"] = ":".join(
+        part
+        for part in (
+            str(BUILD / "gromacs-dseams" / "lib"),
+            str(BUILD / "lammps-intree"),
+            str(BUILD / "seams" / "src"),
+            str(BUILD / "seams" / "chemfiles-prefix" / "lib"),
+            live_env.get("LD_LIBRARY_PATH", ""),
+        )
+        if part
+    )
     prove_live_report()
     code = log.run(
         [py, "-m", "coverage", "run", "--branch", "--append", str(SRC / "tests" / "insitu" / "test_live_cover.py")],
