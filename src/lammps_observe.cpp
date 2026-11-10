@@ -593,9 +593,6 @@ std::vector<int> timesteps_of(const std::string &path, bool *ok) {
 
 int file_sink(const seams_insitu_result *result, void *user) {
   auto *file = static_cast<FILE *>(user);
-  if (file == nullptr || result == nullptr || result->text == nullptr) {
-    return 1;
-  }
   const auto wrote = std::fwrite(result->text, 1, static_cast<std::size_t>(result->text_len), file);
   if (wrote != static_cast<std::size_t>(result->text_len)) {
     return 1;
