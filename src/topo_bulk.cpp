@@ -365,9 +365,7 @@ void partnersOf(const std::vector<std::vector<int>> &rings,
   const int tripMark = ++scratch.tripTick;
   for (int t = 0; t < 3; ++t) {
     const int atom = tripRight[t];
-    if (atom >= 0 && atom < nAtoms) {
-      scratch.tripSeen[static_cast<size_t>(atom)] = tripMark;
-    }
+    scratch.tripSeen[static_cast<size_t>(atom)] = tripMark;
   }
   for (int j = 0; j < nRight; ++j) {
     const int ring = right[static_cast<size_t>(j)];
@@ -709,7 +707,7 @@ bool ddcFourteen(const std::vector<std::vector<int>> &rings,
   };
   const int eqMark = fresh();
   for (const int atom : equatorial) {
-    if (atom < 0 || atom >= nAtoms || stamp[static_cast<size_t>(atom)] == eqMark) {
+    if (stamp[static_cast<size_t>(atom)] == eqMark) {
       return false;
     }
     stamp[static_cast<size_t>(atom)] = eqMark;
@@ -794,9 +792,7 @@ void ddcKeepRoom(const std::vector<std::vector<int>> &rings,
   }
   const int eqMark = ++eqTick;
   for (const int atom : equatorial) {
-    if (atom >= 0 && atom < nAtoms) {
-      eqStamp[static_cast<size_t>(atom)] = eqMark;
-    }
+    eqStamp[static_cast<size_t>(atom)] = eqMark;
   }
   thread_local std::array<IntBuf, 6> kept;
   for (int k = 0; k < 6; ++k) {
@@ -935,7 +931,7 @@ void ddcKeepRoom(const std::vector<std::vector<int>> &rings,
     std::vector<int> bestKey;
     std::vector<int> bestRings;
     auto tryPair = [&](const DdcChain &e, const DdcChain &o) {
-      if ((ddcPartnerMask(e.middles) & o.middles) == 0U || !ddcDistinct(e, o)) {
+      if (!ddcDistinct(e, o)) {
         return;
       }
       int key[6];
