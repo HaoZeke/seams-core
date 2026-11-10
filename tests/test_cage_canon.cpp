@@ -2,6 +2,7 @@
 
 #include <cage_canon.hpp>
 
+#include <thread>
 #include <vector>
 
 TEST_CASE("nautyAvailable matches the compile-time flag", "[nauty]") {
@@ -105,6 +106,29 @@ TEST_CASE("rooted and coloured certificates follow the partition", "[nauty]") {
           cage::canonicalCertificateColoured(3, path, {0, 0, 1}, -1));
   REQUIRE(cage::canonicalCertificateColoured(65, path, {0, 1, 2}, 0).empty());
   REQUIRE(cage::canonicalCertificateColoured(0, {}, {}, -1).empty());
+}
+
+TEST_CASE("two workers agree on one certificate", "[nauty]") {
+  const auto rings = hexPrismRings();
+  const std::string once = cage::canonicalCertificate(rings);
+  REQUIRE_FALSE(once.empty());
+  std::string left;
+  std::string right;
+  std::thread a([&] {
+    for (int i = 0; i < 40; i++) {
+      left = cage::canonicalCertificate(rings);
+    }
+  });
+  std::thread b([&] {
+    for (int i = 0; i < 40; i++) {
+      right = cage::canonicalCertificateRooted(3, {{0, 1}, {1, 2}}, 0);
+    }
+  });
+  a.join();
+  b.join();
+  REQUIRE(left == once);
+  REQUIRE(right == cage::canonicalCertificateRooted(3, {{0, 1}, {1, 2}}, 0));
+  REQUIRE(cage::isHexagonalPrism(rings));
 }
 
 TEST_CASE("no self-edge reaches the certificate", "[nauty]") {

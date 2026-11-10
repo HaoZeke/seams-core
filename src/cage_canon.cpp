@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <map>
+#include <mutex>
 #include <sstream>
 #include <vector>
 
@@ -47,6 +48,10 @@ std::string densenautyCertificate(int n, const std::vector<std::pair<int, int>> 
   if (n <= 0 || n > MAXN) {
     return {};
   }
+  // densenauty keeps its workspace in process globals. Two frame workers
+  // calling it at once free the same block. One lock covers every entry.
+  static std::mutex nautyWorkspace;
+  std::lock_guard<std::mutex> hold(nautyWorkspace);
   DEFAULTOPTIONS_GRAPH(options);
   statsblk stats;
   const int m = SETWORDSNEEDED(n);
