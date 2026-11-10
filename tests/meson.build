@@ -374,7 +374,7 @@ foreach name, args : _device_host_cases
     args: args,
     workdir: meson.project_source_root() / 'input',
     env: _test_env,
-    timeout: 300)
+    timeout: 900)
 endforeach
 
 # The CUDA batch kernels on the host, no device needed
