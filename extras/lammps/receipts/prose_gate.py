@@ -42,6 +42,15 @@ def other_findings(text, skip_we):
     return found
 
 
+def run_guard(cmd):
+    return subprocess.run(
+        cmd,
+        text=True,
+        capture_output=True,
+        cwd=os.environ.get("PROSE_CWD") or None,
+    )
+
+
 def log_proc(log, label, proc):
     log.line("%s exit %d" % (label, proc.returncode))
     if proc.stdout:
@@ -85,13 +94,13 @@ def main():
             failed += 1
         if proc.returncode != 0:
             failed += 1
-        proc = subprocess.run(guard_cmd(paper, ["body=@%s" % path]), text=True, capture_output=True)
+        proc = run_guard(guard_cmd(paper, ["body=@%s" % path]))
         log_proc(log, "rohit-paper %s" % path.name, proc)
         if other_findings((proc.stdout or "") + (proc.stderr or ""), False) or proc.returncode != 0:
             failed += 1
         core = note_core(log)
         if core:
-            proc = subprocess.run(guard_cmd(core, ["body=@%s" % path]), text=True, capture_output=True)
+            proc = run_guard(guard_cmd(core, ["body=@%s" % path]))
             log.line("paper-core %s exit %d" % (path.name, proc.returncode))
             if proc.returncode != 0:
                 failed += 1
@@ -112,22 +121,19 @@ def main():
             if proc.returncode != 0 or "would reformat" in (proc.stdout or ""):
                 failed += 1
                 log.line(subject)
-            proc = subprocess.run(
-                guard_cmd(commit_profile, ["Subject=%s" % subject, "Body=@%s" % body_path]),
-                text=True, capture_output=True,
-            )
+            proc = run_guard(guard_cmd(commit_profile, ["Subject=%s" % subject, "Body=@%s" % body_path]))
             log_proc(log, "commit-msg %s %d" % (repo.name, index), proc)
             if proc.returncode != 0:
                 failed += 1
                 log.line(subject)
-            proc = subprocess.run(guard_cmd(paper, ["body=@%s" % target]), text=True, capture_output=True)
+            proc = run_guard(guard_cmd(paper, ["body=@%s" % target]))
             log_proc(log, "rohit-paper %s %d" % (repo.name, index), proc)
             if other_findings((proc.stdout or "") + (proc.stderr or ""), True):
                 failed += 1
                 log.line(subject)
             core = note_core(log)
             if core:
-                proc = subprocess.run(guard_cmd(core, ["body=@%s" % target]), text=True, capture_output=True)
+                proc = run_guard(guard_cmd(core, ["body=@%s" % target]))
                 log.line("paper-core %s %d exit %d" % (repo.name, index, proc.returncode))
                 if proc.returncode != 0:
                     failed += 1
