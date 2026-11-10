@@ -291,23 +291,48 @@ def raise_exit(value):
     raise SystemExit(value)
 
 
+def require_raised(fn, needle):
+    try:
+        fn()
+    except SystemExit as err:
+        require_text(err, needle)
+    else:
+        raise SystemExit("no exit")
+
+
+def swallow_exit(value="should-fail"):
+    try:
+        if value is not None:
+            raise_exit(value)
+    except SystemExit:
+        return
+    return
+
+
+def demand(caught, label):
+    if not caught:
+        raise SystemExit(label)
+
+
 def drill_exit_checks():
+    require_raised(lambda: expect_exit(lambda: None, 1, "box "), "missing exit")
+    require_raised(lambda: expect_exit(lambda: raise_exit("nope"), 1, "box "), "want")
+    require_raised(lambda: expect_exit(lambda: raise_exit(2), 1, "box "), "want")
+    require_raised(lambda: require_text(SystemExit(3), "nope"), "missing")
+    swallow_exit(None)
+    demand(True, "broken variant was not caught")
     try:
-        expect_exit(lambda: None, 1, "box ")
+        demand(False, "broken variant was not caught")
     except SystemExit as err:
-        require_text(err, "missing exit")
+        require_text(err, "broken variant")
+    caught = False
     try:
-        expect_exit(lambda: raise_exit("nope"), 1, "box ")
+        require_raised(swallow_exit, "unused")
     except SystemExit as err:
-        require_text(err, "want")
-    try:
-        expect_exit(lambda: raise_exit(2), 1, "box ")
-    except SystemExit as err:
-        require_text(err, "want")
-    try:
-        require_text(SystemExit(3), "nope")
-    except SystemExit as err:
-        require_text(err, "missing")
+        require_text(err, "no exit")
+        caught = True
+    demand(caught, "broken variant was not caught")
+    print("broken variant caught", flush=True)
 
 
 def check_dump(path, box, cutoff):
