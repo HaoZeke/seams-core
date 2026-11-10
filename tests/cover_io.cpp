@@ -16,9 +16,13 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <poll.h>
+#include <spawn.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+extern char **environ;
 
 #include <atomic>
 #include <cstdint>
@@ -33,8 +37,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-extern "C" void __gcov_reset() __attribute__((weak));
 
 namespace fs = std::filesystem;
 
@@ -153,41 +155,65 @@ Proc runSeams(const std::vector<std::string> &args) {
   REQUIRE(::pipe(outPipe) == 0);
   REQUIRE(::pipe(errPipe) == 0);
   const std::string bin = seamsBinary().string();
-  const pid_t pid = ::fork();
-  REQUIRE(pid >= 0);
-  if (pid == 0) {
-    ::dup2(outPipe[1], STDOUT_FILENO);
-    ::dup2(errPipe[1], STDERR_FILENO);
-    ::close(outPipe[0]);
-    ::close(outPipe[1]);
-    ::close(errPipe[0]);
-    ::close(errPipe[1]);
-    ::unsetenv("DSEAMS_PHASE");
-    ::setenv("OMP_NUM_THREADS", "1", 1);
-    // This image was forked from a coverage run. Drop its counters so
-    // the exec'd seams process is the one that records a profile.
-    if (__gcov_reset != nullptr) {
-      __gcov_reset();
-    }
-    std::vector<char *> argv;
-    argv.push_back(const_cast<char *>(bin.c_str()));
-    for (const auto &arg : args) {
-      argv.push_back(const_cast<char *>(arg.c_str()));
-    }
-    argv.push_back(nullptr);
-    ::execv(bin.c_str(), argv.data());
-    _exit(127);
+  posix_spawn_file_actions_t actions;
+  REQUIRE(::posix_spawn_file_actions_init(&actions) == 0);
+  REQUIRE(::posix_spawn_file_actions_adddup2(&actions, outPipe[1], STDOUT_FILENO) == 0);
+  REQUIRE(::posix_spawn_file_actions_adddup2(&actions, errPipe[1], STDERR_FILENO) == 0);
+  REQUIRE(::posix_spawn_file_actions_addclose(&actions, outPipe[0]) == 0);
+  REQUIRE(::posix_spawn_file_actions_addclose(&actions, outPipe[1]) == 0);
+  REQUIRE(::posix_spawn_file_actions_addclose(&actions, errPipe[0]) == 0);
+  REQUIRE(::posix_spawn_file_actions_addclose(&actions, errPipe[1]) == 0);
+  std::vector<char *> argv;
+  argv.push_back(const_cast<char *>(bin.c_str()));
+  for (const auto &arg : args) {
+    argv.push_back(const_cast<char *>(arg.c_str()));
   }
+  argv.push_back(nullptr);
+  std::vector<std::string> envStore;
+  for (char **row = environ; row != nullptr && *row != nullptr; ++row) {
+    const std::string item(*row);
+    if (item.rfind("DSEAMS_PHASE=", 0) == 0 || item.rfind("OMP_NUM_THREADS=", 0) == 0) {
+      continue;
+    }
+    envStore.emplace_back(*row);
+  }
+  envStore.emplace_back("OMP_NUM_THREADS=1");
+  std::vector<char *> envp;
+  envp.reserve(envStore.size() + 1);
+  for (auto &row : envStore) {
+    envp.push_back(row.data());
+  }
+  envp.push_back(nullptr);
+  pid_t pid = 0;
+  const int spawned = ::posix_spawn(&pid, bin.c_str(), &actions, nullptr, argv.data(), envp.data());
+  ::posix_spawn_file_actions_destroy(&actions);
   ::close(outPipe[1]);
   ::close(errPipe[1]);
+  REQUIRE(spawned == 0);
   Proc proc;
+  pollfd fds[2] = {{outPipe[0], POLLIN, 0}, {errPipe[0], POLLIN, 0}};
+  bool openOut = true;
+  bool openErr = true;
   char buffer[512];
-  ssize_t got = 0;
-  while ((got = ::read(outPipe[0], buffer, sizeof(buffer))) > 0) {
-    proc.out.append(buffer, static_cast<std::size_t>(got));
-  }
-  while ((got = ::read(errPipe[0], buffer, sizeof(buffer))) > 0) {
-    proc.err.append(buffer, static_cast<std::size_t>(got));
+  while (openOut || openErr) {
+    const int ready = ::poll(fds, 2, -1);
+    REQUIRE(ready >= 0);
+    for (int slot = 0; slot < 2; ++slot) {
+      if ((fds[slot].revents & (POLLIN | POLLHUP | POLLERR)) == 0) {
+        continue;
+      }
+      const ssize_t got = ::read(fds[slot].fd, buffer, sizeof(buffer));
+      if (got > 0) {
+        (slot == 0 ? proc.out : proc.err).append(buffer, static_cast<std::size_t>(got));
+      } else {
+        if (slot == 0) {
+          openOut = false;
+        } else {
+          openErr = false;
+        }
+        fds[slot].fd = -1;
+      }
+    }
   }
   ::close(outPipe[0]);
   ::close(errPipe[0]);
@@ -1122,15 +1148,6 @@ TEST_CASE("language bindings nulls and graph names", "[cover_io]") {
   REQUIRE(lang.nframes(twin.c_str()) >= 1);
   const auto missingXyz = dir / "missing.xyz";
   const int missingFrames = lang.nframes(missingXyz.c_str());
-  if (!(missingFrames < 0)) {
-    std::cerr << "missing-xyz frames " << missingFrames
-              << " exists " << fs::exists(missingXyz)
-              << " path " << missingXyz.string() << "\n";
-    if (fs::is_regular_file(missingXyz)) {
-      std::cerr << "missing-xyz bytes " << fs::file_size(missingXyz) << "\n";
-      std::cerr << "missing-xyz body " << readFile(missingXyz) << "\n";
-    }
-  }
   REQUIRE(missingFrames < 0);
   REQUIRE(lang.read(nullptr, 1, -1) == nullptr);
   void *read = lang.read(dump.c_str(), 1, -1);
@@ -1277,20 +1294,15 @@ TEST_CASE("cli edges for ranges, axes, and unclassified ice", "[cover_io]") {
   const auto xyz = dir / "late.xyz";
   writeText(xyz, "1\n\nO 0 0 0\n");
   auto late = runSeams({"read", xyz.string(), "--frame", "2", "--last", "3"});
-  if (!(late.exited && late.status == 2)) {
-    std::cerr << "late-xyz status " << late.status
-              << " exited " << late.exited
-              << " path " << xyz.string() << "\n";
-    std::cerr << "late-xyz out " << late.out << "\n";
-    std::cerr << "late-xyz err " << late.err << "\n";
-    if (fs::is_regular_file(xyz)) {
-      std::cerr << "late-xyz bytes " << fs::file_size(xyz) << "\n";
-      std::cerr << "late-xyz body " << readFile(xyz) << "\n";
-    }
-  }
   REQUIRE(late.exited);
   REQUIRE(late.status == 2);
   REQUIRE(late.err.find("past the last frame") != std::string::npos);
+  // A start after the requested end is an empty window, not a missing frame.
+  auto inverted = runSeams({"read", xyz.string(), "--frame", "3", "--last", "1"});
+  REQUIRE(inverted.exited);
+  REQUIRE(inverted.status == 0);
+  REQUIRE(inverted.out.empty());
+  REQUIRE(inverted.err.empty());
 
   const auto nodot = dir / "nodot";
   writeText(nodot, dumpText(1, "1 1 0 0 0\n"));
