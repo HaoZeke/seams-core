@@ -1,0 +1,65 @@
+# Filled from templates/in.liquid.lammps in d-SEAMS/dseams2_repro.
+# Each value is marked recovered or new in the comment above it.
+#
+# Recovered from that template, which hard-codes them: units real,
+# atom_style atomic, pair_style sw, the mW.sw coeff line, mass 18.015,
+# the 350 K melt, timestep 5 then 10, the neighbor settings, the
+# minimize line, and the NPT thermostat and barostat time constants.
+# mW.sw is the potential file from the same templates directory.
+#
+# Recovered molecule count and box: 4096 and 49.62270434822753 angstrom,
+# the liquid 1e3 frame in paper/tex/figures/generate_figure_data.py.
+# pack.data is a random packing at that length. The hard core of 2.4
+# angstrom and generator seed 1 are the packing rule and the default
+# generator seed in d-SEAMS/dseams2_repro scripts/seed_ice.py.
+#
+# Temperature 215 K is the temperature in the name of
+# data/mW_liquid_T215_512.data in that repository. The paper does not
+# print 215 next to the 4096-molecule frame, so using it here is that
+# name applied at the paper's molecule count.
+#
+# New: pressure 1.0. The liquid template names P and does not store a
+# number. In units real that number is atmospheres.
+#
+# New split of a recovered sum: steps_melt 1000 and steps_eq 3124.
+# Their sum is 4124, the timestep field in the write_data header of
+# data/mW_liquid_T215_512.data (LAMMPS 22 Jul 2025). That header does
+# not say how the steps were divided.
+#
+# New: velocity seed 1. The template names the seed and stores no integer.
+# 1 is the same integer as the packing generator default, not a logged
+# velocity seed.
+#
+# New: a further 50000 steps at the same temperature and pressure.
+# The 1000 plus 3124 schedule, whose sum is the recovered timestep
+# field, leaves the pressure swinging by hundreds of atmospheres.
+# lammps-short.log is that schedule and is not the frame below.
+# These 50000 steps are not in the template or in that header.
+#
+# New: write_dump of the final frame, atom ids sorted. The template
+# writes a data file and no trajectory. liquid.lammpstrj is that frame.
+
+units           real
+atom_style      atomic
+boundary        p p p
+read_data       pack.data
+pair_style      sw
+pair_coeff      * * mW.sw mW
+mass            1 18.015
+velocity        all create 350.0 1 dist gaussian
+timestep        5.0
+neighbor        2.0 bin
+neigh_modify    every 1 delay 0 check yes
+minimize        1.0e-4 1.0e-6 500 5000
+fix             melt all nvt temp 350.0 350.0 500.0
+run             1000
+unfix           melt
+timestep        10.0
+fix             npt all npt temp 215.0 215.0 1000.0 iso 1.0 1.0 10000.0
+thermo          1000
+thermo_style    custom step temp press vol pe
+run             3124
+# The run above ends the recovered-length schedule. The run below is new.
+run             50000
+write_dump      all custom liquid.lammpstrj id type x y z modify sort id
+write_data      liquid.data nocoeff

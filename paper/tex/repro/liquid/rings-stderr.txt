@@ -1,0 +1,19 @@
+At line 60 of file wbonds.f90 (unit = 30, file = 'bonds/bond-prop.dat')
+Fortran runtime error: Missing comma between descriptors
+(/, "Existence of a bond between two atoms i (α) and j (β)",              /, "
+                                                                                                                                                                                                                                                           ^
+
+Error termination. Backtrace:
+
+Program received signal SIGSEGV: Segmentation fault - invalid memory reference.
+
+Backtrace for this error:
+#0  0x7f5ebe93b40f in ???
+#1  0x7f5ebf038368 in x86_64_fallback_frame_state
+	at ./md-unwind-support.h:57
+#2  0x7f5ebf038368 in uw_frame_state_for
+	at ../../../libgcc/unwind-dw2.c:1016
+#3  0x7f5ebf03a365 in _Unwind_Backtrace
+	at ../../../libgcc/unwind.inc:303
+#4  0x7f5ebef1df83 in backtrace_full
+	at ../../../libbacktrace/backtrace.c:127

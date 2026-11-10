@@ -542,6 +542,15 @@ in the test data of the program.
 The comparator campaign builds ideal ice~Ic and ice~Ih of \num{1000},
 \num{10648}, \num{97336} and \num{1000000} molecules with the same
 oxygen distance.
+The liquid frame is one LAMMPS dump of \num{4096} mW molecules.
+The dump whose SHA-256 is
+\texttt{d02023892336c43cf409da8ee4b7dee2b8f30f94ee9e76a1c1d1ae99e646ea2b}
+could not be fetched, so this frame is a fresh regeneration that
+replaces it.
+Its SHA-256 is
+\texttt{c217f92d992baa39a99bda498dfd5576ba1d9bb8becb40acc3e22fd001c0cee9},
+and the input that produced it records which settings were recovered
+and which are new.
 The confined frame is the \num{250} oxygen atoms of the first frame of
 the deposited square-tube trajectory~\cite{goswami2019nanotubedata},
 replicated to \num{1000}, \num{10000}, \num{100000} and \num{1000000}
@@ -973,12 +982,12 @@ each system; every larger frame, a replica of the smallest, gives the
 same percentage wherever both codes completed.}
 \label{tab:s-agree}
 \small
-\begin{tabular}{@{}llrrrr@{}}
+\begin{tabular}{@{}llrrr@{}}
 \toprule
 d-SEAMS & Other code & Ice~Ic & Ice~Ih & Confined \\
 \midrule
 CHILL+ & OVITO CHILL+ & \dsv{a@ic@1e3@dseams-chill@ovito-chill@pct} & \dsv{a@ih@1e3@dseams-chill@ovito-chill@pct} & \dsv{a@confined@1e3@dseams-chill@ovito-chill@pct} \\
- & CHILL+ library & \dsv{a@ic@1e3@dseams-chill@palmer-chill@pct} & \dsv{a@ih@1e3@dseams-chill@palmer-chill@pct} & & \\
+ & CHILL+ library & \dsv{a@ic@1e3@dseams-chill@palmer-chill@pct} & \dsv{a@ih@1e3@dseams-chill@palmer-chill@pct} & \\
 \addlinespace
 $q_6$ & freud & \dsv{a@ic@1e3@dseams-q6@freud-q6@pct} & \dsv{a@ih@1e3@dseams-q6@freud-q6@pct} & \dsv{a@confined@1e3@dseams-q6@freud-q6@pct} \\
  & pyscal & \dsv{a@ic@1e3@dseams-q6@pyscal-q6@pct} & \dsv{a@ih@1e3@dseams-q6@pyscal-q6@pct} & \dsv{a@confined@1e3@dseams-q6@pyscal-q6@pct} \\

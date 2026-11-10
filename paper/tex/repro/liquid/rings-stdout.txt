@@ -1,0 +1,28 @@
+
+***************************************************************
+
+                      RINGS v1.3 Start
+
+     Started on 10/11/2026 at 07:10:17 MET +00:00 from GMT
+
+***************************************************************
+
+
+==========      Options      ==========
+
+  =>  Periodic Boundary Conditions applied
+  =>  Atomic positions in real coordinates
+  =>  Calculate rings statistics
+    =>  Using all atoms as nodes
+    =>  Primitive rings statistics
+ Changing option =>  Bond properties are needed to compute rings statistics
+
+========      End Options      ========
+
+
+
+********************* Bonding Properties **********************
+
+              => Allocation of memory complete <= 
+
+Writting of bonding properties file: bonds/bond-prop.dat

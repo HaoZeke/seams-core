@@ -744,9 +744,18 @@ and times the rings of up to seven members and both cage searches.
 In the comparison with other codes, each code runs in a worker process
 of its own, and its timer includes its own neighbour search, so every
 timing covers the same path from positions to labels.
-The frames are ideal ice~Ic and ice~Ih and the square-tube ice of a
-deposited trajectory~\cite{goswami2019nanotubedata}, each replicated
-from about a thousand to about a million molecules.
+The frames are ideal ice~Ic and ice~Ih, a regenerated mW liquid of
+\num{4096} molecules, and the square-tube ice of a deposited
+trajectory~\cite{goswami2019nanotubedata}, each crystal and the tube
+replicated from about a thousand to about a million molecules.
+The liquid dump whose SHA-256 is
+\texttt{d02023892336c43cf409da8ee4b7dee2b8f30f94ee9e76a1c1d1ae99e646ea2b}
+could not be fetched.
+The frame used here is a fresh LAMMPS run that replaces it.
+The input, the log and the new dump are
+\texttt{paper/tex/repro/liquid}.
+The new dump SHA-256 is
+\texttt{c217f92d992baa39a99bda498dfd5576ba1d9bb8becb40acc3e22fd001c0cee9}.
 Table~\ref{tab:codes} lists the codes and operations, and
 Section~\sref{sec:s-protocol} gives the frames, the call counts, the
 time limits and the settings of each code.
@@ -981,6 +990,30 @@ The RINGS~1.3.5 source archive is
 \url{https://sourceforge.net/projects/rings-code/files/rings-code/rings-code-v1.3.5/rings-code-v1.3.5.tar.gz/download}
 with SHA-256
 \texttt{a7cdaf60533e8b36944997692aa8f109d94a8069fbf7470f01536babe0f359ce}.
+On the regenerated liquid, at the same cutoff, d-SEAMS counts
+\num{1050} three-membered rings, \num{1379} four-membered rings,
+\num{3396} five-membered rings and \num{3226} six-membered rings.
+matscipy~1.3.1 returns those four counts when the maximum length is
+\num{8}.
+The same call with maximum length \num{7} raises \texttt{ValueError}
+in that release, because the array it allocates is one entry short of
+a ring of that length.
+RINGS~1.3.5, built with GNU Fortran~15.2.0, writes the bond file and
+then stops: the format string in \texttt{wbonds.f90} has no comma
+between descriptors, and the process then receives a segmentation
+fault.
+It returns no ring census on this frame.
+The logs are \texttt{rings-stdout.txt} and \texttt{rings-stderr.txt}
+beside the input.
+CHILL+ on the same frame labels \num{3477} water, \num{461}
+interfacial clathrate, \num{80} interfacial, \num{64} clathrate,
+\num{11} hexagonal and \num{3} cubic molecules.
+Over the thermo lines from step \num{20000} to the final step the mean
+temperature is 215.06~K and the mean pressure is $-0.87$~atm.
+The last instantaneous pressure is 181~atm.
+Values in the input that are new, rather than recovered, are marked
+there: the pressure, the split of the recovered step count, the
+velocity seed, the extra \num{50000} steps, and the dump line.
 We call cycless through the pair-list and cycle functions that GenIce
 uses.
 On the confined frame of \num{1000} molecules it returns

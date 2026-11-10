@@ -1,0 +1,1 @@
+nop 4096 clathrate 64 cubic 3 hexagonal 11 interClathrate 461 interfacial 80 water 3477
