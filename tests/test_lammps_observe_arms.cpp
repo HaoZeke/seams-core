@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -27,7 +28,9 @@ seams_insitu_frame ortho(int step, int n, const double *xyz) {
 }
 
 std::string scratch(const std::string &name) {
-  return std::string("/tmp/seams-observe-arms-") + name;
+  const auto dir = std::filesystem::temp_directory_path() / "seams-observe-arms";
+  std::filesystem::create_directories(dir);
+  return (dir / name).string();
 }
 
 void require_box_nulls(const double rows[9]) {

@@ -290,18 +290,18 @@ std::vector<std::vector<int>> filter_cutoff(const Cloud &cloud,
 std::vector<std::vector<int>> rows_from_flat(const Cloud &cloud, const std::vector<int> &counts,
                                             const std::vector<int> &flat) {
   std::vector<std::vector<int>> rows(static_cast<std::size_t>(cloud.nop));
-  std::size_t cursor = 0;
+  std::size_t flat_at = 0;
   for (const int count : counts) {
-    const int self = flat[cursor];
+    const int self = flat[flat_at];
     const auto at = cloud.idIndexMap.find(self);
     if (at != cloud.idIndexMap.end()) {
       auto &row = rows[static_cast<std::size_t>(at->second)];
       row.clear();
-      const std::size_t n = std::min(static_cast<std::size_t>(count), flat.size() - cursor);
-      row.insert(row.end(), flat.begin() + static_cast<std::ptrdiff_t>(cursor),
-                 flat.begin() + static_cast<std::ptrdiff_t>(cursor + n));
+      const std::size_t n = std::min(static_cast<std::size_t>(count), flat.size() - flat_at);
+      row.insert(row.end(), flat.begin() + static_cast<std::ptrdiff_t>(flat_at),
+                 flat.begin() + static_cast<std::ptrdiff_t>(flat_at + n));
     }
-    cursor += static_cast<std::size_t>(count);
+    flat_at += static_cast<std::size_t>(count);
   }
   return rows;
 }
