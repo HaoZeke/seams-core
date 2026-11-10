@@ -658,8 +658,12 @@ int seams_frame_rdf(const seams_frame *frame, double rmax, int nbins,
     set_error("rdf needs a frame and r, g, count buffers");
     return 1;
   }
+  if (nbins <= 0) {
+    set_error("rdf needs a positive bin count");
+    return 1;
+  }
   try {
-    const int bins = seams_frame_rdf_nbins(rmax, nbins);
+    const int bins = nbins;
     const int typ_i = resolve_type(frame->cloud, type_i);
     const int typ_j = type_j > 0 ? type_j : typ_i;
     const auto histogram =
