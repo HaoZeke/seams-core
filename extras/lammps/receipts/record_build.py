@@ -23,7 +23,7 @@ def main():
     log.line("HEAD_LAMMPS: " + os.popen("git -C %s rev-parse HEAD" % lmp).read().strip())
     log.line("TREE_LAMMPS: " + os.popen("git -C %s rev-parse HEAD^{tree}" % lmp).read().strip())
     log.line("compiler: g++ (GCC) 15.2.0")
-    log.line("cxx_flags: -O3 -DNDEBUG")
+    log.line("cxx_flags: " + os.environ.get("CXX_FLAGS_NOTE", "-O3 -DNDEBUG"))
     log.line("command: " + shown)
     log.line("substitution: live, longest prefix first, see PATHS.txt")
     log.line("---")
