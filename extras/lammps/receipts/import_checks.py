@@ -42,7 +42,7 @@ def main():
         "reject was",
     )
     show_fail(lambda: shipped.need("DSEAMS_NOT_SET"), "set DSEAMS_NOT_SET")
-    show_fail(lambda: shipped.need("PATH"), "nope")
+    show_fail(lambda: shipped.need("DSEAMS_NOT_SET"), "absent-word")
     show_fail(lambda: None, "nope")
     print("import checks exit 0", flush=True)
 
