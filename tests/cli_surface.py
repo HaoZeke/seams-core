@@ -39,6 +39,21 @@ def _write_pdb(path):
         )
 
 
+def _write_run(path):
+    # Frame 1 is a molecule, frame 2 is empty, frame 3 is a molecule.
+    # A strict read must keep the empty frame's failure after frame 3.
+    chunks = []
+    for step, n in ((0, 1), (1, 0), (2, 1)):
+        body = "" if n == 0 else "1 1 0 0 0\n"
+        chunks.append(
+            f"ITEM: TIMESTEP\n{step}\nITEM: NUMBER OF ATOMS\n{n}\n"
+            "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+            "ITEM: ATOMS id type x y z\n" + body
+        )
+    with open(path, "w", encoding="ascii") as handle:
+        handle.write("".join(chunks))
+
+
 def _write_gap(path):
     with open(path, "w", encoding="ascii") as handle:
         handle.write(
@@ -93,8 +108,24 @@ def main():
     per_atom = os.path.join(work, "per-atom.lammpstrj")
     classes = os.path.join(work, "classes.lammpstrj")
     cages_atom = os.path.join(work, "cages.lammpstrj")
+    gap = os.path.join(work, "gap.lammpstrj")
+    _write_gap(gap)
+    run_path = os.path.join(work, "run.lammpstrj")
+    _write_run(run_path)
+    nodot = os.path.join(work, "nodot")
+    with open(nodot, "w", encoding="ascii") as handle:
+        handle.write(
+            "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+            "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+            "ITEM: ATOMS id type x y z\n1 1 0 0 0\n"
+        )
+    xyz = "input/xyz/configuration.xyz"
     ok = [
         ["read", tip],
+        ["--frame", "1", "read", xyz],
+        ["read", nodot],
+        ["--frame", "2", "read", xyz],
+        ["--frame", "1", "--last", "1", "read", xyz],
         ["--format", "json", "read", tip],
         ["--frame", "1", "--last", "2", "--jobs", "2", "read", cubic],
         ["chill", tip, "--cutoff", "3.5", "--type", "2"],
@@ -231,6 +262,14 @@ def main():
         ["density-z", tip, "--axis", "q"],
         ["domains", tip, "--subset", "nope", "--site", "1=tail"],
         ["--strict-input", "read", "missing-file.lammpstrj"],
+        ["--strict-input", "--frame", "1", "--last", "2", "read", gap],
+        ["--strict-input", "--frame", "1", "--last", "3", "read", run_path],
+        ["fingerprint", tip, "--type", "2", "--graph", "seedex"],
+        ["fingerprint", tip, "--type", "2", "--graph", "seede"],
+        ["fingerprint", tip, "--type", "2", "--graph", "seededX"],
+        ["chill", tip, "--type", "2", "--graph", "seedex"],
+        ["chill", tip, "--type", "2", "--graph", "seede"],
+        ["chill", ice, "--type", "1", "--graph", "seededX"],
         ["domains", tip],
         ["pairs", tip],
         ["ions", tip],
@@ -465,6 +504,13 @@ def main():
         ["cn", tip, "--types", ","],
         ["cages", ice, "--type", "1", "--signature", "+"],
         ["--strict-input", "--frame", "1", "--last", "2", "read", gap],
+        ["--strict-input", "--frame", "1", "--last", "3", "read", run_path],
+        ["fingerprint", tip, "--type", "2", "--graph", "seedex"],
+        ["fingerprint", tip, "--type", "2", "--graph", "seede"],
+        ["fingerprint", tip, "--type", "2", "--graph", "seededX"],
+        ["chill", tip, "--type", "2", "--graph", "seedex"],
+        ["chill", tip, "--type", "2", "--graph", "seede"],
+        ["chill", ice, "--type", "1", "--graph", "seededX"],
     ):
         result = run(seams, args)
         if result.returncode != 2:
