@@ -1,3 +1,4 @@
+#include "coverage_threads.hpp"
 #include <catch2/catch_test_macros.hpp>
 
 #include <cage_affiliation.hpp>
@@ -159,7 +160,7 @@ TEST_CASE("cageAffiliation matches the greedy classification on mW",
 #ifdef SEAMS_HAS_OPENMP
   const int maxThreads = omp_get_max_threads();
   for (const int threads : {1, 4}) {
-    omp_set_num_threads(threads);
+    omp_set_num_threads(seams_cap_threads(threads));
 #endif
     const auto affiliation = ring::cageAffiliation(six, idx);
     for (size_t i = 0; i < six.size(); i++) {
@@ -168,7 +169,7 @@ TEST_CASE("cageAffiliation matches the greedy classification on mW",
     }
 #ifdef SEAMS_HAS_OPENMP
   }
-  omp_set_num_threads(maxThreads);
+  omp_set_num_threads(seams_cap_threads(maxThreads));
 #endif
 }
 
@@ -262,7 +263,7 @@ TEST_CASE("cageAffiliation marks hexagonal ice HC on every thread count",
 #ifdef SEAMS_HAS_OPENMP
   const int maxThreads = omp_get_max_threads();
   for (const int threads : {1, 4}) {
-    omp_set_num_threads(threads);
+    omp_set_num_threads(seams_cap_threads(threads));
 #endif
     const auto affiliation = ring::cageAffiliation(six, idx);
     for (size_t i = 0; i < six.size(); i++) {
@@ -271,7 +272,7 @@ TEST_CASE("cageAffiliation marks hexagonal ice HC on every thread count",
     }
 #ifdef SEAMS_HAS_OPENMP
   }
-  omp_set_num_threads(maxThreads);
+  omp_set_num_threads(seams_cap_threads(maxThreads));
 #endif
 }
 

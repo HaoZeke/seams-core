@@ -1,3 +1,4 @@
+#include "coverage_threads.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
@@ -1024,7 +1025,7 @@ TEST_CASE("threaded cell-list rows are the minimum-image neighbours", "[neighbou
 #ifdef SEAMS_HAS_OPENMP
   // 4096 atoms and more than one thread: the rows run in parallel.
   const int threads = omp_get_max_threads();
-  omp_set_num_threads(4);
+  omp_set_num_threads(seams_cap_threads(4));
 #endif
   for (const auto tilt : {std::array<double, 3>{0.0, 0.0, 0.0}, std::array<double, 3>{4.0, 2.0, 3.0}}) {
     const auto cloud = jitteredLattice(16, 3.0, tilt[0], tilt[1], tilt[2]);
@@ -1062,7 +1063,7 @@ TEST_CASE("threaded cell-list rows are the minimum-image neighbours", "[neighbou
   std::vector<std::vector<int>> rows;
   REQUIRE_FALSE(nneigh::cellListRowsThreaded(tight, all, cutoff, rows));
 #ifdef SEAMS_HAS_OPENMP
-  omp_set_num_threads(threads);
+  omp_set_num_threads(seams_cap_threads(threads));
 #endif
 }
 
@@ -1070,7 +1071,7 @@ TEST_CASE("index rows list self then the minimum image in ascending order",
           "[neighbours]") {
 #ifdef SEAMS_HAS_OPENMP
   const int threads = omp_get_max_threads();
-  omp_set_num_threads(4);
+  omp_set_num_threads(seams_cap_threads(4));
 #endif
   const auto rowsMatch = [](const auto &cloud, double cutoff, int step) {
     const auto byIndex = nneigh::getNewNeighbourListByIndex(cloud, cutoff);
@@ -1098,7 +1099,7 @@ TEST_CASE("index rows list self then the minimum image in ascending order",
     rowsMatch(small, cutoff, 1);
   }
 #ifdef SEAMS_HAS_OPENMP
-  omp_set_num_threads(threads);
+  omp_set_num_threads(seams_cap_threads(threads));
 #endif
 }
 
@@ -1109,9 +1110,9 @@ TEST_CASE("neighListO on four threads leaves an unmapped atom as an empty row",
   REQUIRE(cloud.nop == 4096);
   cloud.idIndexMap.erase(101);
   const int threads = omp_get_max_threads();
-  omp_set_num_threads(4);
+  omp_set_num_threads(seams_cap_threads(4));
   const auto nList = nneigh::neighListO(3.5, cloud, 1);
-  omp_set_num_threads(threads);
+  omp_set_num_threads(seams_cap_threads(threads));
   REQUIRE(nList[100].empty());
   bool unmappedPartner = false;
   for (const auto &row : nList) {
@@ -1133,13 +1134,13 @@ TEST_CASE("type-filtered cutoff rows agree on uneven thread counts",
     }
     std::vector<std::array<std::vector<std::vector<int>>, 4>> lists;
     for (const int width : {1, 3, 4}) {
-      omp_set_num_threads(width);
+      omp_set_num_threads(seams_cap_threads(width));
       lists.push_back({nneigh::neighListO(cutoff, cloud, 2),
                        nneigh::halfNeighList(cutoff, cloud, 1),
                        nneigh::neighListPair(cutoff, cloud, 1, 2),
                        nneigh::getNewNeighbourListByIndex(cloud, cutoff)});
     }
-    omp_set_num_threads(threads);
+    omp_set_num_threads(seams_cap_threads(threads));
     INFO("tilt " << tilt[0]);
     REQUIRE((lists[1] == lists[0]));
     REQUIRE((lists[2] == lists[0]));
