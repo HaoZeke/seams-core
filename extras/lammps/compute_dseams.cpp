@@ -93,7 +93,7 @@ void ComputeDseams::compute_peratom() {
   if (nlocal > 0) {
     failed = seams_chill_plus_graph_lammps(xyz.data(), nlocal, box9, cutoff,
                                            graph.c_str(), labels.data()) != 0;
-  } else if (total_atoms == 0) {
+  } else {
     failed = 1;
   }
   int any_failed = 0;
