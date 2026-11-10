@@ -437,15 +437,18 @@ TEST_CASE("in-tree k-nearest matches the periodic heap when linkcell refuses",
                          {1, 1, 1, 2, 1, 1}, {10.0, 10.0, 10.0});
   std::vector<std::vector<int>> rows;
   CerrCapture err;
-  // This build calls linkcell only when SEAMS_HAS_LINKCELL is set.
-  // The refusal text is the catch in nominateByLinkcell.
-  rows = nneigh::kNearestNeighbourList(cloud, 2, 0.05, 1, true);
+  // 0.04 is scaled by 0.75 inside the call, so linkcell sees edge 0.03
+  // and rejects the mesh. The three-edge box then uses the in-tree cell list.
+  // A build without linkcell takes that cell list directly.
+  rows = nneigh::kNearestNeighbourList(cloud, 2, 0.04, 1, true);
 #ifdef SEAMS_HAS_LINKCELL
-  REQUIRE(err.str().find("falling back") != std::string::npos);
+  REQUIRE(err.str().find("falling back to the in-tree cell list") !=
+          std::string::npos);
+#else
+  REQUIRE(cloud.box.size() == 3);
+  REQUIRE(err.str().find("linkcell failed") == std::string::npos);
 #endif
-  REQUIRE(listsId(rows[0], 1));
-  REQUIRE(listsId(rows[0], 5));
-  REQUIRE_FALSE(listsId(rows[0], 3));
+  REQUIRE(rows[0] == std::vector<int>{0, 5, 1});
 
   auto both = nneigh::kNearestNeighbourPair(cloud, 2, 0.05, 1);
   REQUIRE(listsId(both.first[0], 1));
@@ -464,7 +467,12 @@ TEST_CASE("in-tree k-nearest matches the periodic heap when linkcell refuses",
   CerrCapture tiltErr;
   rows = nneigh::kNearestNeighbourList(tilt, 1, 0.05, 1, false);
 #ifdef SEAMS_HAS_LINKCELL
-  REQUIRE(tiltErr.str().find("falling back") != std::string::npos);
+  REQUIRE(tiltErr.str().find("falling back to the in-tree cell list") !=
+          std::string::npos);
+#else
+  // Six box numbers select the fractional heap, not the cell list.
+  REQUIRE(tilt.box.size() >= 6);
+  REQUIRE(tiltErr.str().find("linkcell failed") == std::string::npos);
 #endif
   REQUIRE(rows[0].size() >= 2);
 
