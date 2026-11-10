@@ -43,6 +43,7 @@ class FixDseams : public Fix {
 
  private:
   int active_;
+  int host_;
   int every_;
   int depth_;
   long long seen_step_;

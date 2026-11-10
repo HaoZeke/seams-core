@@ -79,15 +79,11 @@ def lammps_cases(work, plugin, lmp, mpirun, libdir):
         run 1
         """
     )
-    env_host = env.copy()
-    env_host["DSEAMS_NO_HOST"] = "1"
     for name, text in cases.items():
         folder = work / name
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "in").write_text(text)
-        which = env
-        # The still run uses the host list. A second still run skips it.
-        run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log"], folder, which)
+        run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log"], folder, env)
         print("lammps", name, "ok", flush=True)
     both = work / "ranks"
     both.mkdir(parents=True, exist_ok=True)
@@ -100,9 +96,9 @@ def lammps_cases(work, plugin, lmp, mpirun, libdir):
     still = work / "nohost"
     still.mkdir(parents=True, exist_ok=True)
     (still / "in").write_text(
-        header + "fix sea all dseams record rec.txt every 1 cutoff 3.5\nrun 2\n"
+        header + "fix sea all dseams record rec.txt every 1 cutoff 3.5 host no\nrun 2\n"
     )
-    run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log"], still, env_host)
+    run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log"], still, env)
     print("lammps nohost ok", flush=True)
 
 
