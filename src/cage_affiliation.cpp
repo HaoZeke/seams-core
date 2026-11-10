@@ -447,39 +447,43 @@ ring::CageAffiliation batchSweep(const FrameContext &ctx) {
   // nvc++ -mp=gpu (SEAMS_HAS_OFFLOAD) SIGSEGVs host parallel-fors in libnvomp
 #if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
   const bool threaded = nR >= 1024 && !omp_in_parallel();
+#else
+  const bool threaded = false;
 #endif
 
-  // HC affiliation by a global sweep over ordered pairs: every passing pair
-  // marks its basal rings and its prismatic rings. Sweeping every i covers
-  // both directions of every pair once. A flag only ever turns on, so each
-  // thread keeps its marks and sets them once its share is done.
-#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
-#pragma omp parallel if (threaded)
-#endif
+  // A flag only turns on. Once every ring is on, later pairs cannot change
+  // the result, and on a ring-rich graph those pairs are most of the sweep.
   {
-    std::vector<int> marks;
+    std::vector<char> on(static_cast<std::size_t>(nR), 0);
+    int left = nR;
+    auto mark = [&](int m) {
+      if (m < 0 || m >= nR) {
+        return;
+      }
+      char &slot = on[static_cast<std::size_t>(m)];
+      if (slot != 0) {
+        return;
+      }
+      slot = 1;
+      result.hc[static_cast<std::size_t>(m)] = true;
+      --left;
+    };
     std::vector<int> listHC;
     std::vector<ring::strucType> types(nRings, ring::strucType::unclassified);
-#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
-#pragma omp for schedule(dynamic, 256) nowait
-#endif
-    for (int i = 0; i < nR; i++) {
-      for (const int j : ctx.basalCand[static_cast<size_t>(i)]) {
+    for (int i = 0; i < nR && left > 0; ++i) {
+      for (const int j : ctx.basalCand[static_cast<std::size_t>(i)]) {
+        if (left == 0) {
+          break;
+        }
         if (!ctx.basalPair(i, j)) {
           continue;
         }
-        marks.push_back(i);
-        marks.push_back(j);
+        mark(i);
+        mark(j);
         for (const int k : ctx.prismaticOf(i, j, listHC, types)) {
-          marks.push_back(k);
+          mark(k);
         }
       }
-    }
-#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
-#pragma omp critical(seams_cage_affiliation)
-#endif
-    for (const int m : marks) {
-      result.hc[static_cast<std::size_t>(m)] = true;
     }
   }
 
