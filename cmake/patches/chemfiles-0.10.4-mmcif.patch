@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 diff --git a/src/formats/mmCIF.cpp b/src/formats/mmCIF.cpp
 index 41389ee..9f7d597 100644
 --- a/src/formats/mmCIF.cpp

@@ -426,17 +426,27 @@ test('invariance_empty_frame', _check_invariance,
   should_fail: true)
 # 1000 translations and 1000 permutations on every deposited frame, plus
 # the eight half-box shifts. A frame above 2048 atoms is checked at one
-# trial. A degree above 40 is the empty cage set and is still compared.
-# Measured with one thread: the directory returned in 1227s
-# (checked 424, skipped 0) and mW_cubic in 142s. The limits sit
-# above those runs. A hang is a failure.
-test('fuzz_cage_shift_permute', _fuzz_cage,
-  args: [meson.project_source_root() / 'input' / 'traj', '1000'],
+# trial. A degree above 40 is skipped: the primitive-ring walk does not
+# finish, and it is not an empty result. One thread, 1023s, returned
+# checked 22, skipped 402, defined-empty 0. mW_cubic alone was 141s.
+# The limits sit above those runs. A hang is a failure.
+_fuzz_summary = meson.current_source_dir() / 'fuzz_cage_summary.sh'
+test('fuzz_cage_shift_permute', find_program('bash'),
+  args: [_fuzz_summary, 'checked 22 skipped 402 defined-empty 0', _fuzz_cage,
+         meson.project_source_root() / 'input' / 'traj', '1000'],
   env: _test_env,
   timeout: 2400)
 # mW_cubic is 4096 atoms at degree 4. One search returns (8192 six-rings,
-# 2048 cages, 0.97s). Eleven frames at one trial measured 142s.
-test('fuzz_cage_mw_cubic', _fuzz_cage,
-  args: [meson.project_source_root() / 'input' / 'traj' / 'mW_cubic.lammpstrj', '1'],
+# 2048 cages, 0.97s). Eleven frames at one trial measured 141s.
+test('fuzz_cage_mw_cubic', find_program('bash'),
+  args: [_fuzz_summary, 'checked 11 skipped 0 defined-empty 0', _fuzz_cage,
+         meson.project_source_root() / 'input' / 'traj' / 'mW_cubic.lammpstrj', '1'],
   env: _test_env,
   timeout: 360)
+# dump-l frame 1 is 512 atoms at degree 74. Source 32 of 512 already
+# holds 1197642 primitive rings after 180s. The file is skipped.
+test('fuzz_cage_dump_l_skipped', find_program('bash'),
+  args: [_fuzz_summary, 'checked 0 skipped 201 defined-empty 0', _fuzz_cage,
+         meson.project_source_root() / 'input' / 'traj' / 'dump-l.lammpstrj', '1'],
+  env: _test_env,
+  timeout: 180)

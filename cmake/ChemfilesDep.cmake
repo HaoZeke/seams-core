@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 # Optional chemfiles dependency. On by default.
 # find_package uses an installed copy. Otherwise FetchContent builds
 # tag 0.10.4, which carries XYZ, PDB, GRO, LAMMPS, XTC, TRR, DCD,

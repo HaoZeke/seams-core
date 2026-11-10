@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 cmake_minimum_required(VERSION 3.24)
 project(seams_chemfiles_dep LANGUAGES C CXX)
 

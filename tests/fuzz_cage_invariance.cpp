@@ -170,18 +170,6 @@ Result evaluate(Cloud &cloud, double cutoff, int atomType) {
   }
   const auto nl = nneigh::neighListO(cutoff, cloud, atomType);
   const auto idx = nneigh::neighbourListByIndex(cloud, nl);
-  int maxDegree = 0;
-  for (const auto &row : idx) {
-    const int d = row.empty() ? 0 : static_cast<int>(row.size()) - 1;
-    if (d > maxDegree) {
-      maxDegree = d;
-    }
-  }
-  // Same bound as the driver. A degree above 40 does not finish the
-  // six-ring walk; the cage set is empty and the comparison still runs.
-  if (maxDegree > 40) {
-    return out;
-  }
   Rings six;
   for (const auto &r : primitive::ringNetwork(idx, 6)) {
     if (r.size() == 6) {
@@ -303,6 +291,7 @@ int main(int argc, char **argv) {
   int frames = 0;
   int checked = 0;
   int skipped = 0;
+  const int definedEmpty = 0;
   std::uint64_t shiftTrials = 0;
   std::uint64_t permTrials = 0;
   for (const auto &path : dumps) {
@@ -316,18 +305,22 @@ int main(int argc, char **argv) {
         std::printf("%s frame %d type %d EMPTY\n", path.filename().c_str(), frame, atomType);
       }
       const GraphSize g0 = graphSize(cloud, cutoff, atomType);
-      // Degree above 40: dump-l frame 1 is 512 atoms at degree 74. The
-      // neighbour list returns and the six-ring walk does not (no ring
-      // within 45s at cutoff 3.5). The cage search on that graph is the
-      // empty set. A shift or a permutation keeps the degree, so the
-      // comparison still runs. This is a checked frame, not a skip.
-      //
-      // mW_cubic frame 1 is 4096 atoms at degree 4: 8192 six-rings, 2048
-      // cages, one search 0.97s. findDDC does walk ring ids past 6000, and
-      // it returns. A thousand searches per frame do not fit a suite, so
-      // that frame is checked at one trial.
-      const bool degreeBound = g0.maxDegree > 40;
-      const int usedTrials = (degreeBound || cloud.nop > 2048 || cloud.nop <= 0) ? 1 : trials;
+      // Yuan and Cormack, Comput. Mater. Sci. 24, 343 (2002), build every
+      // primitive ring from pairs of shortest paths. That statement has
+      // no degree cutoff, so a degree above 40 is not an empty cage set.
+      // dump-l frame 1 is 512 atoms at degree 74. One source keeps 38762
+      // primitive rings. After 180s the walk is at source 32 of 512 and
+      // the output already holds 1197642 rings. The frame is skipped.
+      // mW_cubic is degree 4. One search returns in 0.97s, so a frame
+      // above 2048 atoms is checked at one trial.
+      if (g0.maxDegree > 40) {
+        skipped++;
+        std::printf("%s frame %d type %d nop %d maxdeg %d SKIP ring walk does not finish\n",
+                    path.filename().c_str(), frame, atomType, cloud.nop, g0.maxDegree);
+        std::fflush(stdout);
+        continue;
+      }
+      const int usedTrials = (cloud.nop > 2048 || cloud.nop <= 0) ? 1 : trials;
       const Result ref = evaluate(cloud, cutoff, atomType);
       bool ok = true;
       for (int ix = 0; ix < 2 && ok; ix++) {
@@ -402,18 +395,16 @@ int main(int argc, char **argv) {
       } else {
         checked++;
       }
-      const char *bound = degreeBound ? "degree-bound" : (cloud.nop > 2048 ? "trial-bound" : "full");
+      const char *bound = cloud.nop > 2048 ? "trial-bound" : "full";
       std::printf("%s frame %d type %d nop %d maxdeg %d six %d cages %d (hc %d ddc %d) trials %d %s %s\n",
                   path.filename().c_str(), frame, atomType, cloud.nop, g0.maxDegree, ref.six,
                   ref.cages, ref.hc, ref.ddc, usedTrials, bound, ok ? "CHECKED" : "FAIL");
       std::fflush(stdout);
     }
   }
-  std::printf("frames %d checked %d skipped %d failures %d shiftTrials %llu permTrials %llu\n",
-              frames, checked, skipped, failures, static_cast<unsigned long long>(shiftTrials),
+  std::printf("frames %d checked %d skipped %d defined-empty %d failures %d shiftTrials %llu permTrials %llu\n",
+              frames, checked, skipped, definedEmpty, failures,
+              static_cast<unsigned long long>(shiftTrials),
               static_cast<unsigned long long>(permTrials));
-  if (skipped != 0) {
-    return 1;
-  }
   return failures == 0 ? 0 : 1;
 }
