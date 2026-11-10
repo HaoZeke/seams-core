@@ -470,12 +470,16 @@ The codes of each comparison ran on the same machine, every timed process used o
 The version comparison builds the cutoff graph once outside the timers and times the rings of up to seven members and both cage searches.
 In the comparison with other codes, each code runs in a worker process of its own, and its timer includes its own neighbour search, so every timing covers the same path from positions to labels.
 The frames are ideal ice~Ic and ice~Ih and the square-tube ice of a deposited trajectory~\cite{goswami2019nanotubedata}, each replicated from about a thousand to about a million molecules.
-The 4096-molecule liquid agreement was recounted with the Nguyen and Molinero 2015 rule as the default.
-That rule gives an ice label only when a molecule has exactly four neighbours inside 3.5~\AA.
+The 4096-molecule liquid agreement was recounted with the Nguyen and
+Molinero 2015 rule as the default.
+That rule gives an ice label only when a molecule has exactly four
+neighbours inside 3.5~\AA.
 It averages $q_3$ over those four nearest neighbours.
 It also applies the interfacial neighbour test in Table~1 of that paper.
-The ovito-chill+ option keeps the requirement of four neighbours inside 3.5~\AA.
-Under that option, $q_3$ is averaged over every neighbour inside the cutoff, and the neighbour test is left off.
+The ovito-chill+ option keeps the requirement of four neighbours inside
+3.5~\AA.
+Under that option, $q_3$ is averaged over every neighbour inside the
+cutoff, and the neighbour test is left off.
 Table~\ref{tab:codes} lists the codes and operations, and Section~\sref{sec:s-protocol} gives the frames, the call counts, the time limits and the settings of each code.
 
 We report the median of the calls with an exact binomial \dsv{set@coverage@pct}\% interval~\cite{hollander2014nonparametric} and the quartiles $Q_1$ and $Q_3$ of the calls~\cite{hyndman1996sample}.
@@ -498,14 +502,16 @@ published Nguyen and Molinero 2015 rule.
 Exactly four neighbours lie inside 3.5~\AA.
 $q_3$ is averaged over those four nearest neighbours.
 The interfacial neighbour test is Table~1 of that paper.
-The ovito-chill+ option averages $q_3$ over the whole 3.5~\AA\ shell and leaves the neighbour test off.
+The ovito-chill+ option averages $q_3$ over the whole 3.5~\AA\ shell and
+leaves the neighbour test off.
 Mutual graph for $q_6$.
 Seeded graph for cage labels \\
 d-SEAMS~1 & 1.0.1 & primitive rings, HC and DDC & cutoff \\
 OVITO~\cite{ovito3172} & 3.17.2 & CHILL+, primitive rings, polyhedral template matching, diamond structure and adaptive common neighbour analysis & CHILL+ only for molecules with four neighbours within cutoff, and the rules of each structure type \\
 CHILL+ library~\cite{palmer2026orderparams} & 2026 & CHILL+ &
 four nearest within cutoff.
-The 2015 default and the ovito-chill+ option are named in the d-SEAMS row \\
+The 2015 default and the ovito-chill+ option are named in the d-SEAMS
+row \\
 freud~\cite{ramasubramani2020freud} & 3.6.1 & $q_6$ & four nearest \\
 pyscal~\cite{menon2019pyscal} & 4.1.0 & $q_6$, diamond structure & four nearest for $q_6$, its own rule for the diamond structure \\
 matscipy~\cite{grigorev2024matscipy} & 1.3.1 & primitive rings & cutoff \\
@@ -629,7 +635,8 @@ In (c), d-SEAMS and OVITO come from the campaign in which each code ran in its o
 
 Every case that ended without a timing belongs to a comparator code (Table~\sref{tab:s-censored}).
 Both interfaces of matscipy end with a segmentation fault on the larger frames.
-The 4096-molecule liquid agreement in the macros is that recount under the 2015 default.
+The 4096-molecule liquid agreement in the macros is that recount under
+the 2015 default.
 The ovito-chill+ option is reported apart from those macros.
 The source archive of RINGS 1.3.5 is not in this checkout, so that lane was not rerun.
 We call cycless through the pair-list and cycle functions that GenIce uses.
