@@ -147,6 +147,7 @@ if not get_option('lammps').disabled()
       'adapters/lammps/fix_dseams.cpp',
       dependencies: [yds_dep, _lammps_mpi],
       include_directories: _lammps_inc,
+      cpp_args: ['-DDSEAMS_LAMMPS_PLUGIN'],
       name_prefix: 'lib',
       install: true)
   elif get_option('lammps').enabled()
