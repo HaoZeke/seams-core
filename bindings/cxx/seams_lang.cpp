@@ -449,9 +449,6 @@ int seams_frame_steinhardt(seams_frame *frame, double cutoff, int type,
     const int n = frame->cloud.nop;
     frame->ql = result.ql;
     frame->qlbar = result.qlBar;
-    if (static_cast<int>(frame->qlbar.size()) < n) {
-      frame->qlbar.resize(static_cast<std::size_t>(n), 0.0);
-    }
     if (ql != nullptr && n > 0) {
       std::memcpy(ql, frame->ql.data(),
                   static_cast<std::size_t>(n) * sizeof(double));
