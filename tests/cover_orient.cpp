@@ -1309,4 +1309,14 @@ TEST_CASE("prism wrap, rejected DDC indices, and a one-sided periphery",
   REQUIRE(pntToPnt::relOrderDDC(equatorial, 4, rings, cages).empty());
   const auto oneSide = pntToPnt::relOrderDDC(equatorial, 0, rings, cages);
   REQUIRE(oneSide.empty());
+
+  // Atom 0 sits at the end of the ring. Its previous neighbour is the
+  // equatorial predecessor, so the forward neighbour is kept and +2 wraps.
+  std::vector<std::vector<int>> forward = {
+      equatorial, {20, 99, 21, 22, 5, 0}, {50, 50, 50, 50, 50, 50},
+      {50, 50, 50, 50, 50, 50},           {50, 50, 50, 50, 50, 50},
+      {50, 50, 50, 50, 50, 50},           {50, 50, 50, 50, 50, 50}};
+  cages[0].rings = {0, 1, 2, 3, 4, 5, 6};
+  const auto wrappedApex = pntToPnt::relOrderDDC(equatorial, 0, forward, cages);
+  REQUIRE(wrappedApex.empty());
 }
