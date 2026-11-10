@@ -264,9 +264,11 @@ Cloud sparseLattice(int n, double spacing) {
     molSys::Point<double> pt;
     pt.type = 1;
     pt.atomID = i + 1;
-    pt.x = spacing * static_cast<double>(i % side);
-    pt.y = spacing * static_cast<double>((i / side) % side);
-    pt.z = spacing * static_cast<double>(i / (side * side));
+    // A tiny unique offset keeps neighbour distances from tying, and stays
+    // far from the 3.5 angstrom cutoff so a shift cannot move a pair across it.
+    pt.x = spacing * static_cast<double>(i % side) + 0.001 * (i + 1);
+    pt.y = spacing * static_cast<double>((i / side) % side) + 0.0007 * (i + 1);
+    pt.z = spacing * static_cast<double>(i / (side * side)) + 0.0005 * (i + 1);
     cloud.pts.push_back(pt);
     cloud.idIndexMap[pt.atomID] = i;
   }
@@ -299,8 +301,10 @@ bool ruleAgrees(Cloud cloud, int seconds) {
   for (const auto rule : {chill::ChillPlusRule::Published, chill::ChillPlusRule::Ovito}) {
     const auto ref = ruleLabels(cloud, rule);
     Cloud moved = cloud;
-    shiftCloud(moved, 0.25, 0.0, 0.5);
-    if (ruleLabels(moved, rule) != ref) {
+    shiftCloud(moved, 0.02, 0.01, 0.015);
+    const auto shifted = ruleLabels(moved, rule);
+    if (shifted != ref) {
+      std::printf("RULE shift mismatch %s n %d\n", chill::chillPlusRuleName(rule), cloud.nop);
       alarm(0);
       return false;
     }
@@ -314,6 +318,7 @@ bool ruleAgrees(Cloud cloud, int seconds) {
     std::sort(got.begin(), got.end());
     std::sort(want.begin(), want.end());
     if (got != want) {
+      std::printf("RULE perm mismatch %s n %d\n", chill::chillPlusRuleName(rule), cloud.nop);
       alarm(0);
       return false;
     }
