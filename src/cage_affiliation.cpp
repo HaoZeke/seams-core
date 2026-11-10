@@ -881,7 +881,8 @@ struct ring::AffiliationUpdater::Impl {
   }
 };
 
-ring::AffiliationUpdater::AffiliationUpdater() : impl_(new Impl) {}
+ring::AffiliationUpdater::AffiliationUpdater()
+    : impl_(std::make_unique<Impl>()) {}
 ring::AffiliationUpdater::~AffiliationUpdater() = default;
 ring::AffiliationUpdater::AffiliationUpdater(AffiliationUpdater &&) noexcept =
     default;
