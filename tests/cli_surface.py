@@ -282,6 +282,10 @@ def main():
         ["read"],
         ["--frame", "zz", "read", tip],
         ["--axis", "   ", "density-z", tip],
+        ["--axis", "yy", "density-z", tip],
+        ["--axis", "yY", "density-z", tip],
+        ["--axis", "zz", "density-z", tip],
+        ["--axis", "11", "density-z", tip],
         ["--site", "nocolon", "pairs", tip],
         ["--site", "abc=cationHead", "pairs", tip],
         ["--per-atom", os.path.join(work, "no-such-dir", "out.lammpstrj"),
@@ -328,6 +332,35 @@ def main():
         if result.returncode != 0:
             sys.stderr.write("fail " + " ".join(args) + "\n" + result.stderr)
             return 1
+    miss = os.path.join(work, "miss.txt")
+    with open(lib_a, encoding="ascii") as handle:
+        header = handle.readline()
+    with open(miss, "w", encoding="ascii") as handle:
+        handle.write(header)
+        handle.write("deadbeef nomatch\n")
+    unmatched = run(seams, ["--library", miss, "--per-atom", per_atom,
+                            "fingerprint", ice, "--type", "1", "--hops", "1"])
+    if unmatched.returncode != 0 or "unmatched" not in unmatched.stdout:
+        sys.stderr.write("unmatched library\n" + unmatched.stdout + unmatched.stderr)
+        return 1
+    blank = os.path.join(work, "blank.txt")
+    with open(blank, "w", encoding="ascii") as handle:
+        handle.write(header.replace(" hops 1 ", " hops 3 "))
+    deep_match = run(seams, ["--library", lib_a + "," + blank, "--per-atom", per_atom,
+                             "fingerprint", ice, "--type", "1"])
+    if deep_match.returncode != 0 or "depth" not in deep_match.stdout:
+        sys.stderr.write("depth library\n" + deep_match.stdout + deep_match.stderr)
+        return 1
+    mixed_depth = run(seams, ["--library", lib_a + "," + blank,
+                                "fingerprint", tip, "--type", "2"])
+    if mixed_depth.returncode != 0 or "depth" not in mixed_depth.stdout:
+        sys.stderr.write("mixed depth\n" + mixed_depth.stdout + mixed_depth.stderr)
+        return 1
+    ion_is_water = run(seams, ["ions", tip, "--type", "1", "--ion-types", "1,2",
+                               "--site", "1=cationHead,2=anion"])
+    if ion_is_water.returncode != 0:
+        sys.stderr.write("ion type is the water type\n" + ion_is_water.stderr)
+        return 1
     env = os.environ.copy()
     env["CHILL_PLUS_RULE"] = "ovito-chill+"
     ruled = run(seams, ["chill-plus", ice, "--type", "1"], env)
