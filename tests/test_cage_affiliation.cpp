@@ -406,7 +406,9 @@ TEST_CASE("AffiliationUpdater matches batch when every neighbour row changes",
   auto six = sixMembered(primitive::ringNetwork(idx, 7));
 
   ring::AffiliationUpdater updater;
-  (void)updater.update(six, idx);
+  const auto primed = updater.update(six, idx);
+  REQUIRE(primed.hc == ring::cageAffiliation(six, idx).hc);
+  REQUIRE(primed.ddc == ring::cageAffiliation(six, idx).ddc);
 
   auto emptyRows = idx;
   for (auto &row : emptyRows) {
@@ -458,7 +460,9 @@ TEST_CASE("AffiliationUpdater matches an unsorted ring list and an empty frame",
   // following frame skips the diff.
   ring::AffiliationUpdater backoff;
   backoff.setBatchFraction(0.001);
-  (void)backoff.update(six, idx);
+  const auto primedBackoff = backoff.update(six, idx);
+  REQUIRE(primedBackoff.hc == ring::cageAffiliation(six, idx).hc);
+  REQUIRE(primedBackoff.ddc == ring::cageAffiliation(six, idx).ddc);
   auto cut = idx;
   if (cut.size() > 2 && cut[0].size() > 1) {
     const int other = cut[0][1];
@@ -783,7 +787,7 @@ TEST_CASE("DDC needs six distinct peripheral rings", "[cage_affiliation]") {
         REQUIRE_FALSE(aff.hc[r]);
         REQUIRE_FALSE(aff.ddc[r]);
       }
-      (void)withExtra;
+      REQUIRE(withExtra == (rings.size() == fx.rings.size() + 1));
 
       std::vector<ring::strucType> types(rings.size(),
                                          ring::strucType::unclassified);
@@ -862,7 +866,9 @@ TEST_CASE("AffiliationUpdater matches a forced HC/DDC edge flip with fallback of
     auto sixFlip = sixMembered(primitive::ringNetwork(flipped, 6));
     ring::AffiliationUpdater step;
     step.setBatchFraction(1.0);
-    (void)step.update(six, baseRows);
+    const auto primedStep = step.update(six, baseRows);
+    REQUIRE(primedStep.hc == ring::cageAffiliation(six, baseRows).hc);
+    REQUIRE(primedStep.ddc == ring::cageAffiliation(six, baseRows).ddc);
     const auto &inc = step.update(sixFlip, flipped);
     const auto batch = ring::cageAffiliation(sixFlip, flipped);
     REQUIRE(inc.hc == batch.hc);
@@ -950,7 +956,9 @@ TEST_CASE("AffiliationUpdater covers a moved owner, a short batch, and a dropped
 
   ring::AffiliationUpdater negative;
   negative.setBatchFraction(1.0);
-  (void)negative.update(mixed, wide);
+  const auto primedNeg = negative.update(mixed, wide);
+  REQUIRE(primedNeg.hc == ring::cageAffiliation(mixed, wide).hc);
+  REQUIRE(primedNeg.ddc == ring::cageAffiliation(mixed, wide).ddc);
   auto withNegative = mixed;
   withNegative[0].push_back(-1);
   withNegative[0].pop_back();
@@ -974,7 +982,9 @@ TEST_CASE("AffiliationUpdater covers a moved owner, a short batch, and a dropped
   };
   ring::AffiliationUpdater finger;
   finger.setBatchFraction(1.0);
-  (void)finger.update(firstRings, fpRows);
+  const auto primedFinger = finger.update(firstRings, fpRows);
+  REQUIRE(primedFinger.hc == ring::cageAffiliation(firstRings, fpRows).hc);
+  REQUIRE(primedFinger.ddc == ring::cageAffiliation(firstRings, fpRows).ddc);
   const auto &fingered = finger.update(secondRings, fpRows);
   const auto fingerBatch = ring::cageAffiliation(secondRings, fpRows);
   REQUIRE(fingered.hc == fingerBatch.hc);
@@ -986,7 +996,9 @@ TEST_CASE("AffiliationUpdater covers a moved owner, a short batch, and a dropped
   REQUIRE(six.size() > 2);
   ring::AffiliationUpdater drop;
   drop.setBatchFraction(1.0);
-  (void)drop.update(six, idx);
+  const auto primedDrop = drop.update(six, idx);
+  REQUIRE(primedDrop.hc == ring::cageAffiliation(six, idx).hc);
+  REQUIRE(primedDrop.ddc == ring::cageAffiliation(six, idx).ddc);
   auto shorter = six;
   const auto planes = ring::stackingPlanes(six, idx);
   std::size_t dropAt = shorter.size();
@@ -1011,7 +1023,9 @@ TEST_CASE("AffiliationUpdater covers a moved owner, a short batch, and a dropped
   for (const std::size_t at : {basals.front(), basals[basals.size() / 2]}) {
     ring::AffiliationUpdater again;
     again.setBatchFraction(1.0);
-    (void)again.update(six, idx);
+    const auto primedAgain = again.update(six, idx);
+    REQUIRE(primedAgain.hc == ring::cageAffiliation(six, idx).hc);
+    REQUIRE(primedAgain.ddc == ring::cageAffiliation(six, idx).ddc);
     auto cut = six;
     cut.erase(cut.begin() + static_cast<std::ptrdiff_t>(at));
     const auto &part = again.update(cut, idx);
@@ -1216,7 +1230,9 @@ TEST_CASE("Affiliation reads a backward cycle and an index outside the cloud",
 
   ring::AffiliationUpdater sized;
   sized.setBatchFraction(1.0);
-  (void)sized.update(hex, hotRows);
+  const auto primedSized = sized.update(hex, hotRows);
+  REQUIRE(primedSized.hc == ring::cageAffiliation(hex, hotRows).hc);
+  REQUIRE(primedSized.ddc == ring::cageAffiliation(hex, hotRows).ddc);
   auto longer = hotRows;
   longer.push_back({1});
   REQUIRE(sized.update(hex, longer).hc == ring::cageAffiliation(hex, longer).hc);
@@ -1228,7 +1244,9 @@ TEST_CASE("Affiliation reads a backward cycle and an index outside the cloud",
   }
   ring::AffiliationUpdater inside;
   inside.setBatchFraction(1.0);
-  (void)inside.update(hex, manyRows);
+  const auto primedInside = inside.update(hex, manyRows);
+  REQUIRE(primedInside.hc.size() == 1u);
+  REQUIRE(primedInside.ddc.size() == 1u);
   int inner = 0;
 #pragma omp parallel
   {

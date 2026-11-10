@@ -189,7 +189,11 @@ Result evaluate(Cloud &cloud, double cutoff, int atomType) {
   std::vector<ring::strucType> types(six.size(), ring::strucType::unclassified);
   std::vector<cage::Cage> cages;
   const auto listHC = ring::findHC(six, types, idx, cages, index);
-  (void)ring::findDDC(six, types, listHC, cages, index);
+  const auto listDDC = ring::findDDC(six, types, listHC, cages, index);
+  if (listHC.size() != six.size() || listDDC.size() != six.size()) {
+    out.cages = -1;
+    return out;
+  }
   out.cages = static_cast<int>(cages.size());
   for (const auto &cg : cages) {
     const bool hc = cg.type == cage::cageType::HexC;
