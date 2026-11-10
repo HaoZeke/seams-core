@@ -378,11 +378,17 @@ int main(int argc, char **argv) {
     seams_frame_free(missing);
   }
   missing = seams_frame_read("missing-lang.gro", 1, 0);
-  if (missing != nullptr) seams_frame_free(missing);
+  if (missing != nullptr) {
+    seams_frame_free(missing);
+  }
   missing = seams_frame_read("missing-lang.dcd", 1, -1);
-  if (missing != nullptr) seams_frame_free(missing);
+  if (missing != nullptr) {
+    seams_frame_free(missing);
+  }
   missing = seams_frame_read("missing-lang.con", 1, 1);
-  if (missing != nullptr) seams_frame_free(missing);
+  if (missing != nullptr) {
+    seams_frame_free(missing);
+  }
   seams_frame *allTypes = seams_frame_read(tip4p.c_str(), 1, -1);
   if (allTypes == nullptr) {
     return fail("type filter");
@@ -883,18 +889,97 @@ int main(int argc, char **argv) {
     return 0;
   };
   const std::string longMissing(80, 'q');
-  if (caught("fault frames", [&] { return seams_path_nframes((longMissing + ".lammpstrj").c_str()) == -1 ? 1 : 0; })) return 1;
-  if (caught("fault read", [&] { return seams_frame_read(ice1h.c_str(), 1, 1) == nullptr ? 1 : 0; })) return 1;
-  if (caught("fault arrays", [&] { return seams_frame_from_arrays(faultXyz, 1, faultBox, nullptr, nullptr) == nullptr ? 1 : 0; })) return 1;
-  if (caught("fault chill", [&] { return seams_frame_chill(oxygen, 3.5, 1, "cutoff", nullptr, nullptr) != 0 ? 1 : 0; })) return 1;
-  if (caught("fault rings", [&] { return seams_frame_rings(oxygen, 3.5, 1, "mutual", 6, faultRings, 8) != 0 ? 1 : 0; })) return 1;
-  if (caught("fault steinhardt", [&] { return seams_frame_steinhardt(oxygen, 3.5, 1, 4, faultR, faultG) != 0 ? 1 : 0; })) return 1;
-  if (caught("fault cages", [&] { return seams_frame_cages(oxygen, 3.5, 1, 4, "cutoff", 0, nullptr, &cageHex, nullptr, nullptr, nullptr) != 0 ? 1 : 0; })) return 1;
-  if (caught("fault signature", [&] { return seams_frame_signature(oxygen, 3.5, 1, "cutoff", "512", &faultCages, &faultAtoms) != 0 ? 1 : 0; })) return 1;
-  if (caught("fault rdf", [&] { return seams_frame_rdf(oxygen, 6.0, 4, 1, 1, faultR, faultG, faultC, nullptr) != 0 ? 1 : 0; })) return 1;
-  if (caught("fault rdf2d", [&] { return seams_frame_rdf2d(oxygen, 3.5, 0.5, nullptr, faultR, faultG) != 0 ? 1 : 0; })) return 1;
-  if (caught("fault prisms", [&] { return seams_frame_prisms(oxygen, 3.5, 1, 4, nullptr, faultPrism, &faultPrismN) != 0 ? 1 : 0; })) return 1;
-  if (caught("fault sheet", [&] { return seams_frame_monolayer(oxygen, 3.5, 1, 4, 1.0, nullptr, faultSheet, 8) != 0 ? 1 : 0; })) return 1;
+  if (caught("fault frames", [&] {
+        return seams_path_nframes((longMissing + ".lammpstrj").c_str()) == -1
+                   ? 1
+                   : 0;
+      })) {
+    return 1;
+  }
+  if (caught("fault read", [&] {
+        return seams_frame_read(ice1h.c_str(), 1, 1) == nullptr ? 1 : 0;
+      })) {
+    return 1;
+  }
+  if (caught("fault arrays", [&] {
+        return seams_frame_from_arrays(faultXyz, 1, faultBox, nullptr,
+                                       nullptr) == nullptr
+                   ? 1
+                   : 0;
+      })) {
+    return 1;
+  }
+  if (caught("fault chill", [&] {
+        return seams_frame_chill(oxygen, 3.5, 1, "cutoff", nullptr, nullptr) !=
+                       0
+                   ? 1
+                   : 0;
+      })) {
+    return 1;
+  }
+  if (caught("fault rings", [&] {
+        return seams_frame_rings(oxygen, 3.5, 1, "mutual", 6, faultRings, 8) !=
+                       0
+                   ? 1
+                   : 0;
+      })) {
+    return 1;
+  }
+  if (caught("fault steinhardt", [&] {
+        return seams_frame_steinhardt(oxygen, 3.5, 1, 4, faultR, faultG) != 0
+                   ? 1
+                   : 0;
+      })) {
+    return 1;
+  }
+  if (caught("fault cages", [&] {
+        return seams_frame_cages(oxygen, 3.5, 1, 4, "cutoff", 0, nullptr,
+                                 &cageHex, nullptr, nullptr, nullptr) != 0
+                   ? 1
+                   : 0;
+      })) {
+    return 1;
+  }
+  if (caught("fault signature", [&] {
+        return seams_frame_signature(oxygen, 3.5, 1, "cutoff", "512",
+                                     &faultCages, &faultAtoms) != 0
+                   ? 1
+                   : 0;
+      })) {
+    return 1;
+  }
+  if (caught("fault rdf", [&] {
+        return seams_frame_rdf(oxygen, 6.0, 4, 1, 1, faultR, faultG, faultC,
+                               nullptr) != 0
+                   ? 1
+                   : 0;
+      })) {
+    return 1;
+  }
+  if (caught("fault rdf2d", [&] {
+        return seams_frame_rdf2d(oxygen, 3.5, 0.5, nullptr, faultR, faultG) !=
+                       0
+                   ? 1
+                   : 0;
+      })) {
+    return 1;
+  }
+  if (caught("fault prisms", [&] {
+        return seams_frame_prisms(oxygen, 3.5, 1, 4, nullptr, faultPrism,
+                                  &faultPrismN) != 0
+                   ? 1
+                   : 0;
+      })) {
+    return 1;
+  }
+  if (caught("fault sheet", [&] {
+        return seams_frame_monolayer(oxygen, 3.5, 1, 4, 1.0, nullptr,
+                                     faultSheet, 8) != 0
+                   ? 1
+                   : 0;
+      })) {
+    return 1;
+  }
   const long beforeUnknown = fault_live()();
   fault_arm()(1, 2);
   if (seams_frame_chill(oxygen, 3.5, 1, "cutoff", nullptr, nullptr) == 0) {
