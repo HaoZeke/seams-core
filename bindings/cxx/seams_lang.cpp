@@ -356,9 +356,6 @@ int classify_chill(seams_frame *frame, double cutoff, int type,
       if (!keep_atom(point.type, type)) {
         label = static_cast<int>(molSys::atom_state_type::unclassified);
       }
-      if (label < 0 || label > 8) {
-        label = 6;
-      }
       frame->labels[static_cast<std::size_t>(i)] = label;
       if (keep_atom(point.type, type)) {
         counts[label] += 1;
