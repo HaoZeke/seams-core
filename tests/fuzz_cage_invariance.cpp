@@ -305,14 +305,12 @@ int main(int argc, char **argv) {
         std::printf("%s frame %d type %d EMPTY\n", path.filename().c_str(), frame, atomType);
       }
       const GraphSize g0 = graphSize(cloud, cutoff, atomType);
-      // Yuan and Cormack, Comput. Mater. Sci. 24, 343 (2002), build every
-      // primitive ring from pairs of shortest paths. That statement has
-      // no degree cutoff, so a degree above 40 is not an empty cage set.
-      // dump-l frame 1 is 512 atoms at degree 74. One source keeps 38762
-      // primitive rings. After 180s the walk is at source 32 of 512 and
-      // the output already holds 1197642 rings. The frame is skipped.
-      // mW_cubic is degree 4. One search returns in 0.97s, so a frame
-      // above 2048 atoms is checked at one trial.
+      // The size cap is applied while the rings are built: a ring longer
+      // than the requested maximum is not stored. On dump-l frame 1 that
+      // cap still leaves tens of thousands of shortest-path rings at one
+      // vertex, and the frame does not finish. It is skipped, and a skip
+      // fails this run. mW_cubic is degree 4. One search returns in
+      // 0.97 s, so a frame above 2048 atoms is checked at one trial.
       if (g0.maxDegree > 40) {
         skipped++;
         std::printf("%s frame %d type %d nop %d maxdeg %d SKIP ring walk does not finish\n",
@@ -406,5 +404,9 @@ int main(int argc, char **argv) {
               frames, checked, skipped, definedEmpty, failures,
               static_cast<unsigned long long>(shiftTrials),
               static_cast<unsigned long long>(permTrials));
+  // A skipped frame was not compared. That is a failure.
+  if (skipped != 0) {
+    return 1;
+  }
   return failures == 0 ? 0 : 1;
 }

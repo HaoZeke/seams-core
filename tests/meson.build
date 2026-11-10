@@ -426,10 +426,10 @@ test('invariance_empty_frame', _check_invariance,
   should_fail: true)
 # 1000 translations and 1000 permutations on every deposited frame, plus
 # the eight half-box shifts. A frame above 2048 atoms is checked at one
-# trial. A degree above 40 is skipped: the primitive-ring walk does not
-# finish, and it is not an empty result. One thread, 1023s, returned
-# checked 22, skipped 402, defined-empty 0. mW_cubic alone was 141s.
-# The limits sit above those runs. A hang is a failure.
+# trial. A degree above 40 is skipped, and a skip fails the run.
+# One thread, 1023 s, reported checked 22, skipped 402, defined-empty 0.
+# mW_cubic alone was 141 s. The limits sit above those runs.
+# A hang is a failure.
 _fuzz_summary = meson.current_source_dir() / 'fuzz_cage_summary.sh'
 test('fuzz_cage_shift_permute', find_program('bash'),
   args: [_fuzz_summary, 'checked 22 skipped 402 defined-empty 0', _fuzz_cage,

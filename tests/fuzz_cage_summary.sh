@@ -9,9 +9,6 @@ shift
 out=$("$@")
 rc=$?
 printf '%s\n' "$out"
-if [[ "$rc" -ne 0 ]]; then
-  exit "$rc"
-fi
 summary=$(printf '%s\n' "$out" | awk '/^frames /{line=$0} END{print line}')
 case "$summary" in
   *" $expected "*) ;;
@@ -26,4 +23,4 @@ if printf '%s\n' "$out" | grep -q 'CHECKED'; then
     exit 1
   fi
 fi
-exit 0
+exit "$rc"

@@ -8,9 +8,11 @@
 #include <set>
 #include <utility>
 #include <vector>
+#include <map>
 #include <mol_sys.hpp>
 #include <neighbours.hpp>
 #include <ring.hpp>
+#include <seams_input.hpp>
 
 #include <vector>
 
@@ -406,4 +408,31 @@ TEST_CASE("populateGraphFromNListID skips a missing id and keeps the other verti
   REQUIRE(graph.pts.size() == 3);
   REQUIRE(graph.pts[1].neighListIndex.empty());
   REQUIRE(graph.pts[0].neighListIndex.size() == 1);
+}
+
+TEST_CASE("the ring-size cap is applied while dump-l rings are built", "[franzblau]") {
+  // dump-l frame 1 is 512 atoms. The cutoff graph has degree 74.
+  // ringNetwork(maxDepth) must not emit a longer ring, and a higher cap
+  // must not change the count of a shorter size. Those two facts are the
+  // cap acting during the search.
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  cloud = sinp::readLammpsTrjO("traj/dump-l.lammpstrj", 1, cloud, 1);
+  const auto idx = nneigh::neighbourListByIndex(cloud, nneigh::neighListO(3.5, cloud, 1));
+  std::vector<char> sources(static_cast<std::size_t>(cloud.nop), 0);
+  sources[0] = 1;
+  const int caps[] = {3, 4, 6};
+  const std::map<int, int> expect3 = {{3, 790}};
+  const std::map<int, int> expect4 = {{3, 790}, {4, 864}};
+  const std::map<int, int> expect6 = {{3, 790}, {4, 864}, {5, 27043}, {6, 10065}};
+  const std::map<int, int> *expected[] = {&expect3, &expect4, &expect6};
+  for (int i = 0; i < 3; i++) {
+    const int cap = caps[i];
+    const auto rings = primitive::ringNetwork(idx, cap, sources);
+    std::map<int, int> hist;
+    for (const auto &ring : rings) {
+      REQUIRE(static_cast<int>(ring.size()) <= cap);
+      hist[static_cast<int>(ring.size())]++;
+    }
+    REQUIRE(hist == *expected[i]);
+  }
 }
