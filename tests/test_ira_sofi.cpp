@@ -165,6 +165,18 @@ TEST_CASE("IRA matches a triangle onto a larger set", "[ira]") {
   REQUIRE(m.rmsd >= 0.0);
 }
 
+TEST_CASE("IRA rejects a matrix that is not n by 3", "[ira]") {
+  Eigen::MatrixXd wide(2, 2);
+  wide.setZero();
+  Eigen::MatrixXd empty(0, 3);
+  ira::Match m;
+  ira::PointGroup pg;
+  REQUIRE(ira::match(wide, squareXY(), m) == 1);
+  REQUIRE(ira::match(squareXY(), wide, m) == 1);
+  REQUIRE(ira::match(empty, squareXY(), m) == 1);
+  REQUIRE(ira::pointGroup(empty, pg) == 1);
+}
+
 TEST_CASE("IRA rejects a non-finite point set", "[ira]") {
   ira::Match m;
   for (const double badValue : {std::numeric_limits<double>::quiet_NaN(),

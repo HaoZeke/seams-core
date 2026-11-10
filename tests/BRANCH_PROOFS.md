@@ -36,6 +36,8 @@
 
 `src/pntCorrespondence.cpp`, `startingIndex > 1` in `changeDiaCageOrder`. The `else if` is reached only from the false arm of `startingIndex <= 1`. For an `int` that is exactly `startingIndex > 1`, so the repeated comparison cannot fail. `startingIndex <= 3` still distinguishes the two peripheral shifts.
 
+`src/ira_sofi.cpp`, the true arm of `p == nat2`, the shift `(hasN && !hasZero)`, and `j < 0 || j >= nat2`, and the zero-`used` arm of the rmsd expression. libira writes a permutation of length `nat2` whose indices start at 0 (`ira_mod.py`: "start by index 0"). A successful match therefore has every index in `0 .. nat2-1`, the shift stays 0, and at least one pair is used when both clouds are non-empty. These arms stay unhit. Raw branch records are in the coverage report.
+
 `src/ira_sofi.cpp`, line `hasN = true` inside `ira::match`. libira writes a permutation of length `nat2` whose indices start at 0 (`ira_mod.py`, the `sym_data.perm` contract: "start by index 0"). The value `nat2` is therefore not an element, so `p == nat2` is false and the assignment that sets `hasN` does not run. A square match in `tests/test_ira_sofi.cpp` returns indices inside `0 .. n-1` and includes 0, which is the same contract. Raw line unhit.
 
 `src/ira_sofi.cpp`, line `continue` after `j < 0 || j >= nat2` in `ira::match`. The same permutation is a sequence of indices of length `nat2` starting at 0, so every element is in `0 .. nat2-1`. After the shift stays 0, `j` is that element. The comparison is false and the skip does not run. Raw line unhit. The file is 142/144 lines.
