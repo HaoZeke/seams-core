@@ -720,9 +720,7 @@ int cmdDomains(std::ostream &os, Cloud &cloud, double cutoff,
                const site::Table &table, site::Kind subset) {
   std::vector<bool> mask(static_cast<std::size_t>(cloud.nop), false);
   for (const int i : site::indicesOf(cloud, table, subset)) {
-    if (i >= 0 && i < cloud.nop) {
-      mask[static_cast<std::size_t>(i)] = true;
-    }
+    mask[static_cast<std::size_t>(i)] = true;
   }
   const auto idxList = nneigh::getNewNeighbourListByIndex(cloud, cutoff);
   std::vector<std::vector<int>> idList(idxList.size());
