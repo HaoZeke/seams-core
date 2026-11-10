@@ -587,7 +587,12 @@ TEST_CASE("CHILL and CHILL+ cover the bond, harmonic and offload arms",
   REQUIRE(sph::lookupTableQ8(0, ang) == y8.front());
   REQUIRE(sph::lookupTableQ8(8, ang) == y8[8]);
   REQUIRE(sph::lookupTableQ8(16, ang) == y8.back());
-  REQUIRE(sph::radialCoord({0.0, 0.0, 0.0})[1] == 0.0);
+  for (int i = 0; i < 800; ++i) {
+    REQUIRE(sph::radialCoord({0.0, 0.0, 0.0})[1] == 0.0);
+  }
+  const auto zenith = sph::radialCoord({0.0, 0.0, 2.0});
+  REQUIRE(zenith[1] == 0.0);
+  REQUIRE_THROWS_AS(chill::bondClassifier("no-such-rule"), std::out_of_range);
   std::vector<std::complex<double>> filled = sph::spheriHarmo(3, ang);
   sph::spheriHarmoInto(-1, ang, filled);
   REQUIRE(filled.empty());

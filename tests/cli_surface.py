@@ -51,6 +51,18 @@ def _write_gap(path):
         )
 
 
+def _write_three_types(path):
+    with open(path, "w", encoding="ascii") as handle:
+        handle.write(
+            "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n3\n"
+            "ITEM: BOX BOUNDS pp pp pp\n0 20\n0 20\n0 20\n"
+            "ITEM: ATOMS id type x y z\n"
+            "1 1 0.0 0.0 0.0\n"
+            "2 2 3.0 0.0 0.0\n"
+            "3 3 0.0 3.0 0.0\n"
+        )
+
+
 def _write_ions(path):
     with open(path, "w", encoding="ascii") as handle:
         handle.write(
@@ -69,6 +81,8 @@ def main():
     cubic = "input/traj/mW_cubic.lammpstrj"
     guest = "input/traj/genice_sI.lammpstrj"
     work = tempfile.mkdtemp(prefix="dseams-cli-")
+    three = os.path.join(work, "three.lammpstrj")
+    _write_three_types(three)
     empty = os.path.join(work, "empty.lammpstrj")
     with open(empty, "w", encoding="ascii") as handle:
         handle.write(
@@ -176,6 +190,29 @@ def main():
     if mutual.returncode != 0 or "interClathrate 7" not in mutual.stdout or "water 242" not in mutual.stdout:
         sys.stderr.write("mutual counts\n" + mutual.stdout + mutual.stderr)
         return 1
+    checked = [
+        (["ovito-chill+", ice, "--type", "1"], "hexagonal"),
+        (["ovito-chill+", ice, "--type", "1", "--rule", "chill+"], "hexagonal"),
+        (["ovito_chill_plus", ice, "--type", "1"], "hexagonal"),
+        (["--frame", "1", "--last", "2", "--type", "1", "read", cubic], "nop"),
+        (["--frame", "1", "--last", "2", "--type", "0", "read", cubic], "nop"),
+        (["cages", empty, "--type", "1"], "both"),
+        (["cages", empty, "--type", "1"], "water"),
+        (["domains", tip, "--site", "1=polar,2=apolar"], "subset"),
+        (["--water-types", "1", "cages", ice, "--type", "1", "--signature", "512", "--graph", "cutoff"], "signature"),
+        (["cages", ice, "--type", "1", "--signature", "512", "--graph", "cutoff"], "signature"),
+        (["--family", "ionicLiquid", "read", tip, "--type", "2"], "nop"),
+        (["cages", cubic, "--type", "1", "--graph", "cutoff"], "cubic 4096"),
+    ]
+    hinted = run(seams, ["--type", "-1", "read", three])
+    if hinted.returncode != 0 or "more than two" not in hinted.stderr:
+        sys.stderr.write("three types\n" + hinted.stdout + hinted.stderr)
+        return 1
+    for args, needle in checked:
+        result = run(seams, args)
+        if result.returncode != 0 or needle not in result.stdout:
+            sys.stderr.write("miss " + " ".join(args) + "\n" + result.stdout + result.stderr)
+            return 1
     for args in ok:
         result = run(seams, args)
         if result.returncode != 0:

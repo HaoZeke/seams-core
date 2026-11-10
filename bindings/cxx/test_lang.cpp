@@ -415,8 +415,8 @@ int main(int argc, char **argv) {
     std::ofstream bad(corrupt);
     bad << "not a lammpstrj\n";
   }
-  (void)seams_path_nframes(corrupt.c_str());
-  (void)seams_path_nframes("no-extension");
+  if (seams_path_nframes(corrupt.c_str()) > 0) return fail("corrupt frames");
+  if (seams_path_nframes("no-extension") > 0) return fail("bare frames");
   const std::string xyzPath = root + "/input/xyz/configuration.xyz";
   seams_frame *xyzFrame = seams_frame_read(xyzPath.c_str(), 1, 1);
   if (xyzFrame != nullptr) {
@@ -503,24 +503,24 @@ int main(int argc, char **argv) {
   if (seams_frame_steinhardt(oxygen, 3.5, 0, 4, qlOxygen.data(), qbarOxygen.data()) != 0) return fail("steinhardt type 0");
   if (seams_frame_steinhardt(oxygen, 3.5, 1, 4, nullptr, qbarOxygen.data()) != 0) return fail("steinhardt null ql");
   if (seams_frame_steinhardt(oxygen, 3.5, 1, 4, qlOxygen.data(), nullptr) != 0) return fail("steinhardt null bar");
-  (void)seams_frame_steinhardt(oxygen, 3.5, 1, -1, qlOxygen.data(), qbarOxygen.data());
-  (void)seams_frame_steinhardt(blank2, 3.5, 0, 4, qlOxygen.data(), qbarOxygen.data());
+  if (seams_frame_steinhardt(oxygen, 3.5, 1, -1, qlOxygen.data(), qbarOxygen.data()) != 0 && seams_last_error()[0] == '\0') return fail("silent bad order");
+  if (seams_frame_steinhardt(blank2, 3.5, 0, 4, qlOxygen.data(), qbarOxygen.data()) != 0) return fail("empty steinhardt");
   const std::string missingDir = (out / "no-such" / "dir").string();
-  (void)seams_frame_rdf2d(oxygen, 3.5, 0.5, missingDir.c_str(), rr, gg);
+  if (seams_frame_rdf2d(oxygen, 3.5, 0.5, missingDir.c_str(), rr, gg) == 0 && seams_last_error()[0] != '\0') return fail("rdf2d error with success");
   int prismCount = 8;
   std::vector<seams_prism_row> prismWide(8);
-  (void)seams_frame_prisms(oxygen, 3.5, 1, 4, missingDir.c_str(), prismWide.data(), &prismCount);
-  (void)seams_frame_monolayer(oxygen, 3.5, 1, 4, 1.0, missingDir.c_str(), sheetCounts, 16);
+  if (seams_frame_prisms(oxygen, 3.5, 1, 4, missingDir.c_str(), prismWide.data(), &prismCount) == 0 && seams_last_error()[0] != '\0') return fail("prism error with success");
+  if (seams_frame_monolayer(oxygen, 3.5, 1, 4, 1.0, missingDir.c_str(), sheetCounts, 16) == 0 && seams_last_error()[0] != '\0') return fail("sheet error with success");
   prismCount = 8;
   if (seams_frame_prisms(oxygen, 3.5, 1, 6, nullptr, prismWide.data(), &prismCount) != 0) return fail("prism memory");
   int shortRows = 0;
   if (seams_frame_prisms(oxygen, 3.5, 1, 6, nullptr, prismWide.data(), &shortRows) == 0) return fail("prism short rows");
   if (seams_frame_prisms(oxygen, 3.5, 1, 4, nullptr, prismWide.data(), nullptr) == 0) return fail("prism null count");
   if (seams_frame_prisms(oxygen, 3.5, 1, 4, slash.c_str(), nullptr, &prismCount) != 0) return fail("prism slash");
-  (void)seams_path_nframes("missing-frames.lammpstrj");
-  (void)seams_path_nframes("missing-frames.xyz");
-  (void)seams_frame_read("missing-frames.xyz", 1, 1);
-  (void)seams_frame_read("missing-frames.con", 1, 1);
+  if (seams_path_nframes("missing-frames.lammpstrj") > 0) return fail("missing frames");
+  if (seams_path_nframes("missing-frames.xyz") != 1) return fail("xyz frames");
+  if (seams_frame_read("missing-frames.xyz", 1, 1) != nullptr) return fail("missing xyz read");
+  if (seams_frame_read("missing-frames.con", 1, 1) != nullptr) return fail("missing con read");
   double pairXyz[6] = {0, 0, 0, 1, 0, 0};
   double pairBox[9] = {0, 0, 0, 5, 5, 5, 0, 0, 0};
   int pairTypes[2] = {1, 2};
@@ -576,6 +576,12 @@ int main(int argc, char **argv) {
   seams_arm_fault(1);
   if (seams_frame_monolayer(oxygen, 3.5, 1, 4, 1.0, nullptr, faultSheet, 8) == 0) return fail("fault sheet");
   seams_arm_fault(0);
+  if (seams_frame_prisms(oxygen, 3.5, 1, 4, nullptr, nullptr, nullptr) != 0) return fail("prism both null");
+  const std::string withSlash = outDir + "/";
+  if (seams_frame_rdf2d(oxygen, 3.5, 0.5, withSlash.c_str(), rr, gg) != 0) return fail("rdf2d slash again");
+  if (seams_frame_rdf2d(oxygen, 3.5, 0.5, "", rr, gg) != 0) return fail("rdf2d blank dir");
+  if (seams_frame_prisms(oxygen, 3.5, 1, 4, withSlash.c_str(), prismWide.data(), &prismCount) != 0) return fail("prism slash again");
+  if (seams_frame_prisms(oxygen, 3.5, 1, 4, "", prismWide.data(), &prismCount) != 0) return fail("prism blank dir");
   seams_frame_free(pair);
   seams_frame_free(blank2);
   seams_frame_free(oxygen);
