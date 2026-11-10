@@ -1252,9 +1252,6 @@ std::vector<cage::Signature> parseSignatures(const std::string &spec) {
   while (std::getline(in, part, '+')) {
     sigs.push_back(cage::Signature::parse(part));
   }
-  if (sigs.empty()) {
-    sigs.push_back(cage::Signature::parse(spec));
-  }
   return sigs;
 }
 
