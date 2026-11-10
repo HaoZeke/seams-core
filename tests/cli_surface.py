@@ -478,9 +478,17 @@ def main():
     if os.path.exists("input/baretraj"):
         os.remove("input/baretraj")
     fault_lib = os.path.join(os.path.dirname(os.path.abspath(seams)), "bindings", "libseams_test_fault.so")
-    if os.path.exists(fault_lib):
-        count_env = os.environ.copy()
-        count_env["LD_PRELOAD"] = fault_lib
+    # The fault allocator replaces operator new. An ASan runtime has to
+    # stay first in the preload list, so this block stays on the ordinary build.
+    if os.path.exists(fault_lib) and "ASAN_OPTIONS" not in os.environ:
+        def fault_env(base=None):
+            env = (base or os.environ).copy()
+            prior = env.get("LD_PRELOAD", "")
+            # An instrumented seams needs libasan ahead of the fault allocator.
+            env["LD_PRELOAD"] = prior + ":" + fault_lib if prior else fault_lib
+            return env
+
+        count_env = fault_env()
         count_env["SEAMS_TEST_KIND"] = "count"
         counted = subprocess.run([seams, "read", ice, "--type", "1"], capture_output=True, text=True, env=count_env)
         serial = 0
@@ -492,8 +500,7 @@ def main():
             return 1
 
         def serial_of(args):
-            env = os.environ.copy()
-            env["LD_PRELOAD"] = fault_lib
+            env = fault_env()
             env["SEAMS_TEST_KIND"] = "count"
             proc = subprocess.run([seams, *args], capture_output=True, text=True, env=env)
             found = 0
@@ -503,8 +510,7 @@ def main():
             return found, proc.returncode
 
         def throw_at(args, at):
-            env = os.environ.copy()
-            env["LD_PRELOAD"] = fault_lib
+            env = fault_env()
             env["SEAMS_TEST_KIND"] = "bad_alloc"
             env["SEAMS_TEST_AT"] = str(at)
             return subprocess.run([seams, *args], capture_output=True, text=True, env=env)
@@ -515,8 +521,7 @@ def main():
             ["pairs", tip, "--site", long_token + "=cationHead"],
         )
         for loud_args in loud_sets:
-            env = os.environ.copy()
-            env["LD_PRELOAD"] = fault_lib
+            env = fault_env()
             env["SEAMS_TEST_KIND"] = "count"
             env["SEAMS_TRACE_SIZE"] = "1"
             traced = subprocess.run([seams, *loud_args], capture_output=True, text=True, env=env)
@@ -537,8 +542,7 @@ def main():
                 sys.stderr.write("fault mismatch " + " ".join(loud_args) + "\n")
                 return 1
         for kind, needle in (("int", "unknown error"), ("bad_alloc", "bad_alloc")):
-            env = os.environ.copy()
-            env["LD_PRELOAD"] = fault_lib
+            env = fault_env()
             env["SEAMS_TEST_KIND"] = kind
             env["SEAMS_TEST_AT"] = str(serial - 20)
             probed = subprocess.run([seams, "read", ice, "--type", "1"], capture_output=True, text=True, env=env)

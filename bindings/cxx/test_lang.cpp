@@ -891,10 +891,10 @@ int main(int argc, char **argv) {
   int faultPrismN = 4;
   int faultCages = 0;
   int faultAtoms = 0;
+  // A sanitizer build does not preload this allocator. The checks
+  // below need it. The ordinary build does preload it.
+  if (fault_arm() != nullptr && fault_live() != nullptr) {
   auto caught = [](const char *label, auto &&call) -> int {
-    if (fault_arm() == nullptr || fault_live() == nullptr) {
-      return fail("no fault allocator");
-    }
     const long before = fault_live()();
     fault_reset()();
     fault_arm()(1, 1);
@@ -1017,6 +1017,7 @@ int main(int argc, char **argv) {
   }
   if (fault_live()() != beforeUnknown) {
     return fail("unknown leak");
+  }
   }
   if (seams_frame_prisms(oxygen, 3.5, 1, 4, nullptr, nullptr, nullptr) != 0) {
     return fail("prism both null");
