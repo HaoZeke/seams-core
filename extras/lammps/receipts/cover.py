@@ -91,6 +91,14 @@ def configure_live(env, build):
     return env
 
 
+def clear_gcda(root):
+    root = Path(root)
+    if not root.is_dir():
+        return
+    for path in root.rglob("*.gcda"):
+        path.unlink()
+
+
 def abort(log, code):
     if code != 0:
         log.line("exit_code: %d" % code)
@@ -138,6 +146,11 @@ def main():
     abort(log, code)
     code = log.run(["cmake", "--build", str(plugin), "-j", "4"], WORK, os.environ.copy())
     abort(log, code)
+    # Counters from an earlier or a parallel run are not part of this figure.
+    clear_gcda(plugin)
+    clear_gcda(WORK / "compute")
+    clear_gcda(BUILD / "seams" / "seams.p")
+    os.environ["OMP_NUM_THREADS"] = "1"
     env = os.environ.copy()
     env["DSEAMS_LAMMPS_SRC"] = str(LAMMPS / "src")
     env["SEAMS_LIB"] = str(BUILD / "seams" / "src" / "libyodaLib.so")
@@ -201,50 +214,35 @@ def main():
     gcov_code = log.run(["gcov", "-b", str(cli_notes)], WORK, os.environ.copy()) or gcov_code
     gcovr = os.environ.get("GCOVR", "gcovr")
     common = [
-        gcovr, "--root", str(SRC),
+        gcovr, "-j", "1", "--root", str(SRC),
         "--object-directory", str(WORK / "plugin" / "CMakeFiles" / "dseams_lammps.dir"),
         "--object-directory", str(WORK / "compute"),
-        "--object-directory", str(BUILD / "seams"),
+        "--object-directory", str(BUILD / "seams" / "seams.p"),
         "--filter", ".*fix_dseams\\.cpp", "--filter", ".*compute_dseams\\.cpp",
         "--filter", ".*seams_cli\\.cpp",
         "--txt-metric", "line",
         "--txt-metric", "branch",
     ]
-    line_patterns = [
-        r"\s*if \(i < 0\)",
-        r"\s*if \(i >= atom->nlocal\)",
-        r"\s*if \(j < 0\)",
-        r"\s*if \(j >= nall\)",
-        r"\s*if \(want\)",
-        r"\s*if \(static_cast<int>\(flat.size\(\)\) > begin\)",
-        r"\s*\} else if \(total_atoms == 0\)",
-        r"\s*if \(comm->me != 0\) \{ // nprocs is already 1",
-        r"\s*continue; // builder stores i at or above zero",
-        r"\s*continue; // builder stores i below nlocal",
-        r"\s*continue; // NEIGHMASK keeps j at or above zero",
-        r"\s*continue; // stencil stores j below nall",
-        r"\s*return; // the only rank left is rank 0",
+    bare = common + [
+        "--no-markers",
+        "--json", str(WORK / "gcovr-nomarkers.json"),
+        "--txt", str(WORK / "gcovr-nomarkers.txt"),
     ]
-    raw_json = common + ["--json", str(WORK / "gcovr-raw.json"), "--txt", str(WORK / "gcovr-raw.txt")]
-    log.line("command: gcovr raw branches")
-    gcovr_code = log.run(raw_json, WORK, os.environ.copy())
+    log.line("command: gcovr -j 1 --no-markers")
+    gcovr_code = log.run(bare, WORK, os.environ.copy())
+    marked = common + [
+        "--json", str(WORK / "gcovr-markers.json"),
+        "--txt", str(WORK / "gcovr-markers.txt"),
+    ]
+    log.line("command: gcovr -j 1")
+    gcovr_code = log.run(marked, WORK, os.environ.copy()) or gcovr_code
     throw_json = common + [
         "--exclude-throw-branches",
         "--json", str(WORK / "gcovr-throw.json"),
         "--txt", str(WORK / "gcovr-throw.txt"),
     ]
-    log.line("command: gcovr --exclude-throw-branches")
+    log.line("command: gcovr -j 1 --exclude-throw-branches")
     gcovr_code = log.run(throw_json, WORK, os.environ.copy()) or gcovr_code
-    gcovr_cmd = common + ["--exclude-throw-branches"]
-    for pattern in line_patterns:
-        gcovr_cmd.extend(["--exclude-lines-by-pattern", pattern])
-    gcovr_cmd.extend([
-        "--json", str(WORK / "gcovr.json"),
-        "--xml", str(WORK / "gcovr.xml"),
-        "--txt", str(WORK / "gcovr.txt"),
-    ])
-    log.line("command: gcovr --exclude-throw-branches plus one pattern per unreachable check")
-    gcovr_code = log.run(gcovr_cmd, WORK, os.environ.copy()) or gcovr_code
     log.line("end: " + streamlog.date_is())
     log.hash_tree(WORK)
     log.line("exit_code: %d" % (gcov_code or gcovr_code or code))

@@ -25,15 +25,32 @@ def command_text(proc, cwd):
     return (proc.stdout or "") + (proc.stderr or "") + log
 
 
+def measured_env(cmd, env):
+    """Keep coverage counters on one process.
+
+    A second MPI rank would update the same .gcda with a single-threaded
+    profile, which is what produces a negative hit. Ranks above 1 still run.
+    Their counters go to a side directory that the report does not read.
+    """
+    base = os.environ.copy() if env is None else dict(env)
+    base["OMP_NUM_THREADS"] = "1"
+    if "-np" in cmd:
+        at = cmd.index("-np")
+        if at + 1 < len(cmd) and cmd[at + 1] != "1":
+            base["GCOV_PREFIX"] = "/tmp/v53-gcov-ranks"
+            base["GCOV_PREFIX_STRIP"] = "0"
+    return base
+
+
 def run(cmd, cwd, env=None):
-    proc = subprocess.run(cmd, cwd=cwd, env=env, text=True, capture_output=True)
+    proc = subprocess.run(cmd, cwd=cwd, env=measured_env(cmd, env), text=True, capture_output=True)
     if proc.returncode != 0:
         raise SystemExit("exit %d want 0\n%s" % (proc.returncode, command_text(proc, cwd)[-1500:]))
     return proc
 
 
 def expect(cmd, cwd, env, code, message):
-    proc = subprocess.run(cmd, cwd=cwd, env=env, text=True, capture_output=True)
+    proc = subprocess.run(cmd, cwd=cwd, env=measured_env(cmd, env), text=True, capture_output=True)
     text = command_text(proc, cwd)
     if proc.returncode != code:
         raise SystemExit("exit %d want %d\n%s" % (proc.returncode, code, text[-1500:]))

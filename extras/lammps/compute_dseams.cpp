@@ -93,7 +93,9 @@ void ComputeDseams::compute_peratom() {
   if (nlocal > 0) {
     failed = seams_chill_plus_graph_lammps(xyz.data(), nlocal, box9, cutoff,
                                            graph.c_str(), labels.data()) != 0;
-  } else if (total_atoms == 0) {
+  // nprocs is already 1, so nlocal equals total_atoms. The else side is
+  // nlocal equal to 0, which forces the total to 0. The false edge cannot run.
+  } else if (total_atoms == 0) { // GCOVR_EXCL_BR_LINE
     failed = 1;
   }
   int any_failed = 0;
@@ -107,8 +109,9 @@ void ComputeDseams::compute_peratom() {
   if (label_path.empty()) {
     return;
   }
-  if (comm->me != 0) { // nprocs is already 1
-    return; // the only rank left is rank 0
+  // The nprocs check has already returned, so the surviving rank is 0.
+  if (comm->me != 0) { // GCOVR_EXCL_BR_LINE
+    return; // GCOVR_EXCL_LINE this return runs only when me is not 0
   }
   std::ofstream out(label_path, label_open ? std::ios::app : std::ios::out);
   label_open = 1;
