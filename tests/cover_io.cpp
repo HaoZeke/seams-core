@@ -498,13 +498,18 @@ TEST_CASE("output paths and padded data files", "[cover_io]") {
       fs::create_directory(raced, ignore);
     }
   });
+  int sawDirectory = 0;
+  int lastCode = -1;
   for (int attempt = 0; attempt < 20000; ++attempt) {
     std::error_code ignore;
     fs::remove(raced, ignore);
-    (void)sout::makePath(raced.string());
+    lastCode = sout::makePath(raced.string());
+    sawDirectory += lastCode == 0 ? 1 : 0;
   }
   stopRace.store(true);
   racer.join();
+  REQUIRE(lastCode == 0 || lastCode == 1);
+  REQUIRE(sawDirectory > 0);
 
   auto cloud = makeCloud(4);
   cloud.box = {10, 10, 10, 0.2, 0.1, 0.0};

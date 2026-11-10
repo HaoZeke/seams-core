@@ -25,6 +25,12 @@ int main() {
   frame.ly = 10.0;
   frame.lz = 10.0;
   const int status = seams_insitu_step(eng, &frame);
+  const seams_insitu_result *result = seams_insitu_last(eng);
+  const int atoms = result == nullptr ? -1 : result->n;
+  const int reported = result == nullptr ? -1 : result->status;
   seams_insitu_destroy(eng);
-  return status == 0 ? 0 : 1;
+  if (status != 0 || atoms != 2 || reported != 0) {
+    return 1;
+  }
+  return 0;
 }
