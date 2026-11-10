@@ -399,7 +399,7 @@ def check_neigh(work):
     neigh_ref.compare_sets(frames[0], {}, "freud")
     bad = work / "badhost.txt"
     bad.write_text(
-        "frame\nstep 0\ncutoff 3.5\nbox 0 0 0 10 10 10 0 0 0\nhost 1\n"
+        "frame\nstep 0\ncutoff 3.5\nbox 0 0 0 10 10 10 0 0 0\npbc 0 0 0\nhost 1\n"
         "atoms 2\natom 1 1 0 0 0\natom 2 1 1 0 0\nrow 1 9\n"
         "label 1 1 0 0 0 0\nendframe\n"
     )
@@ -432,6 +432,35 @@ def check_neigh(work):
     finally:
         builtins.__import__ = real_import
         importlib.reload(neigh_ref)
+    hand = work / "hand.txt"
+    hand.write_text(
+        "frame\nstep 7\ncutoff 3.5\nbox 0 0 0 10 10 10 0 0 0\npbc 0 0 0\nhost 1\n"
+        "atoms 6\n"
+        "atom 1 1 5 5 5\natom 2 1 7 5 5\natom 3 1 3 5 5\n"
+        "atom 4 1 5 7 5\natom 5 1 5 3 5\natom 6 1 5 5 7\n"
+        "row 1 2 3 4 5 6\n"
+        "label 1 1 5 5 5 0\nlabel 2 1 7 5 5 2\nlabel 3 1 3 5 5 2\n"
+        "label 4 1 5 7 5 2\nlabel 5 1 5 3 5 2\nlabel 6 1 5 5 7 2\n"
+        "endframe\n"
+    )
+    held = neigh_ref.parse_frames(hand)[0]
+    centre = neigh_ref.freud_sets(held)[1]
+    if centre != {2, 3, 4, 5, 6}:
+        raise SystemExit("hand freud set %s" % sorted(centre))
+    if neigh_ref.ovito is not None:
+        ovito_centre = neigh_ref.ovito_sets(held)[1]
+        if ovito_centre != centre:
+            raise SystemExit("hand ovito set %s" % sorted(ovito_centre))
+        groups = neigh_ref.chill_table(held, "hand")
+        if 0 not in groups["A"]:
+            raise SystemExit("hand atom 1 was not group A %s" % groups)
+    points = __import__("numpy").array([[1.0, 1.0, 1.0]])
+    shells, _distances, vectors = neigh_ref.full_shells(points, held["box"], 3.5)
+    if len(shells[0]) != 0:
+        raise SystemExit("a lone atom found a neighbour")
+    neigh_ref.q_vectors(shells, vectors, False)
+    pair = __import__("numpy").array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
+    neigh_ref.bond_counts(pair, held["box"], 0, 3.5)
 
 
 def check_prose(work):

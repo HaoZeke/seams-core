@@ -204,8 +204,13 @@ with tempfile.TemporaryDirectory() as tmp:
     ok = run(["pairs", str(water), "--site", "=cationHead", *one], expect=2, message="site spec token '=cationHead' is not key=value") and ok
     ok = run(["chill-plus", str(water), "--graph", "knn-union"], expect=2, message="CHILL and CHILL+ take --graph cutoff or mutual") and ok
     ok = run(["rings", str(empty), "--frame", "1", "--last", "2", "--strict-input"], expect=2, message="input frame 2 contains no atoms") and ok
-    blank_rc = subprocess.run([seams, "rings", str(blank), "--frame", "1", "--last", "1"], capture_output=True).returncode
-    ok = blank_rc in (0, 2) and ok
+    blank_proc = subprocess.run(
+        [seams, "rings", str(blank), "--frame", "1", "--last", "1"],
+        capture_output=True, text=True,
+    )
+    blank_text = blank_proc.stdout + blank_proc.stderr
+    if blank_proc.returncode != 0 or "Frame 1 not found" not in blank_text:
+        raise SystemExit("blank.con " + blank_text)
     ok = run(["chill-plus", str(water), "--family", "not-a-family"], expect=2, message="Usage:") and ok
     ok = run(["rdf", str(water), "--types", "1,2,3"], expect=2, message="Usage:") and ok
     ok = run(["rdf", str(water), "--types", "a,b"], expect=2, message="Usage:") and ok
@@ -251,8 +256,46 @@ with tempfile.TemporaryDirectory() as tmp:
         (["chill", str(water), "--graph", "foo"], "unknown bond graph 'foo' (use cutoff, knn, knn-union)"),
         (["rings", str(water), "--frame", "1-2"], "Usage:"),
         (["cages", str(tiny), "--guest-types", "x"], "invalid arguments: value \"x\" is not a number"),
+        (["chill", str(tiny), "--family", "ionicLiquid"], "CHILL/TUM refused for family ionicLiquid"),
+        (["chill", str(tiny), "--family", "moltenSalt"], "CHILL/TUM refused for family moltenSalt"),
+        (["chill", str(tiny), "--family", "des"], "CHILL/TUM refused for family des"),
+        (["chill", str(tiny), "--family", "electrolyte"], "CHILL/TUM refused for family electrolyte (name a waterIce subset)"),
+        (["chill", str(tiny), "--family", "confinedIL"], "CHILL/TUM refused for family confinedIL"),
+        (["chill", str(tiny), "--family", "confinedWater"], "CHILL/TUM refused for family confinedWater"),
+        (["chill", str(tiny), "--family", "networkFormer"], "CHILL/TUM refused for family networkFormer"),
+        (["domains", str(tiny)], "domains needs --site"),
+        (["rings", str(tiny), "--format", "yaml"], "bad --format (want text|json)"),
+        (["rings", str(tiny), "--bins", "-3"], "bad --bins (want N > 0)"),
+        (["cages", str(tiny), "--cage-edge", "9,1"], "bad cage edge window (want 0 <= lo < hi, or none)"),
+        ([], "A command and a trajectory file are required"),
     ]
     for args, message in rejected:
         ok = run(args, expect=2, message=message) and ok
+    xyz = Path(tmp) / "two.xyz"
+    xyz.write_text("2\nbox\nO 0 0 0\nO 2 0 0\n")
+    nucleation = root / "input" / "traj" / "nucleation_f1.lammpstrj"
+    observed = [
+        (["cages", str(nucleation), "--type", "1", "--graph", "cutoff", "--shape",
+          "--per-atom", per, "--frame", "1", "--last", "1"], "both"),
+        (["cages", str(nucleation), "--type", "1", "--graph", "seeded",
+          "--frame", "1", "--last", "1"], "seeded"),
+        (["chill-plus", str(nucleation), "--type", "1", "--frame", "1", "--last", "1"], "hexagonal"),
+        (["cages", str(tiny), "--graph", "knn-union", "--frame", "1", "--last", "1"], "knn-union"),
+        (["fingerprint", str(tiny), "--graph", "knn", "--by-atom", "--colour-types",
+          "--frame", "1", "--last", "1"], "atom"),
+        (["fingerprint", str(tiny), "--graph", "seeded", "--frame", "1", "--last", "1"], "graph"),
+        (["rings", str(xyz), "--frame", "1", "--last", "1"], "rings"),
+        (["read", str(zero), "--frame", "1", "--last", "1"], "nop 0"),
+        (["rings", str(zero), "--strict-input", "--frame", "1", "--last", "1"], "contains no atoms"),
+        (["cages", str(tiny), "--cage-edge", "0,1", "--graph", "cutoff",
+          "--frame", "1", "--last", "1"], "graph"),
+        (["rings", str(water), "--jobs", "2", "--frame", "1", "--last", "2"], "rings"),
+        (["rings", str(water), "--rebuild", "--jobs", "2", "--frame", "1", "--last", "2"], "rings"),
+    ]
+    for args, needle in observed:
+        proc = subprocess.run([seams, *args], capture_output=True, text=True)
+        text = proc.stdout + proc.stderr
+        if proc.returncode != 0 or needle not in text:
+            raise SystemExit("observed %s\n%s" % (args[0], text[:400]))
 
 sys.exit(0 if ok else 1)

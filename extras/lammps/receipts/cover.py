@@ -180,6 +180,7 @@ def main():
             str(BUILD / "seams" / "src"),
             str(BUILD / "seams" / "chemfiles-prefix" / "lib"),
             live_env.get("LD_LIBRARY_PATH", ""),
+            "/usr/lib/x86_64-linux-gnu",
         )
         if part
     )
