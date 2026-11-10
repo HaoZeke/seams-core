@@ -137,21 +137,8 @@ struct FrameContext {
     basalCand.resize(static_cast<std::size_t>(nR));
     adjRings.resize(static_cast<std::size_t>(nR));
     adjReady.assign(static_cast<std::size_t>(nR), 0);
+    // Left clear. basalCandidates fills a ring the first time a sweep asks.
     basalReady.assign(static_cast<std::size_t>(nR), 0);
-#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
-#pragma omp parallel if (!omp_in_parallel())
-#endif
-    {
-      BasalScratch scratch;
-#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
-#pragma omp for schedule(static)
-#endif
-      for (int i = 0; i < nR; i++) {
-        basalCand[static_cast<std::size_t>(i)] =
-            collectBasalCandidates(i, scratch);
-        basalReady[static_cast<std::size_t>(i)] = 1;
-      }
-    }
   }
 
   [[nodiscard]] bool shareAtoms(int i, int j) const {
@@ -243,10 +230,13 @@ struct FrameContext {
     std::vector<int> arm1;
     std::vector<int> arm2;
     std::vector<int> seen;
-    int tickOn = 0;
-    int tick1 = 0;
-    int tick2 = 0;
-    int tickSeen = 0;
+    // Unsigned, so the generation counter wraps by the language rules.
+    // A signed increment that passed INT_MAX would be undefined, and the
+    // reset under that test was not a path the compiler could take.
+    std::uint8_t tickOn = 0;
+    std::uint8_t tick1 = 0;
+    std::uint8_t tick2 = 0;
+    std::uint8_t tickSeen = 0;
     void prepare(int atoms, int nRings) {
       if (static_cast<int>(onRing.size()) < atoms) {
         onRing.assign(static_cast<size_t>(atoms), 0);
@@ -257,8 +247,9 @@ struct FrameContext {
         seen.assign(static_cast<size_t>(nRings), 0);
       }
     }
-    int next(int &tick, std::vector<int> &stamp) {
-      if (++tick <= 0) {
+    int next(std::uint8_t &tick, std::vector<int> &stamp) {
+      ++tick;
+      if (tick == 0) {
         std::fill(stamp.begin(), stamp.end(), 0);
         tick = 1;
       }
@@ -391,7 +382,7 @@ struct FrameContext {
 
   mutable BasalScratch lazyScratch;
 
-  [[nodiscard]] const std::vector<int> &basalCandidates(int i) {
+  [[nodiscard]] const std::vector<int> &basalCandidates(int i) const {
     static const std::vector<int> empty;
     if (i < 0 || i >= static_cast<int>(basalCand.size())) {
       return empty;
@@ -447,39 +438,40 @@ ring::CageAffiliation batchSweep(const FrameContext &ctx) {
   // nvc++ -mp=gpu (SEAMS_HAS_OFFLOAD) SIGSEGVs host parallel-fors in libnvomp
 #if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
   const bool threaded = nR >= 1024 && !omp_in_parallel();
+#else
+  const bool threaded = false;
 #endif
 
-  // HC affiliation by a global sweep over ordered pairs: every passing pair
-  // marks its basal rings and its prismatic rings. Sweeping every i covers
-  // both directions of every pair once. A flag only ever turns on, so each
-  // thread keeps its marks and sets them once its share is done.
-#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
-#pragma omp parallel if (threaded)
-#endif
+  // A flag only turns on. Once every ring is on, later pairs cannot change
+  // the result, and on a ring-rich graph those pairs are most of the sweep.
   {
-    std::vector<int> marks;
+    std::vector<char> on(static_cast<std::size_t>(nR), 0);
+    int left = nR;
+    auto mark = [&](int m) {
+      char &slot = on[static_cast<std::size_t>(m)];
+      if (slot != 0) {
+        return;
+      }
+      slot = 1;
+      result.hc[static_cast<std::size_t>(m)] = true;
+      --left;
+    };
     std::vector<int> listHC;
     std::vector<ring::strucType> types(nRings, ring::strucType::unclassified);
-#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
-#pragma omp for schedule(dynamic, 256) nowait
-#endif
-    for (int i = 0; i < nR; i++) {
-      for (const int j : ctx.basalCand[static_cast<size_t>(i)]) {
+    for (int i = 0; i < nR && left > 0; ++i) {
+      for (const int j : ctx.basalCandidates(i)) {
+        if (left == 0) {
+          break;
+        }
         if (!ctx.basalPair(i, j)) {
           continue;
         }
-        marks.push_back(i);
-        marks.push_back(j);
+        mark(i);
+        mark(j);
         for (const int k : ctx.prismaticOf(i, j, listHC, types)) {
-          marks.push_back(k);
+          mark(k);
         }
       }
-    }
-#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
-#pragma omp critical(seams_cage_affiliation)
-#endif
-    for (const int m : marks) {
-      result.hc[static_cast<std::size_t>(m)] = true;
     }
   }
 
@@ -1084,12 +1076,12 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
     dirtyEq[static_cast<std::size_t>(i)] = equatorial ? 1 : 0;
   }
   if (dirtyPairs.size() > batchLimit) {
+    // The next frames skip the diff. The call has to run before the return.
+    st.fellBack();
     st.fastAffiliation(rings, nList);
     st.prevSortedRows.swap(st.incoming);
     st.answersValid = false;
     st.batchHot = true;
-    return st.current;
-    st.fellBack();
     return st.current;
   }
 
@@ -1184,12 +1176,11 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
 
   int evaluated = 0;
   st.flags(ctx, evaluated);
+  // The equatorial flag is set only together with the pairs flag,
+  // so the pairs flag already counts every ring that test will rerun.
   std::size_t touched = 0;
   for (int i = 0; i < nR; i++) {
-    touched += (isDirty[static_cast<std::size_t>(i)] ||
-                dirtyEq[static_cast<std::size_t>(i)])
-                   ? 1
-                   : 0;
+    touched += isDirty[static_cast<std::size_t>(i)] ? 1 : 0;
   }
   st.lastReclassified = static_cast<int>(touched);
   st.remember(rings, rows);
