@@ -27,6 +27,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <exception>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -2293,9 +2294,15 @@ int main(int argc, char *argv[]) {
       (jobs == 1 || frameSource(file) != FrameSource::dump)) {
     walkCarry = std::make_unique<FrameCarry>(true);
   }
-  const bool ranged =
-      lo > hi || forEachInputFrame(file, lo, hi, typeFilter, jobs, processFrame,
-                                   selection, part, parts);
+  bool ranged = false;
+  try {
+    ranged =
+        lo > hi || forEachInputFrame(file, lo, hi, typeFilter, jobs, processFrame,
+                                     selection, part, parts);
+  } catch (const std::exception &err) {
+    std::cerr << err.what() << "\n";
+    return 2;
+  }
 #ifdef SEAMS_HAS_MPI
   if (ranks.size > 1 &&
       !gatherFrameResults(ranks, outputLines, outputStatus, outputSeen)) {

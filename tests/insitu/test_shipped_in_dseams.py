@@ -91,100 +91,47 @@ def require_cages(name, live_line, cages):
             raise SystemExit("%s cages %s vs %s" % (name, live_line, cages))
 
 
+class Finished(object):
+    def __init__(self, code, out="", err=""):
+        self.returncode = code
+        self.stdout = out
+        self.stderr = err
+
+
+def assert_reject(fn, message):
+    try:
+        fn()
+    except SystemExit as exc:
+        if str(exc) != message:
+            raise SystemExit("reject was %r" % str(exc))
+        return
+    raise SystemExit("reject did not fire")
+
+
 def exercise_rejects():
-    try:
-        need("DSEAMS_NOT_SET")
-    except SystemExit:
-        pass
-    seams = need("SEAMS_CLI")
-    binary = need("DSEAMS_LMP")
-    plugin = need("DSEAMS_PLUGIN")
-    work = Path(os.environ.get("DSEAMS_IN_DSEAMS_WORK", "var/run/in-dseams")) / "rejects"
-
-    def clear(path):
-        if path.exists():
-            shutil.rmtree(path)
-
-    work.mkdir(parents=True, exist_ok=True)
-    clear(work)
-    clear(work)
-    work.mkdir(parents=True)
-    shutil.copy(WATER, work / "water.data")
-    shutil.copy(plugin, work / "libdseams_lammps.so")
-    (work / "in.dseams").write_text(
-        "units real\natom_style atomic\nboundary p p p\n"
-        "plugin load ./libdseams_lammps.so\nread_data water.data\n"
-        "mass 1 18.015\npair_style zero 4.0\npair_coeff * *\n"
-        "fix sea all dseams record rec.txt every 0\nrun 0\n"
+    assert_reject(lambda: need("DSEAMS_NOT_SET"), "set DSEAMS_NOT_SET")
+    assert_reject(lambda: cli_line("/bin/false", Path("."), "rings", []), "rings exit 1\n")
+    assert_reject(lambda: cli_line("/bin/true", Path("."), "rings", []), "rings wrote no census line")
+    assert_reject(lambda: require_lammps("plugin", Finished(1, "boom")), "plugin exit 1\nboom")
+    assert_reject(lambda: require_steps("plugin", [{"step": 1}]), "plugin steps [1]")
+    assert_reject(lambda: require_rings("plugin", "rings 3:1", "rings 3:0"), "plugin rings\nrings 3:1\nrings 3:0")
+    assert_reject(
+        lambda: require_chill("plugin", "chill cubic:1", "nop 1 cubic 0"),
+        "plugin chill chill cubic:1 vs nop 1 cubic 0",
     )
-    proc = subprocess.run(
-        [binary, "-in", "in.dseams", "-log", "log.lammps"],
-        cwd=work, text=True, capture_output=True,
+    assert_reject(
+        lambda: require_cages("plugin", "cage hc:1 ddc:0 both:0 water:0", "nop 1 x 0 hexagonal 0 cubic 0 both 0 water 0"),
+        "plugin cages cage hc:1 ddc:0 both:0 water:0 vs nop 1 x 0 hexagonal 0 cubic 0 both 0 water 0",
     )
-    try:
-        require_lammps("bad", proc)
-    except SystemExit:
-        pass
-    (work / "in-ok").write_text(
-        "units real\natom_style atomic\nboundary p p p\n"
-        "plugin load ./libdseams_lammps.so\nread_data water.data\n"
-        "mass 1 18.015\npair_style zero 4.0\npair_coeff * *\n"
-        "neighbor 2.0 bin\nneigh_modify delay 0 every 1 check yes\n"
-        "fix sea all dseams record live.txt every 1 cutoff 3.5\n"
-        "dump native all custom 1 dump.lammpstrj id type x y z\n"
-        "dump_modify native sort id format float %.17g\n"
-        "run 1\n"
-    )
-    proc = subprocess.run(
-        [binary, "-in", "in-ok", "-log", "log.lammps"],
-        cwd=work, text=True, capture_output=True,
-    )
-    require_lammps("ok", proc)
-    live_text = (work / "live.txt").read_text()
-    census("")
-    census("note\n\n" + live_text)
-    blocks = census(live_text)
-    try:
-        require_steps("bad", blocks)
-    except SystemExit:
-        pass
-    dump = work / "dump.lammpstrj"
-    try:
-        cli_line(seams, dump, "rings", ["--cutoff", "not-a-number"])
-    except SystemExit:
-        pass
-    try:
-        cli_line(seams, dump, "--features", [])
-    except SystemExit:
-        pass
-    rings = cli_line(seams, dump, "rings", [])
-    other = cli_line(seams, dump, "rings", ["--cutoff", "1.0"])
-    try:
-        require_rings("bad", rings, other)
-    except SystemExit:
-        pass
-    chill = cli_line(seams, dump, "chill-plus", ["--graph", "cutoff"])
-    try:
-        require_chill("bad", "chill cubic:9", chill)
-    except SystemExit:
-        pass
-    cages = cli_line(seams, dump, "cages", ["--graph", "cutoff"])
-    try:
-        require_cages("bad", "cage hc:9 ddc:0 both:0 water:0", cages)
-    except SystemExit:
-        pass
+    if census("") != []:
+        raise SystemExit("empty census")
 
 
 def run_route(name, binary, plugin, work):
     folder = work / name
 
-    def clear(path):
-        if path.exists():
-            shutil.rmtree(path)
-
-    folder.mkdir(parents=True, exist_ok=True)
-    clear(folder)
-    clear(folder)
+    if folder.exists():
+        shutil.rmtree(folder)
     folder.mkdir(parents=True)
     shutil.copy(INPUT, folder / "in.dseams")
     shutil.copy(WATER, folder / "water.data")

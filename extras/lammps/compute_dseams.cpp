@@ -1,5 +1,6 @@
 #include "compute_dseams.h"
 #include "atom.h"
+#include "comm.h"
 #include "domain.h"
 #include "error.h"
 #include "memory.h"
@@ -75,14 +76,17 @@ void ComputeDseams::compute_peratom() {
       domain->triclinic ? domain->xy : 0.0,
       domain->triclinic ? domain->xz : 0.0,
       domain->triclinic ? domain->yz : 0.0};
-  if (seams_chill_plus_graph_lammps(xyz.data(), nlocal, box9, cutoff,
-                                   graph.c_str(), labels.data()) != 0) {
-    error->one(FLERR, "compute dseams: seams_chill_plus_graph failed");
+  int failed = seams_chill_plus_graph_lammps(xyz.data(), nlocal, box9, cutoff,
+                                       graph.c_str(), labels.data()) != 0;
+  int any_failed = 0;
+  MPI_Allreduce(&failed, &any_failed, 1, MPI_INT, MPI_MAX, world);
+  if (any_failed) {
+    error->all(FLERR, "compute dseams: seams_chill_plus_graph failed");
   }
   for (int i = 0; i < nlocal; i++) {
     chill[i] = static_cast<double>(labels[static_cast<std::size_t>(i)]);
   }
-  if (label_path.empty()) {
+  if (label_path.empty() || comm->me != 0) {
     return;
   }
   std::ofstream out(label_path, label_open ? std::ios::app : std::ios::out);

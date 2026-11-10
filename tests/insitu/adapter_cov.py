@@ -214,20 +214,20 @@ def lammps_cases(work, plugin, lmp, mpirun, libdir):
     run([mpirun, "--oversubscribe", "-np", "1", intree, "-in", "in", "-log", "log.lammps"], native, env)
     check_dump(native / "host.txt", expected, cutoff)
     print("lammps intree box-digits exit 0", flush=True)
-    try:
-        run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "no-such-input"], work, env)
-    except SystemExit:
-        pass
+    must_raise(
+        lambda: run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "no-such-input"], work, env),
+        "exit ",
+    )
     bad = work / "bad-every"
     cmd = [mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"]
-    try:
-        expect(cmd, bad, env, 0, "fix dseams: every must be a positive integer")
-    except SystemExit:
-        pass
-    try:
-        expect(cmd, bad, env, 1, "not-the-message")
-    except SystemExit:
-        pass
+    must_raise(
+        lambda: expect(cmd, bad, env, 0, "fix dseams: every must be a positive integer"),
+        "want 0",
+    )
+    must_raise(
+        lambda: expect(cmd, bad, env, 1, "not-the-message"),
+        "missing not-the-message",
+    )
 
 
 
@@ -425,24 +425,23 @@ def subset_case(work, lmp, mpirun, plugin, env):
     run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"], folder, env)
     type_dump(folder / "dump.lammpstrj", folder / "type1.lammpstrj", 1)
     live = (folder / "live.txt").read_text()
-    census_line("", "rings")
-    census_line(live, "absent")
+    if census_line("", "rings") != "":
+        raise SystemExit("empty census line")
+    if census_line(live, "absent") != "":
+        raise SystemExit("absent census line")
     live_rings = census_line(live, "rings")
     cli_rings = cli_census(seams, folder / "type1.lammpstrj", "rings", [])
     require_same("subset rings", live_rings, cli_rings)
     other = cli_census(seams, folder / "type1.lammpstrj", "rings", ["--cutoff", "1.0"])
-    try:
-        require_same("subset rings", live_rings, other)
-    except SystemExit:
-        pass
-    try:
-        cli_census(seams, folder / "type1.lammpstrj", "rings", ["--cutoff", "not-a-number"])
-    except SystemExit:
-        pass
-    try:
-        cli_census(seams, folder / "type1.lammpstrj", "--features", [])
-    except SystemExit:
-        pass
+    must_raise(lambda: require_same("subset rings", live_rings, other), "subset rings")
+    must_raise(
+        lambda: cli_census(seams, folder / "type1.lammpstrj", "rings", ["--cutoff", "not-a-number"]),
+        "rings exit",
+    )
+    must_raise(
+        lambda: cli_census(seams, folder / "type1.lammpstrj", "--features", []),
+        "exit",
+    )
 
 
 def compute_cases(work, lmp, cxx, include, env):
@@ -483,11 +482,11 @@ def compute_cases(work, lmp, cxx, include, env):
         "labels": base + "compute ice all dseams file labels.txt\n" + dump + "run 1\n",
     }
     rejects = {
-        "bad-graph": (base + "compute ice all dseams graph nope\nrun 0\n", "CHILL+ compute: graph is cutoff or mutual"),
-        "bad-cut": (base + "compute ice all dseams cutoff 0\nrun 0\n", "CHILL+ compute: cutoff must be positive"),
-        "bad-word": (base + "compute ice all dseams nope 1\nrun 0\n", "Illegal CHILL+ compute command"),
-        "bare": (base + "compute ice all dseams graph\nrun 0\n", "Illegal CHILL+ compute command"),
-        "bare-file": (base + "compute ice all dseams file\nrun 0\n", "Illegal CHILL+ compute command"),
+        "bad-graph": (base + "compute ice all dseams graph nope\nrun 0\n", "compute dseams: graph is cutoff or mutual"),
+        "bad-cut": (base + "compute ice all dseams cutoff 0\nrun 0\n", "compute dseams: cutoff must be positive"),
+        "bad-word": (base + "compute ice all dseams nope 1\nrun 0\n", "Illegal compute dseams command"),
+        "bare": (base + "compute ice all dseams graph\nrun 0\n", "Illegal compute dseams command"),
+        "bare-file": (base + "compute ice all dseams file\nrun 0\n", "Illegal compute dseams command"),
     }
     empty = (
         "units real\natom_style atomic\nboundary p p p\n"
@@ -516,7 +515,7 @@ def compute_cases(work, lmp, cxx, include, env):
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "chill_plus_compute.so").write_bytes(so.read_bytes())
     (folder / "in").write_text(empty)
-    expect([lmp, "-in", "in", "-log", "log.lammps"], folder, env, 1, "CHILL+ compute: seams_chill_plus_graph failed")
+    expect([lmp, "-in", "in", "-log", "log.lammps"], folder, env, 1, "compute dseams: seams_chill_plus_graph failed")
     print("compute empty exit 1", flush=True)
     low, high, _lengths, expected = odd_box()
     cutoff = odd_cutoff()
@@ -534,13 +533,57 @@ def compute_cases(work, lmp, cxx, include, env):
     run([lmp, "-in", "in", "-log", "log.lammps"], boxed, env)
     check_dump(boxed / "labels.txt", expected, cutoff)
     print("compute box-digits exit 0", flush=True)
+    mpirun = need("DSEAMS_MPIRUN")
+    paired = out / "np2"
+    paired.mkdir(parents=True, exist_ok=True)
+    (paired / "chill_plus_compute.so").write_bytes(so.read_bytes())
+    (paired / "water.data").write_bytes(water.read_bytes())
+    (paired / "in").write_text(
+        base + "compute ice all dseams file labels.txt\n" + dump + "run 0\n"
+    )
+    run(
+        [mpirun, "--oversubscribe", "-np", "2", lmp, "-in", "in", "-log", "log.lammps"],
+        paired,
+        env,
+    )
+    label_text = (paired / "labels.txt").read_text()
+    if label_text.count("\nframe\n") + int(label_text.startswith("frame\n")) != 1:
+        raise SystemExit("np2 frames %d" % label_text.count("frame"))
+    if label_text.count("endframe\n") != 1:
+        raise SystemExit("np2 endframe %d" % label_text.count("endframe"))
+    print("compute np2 exit 0", flush=True)
+    rejected = out / "np2-bad-graph"
+    rejected.mkdir(parents=True, exist_ok=True)
+    (rejected / "chill_plus_compute.so").write_bytes(so.read_bytes())
+    (rejected / "water.data").write_bytes(water.read_bytes())
+    (rejected / "in").write_text(base + "compute ice all dseams graph nope\nrun 0\n")
+    expect(
+        [mpirun, "--oversubscribe", "-np", "2", lmp, "-in", "in", "-log", "log.lammps"],
+        rejected,
+        env,
+        1,
+        "compute dseams: graph is cutoff or mutual",
+    )
+    print("compute np2 bad-graph exit 1", flush=True)
+
+
+def sys_python():
+    return os.environ.get("DSEAMS_PYTHON", "python3")
+
+
+def must_raise(fn, needle):
+    try:
+        fn()
+    except SystemExit as exc:
+        text = exc.code if isinstance(exc.code, str) else str(exc)
+        if needle not in text:
+            raise SystemExit("raised %r" % text)
+        return
+    raise SystemExit("did not raise")
 
 
 def main():
-    try:
-        need("DSEAMS_NOT_SET")
-    except SystemExit:
-        pass
+    must_raise(lambda: need("DSEAMS_NOT_SET"), "set DSEAMS_NOT_SET")
     lmp_src = need("DSEAMS_LAMMPS_SRC")
     seams_lib = need("SEAMS_LIB")
     cxx = need("DSEAMS_MPICXX")

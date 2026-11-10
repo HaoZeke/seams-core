@@ -1,0 +1,93 @@
+# Copyright (c) d-SEAMS developers
+"""Run a command and print each mapped liblammps or plugin path."""
+
+import hashlib
+import os
+import subprocess
+import sys
+import threading
+import time
+
+
+def sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def ppid(pid):
+    try:
+        text = open("/proc/%d/stat" % pid, encoding="utf-8", errors="replace").read()
+    except OSError:
+        return None
+    mark = text.rfind(")")
+    if mark < 0:
+        return None
+    fields = text[mark + 2 :].split()
+    if len(fields) < 2:
+        return None
+    return int(fields[1])
+
+
+def descendants(root):
+    found = {root}
+    changed = True
+    while changed:
+        changed = False
+        names = os.listdir("/proc")
+        for name in names:
+            if not name.isdigit():
+                continue
+            pid = int(name)
+            if pid in found:
+                continue
+            parent = ppid(pid)
+            if parent in found:
+                found.add(pid)
+                changed = True
+    return found
+
+
+def mapped(pid):
+    try:
+        lines = open("/proc/%d/maps" % pid, encoding="utf-8", errors="replace").read().splitlines()
+    except OSError:
+        return []
+    paths = []
+    for line in lines:
+        if "liblammps.so" not in line and "libdseams_lammps.so" not in line:
+            continue
+        parts = line.split()
+        if len(parts) >= 6:
+            paths.append(parts[-1])
+    return paths
+
+
+def main():
+    proc = subprocess.Popen(sys.argv[1:])
+    seen = set()
+    stop = False
+
+    def watch():
+        while not stop:
+            for pid in descendants(proc.pid):
+                for path in mapped(pid):
+                    seen.add(path)
+            time.sleep(0.01)
+
+    thread = threading.Thread(target=watch)
+    thread.start()
+    code = proc.wait()
+    stop = True
+    thread.join()
+    for path in sorted(seen):
+        print("loaded %s %s" % (path, sha256(path)), flush=True)
+    if not seen:
+        print("loaded none", flush=True)
+    return code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

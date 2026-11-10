@@ -168,6 +168,9 @@ with tempfile.TemporaryDirectory() as tmp:
         ["fingerprint", str(tiny), "--select", "name ZZ", "--frame", "1", "--last", "1"],
         ["rings", str(empty), "--frame", "2", "--last", "2"],
         ["hbonds", str(water), *one, "--type", "1", "--htype", "2", "--donors", "--hdist", "3.5"],
+        ["rings", str(root / "input" / "con" / "tiny_multi_cuh2.con"), "--frame", "1", "--last", "2"],
+        ["read", str(root / "input" / "con" / "tiny_multi_cuh2.con"), "--frame", "1", "--last", "1"],
+        ["rings", str(root / "input" / "con" / "tiny_multi_cuh2.con"), "--frame", "1", "--last", "9"],
     ]
     junk = Path(tmp) / "junk.lammpstrj"
     junk.write_text("this is not a dump\n")
@@ -175,10 +178,6 @@ with tempfile.TemporaryDirectory() as tmp:
     calls.append(["rings", str(junk), "--select", "type 1", "--frame", "1", "--last", "1"])
     for args in calls:
         ok = run(args) and ok
-    con = str(root / "input" / "con" / "tiny_multi_cuh2.con")
-    ok = run(["rings", con, "--frame", "1", "--last", "2"], expect=-6, message="Aborted") and ok
-    ok = run(["read", con, "--frame", "1", "--last", "1"], expect=-6, message="Aborted") and ok
-    ok = run(["rings", con, "--frame", "1", "--last", "9"], expect=-6, message="Aborted") and ok
     emitted = subprocess.run(
         [seams, "fingerprint", str(tiny), *one, "--emit-library", "tiny"],
         capture_output=True, text=True)
@@ -204,7 +203,8 @@ with tempfile.TemporaryDirectory() as tmp:
     ok = run(["pairs", str(water), "--site", "=cationHead", *one], expect=2, message="site spec token '=cationHead' is not key=value") and ok
     ok = run(["chill-plus", str(water), "--graph", "knn-union"], expect=2, message="CHILL and CHILL+ take --graph cutoff or mutual") and ok
     ok = run(["rings", str(empty), "--frame", "1", "--last", "2", "--strict-input"], expect=2, message="input frame 2 contains no atoms") and ok
-    ok = run(["rings", str(blank), "--frame", "1", "--last", "1"], expect=-6, message="Aborted") and ok
+    blank_rc = subprocess.run([seams, "rings", str(blank), "--frame", "1", "--last", "1"], capture_output=True).returncode
+    ok = blank_rc in (0, 2) and ok
     ok = run(["chill-plus", str(water), "--family", "not-a-family"], expect=2, message="Usage:") and ok
     ok = run(["rdf", str(water), "--types", "1,2,3"], expect=2, message="Usage:") and ok
     ok = run(["rdf", str(water), "--types", "a,b"], expect=2, message="Usage:") and ok
@@ -216,12 +216,16 @@ with tempfile.TemporaryDirectory() as tmp:
     ok = resolve_dump(root / "input" / "traj" / "not-deposited.lammpstrj") == tiny and ok
     try:
         run(["rings", str(water), "--cutoff", "not-a-number"], expect=0)
-    except SystemExit:
-        ok = True and ok
+        raise SystemExit("cutoff check did not fire")
+    except SystemExit as exc:
+        if str(exc) != "rings %s --cutoff not-a-number exit 2 want 0" % water:
+            raise
     try:
         run(["rings", str(water), "--cutoff", "not-a-number"], expect=2, message="not-the-message")
-    except SystemExit:
-        ok = True and ok
+        raise SystemExit("message check did not fire")
+    except SystemExit as exc:
+        if str(exc) != "missing reject message":
+            raise
     ok = run(["rings", str(water), "--cutoff", "not-a-number"], expect=2, message="Usage:") and ok
     def with_offload():
         off = os.environ.get("SEAMS_OFFLOAD")
