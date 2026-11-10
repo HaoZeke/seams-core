@@ -1,0 +1,15 @@
+tool: valgrind --tool=callgrind
+event: Ir
+chain: 25000 and 50000 atoms, one neighbour each, degree 6
+threads: 1
+sphericart: SPHERICART_ARCH_NATIVE off
+instructions_25000: 37334356088
+instructions_50000: 148415017405
+ratio: 3.975293
+bound: 2.5
+result: fail
+
+==3016657== Collected : 37334356088
+==3016657== I   refs:      37,334,356,088
+==3018270== Collected : 148415017405
+==3018270== I   refs:      148,415,017,405
