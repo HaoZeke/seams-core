@@ -414,7 +414,9 @@ def check_prose(work):
     os.environ["PROSE_LOG"] = str(work / "prose.log")
     kit = work / "badkit"
     kit.mkdir()
-    (kit / "NOTE.md").write_text("x" * 200 + "\n")
+    (kit / "NOTE.md").write_text(
+        "This sentence is deliberately long so the formatter wraps it at the column limit and reports the difference here.\n"
+    )
     os.environ["KIT"] = str(kit)
     import prose_gate
     saved_seams = os.environ.get("SRC_SEAMS", "")
@@ -427,14 +429,19 @@ def check_prose(work):
         (badrepo / "a.txt").write_text("a\n")
         subprocess.check_call(["git", "-C", badrepo, "add", "a.txt"])
         subprocess.check_call(["git", "-C", badrepo, "commit", "-q", "-m", "base"])
-        subprocess.check_call(["git", "-C", badrepo, "commit", "-q", "--allow-empty", "-m", "fix: " + "x" * 200])
+        subprocess.check_call(
+            [
+                "git", "-C", badrepo, "commit", "-q", "--allow-empty",
+                "-m", "fix: reject a long line\n\nThe gate holds a value and this sentence is deliberately long so the formatter wraps it.",
+            ]
+        )
         base = subprocess.check_output(["git", "-C", badrepo, "rev-parse", "HEAD^"], text=True).strip()
         os.environ["SRC_SEAMS"] = str(badrepo)
         os.environ["SRC_LAMMPS"] = str(badrepo)
         os.environ["SEAMS_BASE"] = base
         os.environ["LAMMPS_BASE"] = base
         os.environ["PAPER_CORE"] = str(work / "core.toml")
-        (work / "core.toml").write_text("name = \"core\"\n")
+        (work / "core.toml").write_text("this is not a profile {\n")
         expect_exit(prose_gate.main, "1")
     finally:
         os.environ["SRC_SEAMS"] = saved_seams
