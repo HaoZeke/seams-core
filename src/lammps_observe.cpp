@@ -240,20 +240,17 @@ std::vector<std::vector<int>> filter_cutoff(const Cloud &cloud,
     out[static_cast<std::size_t>(i)].push_back(cloud.pts[static_cast<std::size_t>(i)].atomID);
   }
   const int nRows = static_cast<int>(wide.size());
-  const bool oneRow = nRows == cloud.nop;
-  if (oneRow) {
-    for (int r = 0; r < nRows; ++r) {
-      if (!wide[static_cast<std::size_t>(r)].empty()) {
-        const int iatom = indexOf(wide[static_cast<std::size_t>(r)][0]);
-        if (iatom >= 0) {
-          out[static_cast<std::size_t>(iatom)].reserve(
-              wide[static_cast<std::size_t>(r)].size());
-        }
+  for (int r = 0; r < nRows; ++r) {
+    if (!wide[static_cast<std::size_t>(r)].empty()) {
+      const int iatom = indexOf(wide[static_cast<std::size_t>(r)][0]);
+      if (iatom >= 0) {
+        out[static_cast<std::size_t>(iatom)].reserve(
+            wide[static_cast<std::size_t>(r)].size());
       }
     }
   }
 #ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) if (oneRow && nRows >= 256 && !omp_in_parallel())
+#pragma omp parallel for schedule(static) if (nRows >= 256 && !omp_in_parallel())
 #endif
   for (int r = 0; r < nRows; ++r) {
     const auto &row = wide[static_cast<std::size_t>(r)];
