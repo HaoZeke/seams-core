@@ -51,6 +51,7 @@ test_sources = {
   'cover_io': 'cover_io.cpp',
   'cover_orient': 'cover_orient.cpp',
   'cover_topo': 'cover_topo.cpp',
+  'cover_insitu': 'cover_insitu.cpp',
 }
 
 if readcon_dep.found()

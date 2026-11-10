@@ -36,6 +36,12 @@
 
 `src/pntCorrespondence.cpp`, `startingIndex > 1` in `changeDiaCageOrder`. The `else if` is reached only from the false arm of `startingIndex <= 1`. For an `int` that is exactly `startingIndex > 1`, so the repeated comparison cannot fail. `startingIndex <= 3` still distinguishes the two peripheral shifts.
 
+`src/insitu.cpp`, the false arms of `cloud.box.size() > 0`, `> 1` and `> 2` in `remember_build`. `setBoxFromLammpsEdges` assigns three lengths, or six when the frame is tilted, and returns false without an assignment when an edge is not positive. `build_cloud` returns before analysis when that call fails. `analyze_cloud` calls `remember_build` only for a cloud that `build_cloud` accepted, so the box has three or six numbers.
+
+`src/insitu.cpp`, `count < 1` and `cursor >= flat.size()` in `rows_from_flat`. `seams_insitu_set_neighbours` rejects a count below 1 and copies `flat` to the sum of the counts. `rows_from_flat` reads that pair. The cursor therefore lands on the end of `flat` and never past it.
+
+`src/insitu.cpp`, `size >= 0` and `size <= SEAMS_INSITU_RING_MAX` inside `analyze_cloud`. `seams_insitu_create` rejects a ring depth outside 3 to 12. `RingUpdater` returns cycles no longer than that depth. `size` is the cycle length.
+
 `src/adapters/lammps/fix_dseams.cpp`, the `kept < 0` return and the three `gather_displs` failure returns. `seams_insitu_pack_owned` returns a negative value only when `nlocal < 0` or a buffer pointer is null. The fix passes `atom->nlocal`, which LAMMPS keeps non-negative, and the addresses of its own vectors. `seams_insitu_gather_displs` returns 1 only when `nranks < 0`, `total` is null, a pointer is null while `nranks > 0`, or a count is negative. The fix passes `comm->nprocs` (at least 1), its own vectors, and counts from `MPI_Allgather` of a non-negative `kept` or of container sizes. Those returns stay unhit.
 
 `src/ira_sofi.cpp`, the true arm of `p == nat2`, the shift `(hasN && !hasZero)`, and `j < 0 || j >= nat2`, and the zero-`used` arm of the rmsd expression. libira writes a permutation of length `nat2` whose indices start at 0 (`ira_mod.py`: "start by index 0"). A successful match therefore has every index in `0 .. nat2-1`, the shift stays 0, and at least one pair is used when both clouds are non-empty. These arms stay unhit. Raw branch records are in the coverage report.
