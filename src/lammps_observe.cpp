@@ -344,7 +344,6 @@ int analyze_cloud(Engine *eng, Cloud &cloud, int step, bool do_sink) {
       const double half = skin * 0.5;
       bool keep = cloud.box.size() >= 3 &&
                   eng->wide.size() == static_cast<std::size_t>(cloud.nop) &&
-                  eng->built_xyz.size() == static_cast<std::size_t>(cloud.nop) * 3 &&
                   eng->built_lx == cloud.box[0] && eng->built_ly == cloud.box[1] &&
                   eng->built_lz == cloud.box[2];
       if (keep) {
