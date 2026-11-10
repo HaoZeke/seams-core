@@ -85,9 +85,6 @@ std::string densenautyCertificate(int n, const std::vector<std::pair<int, int>> 
   }
   EMPTYGRAPH(g.data(), m, n);
   for (const auto &e : edges) {
-    if (e.first == e.second) {
-      continue;
-    }
     ADDONEEDGE(g.data(), e.first, e.second, m);
   }
   densenauty(g.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats,
