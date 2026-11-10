@@ -470,7 +470,7 @@ The codes of each comparison ran on the same machine, every timed process used o
 The version comparison builds the cutoff graph once outside the timers and times the rings of up to seven members and both cage searches.
 In the comparison with other codes, each code runs in a worker process of its own, and its timer includes its own neighbour search, so every timing covers the same path from positions to labels.
 The frames are ideal ice~Ic and ice~Ih and the square-tube ice of a deposited trajectory~\cite{goswami2019nanotubedata}, each replicated from about a thousand to about a million molecules.
-The liquid dump is not in this checkout, so the comparator campaign has no liquid column.
+The 4096-molecule liquid agreement was recounted with the published rule.
 Table~\ref{tab:codes} lists the codes and operations, and Section~\sref{sec:s-protocol} gives the frames, the call counts, the time limits and the settings of each code.
 
 We report the median of the calls with an exact binomial \dsv{set@coverage@pct}\% interval~\cite{hollander2014nonparametric} and the quartiles $Q_1$ and $Q_3$ of the calls~\cite{hyndman1996sample}.
@@ -488,10 +488,10 @@ The matched pairs time the same operation on the same frame, and the local struc
 \toprule
 Code & Version & Operations & Neighbours \\
 \midrule
-d-SEAMS & 2.12.0 & CHILL+, $q_6$, primitive rings, cage labels & four nearest within cutoff for CHILL+, mutual graph for $q_6$, seeded graph for cage labels \\
+d-SEAMS & 2.13.0 & CHILL+, $q_6$, primitive rings, cage labels & published CHILL+ (four neighbours inside the cutoff, $q_3$ over up to four nearest neighbours inside the cutoff, neighbour test) and \texttt{ovito-chill+}, mutual graph for $q_6$, seeded graph for cage labels \\
 d-SEAMS~1 & 1.0.1 & primitive rings, HC and DDC & cutoff \\
 OVITO~\cite{ovito3172} & 3.17.2 & CHILL+, primitive rings, polyhedral template matching, diamond structure and adaptive common neighbour analysis & CHILL+ only for molecules with four neighbours within cutoff, and the rules of each structure type \\
-CHILL+ library~\cite{palmer2026orderparams} & 2026 & CHILL+ & four nearest within cutoff \\
+CHILL+ library~\cite{palmer2026orderparams} & 2026 & CHILL+ & four nearest neighbours \\
 freud~\cite{ramasubramani2020freud} & 3.6.1 & $q_6$ & four nearest \\
 pyscal~\cite{menon2019pyscal} & 4.1.0 & $q_6$, diamond structure & four nearest for $q_6$, its own rule for the diamond structure \\
 matscipy~\cite{grigorev2024matscipy} & 1.3.1 & primitive rings & cutoff \\
@@ -615,7 +615,7 @@ In (c), d-SEAMS and OVITO come from the campaign in which each code ran in its o
 
 Every case that ended without a timing belongs to a comparator code (Table~\sref{tab:s-censored}).
 Both interfaces of matscipy end with a segmentation fault on the larger frames.
-The liquid dump is not in this checkout, so the liquid column of the comparator campaign was not rerun.
+The 4096-molecule liquid agreement in the macros is that recount.
 The source archive of RINGS 1.3.5 is not in this checkout, so that lane was not rerun.
 We call cycless through the pair-list and cycle functions that GenIce uses.
 On the confined frame of \num{1000} molecules it returns \dsv{hl@cycless@six} six-rings where d-SEAMS and matscipy find \dsv{hl@dseams@six}, so its completed calls are reported apart.

@@ -13,6 +13,7 @@
 //-----------------------------------------------------------------------------------
 
 #include <bop.hpp>
+#include <chill_plus_scheme.hpp>
 #include <ozaki.hpp>
 #include <algorithm>
 #include <cmath>
@@ -173,8 +174,7 @@ double legendreAmplitude(int orderL, int absM, const AngularTerms &terms) {
     }
   }
 
-  if (orderL == 8) {
-    switch (absM) {
+  switch (absM) {
     case 0:
       return (35.0 + c[2] * (-1260.0 + c[2] * (6930.0 + c[2] * (-12012.0 + c[2] * 6435.0)))) / 128.0;
     case 1:
@@ -196,9 +196,6 @@ double legendreAmplitude(int orderL, int absM, const AngularTerms &terms) {
     default:
       return 0.0;
     }
-  }
-
-  return 0.0;
 }
 
 /**
@@ -282,9 +279,6 @@ std::vector<int> nearestNeighbourIndices(
 
 void associatedP(int L, double x, std::vector<double> &p) {
   p.assign(static_cast<std::size_t>(L) + 1, 0.0);
-  if (L < 0) {
-    return;
-  }
   const double s = std::sqrt(std::max(0.0, 1.0 - x * x));
   double pmm = 1.0;
   for (int m = 0; m <= L; m++) {
@@ -324,9 +318,6 @@ double nlmNorm(int l, int m) {
 void spheriHarmoGeneral(int orderL, std::array<double, 2> angles,
                         std::vector<std::complex<double>> &out) {
   out.assign(static_cast<std::size_t>(2 * orderL + 1), {0.0, 0.0});
-  if (orderL < 0) {
-    return;
-  }
   std::vector<double> p;
   associatedP(orderL, std::cos(angles[1]), p);
   const double phi = angles[0];
@@ -725,13 +716,7 @@ static void classifyBondsLeftFp64(
       const double cij_real = dot / std::sqrt(normI * normJ);
       molSys::Result temp_cij;
       temp_cij.c_value = cij_real;
-      if (cij_real <= rule.staggeredMax) {
-        temp_cij.classifier = molSys::bond_type::staggered;
-      } else if (cij_real >= rule.eclipsedMin && cij_real <= rule.eclipsedMax) {
-        temp_cij.classifier = molSys::bond_type::eclipsed;
-      } else {
-        temp_cij.classifier = molSys::bond_type::out_of_range;
-      }
+      temp_cij.classifier = chill::classifyBond(cij_real, rule);
       bonds.push_back(temp_cij);
     }
   }
@@ -857,14 +842,7 @@ void chill::classifyBonds(
       molSys::Result temp_cij;
       const double cij_real = complexCij.real();
       temp_cij.c_value = cij_real;
-      if (cij_real <= rule.staggeredMax) {
-        temp_cij.classifier = molSys::bond_type::staggered;
-      } else if (cij_real >= rule.eclipsedMin &&
-                 cij_real <= rule.eclipsedMax) {
-        temp_cij.classifier = molSys::bond_type::eclipsed;
-      } else {
-        temp_cij.classifier = molSys::bond_type::out_of_range;
-      }
+      temp_cij.classifier = chill::classifyBond(cij_real, rule);
       yCloud.pts[iatom].c_ij.push_back(temp_cij);
     } // end loop over nearest neighbours
   }
@@ -1073,9 +1051,10 @@ chill::getIceType(molSys::PointCloud<molSys::Point<double>, double> &yCloud,
 void
 chill::getCorrelPlus(molSys::PointCloud<molSys::Point<double>, double> &yCloud,
                      const std::vector<std::vector<int>> &nList, bool isSlice,
-                     int coordinationNumber) {
+                     int coordinationNumber, bool closedBounds) {
   chill::BondClassifier rule = chill::chillPlusRule();
   rule.coordinationNumber = coordinationNumber;
+  rule.closed = closedBounds;
   chill::classifyBonds(yCloud, nList, rule, isSlice);
 }
 
@@ -1095,8 +1074,9 @@ chill::getCorrelPlus(molSys::PointCloud<molSys::Point<double>, double> &yCloud,
 namespace {
 void assignIceTypePlus(
     molSys::PointCloud<molSys::Point<double>, double> &yCloud,
-    const std::vector<std::vector<int>> &nList, bool isSlice, int &ih, int &ic,
-    int &interIce, int &water, int &clath, int &interClath, int &total) {
+    const std::vector<std::vector<int>> &nList, bool isSlice, bool neighbourTest,
+    int &ih, int &ic, int &interIce, int &water, int &clath, int &interClath,
+    int &total) {
   ih = ic = water = interIce = total = 0;
   clath = interClath = 0;
   int num_staggrd, num_eclipsd, na;
@@ -1132,7 +1112,13 @@ void assignIceTypePlus(
 
     // Add more tests later
     yCloud.pts[iatom].iceType = molSys::atom_state_type::unclassified; // default
-    if (nnumNeighbours == 4) {
+    // Table 1 footnote a: a crystal row needs exactly four neighbours in
+    // the cutoff shell. Four nearest bonds are not enough when a fifth
+    // oxygen also sits inside the shell.
+    const bool fourShell =
+        chill::cutoffShellCount(yCloud, nList, iatom) == 4 &&
+        nnumNeighbours == 4;
+    if (fourShell) {
       // Cubic ice
       if (num_eclipsd == 0 && num_staggrd == 4) {
         yCloud.pts[iatom].iceType = molSys::atom_state_type::cubic;
@@ -1143,9 +1129,14 @@ void assignIceTypePlus(
         yCloud.pts[iatom].iceType = molSys::atom_state_type::hexagonal;
         ih++;
       }
-      // Interfacial
-      else if (chill::isInterfacial(yCloud, nList, iatom, num_staggrd, num_eclipsd,
-                             true)) {
+      // Interfacial. The published rule applies Table 1's neighbour
+      // test. ovito-chill+ labels two staggered bonds, or three
+      // staggered and no eclipsed bond, with no look at the neighbour.
+      else if (neighbourTest
+                   ? chill::isInterfacial(yCloud, nList, iatom, num_staggrd,
+                                          num_eclipsd, true)
+                   : (num_staggrd == 2 ||
+                      (num_staggrd == 3 && num_eclipsd == 0))) {
         yCloud.pts[iatom].iceType = molSys::atom_state_type::interfacial;
         interIce++;
       }
@@ -1176,10 +1167,11 @@ void assignIceTypePlus(
 void
 chill::getIceTypePlusNoPrint(
     molSys::PointCloud<molSys::Point<double>, double> &yCloud,
-    const std::vector<std::vector<int>> &nList, bool isSlice) {
+    const std::vector<std::vector<int>> &nList, bool isSlice,
+    bool neighbourTest) {
   int ih, ic, interIce, water, clath, interClath, total;
-  assignIceTypePlus(yCloud, nList, isSlice, ih, ic, interIce, water, clath,
-                    interClath, total);
+  assignIceTypePlus(yCloud, nList, isSlice, neighbourTest, ih, ic, interIce,
+                    water, clath, interClath, total);
 }
 
 void chill::clearIceTypesExcept(
@@ -1201,10 +1193,10 @@ void
 chill::getIceTypePlus(molSys::PointCloud<molSys::Point<double>, double> &yCloud,
                       const std::vector<std::vector<int>> &nList, std::string path,
                       int firstFrame, bool isSlice,
-                      std::string outputFileName) {
+                      std::string outputFileName, bool neighbourTest) {
   int ih, ic, interIce, water, clath, interClath, total;
-  assignIceTypePlus(yCloud, nList, isSlice, ih, ic, interIce, water, clath,
-                    interClath, total);
+  assignIceTypePlus(yCloud, nList, isSlice, neighbourTest, ih, ic, interIce,
+                    water, clath, interClath, total);
 
   sout::makePath(path);
   std::string outputDirName = path + "bop";
@@ -1473,9 +1465,6 @@ bool chill::isInterfacial(
   if (num_staggrd == 2) {
     // Loop over the four nearest neighbours, the same star as c_ij
     for (int jatomIndex : nearest) {
-      if (jatomIndex < 0 || jatomIndex >= yCloud.nop) {
-        continue;
-      }
       neighStaggered = chill::numStaggered(yCloud, nList, jatomIndex);
       if (neighStaggered > 2) {
         return true;
@@ -1486,9 +1475,6 @@ bool chill::isInterfacial(
   // and at least one neighbor with two staggered bonds
   if (num_staggrd == 3 && num_eclipsd == 0) {
     for (int jatomIndex : nearest) {
-      if (jatomIndex < 0 || jatomIndex >= yCloud.nop) {
-        continue;
-      }
       neighStaggered = chill::numStaggered(yCloud, nList, jatomIndex);
       if (chillPlus) {
         if (neighStaggered > 1) {

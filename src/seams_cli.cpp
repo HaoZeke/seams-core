@@ -6,6 +6,7 @@
 #include <argum.h>
 #include <bond.hpp>
 #include <bop.hpp>
+#include <chill_plus_scheme.hpp>
 #include <cage_affiliation.hpp>
 #include <cage_enum.hpp>
 #include <franzblau.hpp>
@@ -73,11 +74,7 @@ const char *iceName(molSys::atom_state_type s) {
     return "clathrate";
   case molSys::atom_state_type::interClathrate:
     return "interClathrate";
-  case molSys::atom_state_type::reCubic:
-    return "reCubic";
-  case molSys::atom_state_type::reHex:
-    return "reHex";
-  case molSys::atom_state_type::unclassified:
+  default:
     break;
   }
   return "unclassified";
@@ -157,7 +154,7 @@ bool forEachInputFrame(const std::string &path, int first, int last,
   }
 
   if (source == FrameSource::serial) {
-    const int stop = last <= 0 ? first : last;
+    const int stop = last;
     for (int frame = std::max(1, first); frame <= stop; ++frame) {
       Cloud cloud = load(path, frame, typeFilter);
       if (cloud.nop == 0 && frame != std::max(1, first)) {
@@ -380,7 +377,7 @@ bool parseTypePair(std::string_view value, int &typeI, int &typeJ) {
   try {
     typeI = parseIntegral<int>(left);
     typeJ = parseIntegral<int>(right);
-  } catch (const ParsingException &) {
+  } catch (const ParsingException &) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
     return false;
   }
   return true;
@@ -428,10 +425,10 @@ waterGraph(Cloud &cloud, double cutoff, int typ,
 }
 
 std::string iceColor(std::string_view name) {
-  if (name == "cubic" || name == "reCubic") {
+  if (name == "cubic") {
     return colorizer.longOption(name);
   }
-  if (name == "hexagonal" || name == "reHex") {
+  if (name == "hexagonal") {
     return colorizer.shortOption(name);
   }
   if (name == "interfacial") {
@@ -459,9 +456,7 @@ void printCounts(std::ostream &os, const Cloud &cloud,
   }
   os << colorizer.heading("nop") << " " << scored;
   for (const auto &[name, n] : hist) {
-    if (n > 0) {
-      os << " " << iceColor(name) << " " << n;
-    }
+    os << " " << iceColor(name) << " " << n;
   }
   os << "\n";
 }
@@ -608,7 +603,7 @@ site::Table parseSiteSpec(std::string_view spec, site::Family family) {
     int typeId = 0;
     try {
       typeId = parseIntegral<int>(key);
-    } catch (const ParsingException &) {
+    } catch (const ParsingException &) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
       throw std::invalid_argument("site spec type '" + std::string(key) +
                                   "' is not an integer");
     }
@@ -623,7 +618,7 @@ void countIonTypes(const Cloud &ions, int &nCation, int &nAnion) {
   for (const auto &pt : ions.pts) {
     if (pt.type == 1) {
       ++nCation;
-    } else if (pt.type == 2) {
+    } else {
       ++nAnion;
     }
   }
@@ -709,18 +704,14 @@ int cmdDomains(std::ostream &os, Cloud &cloud, double cutoff,
                const site::Table &table, site::Kind subset) {
   std::vector<bool> mask(static_cast<std::size_t>(cloud.nop), false);
   for (const int i : site::indicesOf(cloud, table, subset)) {
-    if (i >= 0 && i < cloud.nop) {
-      mask[static_cast<std::size_t>(i)] = true;
-    }
+    mask[static_cast<std::size_t>(i)] = true;
   }
   const auto idxList = nneigh::getNewNeighbourListByIndex(cloud, cutoff);
   std::vector<std::vector<int>> idList(idxList.size());
   for (std::size_t i = 0; i < idxList.size(); ++i) {
     idList[i].reserve(idxList[i].size());
     for (const int idx : idxList[i]) {
-      if (idx >= 0 && idx < cloud.nop) {
-        idList[i].push_back(cloud.pts[static_cast<std::size_t>(idx)].atomID);
-      }
+      idList[i].push_back(cloud.pts[static_cast<std::size_t>(idx)].atomID);
     }
   }
   const auto d = clump::largestDomain(cloud, idList, mask);
@@ -823,7 +814,7 @@ void writePerAtomDump(const std::string &path, const Cloud &cloud, const std::st
   out << "ITEM: ATOMS id type x y z " << column << "\n";
   for (int i = 0; i < cloud.nop; ++i) {
     const auto &pt = cloud.pts[static_cast<std::size_t>(i)];
-    const int v = static_cast<std::size_t>(i) < values.size() ? values[static_cast<std::size_t>(i)] : 0;
+    const int v = values[static_cast<std::size_t>(i)];
     out << pt.atomID << ' ' << pt.type << ' ' << pt.x << ' ' << pt.y << ' ' << pt.z << ' ' << v
         << '\n';
   }
@@ -1138,7 +1129,8 @@ chillGraph(Cloud &cloud, double cutoff, int typ, const std::string &graphName,
 
 int cmdChillPlus(std::ostream &os, FrameCarry &carry, Cloud &cloud,
                  double cutoff, int typeI,
-                 const std::string &graphName, bool layers = false,
+                 const std::string &graphName, const std::string &ruleSpec,
+                 bool layers = false,
                  bool tumLayers = false, int axis = 2, double layerWidth = 3.7,
                  const std::vector<int> &waterTypes = {}) {
   if (cloud.nop == 0) {
@@ -1147,8 +1139,8 @@ int cmdChillPlus(std::ostream &os, FrameCarry &carry, Cloud &cloud,
   }
   const int typ = typeOf(cloud, typeI);
   auto nList = chillGraph(cloud, cutoff, typ, graphName, waterTypes);
-  chill::getCorrelPlus(cloud, nList, false);
-  chill::getIceTypePlusNoPrint(cloud, nList, false);
+  chill::applyChillPlus(cloud, nList, chill::chillPlusRuleFromFile(ruleSpec),
+                        false);
   chill::clearIceTypesExcept(cloud, waterTypes);
   printCounts(os, cloud, waterTypes);
   if (layers) {
@@ -1243,9 +1235,6 @@ std::vector<cage::Signature> parseSignatures(const std::string &spec) {
   std::istringstream in(spec);
   while (std::getline(in, part, '+')) {
     sigs.push_back(cage::Signature::parse(part));
-  }
-  if (sigs.empty()) {
-    sigs.push_back(cage::Signature::parse(spec));
   }
   return sigs;
 }
@@ -1501,12 +1490,10 @@ int cmdCages(std::ostream &os, FrameCarry &carry, Cloud &cloud, double cutoff,
       std::vector<bool> ddc(static_cast<std::size_t>(cloud.nop), false);
       for (std::size_t r = 0; r < six.size(); ++r) {
         for (const int a : six[r]) {
-          if (a >= 0 && a < cloud.nop) {
-            hc[static_cast<std::size_t>(a)] =
-                hc[static_cast<std::size_t>(a)] || aff.hc[r];
-            ddc[static_cast<std::size_t>(a)] =
-                ddc[static_cast<std::size_t>(a)] || aff.ddc[r];
-          }
+          hc[static_cast<std::size_t>(a)] =
+              hc[static_cast<std::size_t>(a)] || aff.hc[r];
+          ddc[static_cast<std::size_t>(a)] =
+              ddc[static_cast<std::size_t>(a)] || aff.ddc[r];
         }
       }
       tallyAtoms(hc, ddc);
@@ -1609,8 +1596,10 @@ int main(int argc, char *argv[]) {
   int densAxis = 2;
   std::string axisFlag;
   std::string outputFormat = "text";
+  std::string chillRule;
+  bool chillRuleSet = false;
 
-  const char *progname = (argc ? argv[0] : "seams");
+  const char *progname = argv[0];
   Parser parser;
 
   parser.add(Option("--help", "-h")
@@ -1762,6 +1751,17 @@ int main(int argc, char *argv[]) {
                  .help("k for knn / seeded cages")
                  .handler([&](std::string_view value) {
                    k = parseIntegral<int>(value);
+                 }));
+
+  parser.add(Option("--rule")
+                 .argName("NAME")
+                 .help("chill-plus rule: chill+ (published default) or "
+                       "ovito-chill+. A path to a readable file is scanned "
+                       "for a rule or chill-plus key. Comments are skipped. "
+                       "The file is not executed as Lua or YAML")
+                 .handler([&](std::string_view value) {
+                   chillRule = std::string(value);
+                   chillRuleSet = true;
                  }));
 
   parser.add(Option("--graph")
@@ -1956,7 +1956,8 @@ int main(int argc, char *argv[]) {
                  }));
 
   parser.add(Positional("command")
-                 .help("read | chill | chill-plus | cages | fingerprint | ions | "
+                 .help("read | chill | chill-plus | ovito-chill+ | cages | "
+                       "fingerprint | ions | "
                        "f4 | steinhardt | rdf | cn | hbonds | pairs | density-z | "
                        "domains")
                  .occurs(zeroOrOneTime)
@@ -1969,7 +1970,7 @@ int main(int argc, char *argv[]) {
 
   try {
     parser.parse(argc, argv);
-  } catch (const ParsingException &ex) {
+  } catch (const ParsingException &ex) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
     std::cerr << colorizer.error(ex.message()) << "\n";
     std::cerr << colorizer.warning(parser.formatUsage(progname, colorizer))
               << "\n";
@@ -2008,7 +2009,7 @@ int main(int argc, char *argv[]) {
   cfg.cutoff = cutoff;
   try {
     cfg.cageEdge = cage::edgeWindowSpec(cage::parseEdgeWindow(cageEdge));
-  } catch (const std::invalid_argument &e) {
+  } catch (const std::invalid_argument &e) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
     std::cerr << colorizer.error(e.what()) << "\n";
     std::cerr << colorizer.warning(parser.formatUsage(progname, colorizer))
               << "\n";
@@ -2019,7 +2020,7 @@ int main(int argc, char *argv[]) {
   if (familyFlag) {
     try {
       family = site::parseFamily(familyNameFlag);
-    } catch (const std::invalid_argument &e) {
+    } catch (const std::invalid_argument &e) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
       std::cerr << colorizer.error(e.what()) << "\n";
       std::cerr << colorizer.warning(parser.formatUsage(progname, colorizer))
                 << "\n";
@@ -2075,6 +2076,17 @@ int main(int argc, char *argv[]) {
     return 2;
   }
 
+  if (cmd == "ovito-chill+" || cmd == "ovito_chill_plus") {
+    if (!chillRuleSet) {
+      chillRule = "ovito-chill+";
+    }
+    cmd = "chill-plus";
+  }
+  if (!chillRuleSet && chillRule.empty()) {
+    if (const char *fromEnv = std::getenv("CHILL_PLUS_RULE")) {
+      chillRule = fromEnv;
+    }
+  }
   const bool iceCmd = cmd == "chill" || cmd == "chill-plus" ||
                       cmd == "chill_plus" || cmd == "cages" || cmd == "ions";
   if (iceCmd && !site::iceScoreAllowed(family)) {
@@ -2087,7 +2099,7 @@ int main(int argc, char *argv[]) {
   if (!siteSpec.empty()) {
     try {
       siteTable = parseSiteSpec(siteSpec, family);
-    } catch (const std::exception &e) {
+    } catch (const std::exception &e) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
       std::cerr << colorizer.error(e.what()) << "\n";
       return 2;
     }
@@ -2147,9 +2159,10 @@ int main(int argc, char *argv[]) {
     }
     if (cmd == "chill-plus" || cmd == "chill_plus") {
       try {
-        return cmdChillPlus(os, carry, cloud, cutoff, typeI, graph, layersFlag,
-                            tumLayersFlag, densAxis, 3.7, waterTypes);
-      } catch (const std::exception &e) {
+        return cmdChillPlus(os, carry, cloud, cutoff, typeI, graph, chillRule,
+                            layersFlag, tumLayersFlag, densAxis, 3.7,
+                            waterTypes);
+      } catch (const std::exception &e) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
         os << colorizer.error(e.what()) << "\n";
         return 2;
       }
@@ -2157,7 +2170,7 @@ int main(int argc, char *argv[]) {
     if (cmd == "chill") {
       try {
         return cmdChill(os, cloud, cutoff, typeI, graph, waterTypes);
-      } catch (const std::exception &e) {
+      } catch (const std::exception &e) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
         os << colorizer.error(e.what()) << "\n";
         return 2;
       }
@@ -2176,7 +2189,7 @@ int main(int argc, char *argv[]) {
                         signatureSpec, guestTypes, guestRadius, perAtomPath,
                         insideFlag, incompleteFlag, waterTypes, shapeFlag,
                         cfg.cageEdge);
-      } catch (const std::exception &e) {
+      } catch (const std::exception &e) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
         os << colorizer.error(e.what()) << "\n";
         return 2;
       }
@@ -2186,7 +2199,7 @@ int main(int argc, char *argv[]) {
         return cmdFingerprint(os, carry, cloud, cutoff, typeI, k, graph, hops,
                               colourTypes,
                               libraryPath, emitLabel, perAtomPath, byAtomFlag);
-      } catch (const std::exception &e) {
+      } catch (const std::exception &e) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
         os << colorizer.error(e.what()) << "\n";
         return 2;
       }
@@ -2251,7 +2264,13 @@ int main(int argc, char *argv[]) {
       return 0;
     }
 #endif
-    Cloud cloud = load(file, frame, loadType);
+    Cloud cloud;
+    try {
+      cloud = load(file, frame, loadType);
+    } catch (const std::exception &e) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
+      std::cerr << colorizer.error(e.what()) << "\n";
+      return 2;
+    }
     std::ostringstream line;
     FrameCarry once(false);
     const int rc = runOne(line, once, cloud);
@@ -2305,9 +2324,12 @@ int main(int argc, char *argv[]) {
       (jobs == 1 || frameSource(file) != FrameSource::dump)) {
     walkCarry = std::make_unique<FrameCarry>(true);
   }
-  const bool ranged =
-      lo > hi || forEachInputFrame(file, lo, hi, typeFilter, jobs, processFrame,
-                                   part, parts);
+  try {
+    forEachInputFrame(file, lo, hi, typeFilter, jobs, processFrame, part, parts);
+  } catch (const std::exception &e) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
+    std::cerr << colorizer.error(e.what()) << "\n";
+    return 2;
+  }
 #ifdef SEAMS_HAS_MPI
   if (ranks.size > 1 &&
       !gatherFrameResults(ranks, outputLines, outputStatus, outputSeen)) {
@@ -2319,11 +2341,6 @@ int main(int argc, char *argv[]) {
     return 2;
   }
 #endif
-  if (!ranged) {
-    std::cerr << colorizer.error("frame ranges are unsupported for this input format")
-              << "\n";
-    return 2;
-  }
   int rc = 0;
   for (std::size_t i = 0; i < outputLines.size(); ++i) {
     if (!outputSeen[i]) {
