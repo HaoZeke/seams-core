@@ -1,3 +1,17 @@
+//-----------------------------------------------------------------------------------
+// d-SEAMS - Deferred Structural Elucidation Analysis for Molecular Simulations
+//
+// Copyright (c) d-SEAMS developers
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the MIT License as published by
+// the Open Source Initiative.
+//
+// A copy of the MIT License is included in the LICENSE file of this repository.
+// You should have received a copy of the MIT License along with this program.
+// If not, see <https://opensource.org/licenses/MIT>.
+//-----------------------------------------------------------------------------------
+
 #ifndef SEAMS_CAGE_CANON_H_
 #define SEAMS_CAGE_CANON_H_
 

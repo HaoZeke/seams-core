@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright (c) d-SEAMS developers
 # Strong and weak scaling on one release build.
 # One Snakemake job, so a point's threads are the only threads on the host.
 set -eu

@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 # Every run reads frame FRAME of its file, and d-SEAMS makes WARMUP warm-up
 # calls and REPEATS timed calls.
 # The ladder frame of m has m^3 cubic cells of SITES_PER_CELL molecules, for

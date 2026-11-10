@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 # Timed calls of a case. Both scales use at least six calls, with no best of them.
 REPEATS=6
 REPEATS_LARGEST=6

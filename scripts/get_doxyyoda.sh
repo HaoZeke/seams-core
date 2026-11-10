@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Copyright (c) d-SEAMS developers
 # Fetch the doxyYoda HTML theme into docs/doxyYoda/.
 set -euo pipefail
 ver=0.2.2

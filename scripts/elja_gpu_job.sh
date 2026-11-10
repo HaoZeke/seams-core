@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Copyright (c) d-SEAMS developers
 #SBATCH --job-name=seams-offload
 #SBATCH --partition=gpu-2xA100
 #SBATCH --account=chem-ui

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Copyright (c) d-SEAMS developers
 # Exclusive-node remeasure of every d-SEAMS 2.0 paper timing row.
 #
 # Runs as an sbatch body on one exclusive node. Builds the tip tree, gates on

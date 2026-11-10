@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Copyright (c) d-SEAMS developers
 # Reconfigure, compile the frame-parallel walk, Catch2, I/O and cages benches.
 set -euo pipefail
 

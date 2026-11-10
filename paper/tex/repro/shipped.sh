@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright (c) d-SEAMS developers
 # Release comparison on one core. Twelve calls on the 110592-molecule frame
 # and six on the 995328-molecule frame. Writes the JSON record and the TeX
 # the paper inputs.

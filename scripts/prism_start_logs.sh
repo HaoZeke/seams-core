@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright (c) d-SEAMS developers
 # Build the fail-before parent and the fix, and keep both Catch logs.
 # Usage: scripts/prism_start_logs.sh BUILD_DIR FAIL_REV FIX_REV OUT_DIR
 # The logs name the test and the exit status. Source paths are rewritten

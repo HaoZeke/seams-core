@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 # One core, one thread, six timed calls after two warmups.
 # Writes the ring and neighbour samples and the type 7 tables.
 export OMP_NUM_THREADS=1

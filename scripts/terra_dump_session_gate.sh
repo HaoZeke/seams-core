@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Copyright (c) d-SEAMS developers
 # Compile the live dump session on the existing meson tree, run Catch2,
 # time Niu dump I/O, and walk a short incremental path.
 set -euo pipefail

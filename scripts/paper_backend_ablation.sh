@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Copyright (c) d-SEAMS developers
 # Same frames as the paper benches. OMP_NUM_THREADS=1 except the OpenMP sweep.
 set -euo pipefail
 ROOT="${1:-.}"

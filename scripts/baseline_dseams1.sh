@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Copyright (c) d-SEAMS developers
 # Build the published d-SEAMS 1 release and time the same cage path as
 # tests/bench_cages. The release is tag v1.0.1, commit
 # 6e51956f3b9059729f36bcc208f6b6d18c3fec22 (2020-05-21), the 1.x tag
