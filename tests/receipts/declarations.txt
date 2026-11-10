@@ -2,9 +2,8 @@ Paper build, with nauty and sphericart linked.
 gcovr --exclude-throw-branches.
 
 src/cage_canon.cpp:125
-The closing brace of ringEdges. gcov marks the line =====.
-It is the compiler epilogue, not a source decision.
-Caller: canonicalCertificate in src/cage_canon.cpp.
+Caller: canonicalCertificate at src/cage_canon.cpp:162, the only call of ringEdges.
+Reason: gcov marks the closing brace =====. The block is the compiler epilogue of ringEdges. No source decision sits on that line.
 
 The no-library stubs in src/cage_canon.cpp and src/sphericart_ylm.cpp
 are a separate profile. They are compiled only when the matching

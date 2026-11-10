@@ -64,9 +64,12 @@ TEST_CASE("degenerate rings keep the underlying edge", "[nauty]") {
   REQUIRE_FALSE(cage::isHexagonalPrism({{7}}));
   const auto edge = cage::canonicalCertificate({{0, 1}});
   REQUIRE(cage::canonicalCertificate({{0, 0, 1}, {1, 0}}) == edge);
+  REQUIRE(cage::canonicalCertificate({{0, 1}, {0}}) == edge);
   REQUIRE(cage::canonicalCertificate({{0, 1, 2}, {0, 1, 2}}) ==
           cage::canonicalCertificate({{0, 1, 2}}));
   REQUIRE_FALSE(cage::sameCertificate({{0, 1}}, {{0, 1, 2}}));
+  REQUIRE(cage::canonicalCertificate({{0, 1, 2}}) !=
+          cage::canonicalCertificate({{0}, {1}, {2}}));
 }
 
 TEST_CASE("rooted and coloured certificates follow the partition", "[nauty]") {
@@ -102,6 +105,25 @@ TEST_CASE("rooted and coloured certificates follow the partition", "[nauty]") {
           cage::canonicalCertificateColoured(3, path, {0, 0, 1}, -1));
   REQUIRE(cage::canonicalCertificateColoured(65, path, {0, 1, 2}, 0).empty());
   REQUIRE(cage::canonicalCertificateColoured(0, {}, {}, -1).empty());
+}
+
+TEST_CASE("no self-edge reaches the certificate", "[nauty]") {
+  REQUIRE(cage::canonicalCertificate({{0, 0, 1}}) ==
+          cage::canonicalCertificate({{0, 1}}));
+  auto rings = hexPrismRings();
+  rings.push_back({0, 0});
+  REQUIRE(cage::isHexagonalPrism(rings));
+  const std::vector<std::pair<int, int>> clean = {{0, 1}};
+  const std::vector<std::pair<int, int>> withSelf = {{0, 0}, {1, 1}, {0, 1}};
+  const std::vector<std::pair<int, int>> onlySelf = {{0, 0}, {1, 1}};
+  REQUIRE(cage::canonicalCertificateRooted(2, withSelf, -1) ==
+          cage::canonicalCertificateRooted(2, clean, -1));
+  REQUIRE(cage::canonicalCertificateRooted(2, onlySelf, -1) ==
+          cage::canonicalCertificateRooted(2, {}, -1));
+  REQUIRE(cage::canonicalCertificateColoured(2, withSelf, {0, 1}, 0) ==
+          cage::canonicalCertificateColoured(2, clean, {0, 1}, 0));
+  REQUIRE(cage::canonicalCertificateColoured(2, onlySelf, {0, 1}, -1) ==
+          cage::canonicalCertificateColoured(2, {}, {0, 1}, -1));
 }
 
 #endif
