@@ -1506,12 +1506,10 @@ int cmdCages(std::ostream &os, FrameCarry &carry, Cloud &cloud, double cutoff,
       std::vector<bool> ddc(static_cast<std::size_t>(cloud.nop), false);
       for (std::size_t r = 0; r < six.size(); ++r) {
         for (const int a : six[r]) {
-          if (a >= 0 && a < cloud.nop) {
-            hc[static_cast<std::size_t>(a)] =
-                hc[static_cast<std::size_t>(a)] || aff.hc[r];
-            ddc[static_cast<std::size_t>(a)] =
-                ddc[static_cast<std::size_t>(a)] || aff.ddc[r];
-          }
+          hc[static_cast<std::size_t>(a)] =
+              hc[static_cast<std::size_t>(a)] || aff.hc[r];
+          ddc[static_cast<std::size_t>(a)] =
+              ddc[static_cast<std::size_t>(a)] || aff.ddc[r];
         }
       }
       tallyAtoms(hc, ddc);
