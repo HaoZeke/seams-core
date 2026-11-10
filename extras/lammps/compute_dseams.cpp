@@ -1,5 +1,7 @@
+// Copyright (c) d-SEAMS developers
 #include "compute_dseams.h"
 #include "atom.h"
+#include "comm.h"
 #include "domain.h"
 #include "error.h"
 #include "memory.h"
@@ -7,18 +9,26 @@
 
 #include <seams_c_api.h>
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <vector>
 
 using namespace LAMMPS_NS;
 
+namespace LAMMPS_NS {
+void require_dseams_narg(LAMMPS *lmp, int narg) {
+  if (narg < 3) {
+    lmp->error->all(FLERR, "Illegal compute dseams command");
+  }
+}
+}
+
 ComputeDseams::ComputeDseams(LAMMPS *lmp, int narg, char **arg)
     : Compute(lmp, narg, arg), nmax(0), chill(nullptr), cutoff(3.5),
-      graph("cutoff") {
-  if (narg < 3) {
-    error->all(FLERR, "Illegal compute dseams command");
-  }
+      graph("cutoff"), label_open(0) {
+  require_dseams_narg(lmp, narg);
   for (int iarg = 3; iarg < narg; iarg += 2) {
     if (iarg + 1 >= narg) {
       error->all(FLERR, "Illegal compute dseams command");
@@ -28,6 +38,8 @@ ComputeDseams::ComputeDseams(LAMMPS *lmp, int narg, char **arg)
       if (graph != "cutoff" && graph != "mutual") {
         error->all(FLERR, "compute dseams: graph is cutoff or mutual");
       }
+    } else if (std::strcmp(arg[iarg], "file") == 0) {
+      label_path = arg[iarg + 1];
     } else if (std::strcmp(arg[iarg], "cutoff") == 0) {
       cutoff = std::strtod(arg[iarg + 1], nullptr);
       if (!(cutoff > 0.0)) {
@@ -44,6 +56,9 @@ ComputeDseams::ComputeDseams(LAMMPS *lmp, int narg, char **arg)
 void ComputeDseams::init() {}
 
 void ComputeDseams::compute_peratom() {
+  if (comm->nprocs != 1) {
+    error->all(FLERR, "compute dseams: one rank only");
+  }
   invoked_peratom = update->ntimestep;
   const int nlocal = atom->nlocal;
   if (nlocal > nmax) {
@@ -71,13 +86,50 @@ void ComputeDseams::compute_peratom() {
       domain->triclinic ? domain->xy : 0.0,
       domain->triclinic ? domain->xz : 0.0,
       domain->triclinic ? domain->yz : 0.0};
-  if (seams_chill_plus_graph_lammps(xyz.data(), nlocal, box9, cutoff,
-                                   graph.c_str(), labels.data()) != 0) {
-    error->one(FLERR, "compute dseams: seams_chill_plus_graph failed");
+  int local_atoms = nlocal;
+  int total_atoms = 0;
+  MPI_Allreduce(&local_atoms, &total_atoms, 1, MPI_INT, MPI_SUM, world);
+  int failed = 0;
+  if (nlocal > 0) {
+    failed = seams_chill_plus_graph_lammps(xyz.data(), nlocal, box9, cutoff,
+                                           graph.c_str(), labels.data()) != 0;
+  } else if (total_atoms == 0) {
+    failed = 1;
+  }
+  int any_failed = 0;
+  MPI_Allreduce(&failed, &any_failed, 1, MPI_INT, MPI_MAX, world);
+  if (any_failed) {
+    error->all(FLERR, "compute dseams: seams_chill_plus_graph failed");
   }
   for (int i = 0; i < nlocal; i++) {
     chill[i] = static_cast<double>(labels[static_cast<std::size_t>(i)]);
   }
+  if (label_path.empty()) {
+    return;
+  }
+  std::ofstream out(label_path, label_open ? std::ios::app : std::ios::out);
+  label_open = 1;
+  out << "frame\n";
+  out << "step " << update->ntimestep << "\n";
+  char cutoff_line[64];
+  std::snprintf(cutoff_line, sizeof(cutoff_line), "cutoff %.17g\n", cutoff);
+  out << cutoff_line;
+  char box_line[320];
+  std::snprintf(box_line, sizeof(box_line),
+                "box %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g\n",
+                box9[0], box9[1], box9[2], box9[3], box9[4], box9[5], box9[6], box9[7], box9[8]);
+  out << box_line;
+  out << "pbc " << domain->boundary[0][0] << " " << domain->boundary[1][0] << " "
+      << domain->boundary[2][0] << "\n";
+  out << "atoms " << nlocal << "\n";
+  for (int i = 0; i < nlocal; i++) {
+    char line[160];
+    std::snprintf(line, sizeof(line), "label %d %d %.17g %.17g %.17g %d\n",
+                  static_cast<int>(atom->tag[i]), atom->type[i], atom->x[i][0], atom->x[i][1],
+                  atom->x[i][2], labels[static_cast<std::size_t>(i)]);
+    out << line;
+  }
+  out << "endframe\n";
 }
 
 double ComputeDseams::memory_usage() {

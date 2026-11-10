@@ -1,3 +1,4 @@
+// Copyright (c) d-SEAMS developers
 #ifdef COMPUTE_CLASS
 ComputeStyle(dseams, ComputeDseams)
 #else
@@ -11,6 +12,8 @@ ComputeStyle(dseams, ComputeDseams)
 
 namespace LAMMPS_NS {
 
+void require_dseams_narg(class LAMMPS *, int narg);
+
 class ComputeDseams : public Compute {
 public:
   ComputeDseams(class LAMMPS *, int, char **);
@@ -23,6 +26,8 @@ private:
   double *chill;
   double cutoff;
   std::string graph;
+  std::string label_path;
+  int label_open;
 };
 
 } // namespace LAMMPS_NS
