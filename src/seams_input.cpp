@@ -1038,7 +1038,6 @@ void loadLammpsFrame(
     yCloud.currentFrame = targetFrame;
     return;
   }
-  try {
   std::unique_lock<std::mutex> lock(sess->mu, std::try_to_lock);
   if (lock.owns_lock()) {
     if (!sess->positionAt(targetFrame)) {
@@ -1060,9 +1059,6 @@ void loadLammpsFrame(
   parseLammpsFrameBody(clone.io->stream(), clone.io->descriptor(), filename, yCloud,
                        typeFilter, keep, isSlice, coordLow, coordHigh);
   yCloud.currentFrame = targetFrame;
-  } catch (const std::ios_base::failure &) {
-    yCloud.currentFrame = targetFrame;
-  }
 }
 } // namespace
 
