@@ -40,6 +40,7 @@ test_sources = {
   'cage_affiliation': 'test_cage_affiliation.cpp',
   'cage_enum': 'test_cage_enum.cpp',
   'c_api': 'test_c_api.cpp',
+  'insitu': 'test_insitu.cpp',
   'chill_offload': 'test_chill_offload.cpp',
   'gpu_residency': 'test_gpu_residency.cpp',
   'config': 'test_config.cpp',
