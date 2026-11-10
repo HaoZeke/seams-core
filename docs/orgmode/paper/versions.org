@@ -14,7 +14,8 @@ later release adds a row here and leaves the v2.12.0 rows in place.
 | PydSEAMSlib (Python, ~import pydseamslib~) | 2.11.1 on PyPI | the wheel wraps seams-core v2.11.0; the label tables and the head-to-head table use its sdist built with v2.12.0 as the seams-core subproject |
 | yodaStruct (Lua, ~require("dseams")~) | v2.10.0 | a separately versioned front end that builds seams-core v2.10.0 |
 | dseams-plumed (PLUMED action ~DSEAMS_CAGES~) | builds seams-core commit ~bdc9b74b~ | separate MIT module, [[https://github.com/d-SEAMS/dseams-plumed][d-SEAMS/dseams-plumed]] |
-| LAMMPS compute ~compute dseams~ | in seams-core | ~extras/lammps/compute_dseams.cpp~ and ~compute_dseams.h~ |
+| LAMMPS fix ~fix dseams~ | this tree | ~extras/lammps/in.dseams~ loads ~./libdseams_lammps.so~; the package runs the same file |
+| v2.12.0 LAMMPS CHILL+ sources | in seams-core | ~extras/lammps/compute_dseams.cpp~ and ~compute_dseams.h~ |
 | Lean development of the supplement | Lean toolchain v4.15.0 | the =lean/= folder of the supplementary archive, no other library |
 
 The =lean/= directory of seams-core is a separate development (Lean

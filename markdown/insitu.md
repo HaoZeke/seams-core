@@ -103,9 +103,9 @@ Cages name the cutoff graph.
 
 ## LAMMPS plugin
 
-The checked binary is LAMMPS (22 Jul 2025 - Update 6).
+The checked binary is LAMMPS (30 Sep 2026 - Update 1).
 Compile `libdseams_lammps.so` against that source tree and against
-`libyodaLib`.
+`libyodaLib`. The shipped file is `extras/lammps/in.dseams`.
 
     cmake -S src/adapters/lammps -B plugin-build \
       -DLAMMPS_SRC=lammps/src \
@@ -115,8 +115,8 @@ Compile `plugin-build` after that configure line.
 
 The input loads the object and adds the fix:
 
-    plugin load libdseams_lammps.so
-    fix sea all dseams record census.txt every 1 cutoff 3.5
+    plugin load ./libdseams_lammps.so
+    fix sea all dseams record live.txt every 1 cutoff 3.5 depth 8
 
 Write a dump of the same atoms on the same stride.
 `seams` on that dump must match `census.txt` on every shared step.
@@ -132,8 +132,9 @@ The package sources are `src/DSEAMS`.
       -DSEAMS_LIBRARY=bbdir-rel/src/libyodaLib.so
 The package binary is the `lmp` produced by compiling `lammps-build`.
 
-The input omits `plugin load`.
-The fix line is the one above.
+The shipped input keeps the `plugin load` line.
+A missing `./libdseams_lammps.so` does not abort, so the package
+binary runs that file and the built-in fix does the work.
 The checked package binary reports the same LAMMPS version string.
 One rank is the acceptance scope for the package.
 The plugin acceptance also runs on two ranks.

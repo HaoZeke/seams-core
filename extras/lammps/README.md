@@ -1,27 +1,35 @@
-# compute dseams
-
-In-run CHILL+ labels from the `seams_chill_plus_graph` C ABI.
-
-```
-compute ice all dseams
-dump 1 all custom 1 dump.chill id type x y z c_ice
-```
-
-The optional keywords are `graph cutoff|mutual` and `cutoff R`
-(angstrom). The defaults are `graph cutoff cutoff 3.5`, the list
-`seams chill-plus` uses. `graph mutual` keeps the mutual four nearest
-neighbours inside `R + 1.5`, as `seams chill-plus --graph mutual` does.
-
-The dump column is the same integer table as `seams chill-plus`
-(0 cubic, 1 hexagonal, 2 water, 3 interfacial, 4 clathrate,
-5 interClathrate, 6 unclassified). Copy these two sources into
-`LAMMPS/src` and add `-I` to the seams-core include path.
+# fix dseams
 
 `in.dseams` reads `water.data` (four oxygen sites) with `pair_style zero`
-and writes `dump.chill`. The compute copies `nlocal` xyz and calls
-`seams_chill_plus_graph`; it does not take the LAMMPS neighbour list.
+and analyses timestep 0.
 
-`tests/test_phase.cpp` checks that the compute's label function is
-`seams_chill_plus`. `build_compute.sh PREFIX` clones LAMMPS
-`stable_22Jul2025_update5`, copies these two sources into `src/`,
-links `libyodaLib` from `PREFIX`, and runs `in.dseams`.
+Place `libdseams_lammps.so` beside the input and run it:
+
+```
+plugin load ./libdseams_lammps.so
+fix sea all dseams record live.txt every 1 cutoff 3.5 depth 8
+dump native all custom 1 dump.lammpstrj id type x y z
+run 0
+```
+
+The plugin is the object from `src/adapters/lammps`. The in-tree package
+registers the same fix. A missing `./libdseams_lammps.so` does not abort
+the input, so that package binary runs this file as written.
+
+`live.txt` is the census. `seams` on `dump.lammpstrj` must match it.
+The keywords are `record`, `every`, `cutoff`, `depth`, and `host`.
+`host yes` is the default and keeps the LAMMPS neighbour list.
+
+Build the plugin against the LAMMPS that will load it:
+
+```
+cmake -S src/adapters/lammps -B plugin-build \
+  -DLAMMPS_SRC=lammps/src \
+  -DSEAMS_INCLUDE=src/include/internal \
+  -DSEAMS_LIBRARY=bbdir/src/libyodaLib.so
+cmake --build plugin-build
+cp plugin-build/libdseams_lammps.so extras/lammps/
+```
+
+The package build adds `-DPKG_DSEAMS=on` and the same `SEAMS_INCLUDE`
+and `SEAMS_LIBRARY`. Its `lmp` runs `in.dseams` without the copy.
