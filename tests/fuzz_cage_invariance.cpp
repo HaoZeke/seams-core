@@ -33,8 +33,11 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <csignal>
 #include <cstdint>
 #include <cstdlib>
+#include <execinfo.h>
+#include <unistd.h>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -65,6 +68,21 @@ struct Result {
   int six = 0;
   std::vector<std::pair<int, std::vector<std::vector<int>>>> keys;
 };
+
+// One cage search on a 4096-atom frame is seconds. A search that is still
+// in findDDC after three minutes is the hang seen on the message-passing
+// run: the worker sat in commonAtom and the test printed nothing.
+constexpr unsigned kTrialBoundSeconds = 180;
+
+void onTrialAlarm(int) {
+  void *stack[48];
+  const int n = backtrace(stack, 48);
+  const char msg[] = "trial exceeded the per-trial bound\n";
+  if (write(STDERR_FILENO, msg, sizeof(msg) - 1) < 0) {
+  }
+  backtrace_symbols_fd(stack, n, STDERR_FILENO);
+  _exit(3);
+}
 
 int majorityType(const std::string &path, int frame) {
   std::ifstream in(path);
@@ -254,6 +272,7 @@ int main(int argc, char **argv) {
   }
   const fs::path dir(argv[1]);
   const int trials = argc > 2 ? std::atoi(argv[2]) : 1000;
+  std::signal(SIGALRM, onTrialAlarm);
   const double cutoff = 3.5;
   if (!fs::is_directory(dir)) {
     std::fprintf(stderr, "fuzz_cage_invariance: %s is not a directory\n", dir.c_str());
@@ -309,14 +328,23 @@ int main(int argc, char **argv) {
         std::fflush(stdout);
         continue;
       }
+      std::printf("progress %s frame %d reference 0\n", path.filename().c_str(), frame);
+      std::fflush(stdout);
+      alarm(kTrialBoundSeconds);
       const Result ref = evaluate(cloud, cutoff, atomType);
+      alarm(0);
       bool ok = true;
       for (int ix = 0; ix < 2 && ok; ix++) {
         for (int iy = 0; iy < 2 && ok; iy++) {
           for (int iz = 0; iz < 2 && ok; iz++) {
             Cloud moved = cloud;
             shiftCloud(moved, 0.5 * ix, 0.5 * iy, 0.5 * iz);
+            std::printf("progress %s frame %d half %d%d%d\n", path.filename().c_str(), frame,
+                        ix, iy, iz);
+            std::fflush(stdout);
+            alarm(kTrialBoundSeconds);
             const Result got = evaluate(moved, cutoff, atomType);
+            alarm(0);
             shiftTrials++;
             if (!sameCount(ref, got) || got.keys != ref.keys) {
               std::printf("FAIL %s frame %d half %d%d%d cages %d/%d (hc %d/%d ddc %d/%d) six %d/%d set %s\n",
@@ -336,7 +364,11 @@ int main(int argc, char **argv) {
           std::uniform_real_distribution<double> unit(0.0, 1.0);
           Cloud moved = cloud;
           shiftCloud(moved, unit(rng), unit(rng), unit(rng));
+          std::printf("progress %s frame %d shift %d\n", path.filename().c_str(), frame, t);
+          std::fflush(stdout);
+          alarm(kTrialBoundSeconds);
           const Result got = evaluate(moved, cutoff, atomType);
+          alarm(0);
           if (!sameCount(ref, got) || got.keys != ref.keys) {
             std::printf("FAIL %s frame %d shift trial %d cages %d/%d (hc %d/%d ddc %d/%d)\n",
                         path.filename().c_str(), frame, t, ref.cages, got.cages, ref.hc, got.hc,
@@ -349,7 +381,11 @@ int main(int argc, char **argv) {
           std::iota(perm.begin(), perm.end(), 0);
           std::shuffle(perm.begin(), perm.end(), rng);
           Cloud permuted = permuteCloud(cloud, perm);
+          std::printf("progress %s frame %d perm %d\n", path.filename().c_str(), frame, t);
+          std::fflush(stdout);
+          alarm(kTrialBoundSeconds);
           const Result pgot = evaluate(permuted, cutoff, atomType);
+          alarm(0);
           if (!sameCount(ref, pgot)) {
             std::printf("FAIL %s frame %d perm trial %d cages %d/%d (hc %d/%d ddc %d/%d) six %d/%d\n",
                         path.filename().c_str(), frame, t, ref.cages, pgot.cages, ref.hc, pgot.hc,
