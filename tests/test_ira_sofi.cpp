@@ -89,6 +89,36 @@ TEST_CASE("IRA overlays a rotated and permuted square", "[ira]") {
   REQUIRE_THAT(m.hausdorff, Catch::Matchers::WithinAbs(0.0, 1e-6));
 }
 
+TEST_CASE("IRA assignments are 0-based indices inside the set", "[ira]") {
+  ira::Match m;
+  const Eigen::MatrixXd ref = squareXY();
+  REQUIRE(ira::match(ref, ref, m) == 0);
+  REQUIRE(m.assignment.size() == 4);
+  bool sawZero = false;
+  for (int p : m.assignment) {
+    REQUIRE(p >= 0);
+    REQUIRE(p < 4);
+    sawZero = sawZero || (p == 0);
+  }
+  REQUIRE(sawZero);
+}
+
+TEST_CASE("IRA returns the library error when no basis exists", "[ira]") {
+  Eigen::MatrixXd ref(4, 3);
+  ref << 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0;
+  Eigen::MatrixXd target(4, 3);
+  target << 0.0, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0, 0.2, 0.0, 8.0, 8.0, 8.0;
+  ira::Match m;
+  REQUIRE(ira::match(ref, target, m, 1.01) != 0);
+}
+
+TEST_CASE("SOFI returns the library error when the basis cannot be set", "[ira]") {
+  ira::PointGroup pg;
+  const int rc = ira::pointGroup(squareXY(), pg, 10.0);
+  REQUIRE(rc == -3);
+  REQUIRE(pg.nOperations == 0);
+}
+
 TEST_CASE("SOFI reports a non-C1 group for a square", "[ira]") {
   ira::PointGroup pg;
   REQUIRE(ira::pointGroup(squareXY(), pg) == 0);
