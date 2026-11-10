@@ -74,6 +74,16 @@ def lammps_cases(work, plugin, lmp, mpirun, libdir):
         "bad-host": (header + "fix sea all dseams record rec.txt host maybe\nrun 1\n", 1, "fix dseams: host is yes or no"),
         "no-record": (header + "fix sea all dseams every 1 cutoff 3.5\nrun 1\n", 1, "fix dseams: record is required"),
         "bad-record": (header + "fix sea all dseams record /no/such/dir/rec.txt every 1\nrun 1\n", 1, "fix dseams: record did not open"),
+        "big-every": (header + "fix sea all dseams record rec.txt every 1000001\nrun 1\n", 1, "fix dseams: every must be a positive integer"),
+        "junk-every": (header + "fix sea all dseams record rec.txt every 2x\nrun 1\n", 1, "fix dseams: every must be a positive integer"),
+        "neg-cutoff": (header + "fix sea all dseams record rec.txt cutoff -3\nrun 1\n", 1, "fix dseams: cutoff must be positive"),
+        "big-depth": (header + "fix sea all dseams record rec.txt depth 1000001\nrun 1\n", 1, "fix dseams: depth must be a positive integer"),
+        "bare-dump": (header + "fix sea all dseams dump\nrun 1\n", 1, "Illegal fix dseams command"),
+        "bare-every": (header + "fix sea all dseams record rec.txt every\nrun 1\n", 1, "Illegal fix dseams command"),
+        "bare-record": (header + "fix sea all dseams record\nrun 1\n", 1, "Illegal fix dseams command"),
+        "bare-cutoff": (header + "fix sea all dseams record rec.txt cutoff\nrun 1\n", 1, "Illegal fix dseams command"),
+        "bare-depth": (header + "fix sea all dseams record rec.txt depth\nrun 1\n", 1, "Illegal fix dseams command"),
+        "bare-host": (header + "fix sea all dseams record rec.txt host\nrun 1\n", 1, "Illegal fix dseams command"),
     }
     cases = {
         "live": header
@@ -128,6 +138,37 @@ def lammps_cases(work, plugin, lmp, mpirun, libdir):
     )
     run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"], still, env)
     print("lammps nohost ok", flush=True)
+    empty = work / "empty-group"
+    empty.mkdir(parents=True, exist_ok=True)
+    (empty / "in").write_text(
+        header
+        + "group none empty\n"
+        + "fix sea none dseams record rec.txt every 1 cutoff 3.5\n"
+        + "run 1\n"
+    )
+    run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"], empty, env)
+    print("lammps empty-group exit 0", flush=True)
+    twice = work / "twice"
+    twice.mkdir(parents=True, exist_ok=True)
+    (twice / "in").write_text(
+        header
+        + "fix hold all setforce 0.0 0.0 0.0\n"
+        + "fix sea all dseams record rec.txt every 1 cutoff 3.5\n"
+        + "run 1\nrun 1\n"
+    )
+    run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"], twice, env)
+    print("lammps twice exit 0", flush=True)
+    moving = work / "moving"
+    moving.mkdir(parents=True, exist_ok=True)
+    (moving / "in").write_text(
+        header
+        + "velocity all create 300.0 9\n"
+        + "fix int all nve\n"
+        + "fix sea all dseams record rec.txt every 1 cutoff 3.5\n"
+        + "run 2\n"
+    )
+    run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"], moving, env)
+    print("lammps moving exit 0", flush=True)
 
 
 
