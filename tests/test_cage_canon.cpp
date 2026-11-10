@@ -10,7 +10,13 @@ TEST_CASE("nautyAvailable matches the compile-time flag", "[nauty]") {
 #else
   REQUIRE_FALSE(cage::nautyAvailable());
   REQUIRE(cage::canonicalCertificate({{0, 1, 2}}).empty());
+  REQUIRE(cage::canonicalCertificate({}).empty());
   REQUIRE_FALSE(cage::isHexagonalPrism({{0, 1, 2, 3, 4, 5}}));
+  REQUIRE_FALSE(cage::isHexagonalPrism({}));
+  REQUIRE_FALSE(cage::sameCertificate({{0, 1, 2}}, {{0, 1, 2}}));
+  REQUIRE(cage::canonicalCertificateRooted(0, {}, -1).empty());
+  REQUIRE(cage::canonicalCertificateRooted(2, {{0, 0}, {-1, 0}, {0, 3}}, 0).empty());
+  REQUIRE(cage::canonicalCertificateColoured(1, {{0, 1}}, {0}, -1).empty());
 #endif
 }
 

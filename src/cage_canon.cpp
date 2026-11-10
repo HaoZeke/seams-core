@@ -24,6 +24,7 @@
 
 namespace {
 
+#ifdef SEAMS_HAS_NAUTY
 void collectAtoms(const std::vector<std::vector<int>> &rings,
                   std::vector<int> &atoms, std::map<int, int> &toLocal) {
   atoms.clear();
@@ -37,6 +38,7 @@ void collectAtoms(const std::vector<std::vector<int>> &rings,
     }
   }
 }
+#endif
 
 #ifdef SEAMS_HAS_NAUTY
 std::string densenautyCertificate(int n, const std::vector<std::pair<int, int>> &edges,
@@ -102,6 +104,7 @@ std::string densenautyCertificate(int n, const std::vector<std::pair<int, int>> 
 }
 #endif
 
+#ifdef SEAMS_HAS_NAUTY
 std::vector<std::pair<int, int>>
 ringEdges(const std::vector<std::vector<int>> &rings,
           const std::map<int, int> &toLocal) {
@@ -124,7 +127,6 @@ ringEdges(const std::vector<std::vector<int>> &rings,
   return edges;
 }
 
-#ifdef SEAMS_HAS_NAUTY
 std::string hexPrismCertificate() {
   std::vector<std::pair<int, int>> edges;
   for (int i = 0; i < 6; i++) {
@@ -179,9 +181,16 @@ bool isHexagonalPrism(const std::vector<std::vector<int>> &rings) {
 
 bool sameCertificate(const std::vector<std::vector<int>> &a,
                      const std::vector<std::vector<int>> &b) {
+#ifndef SEAMS_HAS_NAUTY
+  // Certificates are empty, so the equality arm cannot run.
+  (void)a;
+  (void)b;
+  return false;
+#else
   const std::string ca = canonicalCertificate(a);
   const std::string cb = canonicalCertificate(b);
   return !ca.empty() && ca == cb;
+#endif
 }
 
 std::string canonicalCertificateRooted(int n,
