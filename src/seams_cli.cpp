@@ -2341,6 +2341,18 @@ int main(int argc, char *argv[]) {
     forEachInputFrame(file, lo, hi, typeFilter, jobs, processFrame, selection,
                       part, parts);
   }
+  bool sawFrame = false;
+  for (bool seen : outputSeen) {
+    sawFrame = sawFrame || seen;
+  }
+  // A start past the first frame that produced no row is an error.
+  // Returning success here is what a one-frame xyz did for --frame 2.
+  if (!sawFrame && frame > 1) {
+    std::cerr << colorizer.error("frame " + std::to_string(frame) +
+                                 " is past the last frame in this file")
+              << "\n";
+    return 2;
+  }
 #ifdef SEAMS_HAS_MPI
   if (ranks.size > 1 &&
       !gatherFrameResults(ranks, outputLines, outputStatus, outputSeen)) {

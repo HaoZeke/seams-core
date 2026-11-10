@@ -35,6 +35,7 @@
 #include <cmath>
 #include <cstring>
 #include <exception>
+#include <filesystem>
 #include <fstream>
 #include <memory>
 #include <set>
@@ -216,6 +217,13 @@ int seams_path_nframes(const char *path) {
   clear_error();
   if (path == nullptr) {
     set_error("path is null");
+    return -1;
+  }
+  // A missing path is an error. A reader that invents one step for an
+  // absent file must not win over this check.
+  std::error_code missing;
+  if (!std::filesystem::is_regular_file(path, missing)) {
+    set_error("unreadable trajectory");
     return -1;
   }
   try {
