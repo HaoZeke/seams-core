@@ -7,6 +7,7 @@
 #include <rdf.hpp>
 
 #include <array>
+#include <cmath>
 #include <vector>
 
 namespace {
@@ -152,6 +153,35 @@ TEST_CASE("neighList degree matches site-site CN past every pair and before none
   REQUIRE_THAT(degNone, Catch::Matchers::WithinAbs(0.0, 1e-12));
   REQUIRE_THAT(rdf::coordinationNumber(gr, 1.0, rhoJ),
                Catch::Matchers::WithinAbs(degNone, 1e-9));
+}
+
+TEST_CASE("a distance that rounds onto rmax fills the last bin", "[rdf]") {
+  // Two equal legs. Their squared sum is just under rmax squared, and
+  // the square root rounds back onto rmax, so the raw bin is nbins.
+  const double rmax = 0.1;
+  const int nbins = 4;
+  const double width = rmax / static_cast<double>(nbins);
+  double leg = std::sqrt(rmax * rmax / 2.0);
+  bool rounds = false;
+  for (int i = 0; i < 20; ++i) {
+    const double distSq = leg * leg + leg * leg;
+    if (distSq < rmax * rmax &&
+        static_cast<int>(std::sqrt(distSq) / width) >= nbins) {
+      rounds = true;
+      break;
+    }
+    leg = std::nextafter(leg, 0.0);
+  }
+  REQUIRE(rounds);
+  const double coords[2][3] = {{0.0, 0.0, 0.0}, {leg, leg, 0.0}};
+  auto cloud = twoTypeCloud({20.0, 20.0, 20.0}, coords);
+  const auto gr = rdf::partialRdf(cloud, 1, 2, rmax, nbins);
+  int total = 0;
+  for (int c : gr.count) {
+    total += c;
+  }
+  REQUIRE(total == 1);
+  REQUIRE(gr.count[static_cast<std::size_t>(nbins - 1)] == 1);
 }
 
 TEST_CASE("firstMinimumBin finds the valley after the first of two peaks",
