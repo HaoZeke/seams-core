@@ -45,6 +45,12 @@ const int *seams_frame_ids(const seams_frame *frame);
 
 int seams_frame_chill_plus(seams_frame *frame, double cutoff, int type,
                            const char *graph, int *labels, int counts9[9]);
+/* rule NULL or "" is chill+. "ovito-chill+" is the OVITO 3.17.2 rule.
+ * A YAML document or a Lua table fragment with a rule field is accepted.
+ * Returns 1 when the rule name is unknown. */
+int seams_frame_chill_plus_rule(seams_frame *frame, double cutoff, int type,
+                                const char *graph, const char *rule,
+                                int *labels, int counts9[9]);
 int seams_frame_chill(seams_frame *frame, double cutoff, int type,
                       const char *graph, int *labels, int counts9[9]);
 

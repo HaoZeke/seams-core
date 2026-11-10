@@ -29,18 +29,26 @@ pkg.generate(
   requires: ['seams-core'],
 )
 
+seams_test_fault = shared_library(
+  'seams_test_fault',
+  files('cxx/test_fault_new.cpp'),
+  link_args: ['-ldl', '-Wl,--version-script=' + meson.current_source_dir() / 'cxx/fault.map'],
+)
+
 seams_lang_test = executable(
   'test_seams_lang',
   files('cxx/test_lang.cpp'),
   dependencies: [seams_lang_dep],
   include_directories: include_directories('cxx'),
+  link_args: ['-ldl'],
 )
 
 test(
   'seams_lang_fixtures',
   seams_lang_test,
   args: [meson.project_source_root(), seams_exe.full_path()],
-  depends: [seams_exe],
+  depends: [seams_exe, seams_test_fault],
+  env: ['LD_PRELOAD=' + seams_test_fault.full_path()],
   timeout: 180,
 )
 
@@ -58,6 +66,18 @@ if get_option('with_cli') and get_option('with_tests')
     env: {'DSEAMS_ROOT': meson.project_source_root()},
     depends: [seams_exe, seams_lang],
     timeout: 600,
+  )
+  test(
+    'chill_plus_ctypes',
+    find_program('python3', required: true),
+    args: [meson.project_source_root() / 'tests' / 'test_chill_plus_ctypes.py'],
+    env: {'SEAMS_LANG_LIB': seams_lang.full_path()},
+    depends: [seams_lang],
+    timeout: 120,
+  )
+  install_data(
+    'python/chill_plus.py',
+    install_dir: get_option('datadir') / 'seams' / 'python',
   )
 endif
 
