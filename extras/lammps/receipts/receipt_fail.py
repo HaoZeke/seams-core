@@ -459,6 +459,22 @@ def check_neigh(work):
     if len(shells[0]) != 0:
         raise SystemExit("a lone atom found a neighbour")
     neigh_ref.q_vectors(shells, vectors, False)
+    hand_points = __import__("numpy").array(
+        [[5.0, 5.0, 5.0], [7.0, 5.0, 5.0], [3.0, 5.0, 5.0], [5.0, 7.0, 5.0], [5.0, 3.0, 5.0], [5.0, 5.0, 7.0]]
+    )
+    shells, distances, vectors = neigh_ref.full_shells(hand_points, held["box"], 3.5)
+    centre_shell = sorted(int(i) for i in shells[0])
+    if centre_shell != [1, 2, 3, 4, 5]:
+        raise SystemExit("hand shell %s" % centre_shell)
+    if any(abs(float(d) - 2.0) > 1e-9 for d in distances[0]):
+        raise SystemExit("hand distances %s" % distances[0])
+    near = neigh_ref.q_vectors(shells, vectors, False)
+    wide = neigh_ref.q_vectors(shells, vectors, True)
+    eclipsed, staggered = neigh_ref.eclipsed_staggered(0, shells, near)
+    if eclipsed + staggered < 1:
+        raise SystemExit("hand bond orders %d %d" % (eclipsed, staggered))
+    if __import__("numpy").allclose(near[0], wide[0]):
+        raise SystemExit("four neighbours matched the full shell")
     pair = __import__("numpy").array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
     neigh_ref.bond_counts(pair, held["box"], 0, 3.5)
 
@@ -492,7 +508,13 @@ def check_prose(work):
                 "-m", "fix: reject a long line\n\nThe gate holds a value and this sentence is deliberately long so the formatter wraps it.",
             ]
         )
-        base = subprocess.check_output(["git", "-C", badrepo, "rev-parse", "HEAD^"], text=True).strip()
+        subprocess.check_call(
+            [
+                "git", "-C", badrepo, "commit", "-q", "--allow-empty",
+                "-m", "fix: name three phases\n\nThe census names the cubic, the hexagonal, and the clathrate.\n",
+            ]
+        )
+        base = subprocess.check_output(["git", "-C", badrepo, "rev-parse", "HEAD~2"], text=True).strip()
         os.environ["SRC_SEAMS"] = str(badrepo)
         os.environ["SRC_LAMMPS"] = str(badrepo)
         os.environ["SEAMS_BASE"] = base
@@ -512,6 +534,16 @@ def check_prose(work):
         os.environ["LAMMPS_BASE"] = "098ffdefa525cabc82272925de02e9884f58c657"
         os.environ["PAPER_CORE"] = str(work / "no-such-core.toml")
         prose_gate.main()
+        derived = Path(prose_gate.__file__).resolve().parent / "paper-core.toml"
+        aside = derived.with_suffix(".toml.aside")
+        derived.rename(aside)
+        try:
+            prose_gate.note_core.said = False
+            if prose_gate.note_core(streamlog.Log(work / "nocore.log")) != "":
+                raise SystemExit("a missing profile was used")
+            run_main(prose_gate.__file__, ["prose_gate.py"])
+        finally:
+            aside.rename(derived)
     finally:
         os.environ["SRC_SEAMS"] = saved_seams
         os.environ["SRC_LAMMPS"] = saved_lammps
@@ -533,6 +565,26 @@ def main():
     if work.exists():
         shutil.rmtree(work)
     work.mkdir(parents=True)
+    empty_live = work / "empty-live"
+    empty_live.mkdir()
+    saved_bits = {key: os.environ.get(key) for key in ("MPIRUN", "DSEAMS_MPIRUN", "GMXDATA")}
+    for key in saved_bits:
+        os.environ.pop(key, None)
+    try:
+        cover.configure_live({}, empty_live)
+    finally:
+        for key, value in saved_bits.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+    gmx_link = Path(os.environ["BUILD"]) / "md-prefix" / "bin" / "gmx"
+    if gmx_link.is_symlink() or gmx_link.exists():
+        gmx_link.unlink()
+    cover.configure_live({}, os.environ["BUILD"])
+    cover.configure_live({}, os.environ["BUILD"])
+    cover.require_live(0)
+    require_message(lambda: cover.require_live(1), "test_live_cover.py exit 1")
     check_streamlog(work)
     blog = streamlog.Log(work / "abort.log")
     cover.abort(blog, 0)

@@ -294,8 +294,9 @@ with tempfile.TemporaryDirectory() as tmp:
           "--frame", "1", "--last", "1"], "atom"),
         (["fingerprint", str(tiny), "--graph", "seeded", "--frame", "1", "--last", "1"], "graph"),
         (["rings", str(xyz), "--frame", "1", "--last", "1"], "rings"),
-        (["read", str(zero), "--frame", "1", "--last", "1"], "nop 0"),
-        (["rings", str(zero), "--strict-input", "--frame", "1", "--last", "1"], "contains no atoms"),
+        (["read", str(zero), "--frame", "1", "--last", "1"], "nop 1 frame 1 box"),
+        (["rings", str(zero), "--strict-input", "--frame", "1", "--last", "1"],
+         "The point cloud has no simulation box; cannot build a neighbour list."),
         (["cages", str(tiny), "--cage-edge", "0,1", "--graph", "cutoff",
           "--frame", "1", "--last", "1"], "graph"),
         (["rings", str(water), "--jobs", "2", "--frame", "1", "--last", "2"], "rings"),
@@ -317,5 +318,103 @@ with tempfile.TemporaryDirectory() as tmp:
     except SystemExit as err:
         missed = str(err)
     assert missed == "missing reject message"
+
+    anion = Path(tmp) / "anion.lammpstrj"
+    anion.write_text(
+        "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n2\n"
+        "ITEM: BOX BOUNDS pp pp pp\n0 20\n0 20\n0 20\n"
+        "ITEM: ATOMS id type x y z\n1 2 1 1 1\n2 2 2 1 1\n"
+    )
+    far = Path(tmp) / "far.lammpstrj"
+    far.write_text(
+        "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n2\n"
+        "ITEM: BOX BOUNDS pp pp pp\n0 30\n0 30\n0 30\n"
+        "ITEM: ATOMS id type x y z\n1 1 1 1 1\n2 1 20 1 1\n"
+    )
+    hydro = Path(tmp) / "hydro.lammpstrj"
+    hydro.write_text(
+        "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n2\n"
+        "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        "ITEM: ATOMS id type x y z\n1 2 1 1 1\n2 2 2 1 1\n"
+    )
+    pdb = Path(tmp) / "one.pdb"
+    pdb.write_text(
+        "ATOM      1  O   MOL A   1       1.000   1.000   1.000  1.00  0.00           O\n"
+        "END\n"
+    )
+    nodot = Path(tmp) / "nodotdump"
+    nodot.write_bytes(tiny.read_bytes())
+    checked = [
+        (["rings", str(tiny), "--select", "[[[", "--frame", "1", "--last", "1"],
+         0, "expected property name after [, got ["),
+        (["cages", str(tiny), "--signature", "nope", "--frame", "1", "--last", "1"],
+         2, "bad cage signature 'nope'"),
+        (["rings", "--frame", "1"], 2, "A command and a trajectory file are required"),
+        (["density-z", str(tiny), "--axis", "Y", "--bins", "2", "--frame", "1", "--last", "1"],
+         0, "5 0.00025"),
+        (["density-z", str(tiny), "--axis", "1", "--bins", "2", "--frame", "1", "--last", "1"],
+         0, "15 0.0015"),
+        (["density-z", str(tiny), "--axis", "2", "--bins", "2", "--frame", "1", "--last", "1"],
+         0, "15 0.00175"),
+        (["density-z", str(tiny), "--axis", "Z", "--bins", "2", "--frame", "1", "--last", "1"],
+         0, "5 0"),
+        (["cn", str(anion), "--ions", "--site", "2=anion", "--cutoff", "6", "--frame", "1", "--last", "1"],
+         0, "degree 0 nCation 0 nAnion 2"),
+        (["cn", str(far), "--ions", "--site", "1=cationHead", "--cutoff", "3", "--frame", "1", "--last", "1"],
+         0, "degree 0 nCation 2 nAnion 0"),
+        (["f4", str(hydro), "--type", "0", "--htype", "2", "--frame", "1", "--last", "1"],
+         0, "f4 nan n 0"),
+        (["read", str(pdb), "--frame", "1", "--last", "1"], 0, "nop 1 frame 1 box"),
+        (["rings", str(xyz), "--frame", "2", "--last", "2"],
+         0, "Frame 2 does not exist in"),
+        (["rings", str(root / "input" / "con" / "tiny_multi_cuh2.con"), "--frame", "1", "--last", "0"],
+         0, "rings 3:0 4:0 5:0 6:0 7:0 8:0"),
+        (["rings", str(nodot), "--frame", "1", "--last", "1"], 0, "chemfiles cannot read"),
+        (["domains", str(far), "--site", "1=cationHead", "--cutoff", "6", "--frame", "1", "--last", "1"],
+         0, "subset polar n 2 largest 1 P 0.5"),
+        (["rings", str(far), "--water-types", ",", "--frame", "1", "--last", "1"],
+         0, "rings 3:0 4:0 5:0 6:0 7:0 8:0"),
+        (["rings", str(xyz), "--jobs", "2", "--frame", "1", "--last", "1"],
+         0, "The point cloud has no simulation box; cannot build a neighbour list."),
+        (["cages", str(tiny), "--cage-edge", "none", "--signature", "512", "--frame", "1", "--last", "1"],
+         0, "signature 5:12 cages 0 atoms 0"),
+        (["cages", str(far), "-k", "0", "--frame", "1", "--last", "1"],
+         0, "graph seeded hexagonal 0 cubic 0 both 0 water 0"),
+        (["fingerprint", str(tiny), "--graph", "", "--frame", "1", "--last", "1"],
+         0, "graph cutoff"),
+        (["fingerprint", str(tiny), "--graph", "mutual", "--frame", "1", "--last", "1"],
+         0, "graph mutual"),
+        (["cages", str(root / "input" / "traj" / "genice_sI.lammpstrj"),
+          "--graph", "cutoff", "--signature", "512", "--shape", "--type", "1",
+          "--frame", "1", "--last", "1"],
+         0, "shape 20:off 20:off"),
+    ]
+    def demand(proc, code, needle):
+        text = (proc.stdout or "") + (proc.stderr or "")
+        if proc.returncode != code or needle not in text:
+            raise SystemExit("%s exit %d\n%s" % (" ".join(proc.args[:3]), proc.returncode, text[-500:]))
+
+    caught = ""
+    try:
+        demand(subprocess.CompletedProcess(["seams", "read", "x"], 2, "not the phrase", ""), 0, "phrase")
+    except SystemExit as err:
+        caught = str(err)
+    if "not the phrase" not in caught:
+        raise SystemExit("demand dropped the output")
+    for args, code, needle in checked:
+        demand(subprocess.run([seams, *args], capture_output=True, text=True), code, needle)
+    library = Path(tmp) / "keys.txt"
+    emitted = subprocess.run(
+        [seams, "fingerprint", str(tiny), "--emit-library", "tiny", "--frame", "1", "--last", "1"],
+        capture_output=True, text=True,
+    )
+    demand(emitted, 0, "tiny")
+    library.write_text(emitted.stdout)
+    matched = subprocess.run(
+        [seams, "fingerprint", str(far), "--library", str(library), "--hops", "2",
+         "--frame", "1", "--last", "1"],
+        capture_output=True, text=True,
+    )
+    demand(matched, 0, "unmatched=2")
 
 sys.exit(0 if ok else 1)

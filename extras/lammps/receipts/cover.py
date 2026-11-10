@@ -24,15 +24,72 @@ def require_live(code):
         raise SystemExit("test_live_cover.py exit %d" % code)
 
 
-def prove_live_report():
-    try:
-        require_live(1)
-    except SystemExit as err:
-        if err.code != "test_live_cover.py exit 1":
-            raise
-    else:
-        raise SystemExit("a failing live test was accepted")
-    require_live(0)
+def configure_live(env, build):
+    """Point a live run at the engines that are actually installed."""
+    build = Path(build)
+    gmx = build / "gromacs-dseams" / "bin" / "gmx_mpi"
+    md_bin = build / "md-prefix" / "bin"
+    md_bin.mkdir(parents=True, exist_ok=True)
+    if gmx.is_file():
+        env["DSEAMS_GMX"] = str(gmx)
+        env["DSEAMS_GMX_MPIRUN"] = os.environ.get("MPIRUN", os.environ.get("DSEAMS_MPIRUN", ""))
+        data = os.environ.get("GMXDATA", "")
+        if data:
+            env["GMXDATA"] = data
+        link = md_bin / "gmx"
+        if link.is_symlink() or link.exists():
+            link.unlink()
+        link.symlink_to(gmx)
+        top = Path(data) / "top" if data else Path()
+        if top.is_dir():
+            share = build / "md-prefix" / "share" / "gromacs"
+            share.mkdir(parents=True, exist_ok=True)
+            dest = share / "top"
+            if dest.is_symlink() or dest.exists():
+                dest.unlink()
+            dest.symlink_to(top)
+    for name, key in (
+        ("seams-insitu", "SEAMS_INSITU_EXE"),
+        ("seams-gromacs-imd", "SEAMS_GRO_IMD_EXE"),
+        ("frame_clock", "DSEAMS_FRAME_CLOCK"),
+    ):
+        exe = build / "seams" / name
+        if exe.is_file():
+            env[key] = str(exe)
+    mpi_prefix = build / "lmp-mpi"
+    (mpi_prefix / "bin").mkdir(parents=True, exist_ok=True)
+    (mpi_prefix / "lib").mkdir(parents=True, exist_ok=True)
+    mpirun_bin = Path(os.environ.get("MPIRUN", os.environ.get("DSEAMS_MPIRUN", "mpirun")))
+    if mpirun_bin.is_file():
+        (mpi_prefix / "bin" / "mpirun").unlink(missing_ok=True)
+        (mpi_prefix / "bin" / "mpirun").symlink_to(mpirun_bin)
+    intree = build / "lammps-intree" / "lmp"
+    if intree.is_file():
+        (mpi_prefix / "bin" / "lmp_mpi").unlink(missing_ok=True)
+        (mpi_prefix / "bin" / "lmp_mpi").symlink_to(intree)
+    for so in (build / "lammps-intree").glob("*.so*"):
+        dest = mpi_prefix / "lib" / so.name
+        if dest.is_symlink() or dest.exists():
+            dest.unlink()
+        dest.symlink_to(so)
+    plugin_so = build / "plugin" / "libdseams_lammps.so"
+    if plugin_so.is_file():
+        env["DSEAMS_LMP_MPI_PREFIX"] = str(mpi_prefix)
+        env["DSEAMS_LMP_MPI_PLUGIN"] = str(plugin_so)
+    # Each lmp binary keeps its own liblammps on RUNPATH. Putting one
+    # build directory here would make the other binary load the wrong one.
+    env["LD_LIBRARY_PATH"] = ":".join(
+        part
+        for part in (
+            str(build / "gromacs-dseams" / "lib"),
+            str(build / "seams" / "src"),
+            str(build / "seams" / "chemfiles-prefix" / "lib"),
+            env.get("LD_LIBRARY_PATH", ""),
+            "/usr/lib/x86_64-linux-gnu",
+        )
+        if part
+    )
+    return env
 
 
 def abort(log, code):
@@ -122,69 +179,7 @@ def main():
     live_env["DSEAMS_LMP_INTREE"] = str(BUILD / "lammps-intree" / "lmp")
     live_env["DSEAMS_PLUGIN"] = str(BUILD / "plugin" / "libdseams_lammps.so")
     live_env["DSEAMS_MPIRUN"] = os.environ.get("MPIRUN", os.environ.get("DSEAMS_MPIRUN", ""))
-    gmx = BUILD / "gromacs-dseams" / "bin" / "gmx_mpi"
-    md_bin = BUILD / "md-prefix" / "bin"
-    md_bin.mkdir(parents=True, exist_ok=True)
-    if gmx.is_file():
-        live_env["DSEAMS_GMX"] = str(gmx)
-        live_env["DSEAMS_GMX_MPIRUN"] = os.environ.get("MPIRUN", os.environ.get("DSEAMS_MPIRUN", ""))
-        data = os.environ.get("GMXDATA", "")
-        if data:
-            live_env["GMXDATA"] = data
-        link = md_bin / "gmx"
-        if link.is_symlink() or link.exists():
-            link.unlink()
-        link.symlink_to(gmx)
-        top = Path(data) / "top" if data else Path()
-        if top.is_dir():
-            share = BUILD / "md-prefix" / "share" / "gromacs"
-            share.mkdir(parents=True, exist_ok=True)
-            dest = share / "top"
-            if dest.is_symlink() or dest.exists():
-                dest.unlink()
-            dest.symlink_to(top)
-    insitu = BUILD / "seams" / "seams-insitu"
-    imd = BUILD / "seams" / "seams-gromacs-imd"
-    clock = BUILD / "seams" / "frame_clock"
-    if insitu.is_file():
-        live_env["SEAMS_INSITU_EXE"] = str(insitu)
-    if imd.is_file():
-        live_env["SEAMS_GRO_IMD_EXE"] = str(imd)
-    if clock.is_file():
-        live_env["DSEAMS_FRAME_CLOCK"] = str(clock)
-    mpi_prefix = BUILD / "lmp-mpi"
-    (mpi_prefix / "bin").mkdir(parents=True, exist_ok=True)
-    (mpi_prefix / "lib").mkdir(parents=True, exist_ok=True)
-    mpirun_bin = Path(os.environ.get("MPIRUN", os.environ.get("DSEAMS_MPIRUN", "mpirun")))
-    if mpirun_bin.is_file():
-        (mpi_prefix / "bin" / "mpirun").unlink(missing_ok=True)
-        (mpi_prefix / "bin" / "mpirun").symlink_to(mpirun_bin)
-    intree = BUILD / "lammps-intree" / "lmp"
-    if intree.is_file():
-        (mpi_prefix / "bin" / "lmp_mpi").unlink(missing_ok=True)
-        (mpi_prefix / "bin" / "lmp_mpi").symlink_to(intree)
-    for so in (BUILD / "lammps-intree").glob("*.so*"):
-        dest = mpi_prefix / "lib" / so.name
-        if dest.is_symlink() or dest.exists():
-            dest.unlink()
-        dest.symlink_to(so)
-    plugin_so = BUILD / "plugin" / "libdseams_lammps.so"
-    if plugin_so.is_file():
-        live_env["DSEAMS_LMP_MPI_PREFIX"] = str(mpi_prefix)
-        live_env["DSEAMS_LMP_MPI_PLUGIN"] = str(plugin_so)
-    live_env["LD_LIBRARY_PATH"] = ":".join(
-        part
-        for part in (
-            str(BUILD / "gromacs-dseams" / "lib"),
-            str(BUILD / "lammps-intree"),
-            str(BUILD / "seams" / "src"),
-            str(BUILD / "seams" / "chemfiles-prefix" / "lib"),
-            live_env.get("LD_LIBRARY_PATH", ""),
-            "/usr/lib/x86_64-linux-gnu",
-        )
-        if part
-    )
-    prove_live_report()
+    configure_live(live_env, BUILD)
     code = log.run(
         [py, "-m", "coverage", "run", "--branch", "--append", str(SRC / "tests" / "insitu" / "test_live_cover.py")],
         WORK,
