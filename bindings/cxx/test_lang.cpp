@@ -727,7 +727,13 @@ int main(int argc, char **argv) {
   if (seams_frame_rdf(oxygen, 6.0, 4, 1, 1, rr, gg, nullptr, &vol) == 0) {
     return fail("rdf null count");
   }
-  if (seams_frame_rdf(blank2, 6.0, 0, 0, 0, rr, gg, cc, &vol) != 0) {
+  // A bin count of zero is one tenth of an angstrom, so 6 angstroms
+  // is 60 bins. The eight-element arrays above are for the explicit
+  // four-bin calls.
+  double wideR[64] = {};
+  double wideG[64] = {};
+  int wideC[64] = {};
+  if (seams_frame_rdf(blank2, 6.0, 0, 0, 0, wideR, wideG, wideC, &vol) != 0) {
     return fail("rdf empty");
   }
   if (seams_frame_rdf2d(oxygen, 3.5, 0.5, nullptr, rr, gg) != 0) {
