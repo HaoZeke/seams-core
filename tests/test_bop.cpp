@@ -1,3 +1,4 @@
+#include "coverage_threads.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
@@ -1015,11 +1016,11 @@ TEST_CASE("steinhardtQl is independent of the OpenMP thread count", "[bop]") {
 
 #ifdef SEAMS_HAS_OPENMP
   omp_set_dynamic(0);
-  omp_set_num_threads(1);
+  omp_set_num_threads(seams_cap_threads(1));
 #endif
   const auto serial = run();
 #ifdef SEAMS_HAS_OPENMP
-  omp_set_num_threads(4);
+  omp_set_num_threads(seams_cap_threads(4));
 #endif
   const auto threaded = run();
 
@@ -1170,7 +1171,7 @@ TEST_CASE("steinhardtQl matches a per-bond reference on threaded frames with "
       for (const int threads : {1, 4, 8}) {
 #ifdef SEAMS_HAS_OPENMP
         omp_set_dynamic(0);
-        omp_set_num_threads(threads);
+        omp_set_num_threads(seams_cap_threads(threads));
 #endif
         runs.push_back(chill::steinhardtQl(dense, denseRows, orderL));
         runs.push_back(chill::steinhardtQl(sparse, sparseRows, orderL));
@@ -1191,7 +1192,7 @@ TEST_CASE("steinhardtQl matches a per-bond reference on threaded frames with "
     }
   }
 #ifdef SEAMS_HAS_OPENMP
-  omp_set_num_threads(maxThreads);
+  omp_set_num_threads(seams_cap_threads(maxThreads));
 #endif
 }
 
@@ -1663,7 +1664,7 @@ chill::SteinhardtQl runSteinhardt(
     int nThreads) {
 #ifdef SEAMS_HAS_OPENMP
   omp_set_dynamic(0);
-  omp_set_num_threads(nThreads);
+  omp_set_num_threads(seams_cap_threads(nThreads));
 #endif
   setenv("SEAMS_OFFLOAD", offload ? "1" : "0", 1);
   return chill::steinhardtQl(cloud, nList, orderL);
