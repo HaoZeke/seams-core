@@ -533,6 +533,29 @@ TEST_CASE("synthetic DDC hits both apex wraps and the empty guards",
   REQUIRE_THAT(zeroHuge(0, 0), WithinAbs(0.0, 0.0));
 }
 
+TEST_CASE("a two-step shift of an odd prism keeps a searched start",
+          "[orient][prism-start]") {
+  // Fail-before for the shape-matcher early return. The rings are a
+  // pentagon shifted by two atoms, so the searched start is not zero.
+  const int n = 5;
+  auto bottom = ringCoords(n, 0.0, 1.2);
+  auto top = ringCoords(n, 2.5, 1.2);
+  bottom[2][0] += 0.35;
+  top[2][0] += 0.35;
+  std::vector<std::array<double, 3>> xyz = bottom;
+  xyz.insert(xyz.end(), top.begin(), top.end());
+  Cloud cloud = makeCloud(xyz, {12.0, 12.0, 40.0});
+  const auto ref = pntToPnt::getPointSetRefRing(n, 2);
+  std::vector<std::vector<int>> nList;
+  std::vector<int> rot1 = {2, 3, 4, 0, 1};
+  std::vector<int> rot2 = {7, 8, 9, 5, 6};
+  int beginRot = 0;
+  const bool rotated =
+      match::matchPrismBlock(cloud, nList, ref, rot1, rot2, beginRot);
+  REQUIRE(rotated == true);
+  REQUIRE(beginRot != 0);
+}
+
 TEST_CASE("odd prism block searches every start and drops a failed Horn",
           "[orient][shape]") {
   const int n = 5;
