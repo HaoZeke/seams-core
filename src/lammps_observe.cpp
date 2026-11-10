@@ -375,7 +375,7 @@ int analyze_cloud(Engine *eng, Cloud &cloud, int step, bool do_sink) {
       }
       mark("neigh");
       auto idx = nneigh::neighbourListByIndex(cloud, nList);
-      if (eng->rings_up == nullptr || eng->rings_depth != eng->opt.ring_depth) {
+      if (eng->rings_up == nullptr) {
         eng->rings_up = std::make_unique<primitive::RingUpdater>(eng->opt.ring_depth);
         eng->rings_up->setFullPassFraction(0.15);
         eng->rings_depth = eng->opt.ring_depth;
