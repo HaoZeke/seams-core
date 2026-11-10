@@ -118,23 +118,23 @@ std::string valueOfKey(const std::string &text, const std::string &key) {
         ++end;
       }
       if (lower(text.substr(i, end - i)) == needle) {
-        std::size_t cursor = end;
-        while (cursor < n &&
-               std::isspace(static_cast<unsigned char>(text[cursor]))) {
-          ++cursor;
+        std::size_t scan = end;
+        while (scan < n &&
+               std::isspace(static_cast<unsigned char>(text[scan]))) {
+          ++scan;
         }
-        if (cursor < n && (text[cursor] == ':' || text[cursor] == '=')) {
-          ++cursor;
-          while (cursor < n &&
-                 std::isspace(static_cast<unsigned char>(text[cursor]))) {
-            ++cursor;
+        if (scan < n && (text[scan] == ':' || text[scan] == '=')) {
+          ++scan;
+          while (scan < n &&
+                 std::isspace(static_cast<unsigned char>(text[scan]))) {
+            ++scan;
           }
-          std::size_t stop = cursor;
+          std::size_t stop = scan;
           while (stop < n && text[stop] != '\n' && text[stop] != ',' &&
                  text[stop] != '}' && text[stop] != '#') {
             ++stop;
           }
-          return unquote(text.substr(cursor, stop - cursor));
+          return unquote(text.substr(scan, stop - scan));
         }
       }
       i = end;
