@@ -222,7 +222,7 @@ TEST_CASE("a dilute row of 256 atoms still returns a rings line", "[insitu]") {
   REQUIRE(seams_insitu_step(eng, &frame) == SEAMS_INSITU_OK);
   const auto *result = seams_insitu_last(eng);
   REQUIRE(result != nullptr);
-  REQUIRE(std::strstr(result->text, "rings ") != nullptr);
+  REQUIRE(std::strstr(result->text, "\nrings ") != nullptr);
   frame.lx = 2500;
   REQUIRE(seams_insitu_step(eng, &frame) == SEAMS_INSITU_OK);
   frame.lx = 3000;
