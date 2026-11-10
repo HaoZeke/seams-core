@@ -137,21 +137,8 @@ struct FrameContext {
     basalCand.resize(static_cast<std::size_t>(nR));
     adjRings.resize(static_cast<std::size_t>(nR));
     adjReady.assign(static_cast<std::size_t>(nR), 0);
+    // Left clear. basalCandidates fills a ring the first time a sweep asks.
     basalReady.assign(static_cast<std::size_t>(nR), 0);
-#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
-#pragma omp parallel if (!omp_in_parallel())
-#endif
-    {
-      BasalScratch scratch;
-#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
-#pragma omp for schedule(static)
-#endif
-      for (int i = 0; i < nR; i++) {
-        basalCand[static_cast<std::size_t>(i)] =
-            collectBasalCandidates(i, scratch);
-        basalReady[static_cast<std::size_t>(i)] = 1;
-      }
-    }
   }
 
   [[nodiscard]] bool shareAtoms(int i, int j) const {
@@ -243,10 +230,13 @@ struct FrameContext {
     std::vector<int> arm1;
     std::vector<int> arm2;
     std::vector<int> seen;
-    int tickOn = 0;
-    int tick1 = 0;
-    int tick2 = 0;
-    int tickSeen = 0;
+    // Unsigned, so the generation counter wraps by the language rules.
+    // A signed increment that passed INT_MAX would be undefined, and the
+    // reset under that test was not a path the compiler could take.
+    std::uint8_t tickOn = 0;
+    std::uint8_t tick1 = 0;
+    std::uint8_t tick2 = 0;
+    std::uint8_t tickSeen = 0;
     void prepare(int atoms, int nRings) {
       if (static_cast<int>(onRing.size()) < atoms) {
         onRing.assign(static_cast<size_t>(atoms), 0);
@@ -257,8 +247,9 @@ struct FrameContext {
         seen.assign(static_cast<size_t>(nRings), 0);
       }
     }
-    int next(int &tick, std::vector<int> &stamp) {
-      if (++tick <= 0) {
+    int next(std::uint8_t &tick, std::vector<int> &stamp) {
+      ++tick;
+      if (tick == 0) {
         std::fill(stamp.begin(), stamp.end(), 0);
         tick = 1;
       }
@@ -391,7 +382,7 @@ struct FrameContext {
 
   mutable BasalScratch lazyScratch;
 
-  [[nodiscard]] const std::vector<int> &basalCandidates(int i) {
+  [[nodiscard]] const std::vector<int> &basalCandidates(int i) const {
     static const std::vector<int> empty;
     if (i < 0 || i >= static_cast<int>(basalCand.size())) {
       return empty;
@@ -468,7 +459,7 @@ ring::CageAffiliation batchSweep(const FrameContext &ctx) {
     std::vector<int> listHC;
     std::vector<ring::strucType> types(nRings, ring::strucType::unclassified);
     for (int i = 0; i < nR && left > 0; ++i) {
-      for (const int j : ctx.basalCand[static_cast<std::size_t>(i)]) {
+      for (const int j : ctx.basalCandidates(i)) {
         if (left == 0) {
           break;
         }
@@ -1269,7 +1260,13 @@ ring::SeededAtomLabels ring::seededCageAffiliation(
         }
         for (size_t m = 1; m < permissiveNList[u].size(); m++) {
           const int v = permissiveNList[u][m];
-          if (v >= 0 && v < nAtoms && affiliated[v] && !kept[v]) {
+          // A neighbour id outside the cloud is pushed and dropped when
+          // it is popped. The range test on u is that drop.
+          if (v < 0 || v >= nAtoms) {
+            stack.push_back(v);
+            continue;
+          }
+          if (affiliated[v] && !kept[v]) {
             kept[v] = true;
             stack.push_back(v);
           }
