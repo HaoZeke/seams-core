@@ -25,11 +25,29 @@ def guard_cmd(profile, fields):
         os.environ["PROSEGUARD"], "field", "--no-llm",
         "--profile", profile,
         "--styles-path", os.environ["PROSE_STYLES"],
-        "--zone", "results",
     ]
     for spec in fields:
         cmd.extend(["--field", spec])
     return cmd
+
+
+def other_findings(text, skip_we):
+    found = []
+    for line in text.splitlines():
+        if not line.startswith("field:"):
+            continue
+        if skip_we and "voice.WeRate" in line:
+            continue
+        found.append(line)
+    return found
+
+
+def log_proc(log, label, proc):
+    log.line("%s exit %d" % (label, proc.returncode))
+    if proc.stdout:
+        log.line(proc.stdout.rstrip())
+    if proc.stderr:
+        log.line(proc.stderr.rstrip())
 
 
 def note_core(log):
@@ -62,18 +80,15 @@ def main():
     failed = 0
     for path in sorted(kit.rglob("*.md")):
         proc = subprocess.run([snapper, "-f", "plaintext", "-w", "72", "--check", str(path)], text=True, capture_output=True)
-        log.line("snapper %s exit %d" % (path.name, proc.returncode))
-        if proc.stdout:
-            log.line(proc.stdout.rstrip())
-        if "would reformat" in proc.stdout:
+        log_proc(log, "snapper %s" % path.name, proc)
+        if "would reformat" in (proc.stdout or ""):
             failed += 1
         if proc.returncode != 0:
             failed += 1
         proc = subprocess.run(guard_cmd(paper, ["body=@%s" % path]), text=True, capture_output=True)
-        log.line("rohit-paper %s exit %d" % (path.name, proc.returncode))
-        if proc.returncode != 0:
+        log_proc(log, "rohit-paper %s" % path.name, proc)
+        if other_findings((proc.stdout or "") + (proc.stderr or ""), False) or proc.returncode != 0:
             failed += 1
-            log.line((proc.stdout or proc.stderr)[-500:])
         core = note_core(log)
         if core:
             proc = subprocess.run(guard_cmd(core, ["body=@%s" % path]), text=True, capture_output=True)
@@ -93,26 +108,23 @@ def main():
             body_path = target.with_suffix(".body")
             body_path.write_text(rest)
             proc = subprocess.run([snapper, "-f", "plaintext", "-w", "72", "--check", str(target)], text=True, capture_output=True)
-            log.line("snapper %s %d exit %d" % (repo.name, index, proc.returncode))
+            log_proc(log, "snapper %s %d" % (repo.name, index), proc)
             if proc.returncode != 0 or "would reformat" in (proc.stdout or ""):
                 failed += 1
                 log.line(subject)
-                log.line((proc.stdout or "")[-400:])
             proc = subprocess.run(
                 guard_cmd(commit_profile, ["Subject=%s" % subject, "Body=@%s" % body_path]),
                 text=True, capture_output=True,
             )
-            log.line("commit-msg %s %d exit %d" % (repo.name, index, proc.returncode))
+            log_proc(log, "commit-msg %s %d" % (repo.name, index), proc)
             if proc.returncode != 0:
                 failed += 1
                 log.line(subject)
-                log.line((proc.stdout or proc.stderr)[-400:])
             proc = subprocess.run(guard_cmd(paper, ["body=@%s" % target]), text=True, capture_output=True)
-            log.line("rohit-paper %s %d exit %d" % (repo.name, index, proc.returncode))
-            if proc.returncode != 0:
+            log_proc(log, "rohit-paper %s %d" % (repo.name, index), proc)
+            if other_findings((proc.stdout or "") + (proc.stderr or ""), True):
                 failed += 1
                 log.line(subject)
-                log.line((proc.stdout or proc.stderr)[-400:])
             core = note_core(log)
             if core:
                 proc = subprocess.run(guard_cmd(core, ["body=@%s" % target]), text=True, capture_output=True)
