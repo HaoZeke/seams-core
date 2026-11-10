@@ -214,7 +214,7 @@ sinp::readChemfiles(std::string filename,
       int species = speciesOf(topology[i]);
       const int number = atomicNumberOf(topology[i]);
       // A file with no names and no elements is one species.
-      // A GROMACS TRR is that case, and the live module labels it type 1.
+      // A trajectory with one numeric type is that case, and the caller labels it type 1.
       if (!anyElement && species == 0) {
         species = 1;
       }

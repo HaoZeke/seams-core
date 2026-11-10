@@ -46,7 +46,6 @@ def main():
     lines.append("Measured tree `%s`." % host["tree"])
     lines.append("libyodaLib SHA-256 `%s`." % host["lib_sha256"])
     lines.append("LAMMPS SHA-256 `%s`." % host["lmp_sha256"])
-    lines.append("GROMACS SHA-256 `%s`." % host["gmx_sha256"])
     lines.append("Plugin SHA-256 `%s`." % host.get("plugin_sha256", ""))
     lines.append("")
     code_lines = []
@@ -80,10 +79,8 @@ def main():
     lines.append("")
     lines.append("Overhead is seconds per step.")
     lines.append("The ratio is the live step time divided by the plain step time.")
-    lines.append("The GROMACS row uses the samples recorded for that code.")
-    lines.append("The size table records the native d-SEAMS module.")
-    lines.append("OpenMM writes a disk coordinate dump (DCD) in float32.")
-    lines.append("On this water system that file matches the in-situ record.")
+    lines.append("The size table records the LAMMPS runs.")
+    lines.append("The dump of those runs matches the in-situ record.")
     lines.append("")
     if "scale" in data:
         lines.append("# LAMMPS size and cadence")
@@ -146,7 +143,7 @@ def main():
                     lines.append(fmt(value))
                 lines.append("")
     if "gromacs_scale" in data:
-        lines.append("# GROMACS native module size and cadence")
+        lines.append("# Module size and cadence")
         lines.append("")
         lines.append("The same diamond lattices as the LAMMPS table, one site per water.")
         lines.append("Plain is mdrun.")
