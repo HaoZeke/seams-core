@@ -287,8 +287,7 @@ void associatedP(int L, double x, std::vector<double> &p) {
     }
     if (m == L) {
       p[static_cast<std::size_t>(m)] = pmm;
-      break;
-    }
+    } else {
     double pll2 = pmm;
     double pll1 = x * (2.0 * m + 1.0) * pmm;
     if (L == m + 1) {
@@ -303,6 +302,7 @@ void associatedP(int L, double x, std::vector<double> &p) {
       pll1 = pll;
     }
     p[static_cast<std::size_t>(m)] = pll;
+    }
   }
 }
 
@@ -853,29 +853,43 @@ chill::BondClassifier chill::chillRule() { return {-0.8, -0.2, -0.05, 4}; }
 chill::BondClassifier chill::chillPlusRule() { return {-0.8, -0.35, 0.25, 4}; }
 
 namespace {
-std::unordered_map<std::string, chill::BondClassifier> &bondRuleRegistry() {
-  static std::unordered_map<std::string, chill::BondClassifier> registry = {
-      {"CHILL", chill::chillRule()}, {"CHILL+", chill::chillPlusRule()}};
-  return registry;
+std::unordered_map<std::string, chill::BondClassifier> &customRules() {
+  static std::unordered_map<std::string, chill::BondClassifier> rules;
+  return rules;
 }
 } // namespace
 
 chill::BondClassifier chill::bondClassifier(const std::string &name) {
-  return bondRuleRegistry().at(name);
+  const auto &custom = customRules();
+  const auto found = custom.find(name);
+  if (found != custom.end()) {
+    return found->second;
+  }
+  if (name == "CHILL") {
+    return chillRule();
+  }
+  if (name == "CHILL+") {
+    return chillPlusRule();
+  }
+  throw std::out_of_range("bond classifier " + name);
 }
 
 void chill::registerBondClassifier(const std::string &name,
                                    const chill::BondClassifier &rule) {
-  bondRuleRegistry()[name] = rule;
+  customRules()[name] = rule;
 }
 
 std::vector<std::string> chill::bondClassifierNames() {
   std::vector<std::string> names;
-  names.reserve(bondRuleRegistry().size());
-  for (const auto &entry : bondRuleRegistry()) {
+  const auto &custom = customRules();
+  names.reserve(custom.size() + 2);
+  names.push_back("CHILL");
+  names.push_back("CHILL+");
+  for (const auto &entry : custom) {
     names.push_back(entry.first);
   }
   std::sort(names.begin(), names.end());
+  names.erase(std::unique(names.begin(), names.end()), names.end());
   return names;
 }
 

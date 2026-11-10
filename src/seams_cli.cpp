@@ -74,7 +74,11 @@ const char *iceName(molSys::atom_state_type s) {
     return "clathrate";
   case molSys::atom_state_type::interClathrate:
     return "interClathrate";
-  default:
+  case molSys::atom_state_type::reCubic:
+    return "reCubic";
+  case molSys::atom_state_type::reHex:
+    return "reHex";
+  case molSys::atom_state_type::unclassified:
     break;
   }
   return "unclassified";

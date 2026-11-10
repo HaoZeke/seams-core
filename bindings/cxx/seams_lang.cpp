@@ -491,7 +491,7 @@ int seams_frame_cages(seams_frame *frame, double cutoff, int type, int k,
       int ic = 0;
       int water = 0;
       int both = 0;
-      frame->per_atom.assign(static_cast<std::size_t>(std::max(n, 0)), 0);
+      frame->per_atom.assign(static_cast<std::size_t>(n), 0);
       for (int i = 0; i < n; ++i) {
         const auto &point = frame->cloud.pts[static_cast<std::size_t>(i)];
         if (!keep_atom(point.type, type)) {
