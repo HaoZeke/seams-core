@@ -279,9 +279,6 @@ std::vector<int> nearestNeighbourIndices(
 
 void associatedP(int L, double x, std::vector<double> &p) {
   p.assign(static_cast<std::size_t>(L) + 1, 0.0);
-  if (L < 0) {
-    return;
-  }
   const double s = std::sqrt(std::max(0.0, 1.0 - x * x));
   double pmm = 1.0;
   for (int m = 0; m <= L; m++) {
