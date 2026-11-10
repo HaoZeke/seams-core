@@ -122,80 +122,82 @@ double legendreAmplitude(int orderL, int absM, const AngularTerms &terms) {
   const auto &c = terms.cosPow;
 
   if (orderL == 3) {
-    switch (absM) {
-    case 0:
+    if (absM <= 0) {
       return 5.0 * c[3] - 3.0 * c[1];
-    case 1:
-      return s[1] * (5.0 * c[2] - 1.0);
-    case 2:
-      return s[2] * c[1];
-    case 3:
-      return s[3];
-    default:
-      return 0.0;
     }
+    if (absM == 1) {
+      return s[1] * (5.0 * c[2] - 1.0);
+    }
+    if (absM == 2) {
+      return s[2] * c[1];
+    }
+    // Callers pass absM from 0 through orderL, so 3 is the remaining value.
+    return s[3];
   }
 
   if (orderL == 4) {
-    switch (absM) {
-    case 0:
+    if (absM <= 0) {
       return 35.0 * c[4] - 30.0 * c[2] + 3.0;
-    case 1:
-      return s[1] * (7.0 * c[3] - 3.0 * c[1]);
-    case 2:
-      return s[2] * (7.0 * c[2] - 1.0);
-    case 3:
-      return s[3] * c[1];
-    case 4:
-      return s[4];
-    default:
-      return 0.0;
     }
+    if (absM == 1) {
+      return s[1] * (7.0 * c[3] - 3.0 * c[1]);
+    }
+    if (absM == 2) {
+      return s[2] * (7.0 * c[2] - 1.0);
+    }
+    if (absM == 3) {
+      return s[3] * c[1];
+    }
+    return s[4];
   }
 
   if (orderL == 6) {
-    switch (absM) {
-    case 0:
+    if (absM <= 0) {
       return 231.0 * c[6] - 315.0 * c[4] + 105.0 * c[2] - 5.0;
-    case 1:
-      return s[1] * (33.0 * c[5] - 30.0 * c[3] + 5.0 * c[1]);
-    case 2:
-      return s[2] * (33.0 * c[4] - 18.0 * c[2] + 1.0);
-    case 3:
-      return s[3] * (11.0 * c[3] - 3.0 * c[1]);
-    case 4:
-      return s[4] * (11.0 * c[2] - 1.0);
-    case 5:
-      return s[5] * c[1];
-    case 6:
-      return s[6];
-    default:
-      return 0.0;
     }
+    if (absM == 1) {
+      return s[1] * (33.0 * c[5] - 30.0 * c[3] + 5.0 * c[1]);
+    }
+    if (absM == 2) {
+      return s[2] * (33.0 * c[4] - 18.0 * c[2] + 1.0);
+    }
+    if (absM == 3) {
+      return s[3] * (11.0 * c[3] - 3.0 * c[1]);
+    }
+    if (absM == 4) {
+      return s[4] * (11.0 * c[2] - 1.0);
+    }
+    if (absM == 5) {
+      return s[5] * c[1];
+    }
+    return s[6];
   }
 
-  switch (absM) {
-    case 0:
-      return (35.0 + c[2] * (-1260.0 + c[2] * (6930.0 + c[2] * (-12012.0 + c[2] * 6435.0)))) / 128.0;
-    case 1:
-      return s[1] * c[1] * (-315.0 + c[2] * (3465.0 + c[2] * (-9009.0 + c[2] * 6435.0))) / 16.0;
-    case 2:
-      return s[2] * (-315.0 + c[2] * (10395.0 + c[2] * (-45045.0 + c[2] * 45045.0))) / 16.0;
-    case 3:
-      return s[3] * c[1] * (10395.0 + c[2] * (-90090.0 + c[2] * 135135.0)) / 8.0;
-    case 4:
-      return s[4] * (10395.0 + c[2] * (-270270.0 + c[2] * 675675.0)) / 8.0;
-    case 5:
-      return s[5] * c[1] * (-135135.0 + c[2] * 675675.0) / 2.0;
-    case 6:
-      return s[6] * (-135135.0 + c[2] * 2027025.0) / 2.0;
-    case 7:
-      return s[7] * c[1] * 2027025.0;
-    case 8:
-      return s[8] * 2027025.0;
-    default:
-      return 0.0;
-    }
+  if (absM <= 0) {
+    return (35.0 + c[2] * (-1260.0 + c[2] * (6930.0 + c[2] * (-12012.0 + c[2] * 6435.0)))) / 128.0;
+  }
+  if (absM == 1) {
+    return s[1] * c[1] * (-315.0 + c[2] * (3465.0 + c[2] * (-9009.0 + c[2] * 6435.0))) / 16.0;
+  }
+  if (absM == 2) {
+    return s[2] * (-315.0 + c[2] * (10395.0 + c[2] * (-45045.0 + c[2] * 45045.0))) / 16.0;
+  }
+  if (absM == 3) {
+    return s[3] * c[1] * (10395.0 + c[2] * (-90090.0 + c[2] * 135135.0)) / 8.0;
+  }
+  if (absM == 4) {
+    return s[4] * (10395.0 + c[2] * (-270270.0 + c[2] * 675675.0)) / 8.0;
+  }
+  if (absM == 5) {
+    return s[5] * c[1] * (-135135.0 + c[2] * 675675.0) / 2.0;
+  }
+  if (absM == 6) {
+    return s[6] * (-135135.0 + c[2] * 2027025.0) / 2.0;
+  }
+  if (absM == 7) {
+    return s[7] * c[1] * 2027025.0;
+  }
+  return s[8] * 2027025.0;
 }
 
 /**
