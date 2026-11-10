@@ -384,11 +384,12 @@ if not ira_opt.disabled()
   endif
 endif
 
+paper_prefix = meson.project_source_root() / 'build' / 'prefix'
 sphericart_opt = get_option('with_sphericart')
 sphericart_found = false
 if not sphericart_opt.disabled()
-  sph_lib_dirs = []
-  sph_inc_dirs = []
+  sph_lib_dirs = [paper_prefix / 'lib']
+  sph_inc_dirs = [paper_prefix / 'include']
   python_for_sph = find_program('python3', required: false)
   if python_for_sph.found()
     sph_dir_cmd = run_command(
@@ -455,9 +456,12 @@ nauty_found = false
 if not nauty_opt.disabled()
   nauty_dep = dependency('nauty', required: false)
   if not nauty_dep.found()
-    nauty_lib = cppc.find_library('nauty', required: false)
+    nauty_lib = cppc.find_library('nauty', dirs: [paper_prefix / 'lib'], required: false)
     if nauty_lib.found()
-      nauty_dep = nauty_lib
+      nauty_dep = declare_dependency(
+        dependencies: [nauty_lib],
+        compile_args: ['-I' + paper_prefix / 'include'],
+        link_args: ['-Wl,-rpath,' + paper_prefix / 'lib'])
     endif
   endif
   nauty_probe = '''
@@ -469,6 +473,7 @@ if not nauty_opt.disabled()
     }
   '''
   if nauty_dep.found() and cppc.links(nauty_probe, dependencies: [nauty_dep],
+                                      args: ['-I' + paper_prefix / 'include'],
                                       name: 'nauty densenauty')
     _deps += [nauty_dep]
     _args += ['-DSEAMS_HAS_NAUTY=1']

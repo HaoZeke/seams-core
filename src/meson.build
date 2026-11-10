@@ -132,9 +132,17 @@ lammps_adapter = false
 plumed_adapter = false
 if not get_option('lammps').disabled()
   _lammps_inc = []
+  _lammps_candidates = []
   if get_option('lammps_include') != ''
-    _lammps_inc += include_directories(get_option('lammps_include'))
+    _lammps_candidates += [get_option('lammps_include')]
   endif
+  _lammps_candidates += [meson.project_source_root() / 'build' / 'lammps' / 'src']
+  _fs = import('fs')
+  foreach _cand : _lammps_candidates
+    if _fs.exists(_cand / 'lammpsplugin.h')
+      _lammps_inc += include_directories(_cand)
+    endif
+  endforeach
   _lammps_ok = cppc.compiles(
     '#include "lammpsplugin.h"\nint main() { return 0; }\n',
     include_directories: _lammps_inc,
