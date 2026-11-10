@@ -134,8 +134,10 @@ void FixDseams::init() {
     return;
   }
   list_ = nullptr;
+  // stable_30Sep2026 dropped set_cutoff(). An analysis cutoff is the same
+  // for every type pair, which is set_cutoff_fixed.
   neighbor->add_request(this, NeighConst::REQ_FULL | NeighConst::REQ_OCCASIONAL)
-      ->set_cutoff(cutoff_);
+      ->set_cutoff_fixed(cutoff_);
 }
 
 void FixDseams::init_list(int, NeighList *ptr) { list_ = ptr; }
