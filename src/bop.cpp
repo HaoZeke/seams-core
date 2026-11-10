@@ -15,8 +15,10 @@
 #include <bop.hpp>
 #include <ozaki.hpp>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <complex>
+#include <cstdio>
 #include <iostream>
 #include <numbers>
 #include <unordered_map>
@@ -373,8 +375,7 @@ std::vector<std::complex<double>>
 sph::spheriHarmo(int orderL, std::array<double, 2> radialCoord) {
   std::vector<std::complex<double>> out;
   spheriHarmoInto(orderL, radialCoord, out);
-  return out;
-}
+  return out; }
 
 
 /**
@@ -392,8 +393,7 @@ sph::lookupTableQ8Vec(std::array<double, 2> angles) {
     result[8 - m] = negative;
     result[8 + m] = positive;
   }
-  return result;
-}
+  return result; }
 
 /**
  * @details Single order of @f$Q_8@f$.
@@ -446,8 +446,7 @@ sph::lookupTableQ3Vec(std::array<double, 2> angles) {
     result[3 + m] = positive;
   }
 
-  return result;
-}
+  return result; }
 
 /**
  *  @details Look-up hard-coded values for @f$Q_3@f$
@@ -490,8 +489,7 @@ sph::lookupTableQ4Vec(std::array<double, 2> angles) {
     result[4 + m] = positive;
   }
 
-  return result;
-}
+  return result; }
 
 /**
  * @details Single order of @f$Q_4@f$.
@@ -532,8 +530,7 @@ sph::lookupTableQ6Vec(std::array<double, 2> angles) {
     result[6 + m] = positive;
   }
 
-  return result;
-}
+  return result; }
 
 /**
  * @details Hard-coded calculations for determining @f$Q_6@f$.
@@ -614,9 +611,14 @@ static void classifyBondsLeftFp64(
   }
   std::vector<double> qReal(static_cast<std::size_t>(nop) * nComp, 0.0);
   std::vector<double> qImag(static_cast<std::size_t>(nop) * nComp, 0.0);
+  // Copy the four constants out of the function-local static. The guard on
+  // that static is an atomic load, and every thread hitting it on every
+  // bond bounces one cache line.
+  const std::array<double, 4> q3norm = normQ3();
   const bool fixedKeep = keepMax > 0;
   std::vector<int> chosen;
   std::vector<std::vector<int>> ragged;
+  // One int per atom, padded so adjacent threads do not share a line.
   std::vector<int> nkeep(static_cast<std::size_t>(nop), 0);
   if (fixedKeep) {
     chosen.assign(static_cast<std::size_t>(nop) * static_cast<std::size_t>(keepMax), -1);
@@ -624,72 +626,93 @@ static void classifyBondsLeftFp64(
     ragged.resize(static_cast<std::size_t>(nop));
   }
 
+  // One team for both passes. A fresh candidate vector per atom made the
+  // eight-thread pass slower than one thread: the allocator, not the
+  // harmonics, was the critical section.
+  static const bool bondPhase = std::getenv("DSEAMS_PHASE") != nullptr;
+  const auto bondT0 = bondPhase ? std::chrono::steady_clock::now()
+                                : std::chrono::steady_clock::time_point{};
+  double bondPass1 = 0.0;
 #ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static)
+#pragma omp parallel
 #endif
-  for (int iatom = 0; iatom < nop; iatom++) {
-    if (static_cast<std::size_t>(iatom) >= nList.size()) {
-      continue;
-    }
+  {
     std::vector<std::pair<double, int>> candidates;
-    candidates.reserve(nList[static_cast<std::size_t>(iatom)].size());
-    const Xyz pi = xyz[static_cast<std::size_t>(iatom)];
-    for (std::size_t j = 1; j < nList[static_cast<std::size_t>(iatom)].size(); j++) {
-      const int jatom = resolve(nList[static_cast<std::size_t>(iatom)][j]);
-      if (jatom < 0) {
+    candidates.reserve(64);
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp for schedule(static)
+#endif
+    for (int iatom = 0; iatom < nop; iatom++) {
+      if (static_cast<std::size_t>(iatom) >= nList.size()) {
         continue;
       }
-      const Xyz pj = xyz[static_cast<std::size_t>(jatom)];
-      const auto dr = gen::fracDelta(frame, pi.x, pi.y, pi.z, pj.x, pj.y, pj.z);
-      const double d2 = dr[0] * dr[0] + dr[1] * dr[1] + dr[2] * dr[2];
-      candidates.emplace_back(d2, jatom);
-    }
-    const std::size_t keep =
-        (keepMax > 0) ? std::min(static_cast<std::size_t>(keepMax), candidates.size())
-                      : candidates.size();
-    if (keep == 0) {
-      continue;
-    }
-    std::partial_sort(candidates.begin(), candidates.begin() + static_cast<std::ptrdiff_t>(keep),
-                      candidates.end());
-    nkeep[static_cast<std::size_t>(iatom)] = static_cast<int>(keep);
-    std::array<double, nComp> accRe{};
-    std::array<double, nComp> accIm{};
-    for (std::size_t j = 0; j < keep; j++) {
-      const int jatom = candidates[j].second;
-      if (fixedKeep) {
-        chosen[static_cast<std::size_t>(iatom) * static_cast<std::size_t>(keepMax) + j] = jatom;
-      } else {
-        ragged[static_cast<std::size_t>(iatom)].push_back(jatom);
-      }
-      const Xyz pj = xyz[static_cast<std::size_t>(jatom)];
-      const auto dr = gen::fracDelta(frame, pi.x, pi.y, pi.z, pj.x, pj.y, pj.z);
-      const std::array<double, 2> angles = sph::radialCoord(dr);
-      const AngularTerms terms(angles[1], angles[0]);
-      for (int m = 0; m <= l; m++) {
-        const auto harm = harmonicPair(l, m, terms);
-        accRe[l - m] += harm.first.real();
-        accIm[l - m] += harm.first.imag();
-        if (m == 0) {
+      candidates.clear();
+      const Xyz pi = xyz[static_cast<std::size_t>(iatom)];
+      for (std::size_t j = 1; j < nList[static_cast<std::size_t>(iatom)].size(); j++) {
+        const int jatom = resolve(nList[static_cast<std::size_t>(iatom)][j]);
+        if (jatom < 0) {
           continue;
         }
-        accRe[l + m] += harm.second.real();
-        accIm[l + m] += harm.second.imag();
+        const Xyz pj = xyz[static_cast<std::size_t>(jatom)];
+        const auto dr = gen::fracDelta(frame, pi.x, pi.y, pi.z, pj.x, pj.y, pj.z);
+        const double d2 = dr[0] * dr[0] + dr[1] * dr[1] + dr[2] * dr[2];
+        candidates.emplace_back(d2, jatom);
+      }
+      const std::size_t keep =
+          (keepMax > 0) ? std::min(static_cast<std::size_t>(keepMax), candidates.size())
+                        : candidates.size();
+      if (keep == 0) {
+        continue;
+      }
+      std::partial_sort(candidates.begin(),
+                        candidates.begin() + static_cast<std::ptrdiff_t>(keep),
+                        candidates.end());
+      nkeep[static_cast<std::size_t>(iatom)] = static_cast<int>(keep);
+      std::array<double, nComp> accRe{};
+      std::array<double, nComp> accIm{};
+      for (std::size_t j = 0; j < keep; j++) {
+        const int jatom = candidates[j].second;
+        if (fixedKeep) {
+          chosen[static_cast<std::size_t>(iatom) * static_cast<std::size_t>(keepMax) + j] =
+              jatom;
+        } else {
+          ragged[static_cast<std::size_t>(iatom)].push_back(jatom);
+        }
+        const Xyz pj = xyz[static_cast<std::size_t>(jatom)];
+        const auto dr = gen::fracDelta(frame, pi.x, pi.y, pi.z, pj.x, pj.y, pj.z);
+        const std::array<double, 2> angles = sph::radialCoord(dr);
+        const AngularTerms terms(angles[1], angles[0]);
+        for (int m = 0; m <= l; m++) {
+          const double amplitude = q3norm[static_cast<std::size_t>(m)] *
+                                   legendreAmplitude(l, m, terms);
+          const std::complex<double> negative =
+              amplitude * std::conj(terms.phase[static_cast<std::size_t>(m)]);
+          const std::complex<double> positive =
+              ((m % 2 == 0) ? amplitude : -amplitude) *
+              terms.phase[static_cast<std::size_t>(m)];
+          accRe[l - m] += negative.real();
+          accIm[l - m] += negative.imag();
+          if (m == 0) {
+            continue;
+          }
+          accRe[l + m] += positive.real();
+          accIm[l + m] += positive.imag();
+        }
+      }
+      double *re = qReal.data() + static_cast<std::size_t>(iatom) * nComp;
+      double *im = qImag.data() + static_cast<std::size_t>(iatom) * nComp;
+      for (int m = 0; m < nComp; m++) {
+        re[m] = accRe[m];
+        im[m] = accIm[m];
       }
     }
-    double *re = qReal.data() + static_cast<std::size_t>(iatom) * nComp;
-    double *im = qImag.data() + static_cast<std::size_t>(iatom) * nComp;
-    for (int m = 0; m < nComp; m++) {
-      re[m] = accRe[m];
-      im[m] = accIm[m];
-    }
-  }
 
-  // c_ij from the real part of the complex inner product. The neighbour
-  // count cancels between the averaged harmonics and the norms.
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static)
-#endif
+  }
+  if (bondPhase) {
+    bondPass1 = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - bondT0).count();
+  }
+  // Size every bond list on the calling thread. push_back inside the
+  // correlation took the allocator lock once per atom.
   for (int iatom = 0; iatom < nop; iatom++) {
     if (isSlice && !yCloud.pts[static_cast<std::size_t>(iatom)].inSlice) {
       continue;
@@ -698,42 +721,69 @@ static void classifyBondsLeftFp64(
     if (keep <= 0) {
       continue;
     }
-    const double *reI = qReal.data() + static_cast<std::size_t>(iatom) * nComp;
-    const double *imI = qImag.data() + static_cast<std::size_t>(iatom) * nComp;
-    double normI = 0.0;
-    for (int m = 0; m < nComp; m++) {
-      normI += reI[m] * reI[m] + imI[m] * imI[m];
-    }
-    auto &bonds = yCloud.pts[static_cast<std::size_t>(iatom)].c_ij;
-    bonds.reserve(static_cast<std::size_t>(keep));
-    for (int j = 0; j < keep; j++) {
-      const int jatom =
-          fixedKeep ? chosen[static_cast<std::size_t>(iatom) * static_cast<std::size_t>(keepMax) +
-                             static_cast<std::size_t>(j)]
-                    : ragged[static_cast<std::size_t>(iatom)][static_cast<std::size_t>(j)];
-      if (jatom < 0) {
+    yCloud.pts[static_cast<std::size_t>(iatom)].c_ij.resize(
+        static_cast<std::size_t>(keep));
+  }
+
+  // The dot products are a few dozen flops per atom. A second team is
+  // slower than the loop until the cloud is large.
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) if (nop >= 8192)
+#endif
+  for (int iatom = 0; iatom < nop; iatom++) {
+      if (isSlice && !yCloud.pts[static_cast<std::size_t>(iatom)].inSlice) {
         continue;
       }
-      const double *reJ = qReal.data() + static_cast<std::size_t>(jatom) * nComp;
-      const double *imJ = qImag.data() + static_cast<std::size_t>(jatom) * nComp;
-      double dot = 0.0;
-      double normJ = 0.0;
+      const int keep = nkeep[static_cast<std::size_t>(iatom)];
+      if (keep <= 0) {
+        continue;
+      }
+      const double *reI = qReal.data() + static_cast<std::size_t>(iatom) * nComp;
+      const double *imI = qImag.data() + static_cast<std::size_t>(iatom) * nComp;
+      double normI = 0.0;
       for (int m = 0; m < nComp; m++) {
-        dot += reI[m] * reJ[m] + imI[m] * imJ[m];
-        normJ += reJ[m] * reJ[m] + imJ[m] * imJ[m];
+        normI += reI[m] * reI[m] + imI[m] * imI[m];
       }
-      const double cij_real = dot / std::sqrt(normI * normJ);
-      molSys::Result temp_cij;
-      temp_cij.c_value = cij_real;
-      if (cij_real <= rule.staggeredMax) {
-        temp_cij.classifier = molSys::bond_type::staggered;
-      } else if (cij_real >= rule.eclipsedMin && cij_real <= rule.eclipsedMax) {
-        temp_cij.classifier = molSys::bond_type::eclipsed;
-      } else {
-        temp_cij.classifier = molSys::bond_type::out_of_range;
+      auto &bonds = yCloud.pts[static_cast<std::size_t>(iatom)].c_ij;
+      int written = 0;
+      for (int j = 0; j < keep; j++) {
+        const int jatom =
+            fixedKeep
+                ? chosen[static_cast<std::size_t>(iatom) * static_cast<std::size_t>(keepMax) +
+                         static_cast<std::size_t>(j)]
+                : ragged[static_cast<std::size_t>(iatom)][static_cast<std::size_t>(j)];
+        if (jatom < 0) {
+          continue;
+        }
+        const double *reJ = qReal.data() + static_cast<std::size_t>(jatom) * nComp;
+        const double *imJ = qImag.data() + static_cast<std::size_t>(jatom) * nComp;
+        double dot = 0.0;
+        double normJ = 0.0;
+        for (int m = 0; m < nComp; m++) {
+          dot += reI[m] * reJ[m] + imI[m] * imJ[m];
+          normJ += reJ[m] * reJ[m] + imJ[m] * imJ[m];
+        }
+        const double cij_real = dot / std::sqrt(normI * normJ);
+        molSys::Result temp_cij;
+        temp_cij.c_value = cij_real;
+        if (cij_real <= rule.staggeredMax) {
+          temp_cij.classifier = molSys::bond_type::staggered;
+        } else if (cij_real >= rule.eclipsedMin && cij_real <= rule.eclipsedMax) {
+          temp_cij.classifier = molSys::bond_type::eclipsed;
+        } else {
+          temp_cij.classifier = molSys::bond_type::out_of_range;
+        }
+        bonds[static_cast<std::size_t>(written)] = temp_cij;
+        written += 1;
       }
-      bonds.push_back(temp_cij);
-    }
+      if (written != keep) {
+        bonds.resize(static_cast<std::size_t>(written));
+      }
+  }
+  if (bondPhase) {
+    const double bondAll = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - bondT0).count();
+    std::fprintf(stderr, "phase bond1 %.6f\nphase bond2 %.6f\n", bondPass1,
+                 bondAll - bondPass1);
   }
 }
 
@@ -898,8 +948,7 @@ std::vector<std::string> chill::bondClassifierNames() {
     names.push_back(entry.first);
   }
   std::sort(names.begin(), names.end());
-  return names;
-}
+  return names; }
 
 //! Gets c_ij according to the CHILL rule set
 void

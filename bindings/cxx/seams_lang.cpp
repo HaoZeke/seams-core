@@ -21,6 +21,7 @@
 #include <cmath>
 #include <cstring>
 #include <exception>
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
@@ -48,40 +49,7 @@ std::string extension_of(const std::string &path) {
 }
 
 Cloud load_path(const std::string &path, int frame, int typeI) {
-  Cloud cloud;
-  const auto ext = extension_of(path);
-  if (ext == "xyz") {
-    return sinp::readXYZ(path);
-  }
-  if (ext == "con") {
-#ifdef SEAMS_HAS_READCON
-    return sinp::readCon(path, frame, cloud);
-#else
-    throw std::runtime_error(
-        "readcon-core is not in this build; CON input needs it");
-#endif
-  }
-  if (ext == "pdb" || ext == "gro" || ext == "dcd") {
-#ifdef SEAMS_HAS_CHEMFILES
-    const int filter = typeI > 0 ? typeI : -1;
-    return sinp::readChemfiles(path, frame, cloud, filter);
-#else
-    throw std::runtime_error("chemfiles is not in this build; " + ext +
-                             " input needs it");
-#endif
-  }
-  if (typeI < 0) {
-    return sinp::readLammpsTrj(path, frame, cloud);
-  }
-  if (typeI > 0) {
-    return sinp::readLammpsTrjO(path, frame, cloud, typeI);
-  }
-  cloud = sinp::readLammpsTrjO(path, frame, cloud, 2);
-  if (cloud.nop > 0) {
-    return cloud;
-  }
-  Cloud again;
-  return sinp::readLammpsTrjO(path, frame, again, 1);
+  return sinp::openFrame(path, frame, typeI);
 }
 
 int resolve_type(const Cloud &cloud, int requested) {
@@ -124,8 +92,7 @@ six_of(const std::vector<std::vector<int>> &rings) {
       six.push_back(ring);
     }
   }
-  return six;
-}
+  return six; }
 
 void fill_box(const Cloud &cloud, double box9[9]) {
   for (int i = 0; i < 9; ++i) {
@@ -201,10 +168,29 @@ int seams_path_nframes(const char *path) {
   }
   try {
     const auto ext = extension_of(path);
+    if (ext == "lammpstrj" || ext == "dump") {
+      const int frames = sinp::nLammpsFrames(path);
+      if (frames <= 0) {
+        set_error("unreadable dump");
+        return -1;
+      }
+      return frames;
+    }
+    const int steps = sinp::chemfilesSteps(path);
+    if (steps >= 0) {
+      return steps;
+    }
+    // Without chemfiles the xyz reader still reports one structure.
+#ifdef SEAMS_HAS_CHEMFILES
+    set_error("unreadable trajectory");
+    return -1;
+#else
     if (ext == "xyz") {
       return 1;
     }
-    return sinp::nLammpsFrames(path);
+    set_error("unreadable trajectory");
+    return -1;
+#endif
   } catch (const std::exception &ex) {
     set_error(ex.what());
     return -1;
@@ -240,8 +226,8 @@ seams_frame *seams_frame_from_arrays(const double *xyz, int n,
     return nullptr;
   }
   try {
-    auto *out = new seams_frame();
-    Cloud &cloud = out->cloud;
+    auto held = std::make_unique<seams_frame>();
+    Cloud &cloud = held->cloud;
     cloud.nop = n;
     cloud.currentFrame = 1;
     apply_box(cloud, box9);
@@ -256,8 +242,8 @@ seams_frame *seams_frame_from_arrays(const double *xyz, int n,
       point.molID = point.atomID;
       cloud.idIndexMap[point.atomID] = i;
     }
-    out->sync_arrays();
-    return out;
+    held->sync_arrays();
+    return held.release();
   } catch (const std::exception &ex) {
     set_error(ex.what());
     return nullptr;
@@ -420,8 +406,7 @@ int seams_frame_steinhardt(seams_frame *frame, double cutoff, int type,
   try {
     const int typ = resolve_type(frame->cloud, type);
     const double cand = cutoff + 1.5;
-    auto nList =
-        nneigh::kNearestNeighbourList(frame->cloud, 4, cand, typ, true);
+    auto nList = nneigh::kNearestNeighbourList(frame->cloud, 4, cand, typ, true);
     const auto result = chill::steinhardtQl(frame->cloud, nList, order_l);
     const int n = frame->cloud.nop;
     frame->ql = result.ql;
@@ -433,12 +418,10 @@ int seams_frame_steinhardt(seams_frame *frame, double cutoff, int type,
       frame->qlbar.resize(static_cast<std::size_t>(n), 0.0);
     }
     if (ql != nullptr && n > 0) {
-      std::memcpy(ql, frame->ql.data(),
-                  static_cast<std::size_t>(n) * sizeof(double));
+      std::memcpy(ql, frame->ql.data(), static_cast<std::size_t>(n) * sizeof(double));
     }
     if (qlbar != nullptr && n > 0) {
-      std::memcpy(qlbar, frame->qlbar.data(),
-                  static_cast<std::size_t>(n) * sizeof(double));
+      std::memcpy(qlbar, frame->qlbar.data(), static_cast<std::size_t>(n) * sizeof(double));
     }
     return 0;
   } catch (const std::exception &ex) {

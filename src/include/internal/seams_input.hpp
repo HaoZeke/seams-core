@@ -116,12 +116,50 @@ molSys::PointCloud<molSys::Point<double>, double> readXYZ(std::string filename);
 std::vector<std::vector<int>> readBonds(std::string filename);
 
 #ifdef SEAMS_HAS_CHEMFILES
-//! Read any trajectory format supported by chemfiles (PDB, GRO, DCD, etc.)
+//! How one chemfiles step is turned into a cloud.
+//! typeFilter > 0 keeps that species number. guessOxygen keeps
+//! atomic number 8 when the frame has elements, and otherwise the
+//! LAMMPS oxygen guess (type 2, then type 1). selection is a chemfiles
+//! selection; it is applied before the type filter.
+struct ChemfilesRead {
+  int frame = 1;
+  int typeFilter = -1;
+  bool guessOxygen = false;
+  std::string selection;
+};
+
+//! Number of steps chemfiles can read, or -1 when the file is not a
+//! trajectory it knows.
+int chemfilesSteps(const std::string &filename);
+
+molSys::PointCloud<molSys::Point<double>, double>
+readChemfiles(std::string filename,
+              molSys::PointCloud<molSys::Point<double>, double> &yCloud,
+              const ChemfilesRead &request);
+
+//! typeFilter -1 keeps every atom. Positive values keep that species.
 molSys::PointCloud<molSys::Point<double>, double>
 readChemfiles(std::string filename, int targetFrame,
               molSys::PointCloud<molSys::Point<double>, double> &yCloud,
               int typeFilter = -1);
+
+//! Walk [first, last] through a chemfiles trajectory. Returns false for a
+//! CON path or a file chemfiles does not open, so the caller can use
+//! another reader. part/parts keep one slice of the range.
+bool forEachChemfilesFrame(
+    const std::string &filename, int first, int last, int typeI,
+    const std::string &selection, int part, int parts,
+    const std::function<void(
+        int, molSys::PointCloud<molSys::Point<double>, double> &)> &fn);
 #endif
+
+//! Postprocessing entry. CON stays on readcon. Every other file goes
+//! through chemfiles when that library is linked. typeI follows the
+//! CLI: negative keeps every atom, positive keeps one species, zero
+//! guesses oxygen.
+molSys::PointCloud<molSys::Point<double>, double>
+openFrame(const std::string &filename, int frame, int typeI,
+          const std::string &selection = {});
 
 #ifdef SEAMS_HAS_READCON
 //! Read a .con file through readcon-core. The cell lengths and angles

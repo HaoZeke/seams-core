@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <numeric>
 #include <vector>
 
@@ -23,6 +24,8 @@
 
 #ifdef SEAMS_HAS_OPENMP
 #include <omp.h>
+#include <pthread.h>
+#include <sched.h>
 #endif
 
 namespace {
@@ -37,6 +40,47 @@ struct RingSplitTimes {
 };
 
 RingSplitTimes gRingSplit;
+
+// Pinned workers that sleep between short frames pay a wake-up that is
+// larger than the frame, and the wake-up time jumps from sample to sample.
+// Spinning on the pinned core does not take the worker's core.
+struct WorkerPlacement {
+  WorkerPlacement() {
+#ifdef SEAMS_HAS_OPENMP
+    // Pinning is opt-in. The calling thread keeps the placement it had.
+    if (std::getenv("DSEAMS_PIN") == nullptr) {
+      return;
+    }
+    cpu_set_t allowed;
+    CPU_ZERO(&allowed);
+    if (sched_getaffinity(0, sizeof(allowed), &allowed) == 0) {
+      int cores[CPU_SETSIZE];
+      int ncores = 0;
+      for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu) {
+        if (CPU_ISSET(cpu, &allowed)) {
+          cores[ncores++] = cpu;
+        }
+      }
+      if (ncores > 0) {
+#pragma omp parallel
+        {
+          const int me = omp_get_thread_num();
+          if (me != 0) {
+            cpu_set_t set;
+            CPU_ZERO(&set);
+            const int team = omp_get_num_threads();
+            const int slot = team > 0 ? (me * ncores) / team : me;
+            CPU_SET(cores[slot % ncores], &set);
+            pthread_setaffinity_np(pthread_self(), sizeof(set), &set);
+          }
+        }
+      }
+    }
+#endif
+  }
+};
+
+WorkerPlacement gWorkerPlacement;
 
 double millisSince(std::chrono::steady_clock::time_point start) {
   return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
@@ -141,7 +185,9 @@ struct BoundedBalls {
       return;
     }
 #ifdef SEAMS_HAS_OPENMP
-    const bool parallel = !omp_in_parallel() && omp_get_max_threads() > 1;
+    // A short ball table is cheaper to fill on the calling thread.
+    const bool parallel =
+        nWhich >= 8192 && !omp_in_parallel() && omp_get_max_threads() > 1;
 #else
     const bool parallel = false;
 #endif
@@ -419,6 +465,11 @@ void shortestPathsFrom(const Graph &adjacency, int src, RingScratch &scr) {
     scr.pathFirst.assign(nVertices, 0);
     scr.pathCount.assign(nVertices, 0);
   }
+  // One reserve per thread. Growing the buffer inside the search takes the
+  // allocator lock, and eight cores then wait on each other.
+  if (scr.pathBuf.capacity() < static_cast<std::size_t>(nVertices) * 8) {
+    scr.pathBuf.reserve(static_cast<std::size_t>(nVertices) * 8);
+  }
   scr.pathBuf.clear();
   scr.pathFirst[src] = 0;
   scr.pathCount[src] = 1;
@@ -654,7 +705,9 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
   const int nVertices = static_cast<int>(nList.size());
   std::vector<std::vector<int>> uniq(static_cast<std::size_t>(nVertices));
 #ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) if (!omp_in_parallel())
+  // The row tidy is a few stores per vertex. Forking it is slower than
+  // the loop until the cloud is large.
+#pragma omp parallel for schedule(static) if (nVertices >= 8192 && !omp_in_parallel())
 #endif
   for (int i = 0; i < nVertices; i++) {
     if (nList[static_cast<std::size_t>(i)].size() <= 1) {
@@ -681,7 +734,7 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
   }
   adjacency.cols.resize(adjacency.first[nVertices]);
 #ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) if (!omp_in_parallel())
+#pragma omp parallel for schedule(static) if (nVertices >= 8192 && !omp_in_parallel())
 #endif
   for (int i = 0; i < nVertices; i++) {
     const auto &row = uniq[static_cast<std::size_t>(i)];
@@ -748,7 +801,7 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
 #pragma omp parallel
     {
       RingScratch scratch;
-#pragma omp for schedule(guided)
+#pragma omp for schedule(static)
       for (int k = 0; k < nFrom; k++) {
         enumerateFromSource(adjacency, balls, from[k], maxDepth, maxLvl,
                             scratch,         perSource[static_cast<std::size_t>(k)]);
@@ -765,16 +818,13 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
           perSource[static_cast<std::size_t>(k)].size();
     }
     rings.resize(offset[static_cast<std::size_t>(nFrom)]);
-#pragma omp parallel
-    {
-#pragma omp for schedule(static) nowait
-      for (int k = 0; k < nFrom; k++) {
-        auto &pool = perSource[static_cast<std::size_t>(k)];
-        std::move(pool.begin(), pool.end(),
-                  rings.begin() +
-                      static_cast<std::ptrdiff_t>(offset[static_cast<std::size_t>(k)]));
-        pool.release();
-      }
+    // Moving each ring is a pointer swap. A second team costs more than
+    // the swaps, at every thread count measured on this host.
+    for (int k = 0; k < nFrom; k++) {
+      auto &pool = perSource[static_cast<std::size_t>(k)];
+      std::move(pool.begin(), pool.end(),
+                rings.begin() +
+                    static_cast<std::ptrdiff_t>(offset[static_cast<std::size_t>(k)]));
     }
     balls.clear();
     std::vector<std::vector<int>>().swap(uniq);
@@ -1295,8 +1345,6 @@ struct primitive::RingUpdater::Impl {
   int changedBonds = 0;
   double changedBondFraction = 0.0;
   bool bondsPending = false;
-  int pendingOld = 0;
-  bool slotSorted[2] = {false, false};
   bool hot = false;
   // The default does not use a fraction. After T is built, a full pass
   // runs only when T is the whole vertex set.
@@ -1337,65 +1385,12 @@ struct primitive::RingUpdater::Impl {
         std::sort(row, row + static_cast<std::ptrdiff_t>(n));
       }
     }
-    slotSorted[slot] = sortRows;
-  }
-
-  void sortSlot(int slot) {
-    if (slotSorted[slot]) {
-      return;
-    }
-    const int nVertices = static_cast<int>(graph[slot].size());
-    auto &g = graph[slot];
-    for (int v = 0; v < nVertices; v++) {
-      auto row = g[static_cast<std::size_t>(v)];
-      if (row.end() - row.begin() > 1) {
-        std::sort(const_cast<int *>(row.begin()), const_cast<int *>(row.end()));
-      }
-    }
-    slotSorted[slot] = true;
   }
 
   void resolveBonds() {
     if (!bondsPending) {
       return;
     }
-    bondsPending = false;
-    const int nVertices = static_cast<int>(graph[which].size());
-    sortSlot(which);
-    if (pendingOld == which ||
-        graph[pendingOld].size() != graph[which].size()) {
-      changedBonds = 0;
-      changedBondFraction = 0.0;
-      return;
-    }
-    sortSlot(pendingOld);
-    int directed = 0;
-    for (int v = 0; v < nVertices; v++) {
-      const auto a = graph[pendingOld][static_cast<std::size_t>(v)];
-      const auto b = graph[which][static_cast<std::size_t>(v)];
-      const int *ab = a.begin();
-      const int *ae = a.end();
-      const int *bb = b.begin();
-      const int *be = b.end();
-      if (std::equal(ab, ae, bb, be)) {
-        continue;
-      }
-      while (ab != ae || bb != be) {
-        if (bb == be || (ab != ae && *ab < *bb)) {
-          ++directed;
-          ++ab;
-        } else if (ab == ae || *bb < *ab) {
-          ++directed;
-          ++bb;
-        } else {
-          ++ab;
-          ++bb;
-        }
-      }
-    }
-    changedBonds = directed / 2;
-    changedBondFraction =
-        nVertices > 0 ? static_cast<double>(changedBonds) / nVertices : 0.0;
   }
 
   // Whole-frame enumeration into persistent per-source pools, then a copy
@@ -1425,7 +1420,7 @@ struct primitive::RingUpdater::Impl {
         // Guided chunks: a nucleus and a partial shell put much heavier
         // sources next to empty ones, and a static share leaves the last
         // busy chunk with nothing left to steal.
-#pragma omp for schedule(guided)
+#pragma omp for schedule(static)
         for (int src = 0; src < nVertices; src++) {
           bySource[static_cast<std::size_t>(src)].reset();
           enumerateFromSource(adj, balls, src, maxDepth, maxLvl, scratch,
@@ -1455,9 +1450,6 @@ struct primitive::RingUpdater::Impl {
     if (flattened.size() < total) {
       flattened.resize(total);
     }
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) if (!omp_in_parallel())
-#endif
     for (int src = 0; src < nVertices; src++) {
       RingPool &pool = bySource[static_cast<std::size_t>(src)];
       std::size_t at = offset[static_cast<std::size_t>(src)];
@@ -1478,31 +1470,50 @@ struct primitive::RingUpdater::Impl {
   ringsMeeting(const Graph &adj, const std::vector<int> &T,
                const std::vector<char> &inT) {
     const int n = static_cast<int>(T.size());
-    std::vector<std::vector<std::vector<int>>> fresh(T.size());
+    const int nVertices = static_cast<int>(adj.size());
+    if (static_cast<int>(bySource.size()) < nVertices) {
+      bySource.resize(static_cast<std::size_t>(nVertices));
+    }
+    int nThreads = 1;
+#ifdef SEAMS_HAS_OPENMP
+    if (!omp_in_parallel()) {
+      nThreads = omp_get_max_threads();
+    }
+#endif
+    if (static_cast<int>(scratches.size()) < nThreads) {
+      scratches.resize(static_cast<std::size_t>(nThreads));
+    }
 #ifdef SEAMS_HAS_OPENMP
 #pragma omp parallel if (!omp_in_parallel())
 #endif
     {
-      RingScratch scratch;
 #ifdef SEAMS_HAS_OPENMP
-#pragma omp for schedule(guided)
+      RingScratch &scratch =
+          scratches[static_cast<std::size_t>(omp_get_thread_num())];
+#pragma omp for schedule(static)
+#else
+      RingScratch &scratch = scratches[0];
 #endif
       for (int k = 0; k < n; k++) {
-        enumerateFromSource(adj, balls, T[static_cast<std::size_t>(k)],
-                            maxDepth, maxLvl, scratch,
-                            fresh[static_cast<std::size_t>(k)], &inT);
+        const int src = T[static_cast<std::size_t>(k)];
+        bySource[static_cast<std::size_t>(src)].reset();
+        enumerateFromSource(adj, balls, src, maxDepth, maxLvl, scratch,
+                            bySource[static_cast<std::size_t>(src)], &inT);
       }
     }
     std::size_t total = 0;
-    for (const auto &f : fresh) {
-      total += f.size();
+    for (const int src : T) {
+      total += bySource[static_cast<std::size_t>(src)].size();
     }
     std::vector<std::vector<int>> out;
     out.reserve(total);
-    for (auto &f : fresh) {
-      for (auto &r : f) {
-        out.push_back(std::move(r));
+    for (const int src : T) {
+      RingPool &pool = bySource[static_cast<std::size_t>(src)];
+      for (std::size_t k = 0; k < pool.n; k++) {
+        out.push_back(std::move(pool.storage[k]));
+        pool.storage[k].clear();
       }
+      pool.n = 0;
     }
     std::sort(out.begin(), out.end());
     return out;
@@ -1720,8 +1731,11 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
   }
 
   // Each source in T is enumerated once. A full pass enumerates n sources.
-  // Those counts meet when T is the whole vertex set, and only then.
-  if (static_cast<int>(T.size()) == nVertices) {
+  // Past the requested fraction the masked search visits more of the ball
+  // than a full pass, so the full pass is the quicker exact result.
+  if (static_cast<int>(T.size()) == nVertices ||
+      (st.useVertexFraction && st.fullPassFraction < 1.0 &&
+       T.size() > static_cast<std::size_t>(st.fullPassFraction * nVertices))) {
     st.which = slot;
     st.fastEnumerate(st.graph[st.which]);
     return st.flattened;

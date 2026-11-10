@@ -17,11 +17,11 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <iterator>
-#include <cmath>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -251,6 +251,8 @@ private:
   // Row i is cols_[off_[i] .. off_[i + 1]], sorted and unique.
   std::vector<int> off_;
   std::vector<int> cols_;
+  // One bit per neighbour when the cloud has at most 64 atoms.
+  std::vector<std::uint64_t> bits_;
 };
 
 //! Tests whether two rings are basal rings (true) or not (false): some

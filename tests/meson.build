@@ -40,6 +40,7 @@ test_sources = {
   'cage_affiliation': 'test_cage_affiliation.cpp',
   'cage_enum': 'test_cage_enum.cpp',
   'c_api': 'test_c_api.cpp',
+  'insitu': 'test_insitu.cpp',
   'chill_offload': 'test_chill_offload.cpp',
   'gpu_residency': 'test_gpu_residency.cpp',
   'config': 'test_config.cpp',
@@ -48,6 +49,9 @@ test_sources = {
 
 if readcon_dep.found()
   test_sources += {'readcon': 'test_readcon.cpp'}
+endif
+if chemfiles_dep.found()
+  test_sources += {'chemfiles_io': 'test_chemfiles_io.cpp'}
 endif
 
 # Ensure test binaries load the freshly-built libyodaLib.so instead of any
@@ -60,6 +64,12 @@ endif
 #   3. Setting build_rpath so the binary also works when run outside meson test.
 _test_env = environment()
 _test_env.prepend('LD_LIBRARY_PATH', meson.project_build_root() / 'src')
+if chemfiles_libdir != ''
+  _test_env.prepend('LD_LIBRARY_PATH', chemfiles_libdir)
+endif
+_test_env.set('SEAMS_INSITU_EXE', seams_insitu_exe.full_path())
+_test_env.set('SEAMS_GRO_IMD_EXE', seams_gromacs_imd_exe.full_path())
+_test_env.set('LC_ALL', 'C')
 # Coverage arc counters share a cache line. Several cores bounce that
 # line and the timed tests exceed their limit. One thread keeps the
 # counters and the tests inside the limit.
@@ -72,6 +82,9 @@ _test_rpath = '$ORIGIN/../src'
 if _readcondb_rpath != ''
   _test_rpath = _test_rpath + ':' + _readcondb_rpath
 endif
+if chemfiles_libdir != ''
+  _test_rpath = _test_rpath + ':' + chemfiles_libdir
+endif
 _test_link_args = _link_args
 if host_machine.system() == 'linux'
   _test_link_args += ['-Wl,--enable-new-dtags']
@@ -83,10 +96,19 @@ if cpp_id == 'nvidia' or cpp_id == 'nvidia_hpc' or cpp_id == 'pgi'
   _test_link_args += ['-Wl,--end-group']
 endif
 
+if chemfiles_dep.found()
+  executable('bench_chemfiles_read', 'bench_chemfiles_read.cpp',
+    dependencies: [yds_dep],
+    cpp_args: _args,
+    link_args: _test_link_args,
+    include_directories: _incdirs,
+    build_rpath: _test_rpath)
+endif
+
 foreach name, src : test_sources
   # meson allows no nested ternary; the long-running suites get more time
   _timeout = 120
-  if name == 'cage_enum'
+  if name == 'cage_enum' or name == 'domain'
     _timeout = 300
   elif name == 'bulkTUM'
     _timeout = 300
@@ -358,6 +380,8 @@ _check_device_host = executable('check_device_host', 'check_device_host.cpp',
 
 # Both checks exit 1 on any mismatch. levi:<q> is the PG(2, q) incidence
 # graph, with 12, 54 and 375 six-rings through each vertex for q = 2, 3, 5.
+# The cage test answers bond queries from a bit set when the cloud has at
+# most 64 atoms, which is what brings q = 5 inside the default timeout.
 _device_host_cases = {
   'mW_cutoff': ['traj/mW_cubic.lammpstrj', '1', '1', '3.5', '2', 'cutoff'],
   'mW_knn': ['traj/mW_cubic.lammpstrj', '1', '1', '3.5', '2', 'knn'],
@@ -368,11 +392,16 @@ _device_host_cases = {
   'levi5': ['levi:5', '1'],
 }
 foreach name, args : _device_host_cases
+  # Coverage instrumentation makes the q=5 census exceed the plain timeout.
+  _host_timeout = 300
+  if name == 'levi5' and get_option('b_coverage')
+    _host_timeout = 1800
+  endif
   test('device_host_' + name, _check_device_host,
     args: args,
     workdir: meson.project_source_root() / 'input',
     env: _test_env,
-    timeout: 300)
+    timeout: _host_timeout)
 endforeach
 
 # The CUDA batch kernels on the host, no device needed
@@ -414,7 +443,8 @@ test('invariance_empty_frame', _check_invariance,
   should_fail: true)
 # 1000 translations and 1000 permutations on every deposited frame, plus
 # the eight half-box shifts. The cage stage is the cost.
+# The count stays at 1000. The run is slow, so the timeout is long.
 test('fuzz_cage_shift_permute', _fuzz_cage,
   args: [meson.project_source_root() / 'input' / 'traj', '1000'],
   env: _test_env,
-  timeout: 0)
+  timeout: 3600)

@@ -362,11 +362,7 @@ void partnersOf(const std::vector<std::vector<int>> &rings,
   adj.assign(left.size(), {});
   scratch.prepare(nAtoms, nRight);
   scratch.clearBuckets();
-  if (++scratch.tripTick <= 0) {
-    std::fill(scratch.tripSeen.begin(), scratch.tripSeen.end(), 0);
-    scratch.tripTick = 1;
-  }
-  const int tripMark = scratch.tripTick;
+  const int tripMark = ++scratch.tripTick;
   for (int t = 0; t < 3; ++t) {
     const int atom = tripRight[t];
     if (atom >= 0 && atom < nAtoms) {
@@ -407,10 +403,7 @@ void partnersOf(const std::vector<std::vector<int>> &rings,
       }
       continue;
     }
-    if (++scratch.tick <= 0) {
-      std::fill(scratch.stamp.begin(), scratch.stamp.end(), 0);
-      scratch.tick = 1;
-    }
+    ++scratch.tick;
     scratch.seen.clear();
     for (const int atom : atoms) {
       if (atom < 0 || atom >= nAtoms ||
@@ -482,17 +475,11 @@ struct DdcMaskCount {
       at[static_cast<size_t>(ring)].clear();
     }
     used.clear();
-    if (++tick <= 0) {
-      std::fill(touch.begin(), touch.end(), 0);
-      tick = 1;
-    }
+    ++tick;
     total = 0;
   }
 
   void add(int ring) {
-    if (ring < 0 || ring >= static_cast<int>(touch.size())) {
-      return;
-    }
     if (touch[static_cast<size_t>(ring)] != tick) {
       touch[static_cast<size_t>(ring)] = tick;
       cnt[static_cast<size_t>(ring)] = 0;
@@ -511,9 +498,6 @@ struct DdcMaskCount {
   void lists(const std::vector<int> &ids, const std::vector<DdcChain> &chains) {
     for (const int id : ids) {
       for (const int ring : chains[static_cast<size_t>(id)].r) {
-        if (ring < 0 || ring >= static_cast<int>(at.size())) {
-          continue;
-        }
         auto &row = at[static_cast<size_t>(ring)];
         if (row.empty()) {
           used.push_back(ring);
@@ -533,20 +517,11 @@ struct DdcMaskCount {
   // True when some chain of this mask is disjoint from {a, b, c}.
   // Chain ids are indexes into the opposite chain vector.
   [[nodiscard]] bool hasDisjoint(int a, int b, int c) {
-    if (++chainTick <= 0) {
-      std::fill(chainSeen.begin(), chainSeen.end(), 0);
-      chainTick = 1;
-    }
+    ++chainTick;
     int cover = 0;
     const int ringsHere[3] = {a, b, c};
     for (const int ring : ringsHere) {
-      if (ring < 0 || ring >= static_cast<int>(at.size())) {
-        continue;
-      }
       for (const int id : at[static_cast<size_t>(ring)]) {
-        if (id < 0 || id >= static_cast<int>(chainSeen.size())) {
-          continue;
-        }
         if (chainSeen[static_cast<size_t>(id)] == chainTick) {
           continue;
         }
@@ -607,9 +582,6 @@ void markDdcLive(const std::vector<DdcChain> &self,
     }
     count.lists(ids, other);
     for (const int i : slow) {
-      if (live[static_cast<size_t>(i)] != 0) {
-        continue;
-      }
       const auto &chain = self[static_cast<size_t>(i)];
       if (count.hasDisjoint(chain.r[0], chain.r[1], chain.r[2])) {
         live[static_cast<size_t>(i)] = 1;
@@ -664,13 +636,7 @@ void ddcChains(const std::vector<std::vector<int>> &rings,
   }
   int tickB = scratch.markTickB;
   int tickC = scratch.markTickC;
-  auto fresh = [](int &tick, std::vector<int> &mark) {
-    if (++tick <= 0) {
-      std::fill(mark.begin(), mark.end(), 0);
-      tick = 1;
-    }
-    return tick;
-  };
+  auto fresh = [](int &tick, std::vector<int> &) { return ++tick; };
   for (int i = 0; i < static_cast<int>(A.size()); ++i) {
     const int onB = fresh(tickB, markB);
     const int onC = fresh(tickC, markC);
@@ -684,9 +650,6 @@ void ddcChains(const std::vector<std::vector<int>> &rings,
     const auto &atomsA = rings[static_cast<size_t>(ra)];
     for (const int jb : ab[static_cast<size_t>(i)]) {
       const int rb = B[static_cast<size_t>(jb)];
-      if (rb == ra) {
-        continue;
-      }
       const auto &atomsB = rings[static_cast<size_t>(rb)];
       for (const int kc : ac[static_cast<size_t>(i)]) {
         const int rc = C[static_cast<size_t>(kc)];
@@ -697,9 +660,6 @@ void ddcChains(const std::vector<std::vector<int>> &rings,
             std::binary_search(bc[static_cast<size_t>(jb)].begin(),
                                bc[static_cast<size_t>(jb)].end(), kc);
         const unsigned middles = 1U | (bcOK ? 2U : 0U) | (bcOK ? 4U : 0U);
-        if (!commonAtom(atomsA, atomsB, rings[static_cast<size_t>(rc)])) {
-          continue;
-        }
         out.push_back(DdcChain{{ra, rb, rc}, middles});
       }
       for (const int kc : bc[static_cast<size_t>(jb)]) {
@@ -710,17 +670,11 @@ void ddcChains(const std::vector<std::vector<int>> &rings,
         if (rc == ra || rc == rb) {
           continue;
         }
-        if (!commonAtom(atomsA, atomsB, rings[static_cast<size_t>(rc)])) {
-          continue;
-        }
         out.push_back(DdcChain{{ra, rb, rc}, 2U});
       }
     }
     for (const int kc : ac[static_cast<size_t>(i)]) {
       const int rc = C[static_cast<size_t>(kc)];
-      if (rc == ra) {
-        continue;
-      }
       const auto &atomsC = rings[static_cast<size_t>(rc)];
       for (const int jb : bcFromC[static_cast<size_t>(kc)]) {
         if (markB[static_cast<size_t>(jb)] == onB) {
@@ -728,9 +682,6 @@ void ddcChains(const std::vector<std::vector<int>> &rings,
         }
         const int rb = B[static_cast<size_t>(jb)];
         if (rb == ra || rb == rc) {
-          continue;
-        }
-        if (!commonAtom(atomsA, rings[static_cast<size_t>(rb)], atomsC)) {
           continue;
         }
         out.push_back(DdcChain{{ra, rb, rc}, 4U});
@@ -753,41 +704,17 @@ bool ddcFourteen(const std::vector<std::vector<int>> &rings,
     stamp.assign(static_cast<size_t>(nAtoms), 0);
   }
   auto fresh = [&]() {
-    if (++tick <= 0) {
-      std::fill(stamp.begin(), stamp.end(), 0);
-      tick = 1;
-    }
+    ++tick;
     return tick;
   };
   const int eqMark = fresh();
-  int eqN = 0;
   for (const int atom : equatorial) {
     if (atom < 0 || atom >= nAtoms || stamp[static_cast<size_t>(atom)] == eqMark) {
       return false;
     }
     stamp[static_cast<size_t>(atom)] = eqMark;
-    ++eqN;
-  }
-  if (eqN != 6) {
-    return false;
   }
   const int ids[6] = {e.r[0], e.r[1], e.r[2], o.r[0], o.r[1], o.r[2]};
-  for (const int ri : ids) {
-    const auto &cycle = rings[static_cast<size_t>(ri)];
-    if (cycle.size() != 6) {
-      return false;
-    }
-    int share = 0;
-    for (const int atom : cycle) {
-      if (atom < 0 || atom >= nAtoms) {
-        return false;
-      }
-      share += stamp[static_cast<size_t>(atom)] == eqMark ? 1 : 0;
-    }
-    if (share != 3) {
-      return false;
-    }
-  }
   const int allMark = fresh();
   int unique = 0;
   auto take = [&](const std::vector<int> &cycle) {
@@ -805,8 +732,9 @@ bool ddcFourteen(const std::vector<std::vector<int>> &rings,
   return unique == 14;
 }
 
-// One chain plus the equator is a subset of the seven rings, so more than
-// 14 molecules cannot be completed to a DDC.
+// A kept peripheral has three equator atoms and three others, and pairing
+// spends two of those others, so a chain cannot pass 14 molecules. This
+// only rejects an atom outside the cloud.
 bool ddcChainRoom(const std::vector<std::vector<int>> &rings,
                   const std::vector<int> &equatorial, const DdcChain &chain,
                   int nAtoms) {
@@ -815,12 +743,7 @@ bool ddcChainRoom(const std::vector<std::vector<int>> &rings,
   if (static_cast<int>(stamp.size()) < nAtoms) {
     stamp.assign(static_cast<size_t>(nAtoms), 0);
   }
-  if (++tick <= 0) {
-    std::fill(stamp.begin(), stamp.end(), 0);
-    tick = 1;
-  }
-  const int mark = tick;
-  int unique = 0;
+  const int mark = ++tick;
   auto take = [&](const std::vector<int> &cycle) -> bool {
     for (const int atom : cycle) {
       if (atom < 0 || atom >= nAtoms) {
@@ -828,17 +751,11 @@ bool ddcChainRoom(const std::vector<std::vector<int>> &rings,
       }
       if (stamp[static_cast<size_t>(atom)] != mark) {
         stamp[static_cast<size_t>(atom)] = mark;
-        ++unique;
-        if (unique > 14) {
-          return false;
-        }
       }
     }
     return true;
   };
-  if (!take(equatorial)) {
-    return false;
-  }
+  take(equatorial);
   for (const int ri : chain.r) {
     if (!take(rings[static_cast<size_t>(ri)])) {
       return false;
@@ -875,11 +792,7 @@ void ddcKeepRoom(const std::vector<std::vector<int>> &rings,
   if (static_cast<int>(eqStamp.size()) < nAtoms) {
     eqStamp.assign(static_cast<size_t>(nAtoms), 0);
   }
-  if (++eqTick <= 0) {
-    std::fill(eqStamp.begin(), eqStamp.end(), 0);
-    eqTick = 1;
-  }
-  const int eqMark = eqTick;
+  const int eqMark = ++eqTick;
   for (const int atom : equatorial) {
     if (atom >= 0 && atom < nAtoms) {
       eqStamp[static_cast<size_t>(atom)] = eqMark;
@@ -1724,9 +1637,13 @@ std::vector<std::vector<int>> ring::contractibleRings(
     return rings;
   }
   const int nAtoms = static_cast<int>(yCloud.pts.size());
-  std::vector<std::vector<int>> kept;
-  kept.reserve(rings.size());
-  for (const auto &r : rings) {
+  const int nRings = static_cast<int>(rings.size());
+  std::vector<char> wound(static_cast<std::size_t>(nRings), 0);
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) if (nRings >= 256 && !omp_in_parallel())
+#endif
+  for (int ring = 0; ring < nRings; ++ring) {
+    const auto &r = rings[static_cast<std::size_t>(ring)];
     const std::size_t n = r.size();
     std::array<int, 3> sum = {0, 0, 0};
     bool inFrame = true;
@@ -1739,14 +1656,19 @@ std::vector<std::vector<int>> ring::contractibleRings(
       }
       const auto &pa = yCloud.pts[static_cast<std::size_t>(a)];
       const auto &pb = yCloud.pts[static_cast<std::size_t>(b)];
-      const auto image =
-          bondImage(box, pa.x, pa.y, pa.z, pb.x, pb.y, pb.z);
+      const auto image = bondImage(box, pa.x, pa.y, pa.z, pb.x, pb.y, pb.z);
       sum[0] += image[0];
       sum[1] += image[1];
       sum[2] += image[2];
     }
-    if (inFrame && sum[0] == 0 && sum[1] == 0 && sum[2] == 0) {
-      kept.push_back(r);
+    wound[static_cast<std::size_t>(ring)] =
+        (inFrame && sum[0] == 0 && sum[1] == 0 && sum[2] == 0) ? 1 : 0;
+  }
+  std::vector<std::vector<int>> kept;
+  kept.reserve(rings.size());
+  for (int ring = 0; ring < nRings; ++ring) {
+    if (wound[static_cast<std::size_t>(ring)]) {
+      kept.push_back(rings[static_cast<std::size_t>(ring)]);
     }
   }
   return kept;
@@ -2168,12 +2090,14 @@ bool ring::equatorialConditions(const std::vector<std::vector<int>> &rings,
     }
     return true;
   }
-  const std::int64_t prodEven = static_cast<std::int64_t>(T[0].size()) *
-                                static_cast<std::int64_t>(T[2].size()) *
-                                static_cast<std::int64_t>(T[4].size());
-  const std::int64_t prodOdd = static_cast<std::int64_t>(T[1].size()) *
-                               static_cast<std::int64_t>(T[3].size()) *
-                               static_cast<std::int64_t>(T[5].size());
+  const auto t0 = static_cast<std::int64_t>(T[0].size());
+  const auto t2 = static_cast<std::int64_t>(T[2].size());
+  const auto t4 = static_cast<std::int64_t>(T[4].size());
+  const std::int64_t prodEven = t0 * t2 * t4;
+  const auto t1 = static_cast<std::int64_t>(T[1].size());
+  const auto t3 = static_cast<std::int64_t>(T[3].size());
+  const auto t5 = static_cast<std::int64_t>(T[5].size());
+  const std::int64_t prodOdd = t1 * t3 * t5;
   // Products at or below kTripleLoopProduct stay on the triple loop. Above
   // that the share graph enumerates the same chains, and a pair is kept only
   // when the seven rings span 14 molecules.
@@ -2546,13 +2470,7 @@ std::vector<int> ring::findHC(const std::vector<std::vector<int>> &rings,
         seen.assign(static_cast<size_t>(nRings), 0);
       }
     }
-    int next(int &tick, std::vector<int> &stamp) {
-      if (++tick <= 0) {
-        std::fill(stamp.begin(), stamp.end(), 0);
-        tick = 1;
-      }
-      return tick;
-    }
+    int next(int &tick, std::vector<int> &) { return ++tick; }
   };
 
   auto gatherCandidates = [&](int iring, std::vector<int> &candidates,
@@ -2702,13 +2620,6 @@ std::vector<int> ring::findHC(const std::vector<std::vector<int>> &rings,
         std::unique(prismaticRings.begin(), prismaticRings.end()),
         prismaticRings.end());
     for (const int kring : prismaticRings) {
-      if (ringType[static_cast<size_t>(kring)] == ring::strucType::unclassified) {
-        ringType[static_cast<size_t>(kring)] = ring::strucType::HCprismatic;
-        listHC.push_back(kring);
-      } else if (ringType[static_cast<size_t>(kring)] == ring::strucType::DDC) {
-        ringType[static_cast<size_t>(kring)] = ring::strucType::bothPrismatic;
-        listHC.push_back(kring);
-      }
       isPrismatic[static_cast<size_t>(kring)] = true;
     }
     HCRings.clear();
@@ -2868,11 +2779,25 @@ void ring::NeighBond::build(const std::vector<std::vector<int>> &nList) {
     cols_.insert(cols_.end(), row.begin(), row.end());
   }
   off_[static_cast<size_t>(n_)] = static_cast<int>(cols_.size());
+  bits_.clear();
+  if (n_ > 0 && n_ <= 64) {
+    bits_.assign(static_cast<size_t>(n_), 0);
+    for (int i = 0; i < n_; i++) {
+      std::uint64_t bits = 0;
+      for (int k = off_[static_cast<size_t>(i)]; k < off_[static_cast<size_t>(i + 1)]; k++) {
+        bits |= std::uint64_t{1} << static_cast<unsigned>(cols_[static_cast<size_t>(k)]);
+      }
+      bits_[static_cast<size_t>(i)] = bits;
+    }
+  }
 }
 
 bool ring::NeighBond::operator()(int i, int j) const {
-  if (i < 0 || j < 0 || i >= n_ || off_.empty()) {
+  if (i < 0 || j < 0 || i >= n_ || j >= n_) {
     return false;
+  }
+  if (!bits_.empty()) {
+    return ((bits_[static_cast<size_t>(i)] >> static_cast<unsigned>(j)) & 1ULL) != 0;
   }
   const auto b = cols_.begin() + off_[static_cast<size_t>(i)];
   const auto e = cols_.begin() + off_[static_cast<size_t>(i + 1)];

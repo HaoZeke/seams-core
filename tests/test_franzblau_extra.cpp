@@ -8,6 +8,9 @@
 #include <set>
 #include <utility>
 #include <vector>
+#ifdef SEAMS_HAS_OPENMP
+#include <omp.h>
+#endif
 #include <mol_sys.hpp>
 #include <neighbours.hpp>
 #include <ring.hpp>
@@ -406,4 +409,156 @@ TEST_CASE("populateGraphFromNListID skips a missing id and keeps the other verti
   REQUIRE(graph.pts.size() == 3);
   REQUIRE(graph.pts[1].neighListIndex.empty());
   REQUIRE(graph.pts[0].neighListIndex.size() == 1);
+}
+
+TEST_CASE("ring search split and bond crossover are readable", "[franzblau]") {
+  std::vector<std::vector<int>> nList = {{0, 1, 2}, {1, 0, 2}, {2, 0, 1}};
+  const auto rings = primitive::ringNetwork(nList, 3);
+  REQUIRE_FALSE(rings.empty());
+  const auto split = primitive::lastRingSearchSplit();
+  REQUIRE(split.enumerate_ms >= 0.0);
+  primitive::RingUpdater updater(6);
+  updater.setBondCrossover(0.5);
+  updater.setFullPassFraction(0.5);
+  auto moved = std::move(updater);
+  const auto again = moved.update(nList);
+  REQUIRE(again.size() == rings.size());
+  primitive::RingUpdater assigned(4);
+  assigned = std::move(moved);
+  REQUIRE(assigned.update(nList).size() == rings.size());
+}
+
+TEST_CASE("shortestPath walks a triangle and an empty update is quiet",
+          "[franzblau]") {
+  primitive::Graph graph;
+  graph.pts.resize(3);
+  for (int i = 0; i < 3; ++i) {
+    graph.pts[static_cast<std::size_t>(i)].atomIndex = i;
+    graph.pts[static_cast<std::size_t>(i)].inGraph = true;
+  }
+  graph.pts[0].neighListIndex = {1, 2};
+  graph.pts[1].neighListIndex = {0, 2};
+  graph.pts[2].neighListIndex = {0, 1};
+  std::vector<int> path;
+  std::vector<int> visited;
+  REQUIRE(primitive::shortestPath(graph, 1, 0, path, visited, 6, 0) == 0);
+  REQUIRE(primitive::shortestPath(graph, 0, 0, path, visited, 4, 4) == 0);
+
+  primitive::RingUpdater quiet(2);
+  const std::vector<std::vector<int>> empty;
+  REQUIRE(quiet.update(empty).empty());
+  REQUIRE(quiet.lastChangedBonds() == 0);
+  REQUIRE(quiet.lastChangedBondFraction() == 0.0);
+}
+
+TEST_CASE("a small edit expands into a full ring pass", "[franzblau]") {
+  const int n = 30;
+  std::vector<std::vector<int>> nList(static_cast<std::size_t>(n));
+  auto link = [&](int a, int b) {
+    auto &row = nList[static_cast<std::size_t>(a)];
+    if (std::find(row.begin(), row.end(), b) == row.end()) {
+      row.push_back(b);
+    }
+  };
+  for (int i = 0; i < n; ++i) {
+    nList[static_cast<std::size_t>(i)] = {i};
+    link(i, (i + 1) % n);
+    link(i, (i + n - 1) % n);
+  }
+  for (int j = 2; j <= 12; ++j) {
+    link(0, j);
+    link(j, 0);
+  }
+  primitive::RingUpdater updater(8);
+  updater.setFullPassFraction(0.2);
+  REQUIRE_FALSE(updater.update(nList).empty());
+  link(0, 20);
+  link(20, 0);
+  const auto second = updater.update(nList);
+  const auto full = primitive::ringNetwork(nList, 8);
+  REQUIRE(second.size() == full.size());
+  REQUIRE(updater.lastRecomputedSources() > 0);
+}
+
+TEST_CASE("a single changed bond refreshes the stored balls", "[franzblau]") {
+  const int n = 24;
+  std::vector<std::vector<int>> nList(static_cast<std::size_t>(n));
+  for (int i = 0; i < n; ++i) {
+    nList[static_cast<std::size_t>(i)] = {i, (i + 1) % n, (i + n - 1) % n,
+                                          (i + 2) % n, (i + n - 2) % n};
+  }
+  primitive::RingUpdater updater(6);
+  const auto first = updater.update(nList);
+  REQUIRE_FALSE(first.empty());
+  nList[0].push_back(4);
+  nList[4].push_back(0);
+  const auto second = updater.update(nList);
+  REQUIRE(second.size() == primitive::ringNetwork(nList, 6).size());
+  REQUIRE(updater.lastRecomputedSources() > 0);
+  REQUIRE(updater.lastRecomputedSources() < n);
+  REQUIRE(updater.lastBallsRefreshed() > 0);
+  const std::vector<std::vector<int>> empty;
+  primitive::ringNetwork(empty, 8);
+  primitive::ringNetwork(nList, 2);
+  std::vector<char> none(static_cast<std::size_t>(n), 0);
+  REQUIRE(primitive::ringNetwork(nList, 8, none).empty());
+  primitive::RingUpdater deep(8);
+  const auto primed = deep.update(nList);
+  REQUIRE_FALSE(primed.empty());
+  auto edited = nList;
+  edited[0].push_back(6);
+  edited[6].push_back(0);
+  const auto again = deep.update(edited);
+  REQUIRE(again.size() == primitive::ringNetwork(edited, 8).size());
+}
+
+TEST_CASE("a second thread enumerates the same rings and the same edit",
+          "[franzblau]") {
+#ifdef SEAMS_HAS_OPENMP
+  struct RestoreThreads {
+    int before;
+    RestoreThreads() : before(omp_get_max_threads()) {}
+    ~RestoreThreads() { omp_set_num_threads(before); }
+  } restore;
+  const int n = 48;
+  std::vector<std::vector<int>> cycle(static_cast<std::size_t>(n));
+  for (int i = 0; i < n; ++i) {
+    cycle[static_cast<std::size_t>(i)] = {i, (i + 1) % n, (i + n - 1) % n};
+  }
+  omp_set_num_threads(1);
+  const auto serial = primitive::ringNetwork(cycle, 6);
+  omp_set_num_threads(2);
+  REQUIRE(primitive::ringNetwork(cycle, 6) == serial);
+
+  const int wide = 1200;
+  std::vector<std::vector<int>> path(static_cast<std::size_t>(wide));
+  for (int i = 0; i < wide; ++i) {
+    path[static_cast<std::size_t>(i)] = {i};
+    if (i > 0) {
+      path[static_cast<std::size_t>(i)].push_back(i - 1);
+    }
+    if (i + 1 < wide) {
+      path[static_cast<std::size_t>(i)].push_back(i + 1);
+    }
+  }
+  primitive::RingUpdater updater(8);
+  updater.setFullPassFraction(0.95);
+  const auto primed = updater.update(path);
+  REQUIRE(primed.size() == primitive::ringNetwork(path, 8).size());
+  path[0].push_back(600);
+  path[600].push_back(0);
+  const auto edited = updater.update(path);
+  REQUIRE(edited.size() == primitive::ringNetwork(path, 8).size());
+  omp_set_num_threads(1);
+#endif
+  primitive::Graph graph;
+  graph.pts.resize(4);
+  for (int i = 0; i < 4; ++i) {
+    graph.pts[static_cast<std::size_t>(i)].atomIndex = i;
+    graph.pts[static_cast<std::size_t>(i)].inGraph = true;
+    graph.pts[static_cast<std::size_t>(i)].neighListIndex = {(i + 1) % 4};
+  }
+  graph.rings.push_back({0, 1, -1, 9});
+  primitive::removeNonSPrings(graph);
+  REQUIRE(graph.pts.size() == 4);
 }

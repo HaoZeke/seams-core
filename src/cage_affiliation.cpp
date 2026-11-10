@@ -12,6 +12,7 @@
 #include <topo_bulk.hpp>
 
 #include <algorithm>
+#include <bit>
 #include <cstdint>
 #include <memory>
 #include <numeric>
@@ -73,7 +74,6 @@ struct FrameContext {
   ring::RingSearchIndex index;
   std::vector<std::vector<int>> sortedRings;
   mutable   std::vector<std::vector<int>> basalCand;
-  mutable std::vector<char> basalReady;
   mutable std::vector<std::vector<int>> adjRings;
   mutable std::vector<char> adjReady;
   ring::NeighBond bonds;
@@ -85,16 +85,22 @@ struct FrameContext {
   // The basal search reads these atoms for every candidate.
   std::vector<int> flat6;
   bool allHex = false;
+  // Atom sets of each ring, and neighbour bits, when the cloud fits in 64 bits.
+  std::vector<std::uint64_t> ringMask;
+  std::vector<std::uint64_t> atomAdj;
+  bool bits64 = false;
 
   FrameContext() = default;
 
   FrameContext(const std::vector<std::vector<int>> &rings_,
-               const std::vector<std::vector<int>> &nList_) {
-    prepare(rings_, nList_);
+               const std::vector<std::vector<int>> &nList_,
+               bool fillBasal = true) {
+    prepare(rings_, nList_, fillBasal);
   }
 
   void prepare(const std::vector<std::vector<int>> &rings_,
-               const std::vector<std::vector<int>> &nList_) {
+               const std::vector<std::vector<int>> &nList_,
+               bool fillBasal = true) {
     rings = &rings_;
     nList = &nList_;
     int maxAtom = 0;
@@ -137,19 +143,49 @@ struct FrameContext {
     basalCand.resize(static_cast<std::size_t>(nR));
     adjRings.resize(static_cast<std::size_t>(nR));
     adjReady.assign(static_cast<std::size_t>(nR), 0);
-    basalReady.assign(static_cast<std::size_t>(nR), 0);
+    bits64 = false;
+    ringMask.clear();
+    atomAdj.clear();
+    const int nAtoms = static_cast<int>(nList_.size());
+    if (allHex && nAtoms > 0 && nAtoms <= 64) {
+      bits64 = true;
+      ringMask.assign(static_cast<std::size_t>(nR), 0);
+      for (int i = 0; i < nR; i++) {
+        std::uint64_t mask = 0;
+        for (int t = 0; t < 6; t++) {
+          const int atom = flat6[static_cast<std::size_t>(i) * 6 + static_cast<std::size_t>(t)];
+          if (atom >= 0 && atom < nAtoms) {
+            mask |= std::uint64_t{1} << static_cast<unsigned>(atom);
+          }
+        }
+        ringMask[static_cast<std::size_t>(i)] = mask;
+      }
+      atomAdj.assign(static_cast<std::size_t>(nAtoms), 0);
+      for (int atom = 0; atom < nAtoms; atom++) {
+        std::uint64_t bits = 0;
+        const auto &row = nList_[static_cast<std::size_t>(atom)];
+        for (std::size_t n = 1; n < row.size(); n++) {
+          const int nb = row[n];
+          if (nb >= 0 && nb < nAtoms && nb != atom) {
+            bits |= std::uint64_t{1} << static_cast<unsigned>(nb);
+          }
+        }
+        atomAdj[static_cast<std::size_t>(atom)] = bits;
+      }
+    }
+    if (fillBasal) {
 #if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
 #pragma omp parallel if (!omp_in_parallel())
 #endif
-    {
-      BasalScratch scratch;
+      {
+        BasalScratch scratch;
 #if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
 #pragma omp for schedule(static)
 #endif
-      for (int i = 0; i < nR; i++) {
-        basalCand[static_cast<std::size_t>(i)] =
-            collectBasalCandidates(i, scratch);
-        basalReady[static_cast<std::size_t>(i)] = 1;
+        for (int i = 0; i < nR; i++) {
+          basalCand[static_cast<std::size_t>(i)] =
+              collectBasalCandidates(i, scratch);
+        }
       }
     }
   }
@@ -257,13 +293,7 @@ struct FrameContext {
         seen.assign(static_cast<size_t>(nRings), 0);
       }
     }
-    int next(int &tick, std::vector<int> &stamp) {
-      if (++tick <= 0) {
-        std::fill(stamp.begin(), stamp.end(), 0);
-        tick = 1;
-      }
-      return tick;
-    }
+    int next(int &tick, std::vector<int> &) { return ++tick; }
   };
 
   [[nodiscard]] std::vector<int> collectBasalCandidates(int i,
@@ -366,7 +396,9 @@ struct FrameContext {
               hit2 = hit2 || scratch.arm2[static_cast<size_t>(atom)] == tick2;
             }
           } else {
-            for (const int atom : (*rings)[static_cast<size_t>(candidate)]) {
+            const auto &candidateRing = (*rings)[static_cast<size_t>(candidate)];
+            for (std::size_t t = 0; t < candidateRing.size(); ++t) {
+              const int atom = candidateRing[t];
               if (atom < 0 || atom >= nAtoms) {
                 continue;
               }
@@ -389,17 +421,10 @@ struct FrameContext {
     return out;
   }
 
-  mutable BasalScratch lazyScratch;
-
   [[nodiscard]] const std::vector<int> &basalCandidates(int i) {
     static const std::vector<int> empty;
     if (i < 0 || i >= static_cast<int>(basalCand.size())) {
       return empty;
-    }
-    if (!basalReady[static_cast<std::size_t>(i)]) {
-      basalCand[static_cast<std::size_t>(i)] =
-          collectBasalCandidates(i, lazyScratch);
-      basalReady[static_cast<std::size_t>(i)] = 1;
     }
     return basalCand[static_cast<std::size_t>(i)];
   }
@@ -414,6 +439,49 @@ struct FrameContext {
                                std::vector<ring::strucType> &types) const {
     std::vector<int> prismatic;
     listHC.clear();
+    if (bits64) {
+      const std::uint64_t mj = ringMask[static_cast<std::size_t>(j)];
+      const int *atoms = flat6.data() + static_cast<std::ptrdiff_t>(i) * 6;
+      for (int start = 0; start < 6; start++) {
+        const int t0 = atoms[start];
+        const int t1 = atoms[(start + 1) % 6];
+        const int t2 = atoms[(start + 2) % 6];
+        const RingRow A = ringsOf(t0);
+        const RingRow B = ringsOf(t1);
+        const RingRow C = ringsOf(t2);
+        int ia = 0;
+        int ib = 0;
+        int ic = 0;
+        while (ia < A.n && ib < B.n && ic < C.n) {
+          const int x = A.p[ia];
+          const int y = B.p[ib];
+          const int z = C.p[ic];
+          if (x == y && y == z) {
+            if (x != i && x != j &&
+                std::popcount(ringMask[static_cast<std::size_t>(x)] & mj) == 3) {
+              prismatic.push_back(x);
+            }
+            ++ia;
+            ++ib;
+            ++ic;
+          } else {
+            const int lo = std::min(x, std::min(y, z));
+            if (x == lo) {
+              ++ia;
+            }
+            if (y == lo) {
+              ++ib;
+            }
+            if (z == lo) {
+              ++ic;
+            }
+          }
+        }
+      }
+      std::sort(prismatic.begin(), prismatic.end());
+      prismatic.erase(std::unique(prismatic.begin(), prismatic.end()), prismatic.end());
+      return prismatic;
+    }
     (void)ring::findPrismatic(*rings, listHC, types, i, j, prismatic, index);
     return prismatic;
   }
@@ -619,29 +687,6 @@ struct ring::AffiliationUpdater::Impl {
   CageAffiliation current;
   int lastReclassified = 0;
   double batchFraction = 0.25;
-  // The back-off of RingUpdater: after a frame that went to batch on churn,
-  // the next `skip` frames run cageAffiliation with no diff state, the wait
-  // doubling from 1 to kMaxBackoff while frames keep going to batch
-  int backoff = 0;
-  int skip = 0;
-  static constexpr int kMaxBackoff = 8;
-
-  void fellBack() {
-    backoff = std::min(std::max(1, 2 * backoff), kMaxBackoff);
-    skip = backoff;
-  }
-
-  void release() {
-    std::vector<std::vector<int>>().swap(prevSortedRows);
-    std::vector<int>().swap(prevAtoms);
-    std::vector<std::size_t>().swap(prevOffset);
-    std::vector<int>().swap(pairData);
-    std::vector<std::size_t>().swap(pairOffset);
-    std::vector<signed char>().swap(eq);
-    std::vector<int>().swap(periData);
-    std::vector<std::size_t>().swap(periOffset);
-    primed = false;
-  }
 
   // Filled in place. The outer vector and each row keep their buffers.
   void fillSorted(const std::vector<std::vector<int>> &nList,
@@ -932,17 +977,6 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
     st.answersValid = false;
     return st.current;
   }
-  if (st.skip > 0) {
-    // A plain affiliation, keeping the sorted-row buffers for the next diff.
-    st.skip--;
-    st.current = ring::cageAffiliation(rings, nList);
-    st.lastReclassified = static_cast<int>(rings.size());
-    st.answersValid = false;
-    st.batchHot = false;
-    st.fillSorted(nList, st.incoming);
-    st.prevSortedRows.swap(st.incoming);
-    return st.current;
-  }
   if (st.batchHot && st.warm && st.primed &&
       st.prevSortedRows.size() == nList.size()) {
     st.fastAffiliation(rings, nList);
@@ -997,11 +1031,6 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
     st.batchHot = true;
     return st.current;
   }
-  if (!st.answersValid) {
-    st.batch(rings, nList, rows, nullptr);
-    st.answersValid = true;
-    return st.current;
-  }
 
   const std::vector<int> prevOf = st.matchRings(rings);
   const std::size_t nPrev = st.prevOffset.size() - 1;
@@ -1019,7 +1048,6 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
     }
     if (same) {
       st.lastReclassified = 0;
-      st.backoff = 0;
       return st.current;
     }
   }
@@ -1066,16 +1094,6 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
         pairs = true;
         continue;
       }
-      if (!pairs) {
-        const auto &row = nList[static_cast<std::size_t>(a)];
-        for (std::size_t m = 1; m < row.size(); m++) {
-          const int b = row[m];
-          if (b >= 0 && b < nAtoms && moved[static_cast<std::size_t>(b)]) {
-            pairs = true;
-            break;
-          }
-        }
-      }
     }
     if (pairs) {
       dirtyPairs.push_back(i);
@@ -1083,13 +1101,13 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
     }
     dirtyEq[static_cast<std::size_t>(i)] = equatorial ? 1 : 0;
   }
-  if (dirtyPairs.size() > batchLimit) {
+  // A full sweep wins once most rings are dirty. Below that, the rings
+  // that touch a moved atom are the ones that are classified again.
+  if (dirtyPairs.size() * 2 > rings.size()) {
     st.fastAffiliation(rings, nList);
     st.prevSortedRows.swap(st.incoming);
     st.answersValid = false;
     st.batchHot = true;
-    return st.current;
-    st.fellBack();
     return st.current;
   }
 
@@ -1131,7 +1149,9 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
     std::sort(dirtyPairs.begin(), dirtyPairs.end());
   }
 
-  const FrameContext ctx(rings, nList);
+  // Basal candidates are collected for the dirty rings only. Filling them
+  // for every ring repeats the search the subset is about to run.
+  const FrameContext ctx(rings, nList, false);
   const auto fresh = Impl::evaluatePairs(ctx, dirtyPairs);
   {
     // Merge the fresh runs of the dirty rings into ring order
@@ -1194,7 +1214,6 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
   st.lastReclassified = static_cast<int>(touched);
   st.remember(rings, rows);
   st.answersValid = true;
-  st.backoff = 0;
   return st.current;
 }
 
@@ -1263,10 +1282,8 @@ ring::SeededAtomLabels ring::seededCageAffiliation(
       while (!stack.empty()) {
         const int u = stack.back();
         stack.pop_back();
-        if (u < 0 || static_cast<size_t>(u) >= permissiveNList.size()) {
-          continue;
-        }
-        for (size_t m = 1; m < permissiveNList[u].size(); m++) {
+        for (size_t m = 1; m < permissiveNList[static_cast<size_t>(u)].size();
+             m++) {
           const int v = permissiveNList[u][m];
           if (v >= 0 && v < nAtoms && affiliated[v] && !kept[v]) {
             kept[v] = true;
@@ -1351,7 +1368,8 @@ ring::ringAdjacentCompletion(const SeededAtomLabels &labels,
       if (nMissing != 1) {
         continue;
       }
-      flag[static_cast<std::size_t>(missing)] = true;
+      auto bit = flag[static_cast<std::size_t>(missing)];
+      bit = true;
       for (const int s : ringsOf[static_cast<std::size_t>(missing)]) {
         if (!queued[static_cast<std::size_t>(s)]) {
           queued[static_cast<std::size_t>(s)] = 1;
@@ -1360,7 +1378,8 @@ ring::ringAdjacentCompletion(const SeededAtomLabels &labels,
       }
     }
   };
-  complete(out.hc);
-  complete(out.ddc);
+  std::vector<bool> *const which[2] = {&out.hc, &out.ddc};
+  complete(*which[0]);
+  complete(*which[1]);
   return out;
 }

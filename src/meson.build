@@ -16,6 +16,7 @@ ydslib_sources = files(
   'generic.cpp',
   'ira_sofi.cpp',
   'cage_canon.cpp',
+  'chemfiles_io.cpp',
   'chill_offload.cpp',
   'topo_fingerprint.cpp',
   'tum_offload.cpp',
@@ -36,6 +37,8 @@ ydslib_sources = files(
   'selection.cpp',
   'shapeMatch.cpp',
   'seams_c_api.cpp',
+  'insitu.cpp',
+  'insitu_imd.cpp',
   'site.cpp',
   'steinhardt_parallel.cpp',
   'topo_bulk.cpp',
@@ -117,3 +120,39 @@ pkgconfig.generate(
   requires: ['eigen3 >= 3.4.0'],
   libraries: ['-L${libdir}', '-lyodaLib'],
   extra_cflags: _public_defines)
+
+# The LAMMPS plugin links this library and nothing from the molecular
+# dynamics code. It is built only when that code's headers are visible.
+# auto skips a missing dependency. enabled requires it.
+# Live analysis does not go through PLUMED, so this tree builds no
+# PLUMED action. The neighbour-index fix stays in its own tree.
+# The GROMACS client is seams-gromacs-imd and links no GROMACS library,
+# so it is built with the core. OpenMM is the Python reporter.
+lammps_adapter = false
+plumed_adapter = false
+if not get_option('lammps').disabled()
+  _lammps_inc = []
+  if get_option('lammps_include') != ''
+    _lammps_inc += include_directories(get_option('lammps_include'))
+  endif
+  _lammps_ok = cppc.compiles(
+    '#include "lammpsplugin.h"\nint main() { return 0; }\n',
+    include_directories: _lammps_inc,
+    name: 'LAMMPS plugin header')
+  if _lammps_ok
+    lammps_adapter = true
+    shared_module(
+      'fixdseams',
+      'adapters/lammps/fix_dseams.cpp',
+      dependencies: [yds_dep],
+      include_directories: _lammps_inc,
+      name_prefix: 'lib',
+      install: true)
+  elif get_option('lammps').enabled()
+    error('lammps=enabled but lammpsplugin.h was not found. Pass -Dlammps_include')
+  endif
+endif
+
+if get_option('plumed').enabled()
+  error('Live analysis does not use PLUMED. -Dplumed=enabled is an error.')
+endif
