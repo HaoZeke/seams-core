@@ -315,10 +315,14 @@ def main():
     live.main = saved_main
     check(live.module_entry(["live.py", "--acceptance"]) == 0)
     saved_gmx = os.environ.pop("DSEAMS_GMX", None)
+    saved_gmx_mpi = os.environ.pop("DSEAMS_GMX_MPIRUN", None)
+    check(engine_e2e.gromacs_note() is None)
     note = live.gromacs_mpi_identity()
     check(isinstance(note, tuple) and len(note) == 2 and note[0] is False and isinstance(note[1], str) and note[1] != "")
     if saved_gmx is not None:
         os.environ["DSEAMS_GMX"] = saved_gmx
+    if saved_gmx_mpi is not None:
+        os.environ["DSEAMS_GMX_MPIRUN"] = saved_gmx_mpi
     check(live.loop_time("Loop time of 1.5 on 1 procs for 2 steps\n") == 1.5)
     os.environ["DSEAMS_SCALE_TINY"] = "1"
     live.time_lammps("plain", 2, 1, live.PLUGIN)

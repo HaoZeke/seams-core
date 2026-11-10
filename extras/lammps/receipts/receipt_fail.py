@@ -1,10 +1,11 @@
 # Copyright (c) d-SEAMS developers
 """Drive the receipt scripts into the failures a bad input actually produces."""
 
+import importlib
 import os
+import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 import cover
@@ -328,6 +329,18 @@ def check_campaign(work):
         ("s", "serial", "intree"): {"frames": 1},
     }
     assert not (run_campaign.take_pair(saved, "s", "serial", summary) is None), "pair present"
+    missing = []
+    paired = run_campaign.route_pairs({("s", "serial", "plugin"): {"frames": 1}}, ["s"], ["serial"], missing)
+    if paired:
+        raise SystemExit("a missing route was paired")
+    if not missing:
+        raise SystemExit("absent route was dropped")
+    dirty = run_campaign.PORCELAIN_SEAMS
+    run_campaign.PORCELAIN_SEAMS = " M file"
+    try:
+        require_message(run_campaign.main, "checkout is not empty")
+    finally:
+        run_campaign.PORCELAIN_SEAMS = dirty
     plug = work / "plug"
     plug.mkdir()
     (plug / "libdseams_lammps.so").write_bytes(b"x")
@@ -396,12 +409,35 @@ def check_neigh(work):
         require_message(neigh_ref.main, "mismatch")
     finally:
         sys.argv = old
+    empty = work / "empty-frames.txt"
+    empty.write_text(
+        "frame\nstep 0\ncutoff 3.5\nbox 0 0 0 10 10 10 0 0 0\nhost 0\n"
+        "atoms 1\natom 1 1 0 0 0\nendframe\n"
+    )
+    sys.argv = ["neigh_ref.py", str(empty)]
+    try:
+        require_message(neigh_ref.main, "missing host or chill frames")
+    finally:
+        sys.argv = old
+    real_import = __import__
+    def blocked(name, *args, **kwargs):
+        if name == "freud":
+            raise ImportError("blocked")
+        return real_import(name, *args, **kwargs)
+    builtins = __import__("builtins")
+    builtins.__import__ = blocked
+    try:
+        importlib.reload(neigh_ref)
+        require_message(neigh_ref.main, "freud is not installed")
+    finally:
+        builtins.__import__ = real_import
+        importlib.reload(neigh_ref)
 
 
 def check_prose(work):
     if not os.environ.get("SNAPPER"):
         raise SystemExit("snapper is not set")
-    os.environ["SEAMS_BASE"] = "be748d7a26957fd91bd0371b2dfefdd326feda3d"
+    os.environ["SEAMS_BASE"] = "7f310225b7ea6c9e9e79d48d2b3547ef0f66610c"
     os.environ["LAMMPS_BASE"] = "098ffdefa525cabc82272925de02e9884f58c657"
     os.environ["PROSE_LOG"] = str(work / "prose.log")
     kit = work / "badkit"
@@ -435,6 +471,18 @@ def check_prose(work):
         os.environ["PAPER_CORE"] = str(work / "core.toml")
         (work / "core.toml").write_text("this is not a profile {\n")
         require_message(prose_gate.main, "1")
+        good = work / "goodkit"
+        good.mkdir()
+        sentence = "We read that frame.\n" + ("The dump stores one frame.\n" * 99)
+        for name in ("NOTE.md", "PATHS.txt", "STATUS.txt", "TIP.txt"):
+            (good / name).write_text(sentence)
+        os.environ["KIT"] = str(good)
+        os.environ["SRC_SEAMS"] = saved_seams
+        os.environ["SRC_LAMMPS"] = saved_lammps
+        os.environ["SEAMS_BASE"] = "7f310225b7ea6c9e9e79d48d2b3547ef0f66610c"
+        os.environ["LAMMPS_BASE"] = "098ffdefa525cabc82272925de02e9884f58c657"
+        os.environ["PAPER_CORE"] = str(work / "no-such-core.toml")
+        prose_gate.main()
     finally:
         os.environ["SRC_SEAMS"] = saved_seams
         os.environ["SRC_LAMMPS"] = saved_lammps
@@ -452,7 +500,10 @@ def main():
         import run_campaign
         require_message(lambda: run_campaign.require_fix_input("nope"), "zzzz")
         return
-    work = Path(tempfile.mkdtemp())
+    work = Path(os.environ["BUILD"]) / "work" / "receipt-fail"
+    if work.exists():
+        shutil.rmtree(work)
+    work.mkdir(parents=True)
     check_streamlog(work)
     blog = streamlog.Log(work / "abort.log")
     cover.abort(blog, 0)

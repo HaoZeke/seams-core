@@ -812,7 +812,13 @@ def run_lammps():
         "pair_coeff * * 0.1 2.5\nplugin load " + str(PLUGIN) + "\n"
         "fix sea all dseams dump\nrun 1\n"
     )
-    lammps_bin(bad, folder / "bad.log", folder)
+    try:
+        lammps_bin(bad, folder / "bad.log", folder)
+    except RuntimeError as exc:
+        if "Illegal fix dseams command" not in str(exc):
+            raise
+    else:
+        raise RuntimeError("bad fix command was accepted")
     return {"frames": frames, "steps": 40}
 
 def gromacs_box(gro):
@@ -1057,7 +1063,7 @@ def run_ipi():
     folder.mkdir(parents=True, exist_ok=True)
     port, xml = write_ipi(folder)
     proc = subprocess.Popen(
-        [str(PREFIX / "bin" / "i-pi"), str(xml)],
+        [str(PREFIX / "bin" / "i-pi"), str(xml.resolve())],
         cwd=folder,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -1419,7 +1425,7 @@ def ipi_elapsed(analyse):
     folder.mkdir(parents=True, exist_ok=True)
     port, xml = write_ipi(folder)
     proc = subprocess.Popen(
-        [str(PREFIX / "bin" / "i-pi"), str(xml)],
+        [str(PREFIX / "bin" / "i-pi"), str(xml.resolve())],
         cwd=folder,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,

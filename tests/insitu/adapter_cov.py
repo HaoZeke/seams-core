@@ -319,6 +319,27 @@ def drill_exit_checks():
         require_text(err, "no exit")
         caught = True
     demand(caught, "broken variant was not caught")
+    caught = False
+    try:
+        expect_exit(lambda: raise_exit("box ok"), 1, "nope")
+    except SystemExit as err:
+        require_text(err, "want")
+        caught = True
+    demand(caught, "wrong message was accepted")
+    caught = False
+    try:
+        expect_exit(lambda: None, 1, "box ")
+    except SystemExit as err:
+        require_text(err, "missing exit")
+        caught = True
+    demand(caught, "a command that stays up was accepted")
+    caught = False
+    try:
+        expect_exit(lambda: raise_exit(0), 1, "box ")
+    except SystemExit as err:
+        require_text(err, "want")
+        caught = True
+    demand(caught, "wrong status was accepted")
     print("broken variant caught", flush=True)
 
 
@@ -605,24 +626,19 @@ def main():
     build = work / "plugin"
     build.mkdir(parents=True, exist_ok=True)
     (build / "CMakeCache.txt").unlink(missing_ok=True)
-
-    def ensure_cache():
-        if not (build / "CMakeCache.txt").exists():
-            run(
-                [
-                    "cmake", "-S", str(ROOT / "src" / "adapters" / "lammps"), "-B", str(build),
-                    "-DLAMMPS_SRC=" + lmp_src,
-                    "-DSEAMS_INCLUDE=" + str(ROOT / "src" / "include" / "internal"),
-                    "-DSEAMS_LIBRARY=" + seams_lib,
-                    "-DDSEAMS_LAMMPS_MPI=ON",
-                    "-DCMAKE_BUILD_TYPE=Debug",
-                    "-DCMAKE_CXX_COMPILER=" + cxx,
-                    "-DCMAKE_CXX_FLAGS=--coverage -O0 -fprofile-update=single",
-                ],
-                work,
-            )
-
-    ensure_cache()
+    run(
+        [
+            "cmake", "-S", str(ROOT / "src" / "adapters" / "lammps"), "-B", str(build),
+            "-DLAMMPS_SRC=" + lmp_src,
+            "-DSEAMS_INCLUDE=" + str(ROOT / "src" / "include" / "internal"),
+            "-DSEAMS_LIBRARY=" + seams_lib,
+            "-DDSEAMS_LAMMPS_MPI=ON",
+            "-DCMAKE_BUILD_TYPE=Debug",
+            "-DCMAKE_CXX_COMPILER=" + cxx,
+            "-DCMAKE_CXX_FLAGS=--coverage -O0 -fprofile-update=single",
+        ],
+        work,
+    )
     run(["cmake", "--build", str(build), "-j", "4"], work)
     plugin = str(build / "libdseams_lammps.so")
     libdir = str(Path(seams_lib).parent)

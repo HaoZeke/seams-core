@@ -19,6 +19,22 @@ WORK = BUILD / "work" / "coverage"
 LOG = BUILD / "kit" / "logs" / "coverage.log"
 
 
+def require_live(code):
+    if code != 0:
+        raise SystemExit("test_live_cover.py exit %d" % code)
+
+
+def prove_live_report():
+    try:
+        require_live(1)
+    except SystemExit as err:
+        if err.code != "test_live_cover.py exit 1":
+            raise
+    else:
+        raise SystemExit("a failing live test was accepted")
+    require_live(0)
+
+
 def abort(log, code):
     if code != 0:
         log.line("exit_code: %d" % code)
@@ -106,14 +122,14 @@ def main():
     live_env["DSEAMS_PLUGIN"] = str(BUILD / "plugin" / "libdseams_lammps.so")
     live_env["DSEAMS_MPIRUN"] = os.environ.get("MPIRUN", os.environ.get("DSEAMS_MPIRUN", ""))
     live_env["LD_LIBRARY_PATH"] = str(BUILD / "lammps-intree") + ":" + str(BUILD / "seams" / "src") + ":" + live_env.get("LD_LIBRARY_PATH", "")
+    prove_live_report()
     code = log.run(
         [py, "-m", "coverage", "run", "--branch", "--append", str(SRC / "tests" / "insitu" / "test_live_cover.py")],
         WORK,
         live_env,
     )
     log.line("py test_live_cover.py exit %d" % code)
-    if code != 0:
-        raise SystemExit("test_live_cover.py exit %d" % code)
+    require_live(code)
     log.line("gcov_object_directory: $BUILD/work/coverage")
     fix_notes = next(plugin.rglob("fix_dseams.cpp.gcno"))
     comp_notes = next((WORK / "compute").rglob("compute_dseams.gcno"))
@@ -121,10 +137,14 @@ def main():
     gcov_code = log.run(["gcov", "-b", str(fix_notes)], WORK, os.environ.copy())
     log.line("command: gcov -b " + str(comp_notes))
     gcov_code = log.run(["gcov", "-b", str(comp_notes)], WORK, os.environ.copy()) or gcov_code
+    cli_notes = next(Path(os.environ["BUILD"]).joinpath("seams").rglob("seams_cli.cpp.gcno"))
+    log.line("command: gcov -b " + str(cli_notes))
+    gcov_code = log.run(["gcov", "-b", str(cli_notes)], WORK, os.environ.copy()) or gcov_code
     gcovr = os.environ.get("GCOVR", "gcovr")
     common = [
         gcovr, "--root", str(SRC), "--object-directory", str(WORK),
         "--filter", ".*fix_dseams\\.cpp", "--filter", ".*compute_dseams\\.cpp",
+        "--filter", ".*seams_cli\\.cpp",
         "--txt-metric", "line",
         "--txt-metric", "branch",
     ]

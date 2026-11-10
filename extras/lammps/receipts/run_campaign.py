@@ -143,6 +143,17 @@ def take_pair(saved, system, launch, route_summary):
     return left, right
 
 
+def route_pairs(saved, systems, launches, route_summary):
+    found = []
+    for system in systems:
+        for launch in launches:
+            pair = take_pair(saved, system, launch, route_summary)
+            if pair is None:
+                continue
+            found.append((system, launch, pair))
+    return found
+
+
 def place_plugin(folder, plugin_bytes):
     so = folder / "libdseams_lammps.so"
     if plugin_bytes is None:
@@ -523,23 +534,19 @@ def main():
                 saved[(system, launch, route)] = compared
                 print(route, system, launch, compared["frames"], compared["mismatches"], compared["duplicate_live"], flush=True)
     route_summary = []
-    for system in systems:
-        for launch in launches:
-            pair = take_pair(saved, system, launch, route_summary)
-            if pair is None:
-                continue
-            left, right = pair
-            mismatches = compare_routes(system, launch, left["blocks"], right["blocks"], route_rows)
-            route_summary.append(
-                {
-                    "system": system,
-                    "launch": launch,
-                    "frames_plugin": left["frames"],
-                    "frames_intree": right["frames"],
-                    "mismatches": mismatches,
-                }
-            )
-            print("routes", system, launch, mismatches, flush=True)
+    for system, launch, pair in route_pairs(saved, systems, launches, route_summary):
+        left, right = pair
+        mismatches = compare_routes(system, launch, left["blocks"], right["blocks"], route_rows)
+        route_summary.append(
+            {
+                "system": system,
+                "launch": launch,
+                "frames_plugin": left["frames"],
+                "frames_intree": right["frames"],
+                "mismatches": mismatches,
+            }
+        )
+        print("routes", system, launch, mismatches, flush=True)
 
     shipped = LITERAL.read_text()
     require_fix_input(shipped)

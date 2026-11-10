@@ -129,12 +129,14 @@ def main():
             body_path.write_text(rest)
             proc = subprocess.run([snapper, "-f", "plaintext", "-w", "72", "--check", str(target)], text=True, capture_output=True)
             log_proc(log, "snapper %s %d" % (repo.name, index), proc)
-            if proc.returncode != 0 or "would reformat" in (proc.stdout or ""):
+            snap_text = (proc.stdout or "") + (proc.stderr or "")
+            if proc.returncode != 0 or "would reformat" in snap_text:
                 failed += 1
                 log.line(subject)
             proc = run_guard(guard_cmd(commit_profile, ["Subject=%s" % subject, "Body=@%s" % body_path]))
             log_proc(log, "commit-msg %s %d" % (repo.name, index), proc)
-            if proc.returncode != 0:
+            commit_text = (proc.stdout or "") + (proc.stderr or "")
+            if proc.returncode != 0 or "TricolonAbuse" in commit_text:
                 failed += 1
                 log.line(subject)
             proc = run_guard(guard_cmd(paper, ["body=@%s" % target]))
@@ -146,7 +148,7 @@ def main():
             if core:
                 proc = run_guard(guard_cmd(core, ["body=@%s" % target]))
                 log.line("paper-core %s %d exit %d" % (repo.name, index, proc.returncode))
-                if proc.returncode != 0:
+                if other_findings((proc.stdout or "") + (proc.stderr or ""), True):
                     failed += 1
     log.line("failures: %d" % failed)
     log.line("end: " + streamlog.date_is())

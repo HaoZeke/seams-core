@@ -130,6 +130,12 @@ def gromacs_case():
     return matched
 
 
+def gromacs_note():
+    if os.environ.get("DSEAMS_GMX") and os.environ.get("DSEAMS_GMX_MPIRUN"):
+        return gromacs_case()
+    return None
+
+
 def main():
     need("SEAMS_LIB")
     need("SEAMS_CLI")
@@ -139,10 +145,11 @@ def main():
     print("lammps-plugin-1", lammps_case(need("DSEAMS_LMP"), need("DSEAMS_PLUGIN"), work / "lammps-plugin-1", 1), flush=True)
     print("lammps-plugin-2", lammps_case(need("DSEAMS_LMP"), need("DSEAMS_PLUGIN"), work / "lammps-plugin-2", 2), flush=True)
     print("lammps-package", lammps_case(need("DSEAMS_LMP_INTREE"), "", work / "lammps-package", 1), flush=True)
-    if os.environ.get("DSEAMS_GMX") and os.environ.get("DSEAMS_GMX_MPIRUN"):
-        print("gromacs", gromacs_case(), flush=True)
-    else:
+    matched = gromacs_note()
+    if matched is None:
         print("gromacs is not installed", flush=True)
+    else:
+        print("gromacs", matched, flush=True)
 
 
 if __name__ == "__main__": main()
