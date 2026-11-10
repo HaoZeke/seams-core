@@ -94,8 +94,8 @@ void ComputeDseams::compute_peratom() {
     failed = seams_chill_plus_graph_lammps(xyz.data(), nlocal, box9, cutoff,
                                            graph.c_str(), labels.data()) != 0;
   // nprocs is already 1, so nlocal equals total_atoms. The else side is
-  // nlocal equal to 0, which forces the total to 0. The false edge cannot run.
-  } else if (total_atoms == 0) { // GCOVR_EXCL_BR_LINE
+  // nlocal equal to 0, which forces the total to 0.
+  } else {
     failed = 1;
   }
   int any_failed = 0;
