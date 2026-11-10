@@ -339,12 +339,9 @@ def cmd_gcov(args):
     gcov_dir = out / "gcov"
     gcov_dir.mkdir(parents=True, exist_ok=True)
     log_path = out / "gcov-run.log"
-    if os.environ.get("DSEAMS_V30_SKIP_TEST") == "1" and log_path.exists():
-        code = 0
-    else:
-        if log_path.exists():
-            log_path.unlink()
-        code = stamp_run(
+    if log_path.exists():
+        log_path.unlink()
+    code = stamp_run(
         ["meson", "test", "-C", str(build), "--no-rebuild", "--timeout-multiplier", "20"],
         log_path,
         root,
