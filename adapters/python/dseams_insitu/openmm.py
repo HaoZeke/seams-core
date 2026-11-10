@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """OpenMM reporter. Positions come from the context, on the host."""
 
 

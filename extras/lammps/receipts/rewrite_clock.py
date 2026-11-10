@@ -39,10 +39,6 @@ def sample():
 def write_read(log, line):
     log.write("read " + line + "\n")
     log.flush()
-    raw_path = os.environ.get("CLOCK_RAW", "")
-    if raw_path:
-        with open(raw_path, "a", encoding="utf-8") as handle:
-            handle.write(line + "\n")
 
 
 def reading(log):

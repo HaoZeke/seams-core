@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Live water and ice runs. The in-situ record must match a replay of the dump."""
 
 import json
@@ -214,6 +215,7 @@ def native_frame_count(path):
 
 
 def cli_text(command, dump, extra=None, type_filter=1):
+    dump = Path(dump).resolve()
     frames = native_frame_count(dump)
     cmd = [
         SEAMS,

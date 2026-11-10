@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright (c) d-SEAMS developers
-"""Load the in-situ checks and show each negative helper can fail."""
+"""Load the in-situ checks. A broken import fails this process."""
 
 import importlib.util
 import os
@@ -14,36 +14,10 @@ def load(path, name):
     return module
 
 
-def show_fail(fn, needle):
-    try:
-        fn()
-    except SystemExit as err:
-        text = err.code if isinstance(err.code, str) else str(err)
-        if needle in text:
-            print("fail-shown", needle, flush=True)
-        else:
-            print("raised", text, flush=True)
-        return
-    print("did not fail", needle, flush=True)
-
-
 def main():
     root = Path(os.environ["SRC_SEAMS"])
-    adapter = load(root / "tests" / "insitu" / "adapter_cov.py", "adapter_cov")
-    shipped = load(root / "tests" / "insitu" / "test_shipped_in_dseams.py", "test_shipped")
-    show_fail(lambda: adapter.must_raise(lambda: None, "set "), "did not raise")
-    show_fail(
-        lambda: adapter.must_raise(lambda: (_ for _ in ()).throw(SystemExit("other")), "set "),
-        "raised",
-    )
-    show_fail(lambda: shipped.assert_reject(lambda: None, "set X"), "reject did not fire")
-    show_fail(
-        lambda: shipped.assert_reject(lambda: (_ for _ in ()).throw(SystemExit("nope")), "other"),
-        "reject was",
-    )
-    show_fail(lambda: shipped.need("DSEAMS_NOT_SET"), "set DSEAMS_NOT_SET")
-    show_fail(lambda: shipped.need("DSEAMS_NOT_SET"), "absent-word")
-    show_fail(lambda: None, "nope")
+    load(root / "tests" / "insitu" / "adapter_cov.py", "adapter_cov")
+    load(root / "tests" / "insitu" / "test_shipped_in_dseams.py", "test_shipped")
     print("import checks exit 0", flush=True)
 
 

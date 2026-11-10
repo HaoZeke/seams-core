@@ -66,10 +66,12 @@ def main():
         print("committer %s" % committer, flush=True)
         print("subject %s" % row["subject"], flush=True)
         print("---", flush=True)
-    seam_n = len(commits(seams, seams_base, git(seams, "rev-parse", "HEAD").strip()))
-    lammps_n = len(commits(lammps, lammps_base, git(lammps, "rev-parse", "HEAD").strip()))
-    if len(rows) != seam_n + lammps_n:
-        raise SystemExit("rows %d commits %d" % (len(rows), seam_n + lammps_n))
+    seam_ids = commits(seams, seams_base, git(seams, "rev-parse", "HEAD").strip())
+    lammps_ids = commits(lammps, lammps_base, git(lammps, "rev-parse", "HEAD").strip())
+    logged = {row["new"] for row in rows}
+    missing = [item for item in seam_ids + lammps_ids if item not in logged]
+    if missing:
+        raise SystemExit("rows %d commits %d" % (len(rows), len(seam_ids) + len(lammps_ids)))
     print("commits %d" % len(rows), flush=True)
     print("exit 0", flush=True)
 

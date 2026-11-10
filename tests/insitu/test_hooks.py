@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Line coverage for the Python adapters that do not need a dynamics package."""
 
 import ctypes

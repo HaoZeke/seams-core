@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Head-to-head of the d-SEAMS LAMMPS plugin and the in-tree package.
 
 Same host, same LAMMPS version string, one thread. Six samples after one

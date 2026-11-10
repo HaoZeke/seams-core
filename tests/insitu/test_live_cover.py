@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Cover the acceptance helpers and the error branches around them."""
 
 import os
@@ -7,9 +8,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-os.environ.setdefault("SEAMS_LIB", str(ROOT / "bbdir-rel" / "src" / "libyodaLib.so"))
-os.environ.setdefault("SEAMS_CLI", str(ROOT / "bbdir-rel" / "seams"))
-os.environ.setdefault("DSEAMS_MD_PREFIX", "var/dseams-md")
+_build = os.environ.get("BUILD", "")
+if _build:
+    os.environ.setdefault("SEAMS_LIB", _build + "/seams/src/libyodaLib.so")
+    os.environ.setdefault("SEAMS_CLI", _build + "/seams/seams")
+    os.environ.setdefault("SEAMS_LAMMPS_PLUGIN", _build + "/plugin/libdseams_lammps.so")
+    os.environ.setdefault("DSEAMS_MD_PREFIX", _build + "/md-prefix")
 os.environ.setdefault("DSEAMS_LIVE_WORK", "var/run/dseams-live-cover")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -234,14 +238,7 @@ def main():
         eng.observe(0, [[0.0, 0.0, 0.0], [2.8, 0.0, 0.0], [0.0, 2.8, 0.0], [1.4, 1.4, 2.0]],
                     [0.0, 0.0, 0.0, 20.0, 20.0, 20.0, 0.0, 0.0, 0.0], None, [1, 1, 1, 1])
     os.environ["DSEAMS_E2E_WORK"] = str(work)
-    try:
-        import openmm  # noqa: F401
-    except ImportError:
-        openmm = None
-    if openmm is not None:
-        engine_e2e.main()
-    else:
-        print("openmm absent", flush=True)
+    engine_e2e.main()
     check(live.type7_median([1.0, 3.0]) == 2.0)
     gro = folder / "box.gro"
     gro.write_text("title\n1\n    1SOL     OW    1   0.1   0.1   0.1\n   2.0   2.0   2.0\n")

@@ -96,16 +96,24 @@ def main():
         log.line("py %s exit %d" % (Path(args[0]).name, code))
         abort(log, code)
     live_env = dict(env)
+    live_env["BUILD"] = str(BUILD)
+    live_env["SEAMS_CLI"] = str(BUILD / "seams" / "seams")
+    live_env["SEAMS_LIB"] = str(BUILD / "seams" / "src" / "libyodaLib.so")
+    live_env["SEAMS_LAMMPS_PLUGIN"] = str(BUILD / "plugin" / "libdseams_lammps.so")
     live_env["DSEAMS_MD_PREFIX"] = str(BUILD / "md-prefix")
+    live_env["DSEAMS_LMP"] = str(BUILD / "lammps-stock" / "lmp")
+    live_env["DSEAMS_LMP_INTREE"] = str(BUILD / "lammps-intree" / "lmp")
+    live_env["DSEAMS_PLUGIN"] = str(BUILD / "plugin" / "libdseams_lammps.so")
+    live_env["DSEAMS_MPIRUN"] = os.environ.get("MPIRUN", os.environ.get("DSEAMS_MPIRUN", ""))
+    live_env["LD_LIBRARY_PATH"] = str(BUILD / "lammps-intree") + ":" + str(BUILD / "seams" / "src") + ":" + live_env.get("LD_LIBRARY_PATH", "")
     code = log.run(
         [py, "-m", "coverage", "run", "--branch", "--append", str(SRC / "tests" / "insitu" / "test_live_cover.py")],
         WORK,
         live_env,
     )
     log.line("py test_live_cover.py exit %d" % code)
-    import receipt_fail  # noqa: F401
     if code != 0:
-        log.line("test_live_cover.py stopped where openmm is not installed")
+        raise SystemExit("test_live_cover.py exit %d" % code)
     log.line("gcov_object_directory: $BUILD/work/coverage")
     fix_notes = next(plugin.rglob("fix_dseams.cpp.gcno"))
     comp_notes = next((WORK / "compute").rglob("compute_dseams.gcno"))

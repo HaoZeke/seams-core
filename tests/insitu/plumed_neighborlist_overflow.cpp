@@ -1,3 +1,4 @@
+// Copyright (c) d-SEAMS developers
 // The neighbour fault on a 64000-atom cell is in PLUMED, not in this action.
 //
 // plumed 2.10.2 src/tools/NeighborList.cpp, getIndexPair, line 138:

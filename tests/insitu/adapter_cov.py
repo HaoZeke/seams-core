@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Build the LAMMPS adapter with coverage and exercise it.
 
 Tool paths come from the environment. Sources are taken from this repo.
@@ -300,15 +301,6 @@ def require_raised(fn, needle):
         raise SystemExit("no exit")
 
 
-def swallow_exit(value="should-fail"):
-    try:
-        if value is not None:
-            raise_exit(value)
-    except SystemExit:
-        return
-    return
-
-
 def demand(caught, label):
     if not caught:
         raise SystemExit(label)
@@ -322,7 +314,7 @@ def drill_exit_checks():
         require_text(err, "broken variant")
     caught = False
     try:
-        require_raised(swallow_exit, "unused")
+        require_raised(lambda: None, "unused")
     except SystemExit as err:
         require_text(err, "no exit")
         caught = True
@@ -632,7 +624,6 @@ def main():
 
     ensure_cache()
     run(["cmake", "--build", str(build), "-j", "4"], work)
-    ensure_cache()
     plugin = str(build / "libdseams_lammps.so")
     libdir = str(Path(seams_lib).parent)
     lammps_cases(work / "lmp", plugin, lmp, mpirun, libdir + ":" + str(Path(seams_lib).parent.parent / "subprojects" / "readcon-core"))

@@ -16,20 +16,15 @@ import streamlog
 import trace_libs
 
 
-def outcome(fn):
+def require_message(fn, needle):
     try:
         fn()
     except SystemExit as exc:
-        return str(exc)
-    return ""
-
-
-def expect_exit(fn, needle):
-    text = outcome(fn)
-    if needle in text:
-        print("shown", needle, flush=True)
-        return
-    print("absent", needle, flush=True)
+        text = str(exc)
+    else:
+        raise SystemExit("no failure for %s" % needle)
+    if needle not in text:
+        raise SystemExit("wanted %s got %s" % (needle, text))
 
 
 def init_repo(path):
@@ -112,7 +107,7 @@ def check_record(work):
     old = sys.argv
     sys.argv = ["record_build.py", str(work / "bad-build.log"), str(work), "false", "false"]
     try:
-        expect_exit(record_build.main, "1")
+        require_message(record_build.main, "1")
         sys.argv = ["record_build.py", str(work / "ok-build.log"), str(work), "true", "true"]
         record_build.main()
     finally:
@@ -174,16 +169,16 @@ def check_evidence(work):
     second = git_commit(str(repo), "fix: b\n\nBody.\n", use, use)
     good = work / "good-clock.txt"
     good.write_text(clock_row(repo, first, use, "fix: a") + clock_row(repo, second, later, "fix: b"))
-    expect_exit(lambda: run_evidence(good, repo, base), "clock")
+    require_message(lambda: run_evidence(good, repo, base), "clock")
     same = work / "same-clock.txt"
     same.write_text(clock_row(repo, first, use, "fix: a") + clock_row(repo, second, use, "fix: b"))
-    expect_exit(lambda: run_evidence(same, repo, base), "shared second")
+    require_message(lambda: run_evidence(same, repo, base), "shared second")
     (work / "missing-clock.txt").write_text("")
-    expect_exit(lambda: run_evidence(work / "missing-clock.txt", repo, base), "rows")
+    require_message(lambda: run_evidence(work / "missing-clock.txt", repo, base), "rows")
     drifted = git_commit(str(repo), "fix: c\n\nBody.\n", use, later)
     dates = work / "dates-clock.txt"
     dates.write_text(clock_row(repo, drifted, use, "fix: c"))
-    expect_exit(lambda: run_evidence(dates, repo, base), "dates differ")
+    require_message(lambda: run_evidence(dates, repo, base), "dates differ")
     signed = subprocess.check_output(
         [
             "git", "-C", repo, "-c", "gpg.format=openpgp",
@@ -197,7 +192,7 @@ def check_evidence(work):
     signed_hash = subprocess.check_output(["git", "-C", repo, "rev-parse", "HEAD"], text=True).strip()
     signed_clock = work / "signed-clock.txt"
     signed_clock.write_text(clock_row(repo, signed_hash, use, "signed"))
-    expect_exit(lambda: run_evidence(signed_clock, repo, base), "signed")
+    require_message(lambda: run_evidence(signed_clock, repo, base), "signed")
     one = work / "one"
     one.mkdir()
     init_repo(one)
@@ -310,18 +305,18 @@ def check_campaign(work):
     )
     assert not (run_campaign.quantile7([3.0], 0.5) != 3.0), "quantile one"
     assert not (run_campaign.quantile7([1.0, 2.0, 3.0, 4.0], 1.0) != 4.0), "quantile edge"
-    expect_exit(lambda: run_campaign.require_fix_input("nope"), "not the fix")
-    expect_exit(lambda: run_campaign.require_fix_input("fix sea all dseams\n"), "does not load")
+    require_message(lambda: run_campaign.require_fix_input("nope"), "not the fix")
+    require_message(lambda: run_campaign.require_fix_input("fix sea all dseams\n"), "does not load")
     run_campaign.require_fix_input(run_campaign.LITERAL.read_text())
-    expect_exit(lambda: run_campaign.require_ok(2, "bad 2"), "bad 2")
+    require_message(lambda: run_campaign.require_ok(2, "bad 2"), "bad 2")
     run_campaign.require_ok(0, "ok")
-    expect_exit(
+    require_message(
         lambda: run_campaign.run_lammps(
             "/bin/false", "false", "0" * 64, work / "badlmp", "serial", "plugin", "bad", "bad-plugin.log"
         ),
         "exit",
     )
-    expect_exit(lambda: run_campaign.require_record(work / "none", "plugin", "s", "serial"), "no live")
+    require_message(lambda: run_campaign.require_record(work / "none", "plugin", "s", "serial"), "no live")
     present = work / "present"
     present.mkdir()
     (present / "live.txt").write_text("step 0\n")
@@ -340,9 +335,9 @@ def check_campaign(work):
     assert not ((plug / "libdseams_lammps.so").exists()), "plugin removed"
     run_campaign.place_plugin(plug, b"y")
     assert not ((plug / "libdseams_lammps.so").read_bytes() != b"y"), "plugin written"
-    expect_exit(lambda: run_campaign.require_literal({"mismatches": 1, "live_steps": [0]}, "plugin"), "mismatch")
+    require_message(lambda: run_campaign.require_literal({"mismatches": 1, "live_steps": [0]}, "plugin"), "mismatch")
     run_campaign.require_literal({"mismatches": 0, "live_steps": [0]}, "plugin")
-    expect_exit(lambda: run_campaign.require_route_match(2), "routes")
+    require_message(lambda: run_campaign.require_route_match(2), "routes")
     run_campaign.require_route_match(0)
     fresh = work / "fresh"
     fresh.mkdir()
@@ -350,8 +345,7 @@ def check_campaign(work):
     git_commit(str(fresh), "fix: first\n\nFirst.\n", "2026-11-09 16:10:00 -0600", "2026-11-09 16:10:00 -0600")
     def compare_dump(dump):
         if not dump.is_file():
-            print("dump absent", flush=True)
-            return
+            raise SystemExit("campaign dump is missing")
         folder = work / "cmp"
         folder.mkdir()
         (folder / "dump.lammpstrj").write_bytes(dump.read_bytes())
@@ -362,13 +356,11 @@ def check_campaign(work):
         saved_cli = run_campaign.SEAMS
         run_campaign.SEAMS = Path("/bin/false")
         try:
-            expect_exit(lambda: run_campaign.cli_lines("rings", folder / "dump.lammpstrj", [], "rings "), "exit")
+            require_message(lambda: run_campaign.cli_lines("rings", folder / "dump.lammpstrj", [], "rings "), "exit")
         finally:
             run_campaign.SEAMS = saved_cli
 
-    compare_dump(work / "no-such-dump.lammpstrj")
     compare_dump(Path(os.environ["BUILD"]) / "work" / "plugin" / "small-run0" / "serial" / "dump.lammpstrj")
-    expect_exit(lambda: run_campaign.require_fix_input(run_campaign.LITERAL.read_text()), "not the fix")
 
 
 def check_neigh(work):
@@ -401,15 +393,14 @@ def check_neigh(work):
     old = sys.argv
     sys.argv = ["neigh_ref.py", str(bad)]
     try:
-        expect_exit(neigh_ref.main, "mismatch")
+        require_message(neigh_ref.main, "mismatch")
     finally:
         sys.argv = old
 
 
 def check_prose(work):
     if not os.environ.get("SNAPPER"):
-        print("snapper absent", flush=True)
-        return
+        raise SystemExit("snapper is not set")
     os.environ["SEAMS_BASE"] = "be748d7a26957fd91bd0371b2dfefdd326feda3d"
     os.environ["LAMMPS_BASE"] = "098ffdefa525cabc82272925de02e9884f58c657"
     os.environ["PROSE_LOG"] = str(work / "prose.log")
@@ -423,7 +414,7 @@ def check_prose(work):
     saved_seams = os.environ.get("SRC_SEAMS", "")
     saved_lammps = os.environ.get("SRC_LAMMPS", "")
     try:
-        expect_exit(prose_gate.main, "1")
+        require_message(prose_gate.main, "1")
         badrepo = work / "badrepo"
         badrepo.mkdir()
         init_repo(badrepo)
@@ -443,24 +434,35 @@ def check_prose(work):
         os.environ["LAMMPS_BASE"] = base
         os.environ["PAPER_CORE"] = str(work / "core.toml")
         (work / "core.toml").write_text("this is not a profile {\n")
-        expect_exit(prose_gate.main, "1")
+        require_message(prose_gate.main, "1")
     finally:
         os.environ["SRC_SEAMS"] = saved_seams
         os.environ["SRC_LAMMPS"] = saved_lammps
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--good-input":
+        import run_campaign
+        require_message(
+            lambda: run_campaign.require_fix_input(run_campaign.LITERAL.read_text()),
+            "not the fix",
+        )
+        return
+    if len(sys.argv) > 1 and sys.argv[1] == "--wrong-word":
+        import run_campaign
+        require_message(lambda: run_campaign.require_fix_input("nope"), "zzzz")
+        return
     work = Path(tempfile.mkdtemp())
     check_streamlog(work)
     blog = streamlog.Log(work / "abort.log")
     cover.abort(blog, 0)
-    expect_exit(lambda: cover.abort(streamlog.Log(work / "abort-bad.log"), 3), "3")
+    require_message(lambda: cover.abort(streamlog.Log(work / "abort-bad.log"), 3), "3")
     os.environ["GCOVR_XML"] = ""
     os.environ["GCOVR_DIFF_LOG"] = ""
     import py_diff
     assert not (py_diff.gcovr_diff(Path("."), Path("."), "python3", "d763dd35", os.environ.copy()) != 0), "gcovr skip"
     py_diff.raise_status(0)
-    expect_exit(lambda: py_diff.raise_status(1), "1")
+    require_message(lambda: py_diff.raise_status(1), "1")
     check_record(work)
     check_clock(work)
     check_evidence(work)
@@ -468,17 +470,7 @@ def main():
     check_trace()
     check_campaign(work)
     check_neigh(work)
-    snap = os.environ.pop("SNAPPER", None)
     check_prose(work)
-    def restore(value):
-        if value:
-            os.environ["SNAPPER"] = value
-            check_prose(work)
-        else:
-            print("snapper stayed absent", flush=True)
-
-    restore(None)
-    restore(snap)
     run_main(date_check.__file__, ["date_check.py", str(work / "logs")])
     run_main(record_build.__file__, ["record_build.py", str(work / "ok-build.log"), str(work), "true", "true"])
     run_main(trace_libs.__file__, ["trace_libs.py", "/bin/true"])
@@ -492,6 +484,11 @@ def main():
         date_evidence.__file__,
         ["date_evidence.py", str(work / "one-clock.txt"), str(one), one_base, str(one), subprocess.check_output(["git", "-C", one, "rev-parse", "HEAD"], text=True).strip()],
     )
+    py = os.environ.get("DSEAMS_PYTHON", sys.executable)
+    for mode in ("--good-input", "--wrong-word"):
+        proc = subprocess.run([py, "-m", "coverage", "run", "--branch", "--append", __file__, mode])
+        if proc.returncode == 0:
+            raise SystemExit("%s was accepted" % mode)
     print("receipt fail exit 0", flush=True)
 
 

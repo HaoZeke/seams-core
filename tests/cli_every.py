@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Run every seams command on a one-frame trajectory.
 
 The process must exit 0. That is the coverage of the command bodies.
@@ -214,23 +215,6 @@ with tempfile.TemporaryDirectory() as tmp:
     ver = subprocess.run([seams, "--version"], capture_output=True, text=True)
     ok = ver.returncode == 0 and "seams" in ver.stdout and ok
     ok = resolve_dump(root / "input" / "traj" / "not-deposited.lammpstrj") == tiny and ok
-    def take(args, expect, message, want):
-        try:
-            run(args, expect=expect, message=message)
-        except SystemExit as exc:
-            if str(exc) == want:
-                print("shown", want, flush=True)
-            else:
-                print("other", str(exc), flush=True)
-            return
-        print("quiet", flush=True)
-
-    want_code = "rings %s --cutoff not-a-number exit 2 want 0" % water
-    bad = ["rings", str(water), "--cutoff", "not-a-number"]
-    take(bad, 0, None, want_code)
-    take(bad, 2, "not-the-message", "missing reject message")
-    take(bad, 0, None, "not the exit line")
-    take(["--version"], 0, None, "quiet")
     ok = run(["rings", str(water), "--cutoff", "not-a-number"], expect=2, message="Usage:") and ok
     def with_offload():
         off = os.environ.get("SEAMS_OFFLOAD")

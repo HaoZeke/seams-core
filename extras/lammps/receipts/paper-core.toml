@@ -1,0 +1,41 @@
+name = "paper-core"
+kind = "rewriter"
+description = "Derived on this machine from rohit-paper, plus tricolon, we-rate, and the snapper width check run beside it. The box verify runs the authoritative paper-core profile."
+severity_floor = "suggestion"
+include = ["**/*.md", "**/*.org", "**/*.txt", "**/*.rst", "**/*.tex"]
+exclude = ["**/node_modules/**", "**/.git/**"]
+lexical_styles = ["rgoswami"]
+lexical_disable = [
+  "rgoswami.EPrimeSoft",
+  "rgoswami.Acronyms",
+  "write-good.Passive",
+]
+
+[engines]
+lexical = true
+voice = true
+judge = false
+harper = false
+leak = false
+structure = false
+
+[sentences]
+hard_words = 0
+
+[register]
+mean_sent = 24.1
+mean_sent_band = 6.0
+we = 0.09
+we_band = 0.08
+digit = 0.21
+digit_band = 0.12
+gates = ["we"]
+fact_anchor = "numeric"
+
+[register.zones.results]
+we = 0.0
+we_band = 0.02
+
+[register.zones.introduction]
+we = 0.12
+we_band = 0.08

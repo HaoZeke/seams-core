@@ -38,8 +38,6 @@ def other_findings(text, skip_we):
     for line in text.splitlines():
         if not line.startswith("field:"):
             continue
-        if "[error]" not in line:
-            continue
         if skip_we and "voice.WeRate" in line:
             continue
         found.append(line)
@@ -65,14 +63,15 @@ def log_proc(log, label, proc):
 
 def note_core(log):
     core = os.environ.get("PAPER_CORE", "")
-    if core and Path(core).is_file():
-        return core
+    derived = Path(__file__).resolve().parent / "paper-core.toml"
+    if not (core and Path(core).is_file()):
+        core = str(derived)
     if not getattr(note_core, "said", False):
         note_core.said = True
         log.line(
-            "paper-core is not on this machine. The profile file is absent, so this VM does not run that check."
+            "paper-core on this machine is derived from the rohit-paper rules plus the tricolon, we-rate, and snapper checks. The box verify runs the authoritative paper-core profile."
         )
-    return ""
+    return core if Path(core).is_file() else ""
 
 
 def main():

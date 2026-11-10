@@ -1,3 +1,4 @@
+// Copyright (c) d-SEAMS developers
 #ifdef COMPUTE_CLASS
 ComputeStyle(dseams, ComputeDseams)
 #else

@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """The coverage scorer rejects a directory, a mismatched source, and a missing path."""
 
 import importlib.util

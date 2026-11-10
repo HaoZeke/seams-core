@@ -1,3 +1,4 @@
+// Copyright (c) d-SEAMS developers
 #include "compute_dseams.h"
 #include "atom.h"
 #include "comm.h"

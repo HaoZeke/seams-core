@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Type 7 quartiles of the live overhead samples. Writes REPORT.md."""
 
 import json

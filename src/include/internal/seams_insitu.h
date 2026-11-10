@@ -1,3 +1,4 @@
+// Copyright (c) d-SEAMS developers
 #ifndef SEAMS_INSITU_H_
 #define SEAMS_INSITU_H_
 
