@@ -209,8 +209,7 @@ struct FrameContext {
   };
 
   [[nodiscard]] RingRow ringsOf(int atom) const {
-    if (atom < 0 || index.ringOff.empty() ||
-        static_cast<std::size_t>(atom) + 1 >= index.ringOff.size()) {
+    if (static_cast<std::size_t>(atom) + 1 >= index.ringOff.size()) {
       return {};
     }
     const int begin = index.ringOff[static_cast<std::size_t>(atom)];
@@ -252,7 +251,7 @@ struct FrameContext {
 
   //! Ordered basal-pair predicate, exactly the findHC acceptance test
   [[nodiscard]] bool basalPair(int i, int j) const {
-    if (i == j || shareAtoms(i, j)) {
+    if (shareAtoms(i, j)) {
       return false;
     }
     return ring::basalConditions(bonds, (*rings)[static_cast<std::size_t>(i)],
@@ -373,8 +372,7 @@ struct FrameContext {
         const RingRow through = ringsOf(nb);
         for (int c = 0; c < through.n; c++) {
           const int candidate = through.p[c];
-          if (scratch.seen[static_cast<size_t>(candidate)] == seenTick ||
-              candidate == i) {
+          if (scratch.seen[static_cast<size_t>(candidate)] == seenTick) {
             continue;
           }
           scratch.seen[static_cast<size_t>(candidate)] = seenTick;
@@ -422,10 +420,6 @@ struct FrameContext {
   }
 
   [[nodiscard]] const std::vector<int> &basalCandidates(int i) {
-    static const std::vector<int> empty;
-    if (i < 0 || i >= static_cast<int>(basalCand.size())) {
-      return empty;
-    }
     return basalCand[static_cast<std::size_t>(i)];
   }
 
@@ -457,7 +451,7 @@ struct FrameContext {
           const int y = B.p[ib];
           const int z = C.p[ic];
           if (x == y && y == z) {
-            if (x != i && x != j &&
+            if (x != i &&
                 std::popcount(ringMask[static_cast<std::size_t>(x)] & mj) == 3) {
               prismatic.push_back(x);
             }
@@ -614,9 +608,7 @@ ring::stackingPlanes(const std::vector<std::vector<int>> &rings,
       hc[i] = true;
       hc[static_cast<std::size_t>(j)] = true;
       for (const int k : ctx.prismaticOf(static_cast<int>(i), j)) {
-        if (k >= 0 && static_cast<std::size_t>(k) < nRings) {
-          hc[static_cast<std::size_t>(k)] = true;
-        }
+        hc[static_cast<std::size_t>(k)] = true;
       }
     }
   }
@@ -826,13 +818,8 @@ struct ring::AffiliationUpdater::Impl {
   // Whole-frame evaluation that also fills the stored answers
   void batch(const std::vector<std::vector<int>> &rings,
              const std::vector<std::vector<int>> &nList,
-             std::vector<std::vector<int>> rows, const FrameContext *given) {
-    std::unique_ptr<FrameContext> own;
-    if (given == nullptr) {
-      own = std::make_unique<FrameContext>(rings, nList);
-      given = own.get();
-    }
-    const FrameContext &ctx = *given;
+             std::vector<std::vector<int>> rows) {
+    const FrameContext ctx(rings, nList);
     const int nR = static_cast<int>(rings.size());
     std::vector<int> all(rings.size());
     std::iota(all.begin(), all.end(), 0);
@@ -977,8 +964,7 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
     st.answersValid = false;
     return st.current;
   }
-  if (st.batchHot && st.warm && st.primed &&
-      st.prevSortedRows.size() == nList.size()) {
+  if (st.batchHot && st.prevSortedRows.size() == nList.size()) {
     st.fastAffiliation(rings, nList);
     return st.current;
   }
@@ -986,7 +972,7 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
   auto &rows = st.incoming;
   if (!st.primed || st.prevSortedRows.size() != nList.size()) {
     st.batchHot = false;
-    st.batch(rings, nList, rows, nullptr);
+    st.batch(rings, nList, rows);
     st.answersValid = true;
     return st.current;
   }
@@ -1206,10 +1192,7 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
   st.flags(ctx, evaluated);
   std::size_t touched = 0;
   for (int i = 0; i < nR; i++) {
-    touched += (isDirty[static_cast<std::size_t>(i)] ||
-                dirtyEq[static_cast<std::size_t>(i)])
-                   ? 1
-                   : 0;
+    touched += isDirty[static_cast<std::size_t>(i)] ? 1 : 0;
   }
   st.lastReclassified = static_cast<int>(touched);
   st.remember(rings, rows);
@@ -1306,10 +1289,10 @@ ring::SeededAtomLabels ring::seededCageAffiliation(
 
   for (int a = 0; a < nAtoms; a++) {
     if (keptHC[a]) {
-      out.hc[a] = hcS[a] || hcP[a];
+      out.hc[a] = true;
     }
     if (keptDDC[a]) {
-      out.ddc[a] = ddcS[a] || ddcP[a];
+      out.ddc[a] = true;
     }
   }
   if (ringAdjacentCompletion) {
