@@ -2340,18 +2340,10 @@ int main(int argc, char *argv[]) {
       (jobs == 1 || frameSource(file) != FrameSource::dump)) {
     walkCarry = std::make_unique<FrameCarry>(true);
   }
-  bool ranged = false;
   try {
-    ranged = forEachInputFrame(file, lo, hi, typeFilter, jobs, processFrame,
-                               part, parts);
+    forEachInputFrame(file, lo, hi, typeFilter, jobs, processFrame, part, parts);
   } catch (...) {
     std::cerr << colorizer.error(exceptionText()) << "\n";
-    return 2;
-  }
-  if (!ranged) {
-    std::cerr << colorizer.error(
-                     "frame ranges are unsupported for this input format")
-              << "\n";
     return 2;
   }
 #ifdef SEAMS_HAS_MPI
