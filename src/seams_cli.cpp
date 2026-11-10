@@ -365,6 +365,18 @@ void emitResult(std::ostream &os, std::string_view format,
      << jsonEscape(text) << "\"}\n";
 }
 
+std::string exceptionText() {
+  try {
+    throw;
+  } catch (const ParsingException &ex) {
+    return std::string(ex.message());
+  } catch (const std::exception &ex) {
+    return ex.what();
+  } catch (...) {
+    return "unknown error";
+  }
+}
+
 bool parseTypePair(std::string_view value, int &typeI, int &typeJ) {
   const auto comma = value.find(',');
   if (comma == std::string_view::npos) {
@@ -381,7 +393,7 @@ bool parseTypePair(std::string_view value, int &typeI, int &typeJ) {
   try {
     typeI = parseIntegral<int>(left);
     typeJ = parseIntegral<int>(right);
-  } catch (const ParsingException &) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
+  } catch (const ParsingException &) {
     return false;
   }
   return true;
@@ -607,7 +619,7 @@ site::Table parseSiteSpec(std::string_view spec, site::Family family) {
     int typeId = 0;
     try {
       typeId = parseIntegral<int>(key);
-    } catch (const ParsingException &) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
+    } catch (const ParsingException &) {
       throw std::invalid_argument("site spec type '" + std::string(key) +
                                   "' is not an integer");
     }
@@ -1974,8 +1986,8 @@ int main(int argc, char *argv[]) {
 
   try {
     parser.parse(argc, argv);
-  } catch (const ParsingException &ex) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-    std::cerr << colorizer.error(ex.message()) << "\n";
+  } catch (...) {
+    std::cerr << colorizer.error(exceptionText()) << "\n";
     std::cerr << colorizer.warning(parser.formatUsage(progname, colorizer))
               << "\n";
     return 2;
@@ -2013,8 +2025,8 @@ int main(int argc, char *argv[]) {
   cfg.cutoff = cutoff;
   try {
     cfg.cageEdge = cage::edgeWindowSpec(cage::parseEdgeWindow(cageEdge));
-  } catch (const std::invalid_argument &e) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-    std::cerr << colorizer.error(e.what()) << "\n";
+  } catch (...) {
+    std::cerr << colorizer.error(exceptionText()) << "\n";
     std::cerr << colorizer.warning(parser.formatUsage(progname, colorizer))
               << "\n";
     return 2;
@@ -2024,8 +2036,8 @@ int main(int argc, char *argv[]) {
   if (familyFlag) {
     try {
       family = site::parseFamily(familyNameFlag);
-    } catch (const std::invalid_argument &e) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-      std::cerr << colorizer.error(e.what()) << "\n";
+    } catch (...) {
+      std::cerr << colorizer.error(exceptionText()) << "\n";
       std::cerr << colorizer.warning(parser.formatUsage(progname, colorizer))
                 << "\n";
       return 2;
@@ -2103,8 +2115,8 @@ int main(int argc, char *argv[]) {
   if (!siteSpec.empty()) {
     try {
       siteTable = parseSiteSpec(siteSpec, family);
-    } catch (const std::exception &e) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-      std::cerr << colorizer.error(e.what()) << "\n";
+    } catch (...) {
+      std::cerr << colorizer.error(exceptionText()) << "\n";
       return 2;
     }
   }
@@ -2166,16 +2178,16 @@ int main(int argc, char *argv[]) {
         return cmdChillPlus(os, carry, cloud, cutoff, typeI, graph, chillRule,
                             layersFlag, tumLayersFlag, densAxis, 3.7,
                             waterTypes);
-      } catch (const std::exception &e) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-        os << colorizer.error(e.what()) << "\n";
+      } catch (...) {
+        os << colorizer.error(exceptionText()) << "\n";
         return 2;
       }
     }
     if (cmd == "chill") {
       try {
         return cmdChill(os, cloud, cutoff, typeI, graph, waterTypes);
-      } catch (const std::exception &e) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-        os << colorizer.error(e.what()) << "\n";
+      } catch (...) {
+        os << colorizer.error(exceptionText()) << "\n";
         return 2;
       }
     }
@@ -2193,8 +2205,8 @@ int main(int argc, char *argv[]) {
                         signatureSpec, guestTypes, guestRadius, perAtomPath,
                         insideFlag, incompleteFlag, waterTypes, shapeFlag,
                         cfg.cageEdge);
-      } catch (const std::exception &e) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-        os << colorizer.error(e.what()) << "\n";
+      } catch (...) {
+        os << colorizer.error(exceptionText()) << "\n";
         return 2;
       }
     }
@@ -2203,8 +2215,8 @@ int main(int argc, char *argv[]) {
         return cmdFingerprint(os, carry, cloud, cutoff, typeI, k, graph, hops,
                               colourTypes,
                               libraryPath, emitLabel, perAtomPath, byAtomFlag);
-      } catch (const std::exception &e) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-        os << colorizer.error(e.what()) << "\n";
+      } catch (...) {
+        os << colorizer.error(exceptionText()) << "\n";
         return 2;
       }
     }
@@ -2271,8 +2283,8 @@ int main(int argc, char *argv[]) {
     Cloud cloud;
     try {
       cloud = load(file, frame, loadType);
-    } catch (const std::exception &e) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-      std::cerr << colorizer.error(e.what()) << "\n";
+    } catch (...) {
+      std::cerr << colorizer.error(exceptionText()) << "\n";
       return 2;
     }
     std::ostringstream line;
@@ -2330,8 +2342,8 @@ int main(int argc, char *argv[]) {
   }
   try {
     forEachInputFrame(file, lo, hi, typeFilter, jobs, processFrame, part, parts);
-  } catch (const std::exception &e) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-    std::cerr << colorizer.error(e.what()) << "\n";
+  } catch (...) {
+    std::cerr << colorizer.error(exceptionText()) << "\n";
     return 2;
   }
 #ifdef SEAMS_HAS_MPI

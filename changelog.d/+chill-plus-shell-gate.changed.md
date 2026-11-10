@@ -8,3 +8,6 @@ Users who want the OVITO labels use the ovito-chill+ command.
 That command averages q3 on the full shell and skips the test.
 Plain CHILL keeps four closest neighbours and Moore's test.
 A reader error now returns exit code 2 instead of aborting the process.
+We print reCubic and reHex as plain text.
+A path that ends in xyz and cannot be opened returns an error.
+An exception outside std::exception returns exit code 2.

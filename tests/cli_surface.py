@@ -196,6 +196,7 @@ def main():
         (["ovito_chill_plus", ice, "--type", "1"], "hexagonal"),
         (["--frame", "1", "--last", "2", "--type", "1", "read", cubic], "nop"),
         (["--frame", "1", "--last", "2", "--type", "0", "read", cubic], "nop"),
+        (["--frame", "1", "--last", "2", "--type", "0", "density-z", tip, "--bins", "2"], "rho"),
         (["cages", empty, "--type", "1"], "both"),
         (["cages", empty, "--type", "1"], "water"),
         (["domains", tip, "--site", "1=polar,2=apolar"], "subset"),
@@ -203,6 +204,8 @@ def main():
         (["cages", ice, "--type", "1", "--signature", "512", "--graph", "cutoff"], "signature"),
         (["--family", "ionicLiquid", "read", tip, "--type", "2"], "nop"),
         (["cages", cubic, "--type", "1", "--graph", "cutoff"], "cubic 4096"),
+        (["cages", "input/traj/genice_sI.lammpstrj", "--type", "1", "--signature", "512",
+          "--guest-types", "1", "--guest-radius", "2"], "occ 0:2"),
     ]
     hinted = run(seams, ["--type", "-1", "read", three])
     if hinted.returncode != 0 or "more than two" not in hinted.stderr:
@@ -299,14 +302,14 @@ def main():
         ["--frame", "1", "--last", "2", "read", "missing-cli.dcd"],
     ):
         probed = run(seams, args)
-        if probed.returncode not in (0, 2):
-            sys.stderr.write("aborted " + " ".join(args) + "\n")
+        if probed.returncode != 0:
+            sys.stderr.write("aborted " + " ".join(args) + " " + str(probed.returncode) + "\n")
             return 1
     off = os.environ.copy()
     off["SEAMS_OFFLOAD"] = "1"
     reached = run(seams, ["cages", ice, "--type", "1", "--graph", "cutoff"], off)
-    if reached.returncode not in (0, 2):
-        sys.stderr.write("offload cages aborted\n")
+    if reached.returncode != 0 or "nop" not in reached.stdout:
+        sys.stderr.write("offload cages aborted\n" + reached.stdout)
         return 1
     weird = run(seams, ["--emit-library", 'say "hi"\\\t', "fingerprint", ice,
                         "--type", "1", "--hops", "1"])
@@ -316,8 +319,8 @@ def main():
             handle.write(weird.stdout)
         escaped = run(seams, ["--format", "json", "--library", weird_path,
                               "fingerprint", ice, "--type", "1", "--hops", "1"])
-        if escaped.returncode not in (0, 2):
-            sys.stderr.write("json escape aborted\n")
+        if escaped.returncode != 0:
+            sys.stderr.write("json escape aborted " + str(escaped.returncode) + "\n")
             return 1
     missing_lib = run(seams, ["--library", os.path.join(work, "absent.txt"),
                               "fingerprint", ice, "--type", "1"])
@@ -358,9 +361,7 @@ def main():
         ["pairs", ions, "--site", "1=solvent"],
         ["--frame", "1", "--last", "2", "read", "missing-range.gro"],
         ["--frame", "1", "--last", "2", "read", "missing-range.dcd"],
-        ["--frame", "1", "--last", "2", "read", "missing-range.con"],
         ["--frame", "5", "--last", "6", "read", "input/xyz/configuration.xyz"],
-        ["--types", "2,zz", "rdf", ice, "--type", "1"],
         ["read", "input/baretraj"],
         ["--frame", "1", "--last", "2", "read", "input/baretraj"],
         ["--type", "0", "read", "missing-type.pdb"],
@@ -371,7 +372,6 @@ def main():
         ["cn", ions, "--type", "0"],
         ["cages", ice, "--type", "1", "--signature", "512", "--guest-types", "9", "--guest-radius", "0.1"],
         ["ions", ions, "--ion-types", "1", "--site", "1=cationHead,2=anion", "--type", "2"],
-        ["rdf", ions, "--types", "2,zz"],
         ["cages", interface, "--type", "1", "--signature", "512", "--graph", "cutoff",
          "--water-types", "1"],
         ["cages", ice, "--type", "1", "--guest-types", "1", "--shape"],
@@ -381,16 +381,13 @@ def main():
         ["chill-plus", empty, "--type", "1"],
         ["f4", ice, "--type", "1", "--htype", "1"],
         ["f4", ice, "--type", "0", "--htype", "9"],
-        ["rdf", tip, "--types", "2,2,2"],
         ["rdf", tip, "--types", " 2 , 2 "],
-        ["cn", tip, "--types", ","],
         ["--water-types", ",,", "chill", tip, "--type", "2"],
         ["--water-types", "1", "ions", tip, "--ion-types", "1",
          "--site", "1=cationHead,2=anion"],
         ["--site", " , 1=cationHead", "pairs", tip],
         ["--site", "family=ionicLiquid,1=cationHead,2=anion", "pairs", tip],
         ["--site", "1=tail,2=polar,3=apolar", "pairs", "input/traj/agi_water_tiny.lammpstrj"],
-        ["cages", ice, "--type", "1", "--signature", "+"],
         ["cages", ice, "--type", "1", "--graph", "knn-union", "--signature", "512"],
         ["--format", "json", "chill", empty, "--type", "1"],
         ["--jobs", "1", "--frame", "1", "--last", "2", "read", cubic],
@@ -411,7 +408,6 @@ def main():
         ["--type", "2", "read", pdb],
         ["--type", "-1", "read", gro],
         ["--format", "json", "--frame", "1", "--last", "2", "read", gro],
-        ["--strict-input", "--frame", "1", "--last", "2", "read", gap],
         ["--jobs", "2", "--frame", "1", "--last", "2", "read", "input/xyz/configuration.xyz"],
         ["rdf", empty, "--type", "0"],
         ["rdf", empty, "--type", "-1"],
@@ -453,8 +449,8 @@ def main():
         ["--axis", "z", "density-z", tip, "--type", "2", "--bins", "0"],
     ):
         result = run(seams, args)
-        if result.returncode not in (0, 2):
-            sys.stderr.write("aborted " + " ".join(args) + "\n")
+        if result.returncode != 0:
+            sys.stderr.write("aborted " + " ".join(args) + " " + str(result.returncode) + "\n")
             failed = True
     for args in (
         ["read", "missing-edge.con"],
@@ -462,6 +458,13 @@ def main():
         ["--site", "zz=cationHead", "pairs", tip],
         ["--cage-edge", "9", "cages", ice, "--type", "1"],
         ["--family", "nope", "read", tip],
+        ["--frame", "1", "--last", "2", "read", "missing-range.con"],
+        ["--types", "2,zz", "rdf", ice, "--type", "1"],
+        ["rdf", ions, "--types", "2,zz"],
+        ["rdf", tip, "--types", "2,2,2"],
+        ["cn", tip, "--types", ","],
+        ["cages", ice, "--type", "1", "--signature", "+"],
+        ["--strict-input", "--frame", "1", "--last", "2", "read", gap],
     ):
         result = run(seams, args)
         if result.returncode != 2:
@@ -474,6 +477,28 @@ def main():
             failed = True
     if os.path.exists("input/baretraj"):
         os.remove("input/baretraj")
+    fault_lib = os.path.join(os.path.dirname(os.path.abspath(seams)), "bindings", "libseams_test_fault.so")
+    if os.path.exists(fault_lib):
+        count_env = os.environ.copy()
+        count_env["LD_PRELOAD"] = fault_lib
+        count_env["SEAMS_TEST_KIND"] = "count"
+        counted = subprocess.run([seams, "read", ice, "--type", "1"], capture_output=True, text=True, env=count_env)
+        serial = 0
+        for line in counted.stderr.splitlines():
+            if line.startswith("fault-serial "):
+                serial = int(line.split()[1])
+        if serial < 50 or counted.returncode != 0:
+            sys.stderr.write("fault count\n" + counted.stderr)
+            return 1
+        for kind, needle in (("int", "unknown error"), ("bad_alloc", "bad_alloc")):
+            env = os.environ.copy()
+            env["LD_PRELOAD"] = fault_lib
+            env["SEAMS_TEST_KIND"] = kind
+            env["SEAMS_TEST_AT"] = str(serial - 20)
+            probed = subprocess.run([seams, "read", ice, "--type", "1"], capture_output=True, text=True, env=env)
+            if probed.returncode != 2 or needle not in probed.stderr:
+                sys.stderr.write("fault " + kind + " " + str(probed.returncode) + "\n" + probed.stderr)
+                return 1
     return 1 if failed else 0
 
 

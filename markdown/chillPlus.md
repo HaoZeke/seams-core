@@ -9,7 +9,7 @@ CHILL+ labels every site cubic on that lattice.
 `nucleation.lammpstrj` is a different figshare deposit.
 
 The 1.x driver is gone.
-Use the `seams` command.
+We use the `seams` command.
 
 ## CLI
 
