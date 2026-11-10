@@ -669,30 +669,6 @@ int uniqueTypeCount(const Cloud &cloud) {
   return static_cast<int>(types.size());
 }
 
-int cmdCn(std::ostream &os, Cloud &cloud, double cutoff, int typeI,
-          int typeJ) {
-  const int typI = typeOf(cloud, typeI);
-  const int typJ = typeJ > 0 ? typeJ : typI;
-  const auto nList = nneigh::neighListPair(cutoff, cloud, typI, typJ);
-  double sum = 0.0;
-  int nI = 0;
-  const int nRows = static_cast<int>(nList.size());
-  for (int i = 0; i < cloud.nop; ++i) {
-    if (cloud.pts[static_cast<std::size_t>(i)].type != typI) {
-      continue;
-    }
-    ++nI;
-    if (i >= nRows || nList[static_cast<std::size_t>(i)].empty()) {
-      continue;
-    }
-    sum += static_cast<double>(nList[static_cast<std::size_t>(i)].size() - 1);
-  }
-  const double degree = nI > 0 ? sum / static_cast<double>(nI) : 0.0;
-  os << "site-site types " << typI << " " << typJ << " cutoff " << cutoff
-     << " degree " << degree << " nI " << nI << "\n";
-  return 0;
-}
-
 int cmdCnIons(std::ostream &os, Cloud &cloud, double cutoff,
               const site::Table &table) {
   const auto ions = site::ionCloud(cloud, table);
@@ -2166,8 +2142,9 @@ int main(int argc, char *argv[]) {
       os << "input frame " << cloud.currentFrame << " contains no atoms\n";
       return 2;
     }
-    if (!familyFlag && family == site::Family::waterIce &&
-        uniqueTypeCount(cloud) > 2) {
+    // --family sets the flag in the same handler that replaces the
+    // default, so an unset flag is waterIce.
+    if (!familyFlag && uniqueTypeCount(cloud) > 2) {
       std::cerr << colorizer.warning(
                        "hint: more than two LAMMPS types; set --family "
                        "(default waterIce)")
