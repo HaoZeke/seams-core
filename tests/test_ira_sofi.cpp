@@ -1,3 +1,17 @@
+//-----------------------------------------------------------------------------------
+// d-SEAMS - Deferred Structural Elucidation Analysis for Molecular Simulations
+//
+// Copyright (c) d-SEAMS developers
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the MIT License as published by
+// the Open Source Initiative.
+//
+// A copy of the MIT License is included in the LICENSE file of this repository.
+// You should have received a copy of the MIT License along with this program.
+// If not, see <https://opensource.org/licenses/MIT>.
+//-----------------------------------------------------------------------------------
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
@@ -152,19 +166,28 @@ TEST_CASE("IRA matches a triangle onto a larger set", "[ira]") {
 }
 
 TEST_CASE("IRA rejects a non-finite point set", "[ira]") {
-  Eigen::MatrixXd bad = squareXY();
-  bad(0, 0) = std::numeric_limits<double>::quiet_NaN();
   ira::Match m;
-  REQUIRE(ira::match(bad, squareXY(), m) != 0);
+  for (const double badValue : {std::numeric_limits<double>::quiet_NaN(),
+                                std::numeric_limits<double>::infinity(),
+                                -std::numeric_limits<double>::infinity()}) {
+    Eigen::MatrixXd bad = squareXY();
+    bad(0, 0) = badValue;
+    REQUIRE(ira::match(bad, squareXY(), m) == 1);
+    REQUIRE(ira::match(squareXY(), bad, m) == 1);
+  }
 }
 
 TEST_CASE("SOFI rejects a non-finite cloud before libira", "[ira]") {
   // A NaN coordinate used to enter libira_compute_all and segfault.
   Eigen::MatrixXd bad = squareXY();
-  bad(1, 2) = std::numeric_limits<double>::quiet_NaN();
   ira::PointGroup pg;
-  REQUIRE(ira::pointGroup(bad, pg) == 1);
-  REQUIRE(pg.nOperations == 0);
+  for (const double badValue : {std::numeric_limits<double>::quiet_NaN(),
+                                std::numeric_limits<double>::infinity(),
+                                -std::numeric_limits<double>::infinity()}) {
+    bad(1, 2) = badValue;
+    REQUIRE(ira::pointGroup(bad, pg) == 1);
+    REQUIRE(pg.nOperations == 0);
+  }
 }
 
 TEST_CASE("orient copies the quaternion of a matched square", "[ira]") {
