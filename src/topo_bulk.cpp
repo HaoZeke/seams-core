@@ -2192,7 +2192,7 @@ bool ring::equatorialConditions(const std::vector<std::vector<int>> &rings,
       int nAtomsHere = 0;
       bool hexagons = true;
       auto take = [&](const std::vector<int> &cycle) {
-        if (cycle.size() != 6) {
+        if (cycle.size() != 6 || nAtomsHere + 6 > 42) {
           hexagons = false;
           return;
         }
@@ -2258,7 +2258,7 @@ bool ring::equatorialConditions(const std::vector<std::vector<int>> &rings,
         std::unique(peripheralUnion->begin(), peripheralUnion->end()),
         peripheralUnion->end());
   }
-  if (haveBest) {
+  if (haveBest && rank != nullptr) {
     std::sort(bestIds, bestIds + 6, [rank](int a, int b) {
       return (*rank)[static_cast<size_t>(a)] < (*rank)[static_cast<size_t>(b)];
     });
