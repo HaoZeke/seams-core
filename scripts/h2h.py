@@ -48,6 +48,10 @@ NIU = pathlib.Path(
 )
 REPS = int(os.environ.get("H2H_REPS", "7"))
 CUT = 3.5
+Q6_THRESHOLD = 0.558
+PTM_RMSD = 0.1
+SIGNIFICANCE = 0.05
+PALMER_MAX_NEIGHBOURS = 128
 
 # scripts/sota_compare.py lives next to this file, or wherever H2H_SCRIPTS points.
 sys.path.insert(0, os.environ.get("H2H_SCRIPTS", str(pathlib.Path(__file__).resolve().parent)))

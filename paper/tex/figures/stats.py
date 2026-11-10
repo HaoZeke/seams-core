@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Rounded LaTeX macros and table rows from the measured records.
 
 Reads paper/tex/figures/data/ and writes data/macros.tex, the table bodies
@@ -109,13 +110,13 @@ SETTINGS = (
                 ("paper/tex/figures/worked_example.py",
                  r"^PRISM_HEIGHT_A = ([0-9.]+)$"))),
     ("bond", (("paper/tex/figures/worked_example.py", r"^BOND_A = ([0-9.]+)$"),)),
-    ("q6", ((STATS, r"^Q6_THRESHOLD = ([0-9.]+)$"),), 3),
-    ("ptm", ((STATS, r"^PTM_RMSD = ([0-9.]+)$"),)),
+    ("q6", ((CAMPAIGN, r"^Q6_THRESHOLD = ([0-9.]+)$"),), 3),
+    ("ptm", ((CAMPAIGN, r"^PTM_RMSD = ([0-9.]+)$"),)),
     ("coverage", ((STATS, r"^COVERAGE = ([0-9.]+)$"),)),
     ("draws", ((STATS, r"^DRAWS = (\d+)$"),)),
     ("seed", ((STATS, r"^SEED = (\d+)$"),)),
-    ("significance", ((STATS, r"^SIGNIFICANCE = ([0-9.]+)$"),)),
-    ("palmer", ((STATS, r"^PALMER_MAX_NEIGHBOURS = (\d+)$"),)),
+    ("significance", ((CAMPAIGN, r"^SIGNIFICANCE = ([0-9.]+)$"),)),
+    ("palmer", ((CAMPAIGN, r"^PALMER_MAX_NEIGHBOURS = (\d+)$"),)),
     ("minring", ((STATS, r"^MIN_RING = (\d+)$"),
                  ("paper/tex/figures/worked_example.py", r"^MIN_RING = (\d+)$"))),
     ("maxring", ((STATS, r"^MAX_RING = (\d+)$"),

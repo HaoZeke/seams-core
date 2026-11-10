@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Split the d-SEAMS and OVITO CHILL+ labels of one frame by coordination.
 
 Run with a Python that has ovito 3.17.2 and numpy:
@@ -20,7 +21,7 @@ from ovito.modifiers import ChillPlusModifier
 
 HERE = pathlib.Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location(
-    "h2h", HERE.parents[2] / "scripts" / "h2h.py"
+    "h2h", HERE.parents[2] / "scripts" / "h2h_campaign.py"
 )
 h2h = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(h2h)
