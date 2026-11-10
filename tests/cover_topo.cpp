@@ -27,6 +27,8 @@
 #include <numeric>
 #include <sstream>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #ifdef SEAMS_HAS_OPENMP
@@ -428,15 +430,18 @@ TEST_CASE("bulk search rejects a thin or missing cell and a duplicated point",
 #ifdef SEAMS_HAS_OPENMP
   omp_set_num_threads(2);
   std::vector<std::vector<int>> insideKept;
+  ring::RingSearchIndex nested;
 #pragma omp parallel
   {
 #pragma omp single
-    insideKept = ring::contractibleRings(many, wide);
+    {
+      insideKept = ring::contractibleRings(many, wide);
+      nested = ring::buildRingSearchIndex(rings, 3);
+    }
   }
   REQUIRE(insideKept.size() == 300);
-  auto nested = ring::buildRingSearchIndex(rings, 3);
-  omp_set_num_threads(1);
   REQUIRE(nested.ringsContainingAtom[0].size() == 1);
+  omp_set_num_threads(1);
 #endif
 }
 
@@ -543,6 +548,15 @@ TEST_CASE("a hexagonal cage still counts when a neighbour index is out of range"
   REQUIRE_FALSE(found.empty());
   REQUIRE_FALSE(cages.empty());
   REQUIRE(cages[0].type == cage::cageType::HexC);
+  auto shared = rings;
+  shared[0].push_back(-1);
+  if (shared.size() > 1) {
+    shared[1].push_back(-1);
+  }
+  std::vector<ring::strucType> sharedTypes(shared.size(), ring::strucType::unclassified);
+  std::vector<cage::Cage> sharedCages;
+  auto sharedFound = ring::findHC(shared, sharedTypes, rows, sharedCages);
+  REQUIRE(sharedFound.size() <= found.size());
 
   auto small = ring::buildRingSearchIndex(rings, static_cast<int>(rows.size()) - 1);
   rows[2].push_back(static_cast<int>(rows.size()) - 1);
@@ -558,6 +572,14 @@ TEST_CASE("a hexagonal cage still counts when a neighbour index is out of range"
   std::vector<ring::strucType> parallelTypes(rings.size(), ring::strucType::unclassified);
   std::vector<cage::Cage> parallelCages;
   auto parallelFound = ring::findHC(rings, parallelTypes, rows, parallelCages);
+  std::vector<ring::strucType> nestedTypes(rings.size(), ring::strucType::unclassified);
+  std::vector<cage::Cage> nestedCages;
+  std::vector<int> nestedFound;
+#pragma omp parallel
+  {
+#pragma omp single
+    nestedFound = ring::findHC(rings, nestedTypes, rows, nestedCages);
+  }
   REQUIRE(parallelFound.size() == found.size());
   REQUIRE(parallelCages.size() == cages.size());
   omp_set_num_threads(1);
@@ -605,6 +627,10 @@ TEST_CASE("filler rings keep one double-diamond cage and drop an empty chain",
   }
   REQUIRE(equator >= 0);
   REQUIRE(chosen.size() == 6);
+  ring::EquatorChoice plainRaw;
+  REQUIRE(ring::equatorialConditions(rings, equator, index, nullptr, nullptr, &rank,
+                                     &plainRaw));
+  REQUIRE(plainRaw.n == 6);
 
   auto grow = [&](int copies, bool oddsOnly) {
     auto grown = rings;
@@ -649,6 +675,65 @@ TEST_CASE("filler rings keep one double-diamond cage and drop an empty chain",
   REQUIRE(ring::equatorialConditions(both, equator, bothIndex, nullptr, nullptr,
                                      nullptr, nullptr));
 
+  auto narrow = grow(1, false);
+  auto narrowIndex =
+      ring::buildRingSearchIndex(narrow, 14 + 6 * 1 * 3);
+  std::vector<int> narrowRank(narrow.size());
+  std::iota(narrowRank.begin(), narrowRank.end(), 0);
+  std::vector<int> narrowChosen;
+  ring::EquatorChoice narrowRaw;
+  REQUIRE(ring::equatorialConditions(narrow, equator, narrowIndex, nullptr,
+                                     &narrowChosen, &narrowRank, &narrowRaw));
+  REQUIRE(narrowChosen.size() == 6);
+  REQUIRE(narrowRaw.n == 6);
+  ring::EquatorChoice narrowRawOnly;
+  REQUIRE(ring::equatorialConditions(narrow, equator, narrowIndex, nullptr, nullptr,
+                                     &narrowRank, &narrowRawOnly));
+  REQUIRE(narrowRawOnly.n == 6);
+  REQUIRE(ring::equatorialConditions(narrow, equator, narrowIndex, nullptr, nullptr,
+                                     nullptr, nullptr));
+
+  auto extra = both;
+  auto addExtra = [&](int a, int b, int c, int x, int y, int z) {
+    extra.push_back({a, b, c, x, y, z});
+  };
+  const auto &eq = rings[static_cast<std::size_t>(equator)];
+  auto at = [&](int k) { return eq[static_cast<std::size_t>(k % 6)]; };
+  addExtra(at(0), at(1), at(2), 200, 201, 202);
+  addExtra(at(2), at(3), at(4), 200, 201, 203);
+  addExtra(at(4), at(5), at(0), 200, 202, 204);
+  addExtra(at(0), at(1), at(2), 210, 211, 212);
+  addExtra(at(2), at(3), at(4), 210, 211, 213);
+  addExtra(at(4), at(5), at(0), 210, 212, 214);
+  std::unordered_set<int> eqAtoms(eq.begin(), eq.end());
+  std::unordered_map<int, int> alias;
+  int aliasNext = 400;
+  for (int i = 0; i < static_cast<int>(rings.size()); ++i) {
+    if (i == equator) {
+      continue;
+    }
+    std::vector<int> copy;
+    for (int atom : rings[static_cast<std::size_t>(i)]) {
+      if (eqAtoms.count(atom) != 0) {
+        copy.push_back(atom);
+      } else {
+        auto [it, inserted] = alias.emplace(atom, aliasNext);
+        if (inserted) {
+          ++aliasNext;
+        }
+        copy.push_back(it->second);
+      }
+    }
+    extra.push_back(std::move(copy));
+  }
+  auto extraIndex = ring::buildRingSearchIndex(extra, aliasNext);
+  std::vector<int> extraRank(extra.size());
+  std::iota(extraRank.begin(), extraRank.end(), 0);
+  std::vector<int> extraChosen;
+  REQUIRE(ring::equatorialConditions(extra, equator, extraIndex, nullptr,
+                                     &extraChosen, &extraRank, nullptr));
+  REQUIRE(extraChosen.size() == 6);
+
   auto odds = grow(6, true);
   auto oddsIndex = ring::buildRingSearchIndex(odds, 14 + 3 * 6 * 3);
   std::vector<int> oddsRank(odds.size());
@@ -675,27 +760,20 @@ TEST_CASE("filler rings keep one double-diamond cage and drop an empty chain",
       add(k, (k + 1) % 6, (k + 2) % 6, {});
     }
   }
-  add(0, 1, 2, {10, 11, 4000});
-  add(2, 3, 4, {10, 11, 4001});
-  add(4, 5, 0, {10, 12, 4002});
-  auto countTrip = [&](int a, int b, int c) {
-    int n = 0;
-    for (const auto &ring : loose) {
-      bool ha = false;
-      bool hb = false;
-      bool hc = false;
-      for (int atom : ring) {
-        ha = ha || atom == a;
-        hb = hb || atom == b;
-        hc = hc || atom == c;
-      }
-      n += static_cast<int>(ha && hb && hc);
-    }
-    return n;
-  };
-  std::cerr << "trips " << countTrip(0, 1, 2) << " " << countTrip(2, 3, 4) << " "
-            << countTrip(4, 5, 0) << " loose " << loose.size() << " fresh "
-            << fresh << "\n";
+  // Two even chains of middles 1, so the later chain's key is worse.
+  add(0, 1, 2, {150, 151, 152});
+  add(2, 3, 4, {150, 151, 153});
+  add(4, 5, 0, {150, 152, 154});
+  add(0, 1, 2, {190, 191, 192});
+  add(2, 3, 4, {190, 191, 193});
+  add(4, 5, 0, {190, 192, 194});
+  // Odd middles 4 is dead against even bucket 1. Odd middles 2 stays live.
+  add(1, 2, 3, {180, 181, 182});
+  add(5, 0, 1, {180, 181, 183});
+  add(3, 4, 5, {183, 181, 185});
+  add(1, 2, 3, {170, 173, 172});
+  add(3, 4, 5, {170, 173, 174});
+  add(5, 0, 1, {174, 173, 177});
   auto looseIndex = ring::buildRingSearchIndex(loose, 200);
   std::vector<int> looseRank(loose.size());
   std::iota(looseRank.begin(), looseRank.end(), 0);
@@ -703,4 +781,79 @@ TEST_CASE("filler rings keep one double-diamond cage and drop an empty chain",
   REQUIRE_FALSE(ring::equatorialConditions(loose, 0, looseIndex, nullptr, nullptr,
                                            &looseRank, &looseRaw));
   REQUIRE(looseRaw.n == 0);
+  REQUIRE_FALSE(ring::equatorialConditions(loose, 0, looseIndex, nullptr, nullptr,
+                                           nullptr, nullptr));
+
+  std::vector<std::vector<int>> dropped = {{0, 1, 2, 3, 4, 5}};
+  int freshDrop = 6;
+  auto addDrop = [&](int a, int b, int c, int x, int y, int z) {
+    dropped.push_back({a, b, c, x, y, z});
+  };
+  for (int k = 0; k < 6; ++k) {
+    for (int copy = 0; copy < 7; ++copy) {
+      dropped.push_back({k, (k + 1) % 6, (k + 2) % 6, freshDrop, freshDrop + 1,
+                         freshDrop + 2});
+      freshDrop += 3;
+    }
+  }
+  addDrop(0, 1, 2, 150, 151, 4000);
+  addDrop(2, 3, 4, 150, 151, 4000);
+  addDrop(4, 5, 0, 150, 151, 4000);
+  auto droppedIndex = ring::buildRingSearchIndex(dropped, 220);
+  std::vector<int> droppedRank(dropped.size());
+  std::iota(droppedRank.begin(), droppedRank.end(), 0);
+  REQUIRE_FALSE(ring::equatorialConditions(dropped, 0, droppedIndex, nullptr, nullptr,
+                                           &droppedRank, nullptr));
+
+  std::vector<std::vector<int>> dead = {{0, 1, 2, 3, 4, 5}};
+  int freshDead = 6;
+  auto addDead = [&](int a, int b, int c, std::initializer_list<int> extra) {
+    std::vector<int> ring = {a, b, c};
+    ring.insert(ring.end(), extra.begin(), extra.end());
+    while (ring.size() < 6) {
+      ring.push_back(freshDead++);
+    }
+    dead.push_back(std::move(ring));
+  };
+  for (int k = 0; k < 6; ++k) {
+    for (int copy = 0; copy < 7; ++copy) {
+      addDead(k, (k + 1) % 6, (k + 2) % 6, {});
+    }
+  }
+  addDead(0, 1, 2, {150, 151, 152});
+  addDead(2, 3, 4, {150, 151, 153});
+  addDead(4, 5, 0, {150, 152, 154});
+  addDead(1, 2, 3, {180, 181, 182});
+  addDead(5, 0, 1, {180, 181, 183});
+  addDead(3, 4, 5, {183, 181, 185});
+  auto deadIndex = ring::buildRingSearchIndex(dead, 220);
+  std::vector<int> deadRank(dead.size());
+  std::iota(deadRank.begin(), deadRank.end(), 0);
+  REQUIRE_FALSE(ring::equatorialConditions(dead, 0, deadIndex, nullptr, nullptr,
+                                           &deadRank, nullptr));
+
+  std::vector<std::vector<int>> evenDead = {{0, 1, 2, 3, 4, 5}};
+  int freshEven = 6;
+  auto addEven = [&](int a, int b, int c, std::initializer_list<int> extra) {
+    std::vector<int> ring = {a, b, c};
+    ring.insert(ring.end(), extra.begin(), extra.end());
+    while (ring.size() < 6) {
+      ring.push_back(freshEven++);
+    }
+    evenDead.push_back(std::move(ring));
+  };
+  for (int k = 0; k < 6; ++k) {
+    for (int copy = 0; copy < 7; ++copy) {
+      addEven(k, (k + 1) % 6, (k + 2) % 6, {});
+    }
+  }
+  addEven(0, 1, 2, {150, 151, 152});
+  addEven(2, 3, 4, {150, 151, 153});
+  addEven(4, 5, 0, {150, 152, 154});
+  addEven(1, 2, 3, {170, 173, 172});
+  addEven(3, 4, 5, {170, 173, 174});
+  addEven(5, 0, 1, {174, 173, 177});
+  auto evenDeadIndex = ring::buildRingSearchIndex(evenDead, 220);
+  REQUIRE_FALSE(ring::equatorialConditions(evenDead, 0, evenDeadIndex, nullptr,
+                                           nullptr, nullptr, nullptr));
 }
