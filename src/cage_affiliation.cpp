@@ -334,8 +334,7 @@ struct FrameContext {
         const RingRow through = ringsOf(nb);
         for (int c = 0; c < through.n; c++) {
           const int candidate = through.p[c];
-          if (scratch.seen[static_cast<size_t>(candidate)] == seenTick ||
-              candidate == i) {
+          if (scratch.seen[static_cast<size_t>(candidate)] == seenTick) {
             continue;
           }
           scratch.seen[static_cast<size_t>(candidate)] = seenTick;
