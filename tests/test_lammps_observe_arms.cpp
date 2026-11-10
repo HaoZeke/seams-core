@@ -245,6 +245,90 @@ TEST_CASE("a dilute row of 256 atoms still returns a rings line", "[insitu]") {
   seams_insitu_destroy(eng);
 }
 
+TEST_CASE("a repeated diamond cell records a double-diamond flag", "[insitu]") {
+  const double a = 6.36;
+  const double frac[8][3] = {
+      {0, 0, 0},           {0, 0.5, 0.5},       {0.5, 0, 0.5},
+      {0.5, 0.5, 0},       {0.25, 0.25, 0.25},  {0.25, 0.75, 0.75},
+      {0.75, 0.25, 0.75},  {0.75, 0.75, 0.25}};
+  const int n = 2;
+  std::vector<double> xyz;
+  for (int ix = 0; ix < n; ++ix) {
+    for (int iy = 0; iy < n; ++iy) {
+      for (int iz = 0; iz < n; ++iz) {
+        for (const auto &f : frac) {
+          xyz.push_back((f[0] + ix) * a);
+          xyz.push_back((f[1] + iy) * a);
+          xyz.push_back((f[2] + iz) * a);
+        }
+      }
+    }
+  }
+  auto *eng = seams_insitu_create(nullptr);
+  auto frame = ortho(1, static_cast<int>(xyz.size() / 3), xyz.data());
+  frame.lx = n * a;
+  frame.ly = n * a;
+  frame.lz = n * a;
+  REQUIRE(seams_insitu_step(eng, &frame) == SEAMS_INSITU_OK);
+  const auto *result = seams_insitu_last(eng);
+  REQUIRE(result != nullptr);
+  REQUIRE(result->n_ddc + result->n_both > 0);
+  seams_insitu_destroy(eng);
+}
+
+TEST_CASE("one atom rebuilt after each edge length changes", "[insitu]") {
+  const double xyz[3] = {1, 1, 1};
+  auto *eng = seams_insitu_create(nullptr);
+  auto frame = ortho(1, 1, xyz);
+  frame.lx = 10;
+  frame.ly = 10;
+  frame.lz = 10;
+  REQUIRE(seams_insitu_step(eng, &frame) == SEAMS_INSITU_OK);
+  frame.lx = 12;
+  REQUIRE(seams_insitu_step(eng, &frame) == SEAMS_INSITU_OK);
+  frame.ly = 14;
+  REQUIRE(seams_insitu_step(eng, &frame) == SEAMS_INSITU_OK);
+  frame.lz = 16;
+  REQUIRE(seams_insitu_step(eng, &frame) == SEAMS_INSITU_OK);
+  REQUIRE(seams_insitu_step(eng, &frame) == SEAMS_INSITU_OK);
+  seams_insitu_destroy(eng);
+}
+
+TEST_CASE("a small ice cell records cage flags", "[insitu]") {
+  const double a = 2.76 * std::sqrt(8.0 / 3.0);
+  const double c = a * std::sqrt(8.0 / 3.0);
+  const double b = a * std::sqrt(3.0);
+  const double basis[4][3] = {{1.0 / 3, 2.0 / 3, 0.0},
+                              {2.0 / 3, 1.0 / 3, 0.5},
+                              {1.0 / 3, 2.0 / 3, 3.0 / 8},
+                              {2.0 / 3, 1.0 / 3, 7.0 / 8}};
+  const int n = 2;
+  std::vector<double> xyz;
+  for (int ix = 0; ix < n; ++ix) {
+    for (int iy = 0; iy < n; ++iy) {
+      for (int iz = 0; iz < n; ++iz) {
+        for (const double shift : {0.0, 0.5}) {
+          for (const auto &f : basis) {
+            xyz.push_back(std::fmod(shift * a + f[0] * a - f[1] * a / 2 + ix * a, n * a));
+            xyz.push_back(std::fmod(shift * b + f[1] * b / 2 + iy * b, n * b));
+            xyz.push_back((f[2] + iz) * c);
+          }
+        }
+      }
+    }
+  }
+  auto *eng = seams_insitu_create(nullptr);
+  auto frame = ortho(1, static_cast<int>(xyz.size() / 3), xyz.data());
+  frame.lx = n * a;
+  frame.ly = n * b;
+  frame.lz = n * c;
+  REQUIRE(seams_insitu_step(eng, &frame) == SEAMS_INSITU_OK);
+  const auto *result = seams_insitu_last(eng);
+  REQUIRE(result != nullptr);
+  REQUIRE(result->n >= 8);
+  seams_insitu_destroy(eng);
+}
+
 TEST_CASE("twelve cage oxygens record a hexagonal count", "[insitu]") {
   const double coords[12][3] = {
       {8.995, 10.3859997, 15.0939999},     {6.7459998, 14.2810001, 15.0939999},
