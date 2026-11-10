@@ -1,0 +1,49 @@
+Replay of the history above 7f310225.
+
+Base
+7f310225b7ea6c9e9e79d48d2b3547ef0f66610c
+Author date 2026-11-06 03:02:13 -0600.
+The branch insitu-v34 is built on that commit.
+Nothing below it was rewritten.
+
+Identity and clock
+Author and committer are Rohit Goswami <rgoswami@ieee.org>.
+The zone is America/Chicago, offset -0600.
+The commits are unsigned.
+The messages on this branch carry no Co-authored-by trailer.
+
+The PLUMED file
+813597b2 has the subject "fix(insitu): reject a bad xyz and drop the live route".
+Its author date is 2026-11-09 13:39:15 -0600.
+That commit deletes src/adapters/plumed/Dseams.cpp.
+It is on insitu-v31, insitu-v32 and insitu-v33.
+It is not an ancestor of insitu-v34.
+The reachable commit with the same subject is d6539ae1.
+d6539ae1 keeps the file and adds the developers copyright line.
+Its message says the PLUMED source stays in the tree.
+The file is present at the tip.
+
+Dates
+One hundred sixty nine commits share the committer timestamp
+2026-11-09 19:06:05 -0600.
+Their author timestamps stay on the earlier clock, from
+2026-11-09 13:38:22 -0600 through 2026-11-09 13:39:59 -0600,
+about one second apart.
+A rebase that keeps author dates and finishes inside one second
+produces that pattern. The author clock was not moved to 19:06.
+Commits made after that rebase use a fresh committer timestamp
+from the clock at the time of the commit.
+
+Two pairs share a committer second because the two commits were
+created back to back:
+2026-11-09 22:25:24 -0600, 75c535e9 and 796ea592.
+2026-11-10 00:25:57 -0600, ff363d97 and cfb987dd.
+No sleep was inserted between them.
+
+The odd-prism pair
+cfb987dd adds the two-step pentagon test and leaves the early return.
+That test exits 42. The log is paper/tex/repro/prism-fail-before.txt.
+922b3da1 is the next commit. It limits the early return to even rings
+and triangles. The same test exits 0.
+The log is paper/tex/repro/prism-fixed.txt.
+scripts/prism_start_logs.sh produced both logs.
