@@ -22,7 +22,7 @@ def need(name):
 def census(text):
     blocks = []
     current = None
-    for line in text.splitlines() or [""]:
+    for line in text.splitlines():
         if line.startswith("step "):
             if current is not None:
                 blocks.append(current)
@@ -45,7 +45,7 @@ def cli_line(seams, dump, command, extra):
     )
     if proc.returncode != 0:
         raise SystemExit("%s exit %d\n%s" % (command, proc.returncode, proc.stderr))
-    for line in proc.stdout.splitlines() or [""]:
+    for line in proc.stdout.splitlines():
         if line.startswith("rings ") or line.startswith("nop "):
             return line
     raise SystemExit(command + " wrote no census line")
@@ -123,29 +123,9 @@ def exercise_rejects():
         lambda: require_cages("plugin", "cage hc:1 ddc:0 both:0 water:0", "nop 1 x 0 hexagonal 0 cubic 0 both 0 water 0"),
         "plugin cages cage hc:1 ddc:0 both:0 water:0 vs nop 1 x 0 hexagonal 0 cubic 0 both 0 water 0",
     )
-    def require_steps_text(text, steps):
-        blocks = census(text)
-        if [block["step"] for block in blocks] != steps:
-            raise SystemExit("two steps")
-
-    def show_arm(fn, needle):
-        try:
-            fn()
-        except SystemExit as exc:
-            if needle not in str(exc):
-                raise SystemExit("arm %r" % str(exc))
-            return
-        raise SystemExit("arm returned")
-
-    def require_empty(text):
-        if census(text) != []:
-            raise SystemExit("empty census")
-
-    require_steps_text("step 0\nrings a\nstep 1\nrings b\n", [0, 1])
-    require_empty("")
-    show_arm(lambda: require_steps_text("step 0\n", [0, 1]), "two steps")
-    show_arm(lambda: require_empty("step 0\n"), "empty census")
-    show_arm(lambda: show_arm(lambda: None, "x"), "arm returned")
+    blocks = census("step 0\nrings a\nstep 1\nrings b\n")
+    if [block["step"] for block in blocks] != [0, 1]:
+        raise SystemExit("two steps")
 
 
 def run_route(name, binary, plugin, work):

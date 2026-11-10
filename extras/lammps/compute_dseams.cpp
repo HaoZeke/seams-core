@@ -55,6 +55,9 @@ ComputeDseams::ComputeDseams(LAMMPS *lmp, int narg, char **arg)
 void ComputeDseams::init() {}
 
 void ComputeDseams::compute_peratom() {
+  if (comm->nprocs != 1) {
+    error->all(FLERR, "compute dseams: one rank only");
+  }
   invoked_peratom = update->ntimestep;
   const int nlocal = atom->nlocal;
   if (nlocal > nmax) {

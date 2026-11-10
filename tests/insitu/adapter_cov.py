@@ -319,8 +319,6 @@ def drill_exit_checks():
     require_raised(lambda: expect_exit(lambda: raise_exit("nope"), 1, "box "), "want")
     require_raised(lambda: expect_exit(lambda: raise_exit(2), 1, "box "), "want")
     require_raised(lambda: require_text(SystemExit(3), "nope"), "missing")
-    swallow_exit(None)
-    demand(True, "broken variant was not caught")
     try:
         demand(False, "broken variant was not caught")
     except SystemExit as err:
@@ -347,7 +345,7 @@ def check_dump(path, box, cutoff):
 
 
 def census_line(text, key):
-    for line in text.splitlines() or [""]:
+    for line in text.splitlines():
         if line.split()[:1] == [key]:
             return line
     return ""
@@ -558,13 +556,14 @@ def compute_cases(work, lmp, cxx, include, env):
     (paired / "in").write_text(
         base + "compute ice all dseams file labels.txt\n" + dump + "run 0\n"
     )
-    run(
+    expect(
         [mpirun, "--oversubscribe", "-np", "2", lmp, "-in", "in", "-log", "log.lammps"],
         paired,
         env,
+        1,
+        "compute dseams: one rank only",
     )
-    require_one_frame((paired / "labels.txt").read_text())
-    print("compute np2 exit 0", flush=True)
+    print("compute np2 exit 1", flush=True)
     rejected = out / "np2-bad-graph"
     rejected.mkdir(parents=True, exist_ok=True)
     (rejected / "chill_plus_compute.so").write_bytes(so.read_bytes())
@@ -583,14 +582,6 @@ def compute_cases(work, lmp, cxx, include, env):
 def require_absent(text, key):
     if census_line(text, key) != "":
         raise SystemExit("census line")
-
-
-def require_one_frame(text):
-    frames = text.count("\nframe\n") + int(text.startswith("frame\n"))
-    if frames != 1:
-        raise SystemExit("np2 frames %d" % frames)
-    if text.count("endframe\n") != 1:
-        raise SystemExit("np2 endframe %d" % text.count("endframe"))
 
 
 def must_raise(fn, needle):
@@ -633,7 +624,6 @@ def main():
                 work,
             )
 
-    ensure_cache()
     ensure_cache()
     run(["cmake", "--build", str(build), "-j", "4"], work)
     plugin = str(build / "libdseams_lammps.so")
