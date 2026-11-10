@@ -68,6 +68,7 @@ struct Result {
   int hc = 0;
   int ddc = 0;
   int six = 0;
+  bool sized = true;
   std::vector<std::pair<int, std::vector<std::vector<int>>>> keys;
 };
 
@@ -192,6 +193,7 @@ Result evaluate(Cloud &cloud, double cutoff, int atomType) {
   const auto listDDC = ring::findDDC(six, types, listHC, cages, index);
   if (listHC.size() != six.size() || listDDC.size() != six.size()) {
     out.cages = -1;
+    out.sized = false;
     return out;
   }
   out.cages = static_cast<int>(cages.size());
@@ -417,6 +419,10 @@ int main(int argc, char **argv) {
       checked++;
       const Result ref = evaluate(cloud, cutoff, atomType);
       bool ok = true;
+      if (!ref.sized) {
+        ok = false;
+        std::printf("FAIL %s frame %d flag vector length\n", path.filename().c_str(), frame);
+      }
       for (int ix = 0; ix < 2 && ok; ix++) {
         for (int iy = 0; iy < 2 && ok; iy++) {
           for (int iz = 0; iz < 2 && ok; iz++) {
