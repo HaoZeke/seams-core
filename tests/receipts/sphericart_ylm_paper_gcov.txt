@@ -1,0 +1,5 @@
+src/sphericart_ylm.cpp
+gcovr --exclude-throw-branches
+lines 22/22
+branches taken 21/21
+Lines 36 through 57 are in this object.

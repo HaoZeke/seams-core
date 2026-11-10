@@ -1,0 +1,8 @@
+src/cage_canon.cpp
+gcovr --exclude-throw-branches
+lines 119/120
+branches taken 130/130
+
+Line 125 is the closing brace of ringEdges.
+gcov marks that line =====.
+Caller: canonicalCertificate in this file.

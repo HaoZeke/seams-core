@@ -51,4 +51,57 @@ TEST_CASE("hexagonal prism certificate is stable under relabel", "[nauty]") {
   REQUIRE_FALSE(cage::isHexagonalPrism({{0, 1, 2, 3, 4, 5}}));
 }
 
+TEST_CASE("an empty ring set has an empty certificate", "[nauty]") {
+  REQUIRE(cage::canonicalCertificate({}).empty());
+  REQUIRE_FALSE(cage::isHexagonalPrism({}));
+  REQUIRE_FALSE(cage::sameCertificate({}, {}));
+  REQUIRE_FALSE(cage::sameCertificate({}, hexPrismRings()));
+}
+
+TEST_CASE("degenerate rings keep the underlying edge", "[nauty]") {
+  const auto lone = cage::canonicalCertificate({{7}});
+  REQUIRE_FALSE(lone.empty());
+  REQUIRE_FALSE(cage::isHexagonalPrism({{7}}));
+  const auto edge = cage::canonicalCertificate({{0, 1}});
+  REQUIRE(cage::canonicalCertificate({{0, 0, 1}, {1, 0}}) == edge);
+  REQUIRE(cage::canonicalCertificate({{0, 1, 2}, {0, 1, 2}}) ==
+          cage::canonicalCertificate({{0, 1, 2}}));
+  REQUIRE_FALSE(cage::sameCertificate({{0, 1}}, {{0, 1, 2}}));
+}
+
+TEST_CASE("rooted and coloured certificates follow the partition", "[nauty]") {
+  const std::vector<std::pair<int, int>> path = {{0, 1}, {1, 2}};
+  const auto end = cage::canonicalCertificateRooted(3, path, 0);
+  const auto mid = cage::canonicalCertificateRooted(3, path, 1);
+  const auto plain = cage::canonicalCertificateRooted(3, path, -1);
+  REQUIRE_FALSE(end.empty());
+  REQUIRE(end != mid);
+  REQUIRE(cage::canonicalCertificateRooted(3, path, 3) == plain);
+  REQUIRE(cage::canonicalCertificateRooted(0, path, 0).empty());
+  REQUIRE(cage::canonicalCertificateRooted(-1, path, 0).empty());
+  REQUIRE(cage::canonicalCertificateRooted(65, path, 0).empty());
+
+  const std::vector<std::pair<int, int>> messy = {
+      {-1, 0}, {0, -1}, {3, 0}, {0, 3}, {1, 1}, {0, 1}, {1, 0}, {0, 1}};
+  REQUIRE(cage::canonicalCertificateRooted(3, messy, -1) ==
+          cage::canonicalCertificateRooted(3, {{0, 1}}, -1));
+
+  const auto ends = cage::canonicalCertificateColoured(3, path, {1, 0, 1}, -1);
+  const auto midColour =
+      cage::canonicalCertificateColoured(3, path, {0, 1, 0}, -1);
+  REQUIRE_FALSE(ends.empty());
+  REQUIRE(ends != midColour);
+  const auto rootedColour =
+      cage::canonicalCertificateColoured(3, path, {0, 0, 1}, 0);
+  REQUIRE_FALSE(rootedColour.empty());
+  REQUIRE(rootedColour != ends);
+  REQUIRE(cage::canonicalCertificateColoured(3, messy, {0, 0, 1}, 0) ==
+          cage::canonicalCertificateColoured(3, {{0, 1}}, {0, 0, 1}, 0));
+  // A root outside the vertex range is not its own cell.
+  REQUIRE(cage::canonicalCertificateColoured(3, path, {0, 0, 1}, 3) ==
+          cage::canonicalCertificateColoured(3, path, {0, 0, 1}, -1));
+  REQUIRE(cage::canonicalCertificateColoured(65, path, {0, 1, 2}, 0).empty());
+  REQUIRE(cage::canonicalCertificateColoured(0, {}, {}, -1).empty());
+}
+
 #endif

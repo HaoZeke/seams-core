@@ -1,0 +1,31 @@
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/sphericart_ylm.cpp.o
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+ninja: Entering directory `build/paper'
+[1/4] Compiling C++ object src/libyodaLib.so.p/sphericart_ylm.cpp.o
+[2/4] Linking target src/libyodaLib.so
+[3/4] Generating symbol file src/libyodaLib.so.p/libyodaLib.so.symbols
+NINJA:0
+Randomness seeded to: 4292776860
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+test_sphericart is a Catch2 v3.14.0 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+sphericart accepts the implemented orders and rejects the rest
+-------------------------------------------------------------------------------
+../../tests/test_sphericart.cpp:58
+...............................................................................
+
+../../tests/test_sphericart.cpp:63: FAILED:
+  REQUIRE( seams::sphericart_ylm::ylmCartesian(5, xyz, 1, &scratch) == 1 )
+with expansion:
+  0 == 1
+
+===============================================================================
+test cases: 4 | 3 passed | 1 failed
+assertions: 7 | 6 passed | 1 failed
+
+TEST:42
