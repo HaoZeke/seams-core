@@ -857,3 +857,64 @@ TEST_CASE("filler rings keep one double-diamond cage and drop an empty chain",
   REQUIRE_FALSE(ring::equatorialConditions(evenDead, 0, evenDeadIndex, nullptr,
                                            nullptr, nullptr, nullptr));
 }
+
+TEST_CASE("a duplicated peripheral uses the triple loop and a disjoint set does not",
+          "[cover_topo][bulk]") {
+  const double ddc[14][3] = {
+      {25.4799996, 25.4799996, 19.1100006}, {25.4799996, 25.4799996, 25.4799996},
+      {25.4799996, 22.2950001, 22.2950001}, {25.4799996, 28.6650009, 22.2950001},
+      {22.2950001, 22.2950001, 25.4799996}, {22.2950001, 25.4799996, 22.2950001},
+      {28.6650009, 25.4799996, 22.2950001}, {23.8880006, 20.7029991, 23.8880006},
+      {23.8880006, 27.073, 23.8880006},     {27.073, 27.073, 20.7029991},
+      {20.7029991, 23.8880006, 23.8880006}, {27.073, 23.8880006, 23.8880006},
+      {23.8880006, 23.8880006, 20.7029991}, {23.8880006, 23.8880006, 27.073}};
+  auto cloud = makeCloud(ddc, {54, 54, 54});
+  auto rows = nneigh::neighbourListByIndex(cloud, nneigh::neighListO(3.5, cloud, 1));
+  auto rings = ring::getSingleRingSize(primitive::ringNetwork(rows, 6), 6);
+  auto index = ring::buildRingSearchIndex(rings, 14);
+  int equator = -1;
+  std::vector<int> chosen;
+  std::vector<int> rank(rings.size());
+  std::iota(rank.begin(), rank.end(), 0);
+  for (int i = 0; i < static_cast<int>(rings.size()); ++i) {
+    chosen.clear();
+    if (ring::equatorialConditions(rings, i, index, nullptr, &chosen, &rank,
+                                   nullptr)) {
+      equator = i;
+      break;
+    }
+  }
+  REQUIRE(equator >= 0);
+  auto twin = rings;
+  twin.push_back(rings[static_cast<std::size_t>(chosen[0])]);
+  auto twinIndex = ring::buildRingSearchIndex(twin, 14);
+  REQUIRE(ring::equatorialConditions(twin, equator, twinIndex, nullptr, nullptr,
+                                     nullptr, nullptr));
+  std::vector<int> peripheral;
+  REQUIRE(ring::equatorialConditions(twin, equator, twinIndex, &peripheral,
+                                     nullptr, nullptr, nullptr));
+  REQUIRE(peripheral.size() >= 6);
+
+  std::vector<std::vector<int>> apart = {{0, 1, 2, 3, 4, 5}};
+  int atom = 6;
+  for (int k = 0; k < 6; ++k) {
+    apart.push_back({k, (k + 1) % 6, (k + 2) % 6, atom, atom + 1, atom + 2});
+    atom += 3;
+  }
+  auto apartIndex = ring::buildRingSearchIndex(apart, atom);
+  REQUIRE_FALSE(ring::equatorialConditions(apart, 0, apartIndex, nullptr, nullptr,
+                                           nullptr, nullptr));
+
+  std::vector<std::vector<int>> past = {{80, 1, 2, 3, 4, 5}};
+  auto pastIndex = ring::buildRingSearchIndex(past, 6);
+  REQUIRE_FALSE(ring::equatorialConditions(past, 0, pastIndex, nullptr, nullptr,
+                                           nullptr, nullptr));
+
+  auto hcRows = rows;
+  auto hcRings = rings;
+  hcRings[static_cast<std::size_t>(equator)].push_back(400);
+  std::vector<ring::strucType> hcTypes(hcRings.size(), ring::strucType::unclassified);
+  std::vector<cage::Cage> hcCages;
+  auto hcFound = ring::findHC(hcRings, hcTypes, hcRows, hcCages);
+  REQUIRE(hcFound.size() <= hcRings.size());
+}
