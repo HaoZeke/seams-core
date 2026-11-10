@@ -437,10 +437,12 @@ TEST_CASE("in-tree k-nearest matches the periodic heap when linkcell refuses",
                          {1, 1, 1, 2, 1, 1}, {10.0, 10.0, 10.0});
   std::vector<std::vector<int>> rows;
   CerrCapture err;
-  // Hint ~0.04 makes linkcell's mesh exceed its cell cap and throws.
-  // The in-tree grid is the same edge and still fits in memory.
+  // This build calls linkcell only when SEAMS_HAS_LINKCELL is set.
+  // The refusal text is the catch in nominateByLinkcell.
   rows = nneigh::kNearestNeighbourList(cloud, 2, 0.05, 1, true);
+#ifdef SEAMS_HAS_LINKCELL
   REQUIRE(err.str().find("falling back") != std::string::npos);
+#endif
   REQUIRE(listsId(rows[0], 1));
   REQUIRE(listsId(rows[0], 5));
   REQUIRE_FALSE(listsId(rows[0], 3));
@@ -461,7 +463,9 @@ TEST_CASE("in-tree k-nearest matches the periodic heap when linkcell refuses",
   tilt.box = {12.0, 10.0, 10.0, 2.0, 0.5, 0.0};
   CerrCapture tiltErr;
   rows = nneigh::kNearestNeighbourList(tilt, 1, 0.05, 1, false);
+#ifdef SEAMS_HAS_LINKCELL
   REQUIRE(tiltErr.str().find("falling back") != std::string::npos);
+#endif
   REQUIRE(rows[0].size() >= 2);
 
   Cloud emptyBox = cloud;
