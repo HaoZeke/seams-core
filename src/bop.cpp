@@ -260,6 +260,9 @@ std::vector<int> nearestNeighbourIndices(
     if (it == yCloud.idIndexMap.end()) {
       continue;
     }
+    if (it->second < 0 || it->second >= yCloud.nop) {
+      continue;
+    }
     candidates.emplace_back(gen::periodicDistSq(frame, yCloud, iatomIndex, it->second),
                             it->second);
   }
@@ -1513,7 +1516,7 @@ bool chill::isInterfacial(
   if (num_staggrd == 2) {
     // Loop over the four nearest neighbours, the same star as c_ij
     for (int jatomIndex : nearest) {
-      if (jatomIndex >= yCloud.nop) {
+      if (jatomIndex < 0 || jatomIndex >= yCloud.nop) {
         continue;
       }
       neighStaggered = chill::numStaggered(yCloud, nList, jatomIndex);
@@ -1526,7 +1529,7 @@ bool chill::isInterfacial(
   // and at least one neighbor with two staggered bonds
   if (num_staggrd == 3 && num_eclipsd == 0) {
     for (int jatomIndex : nearest) {
-      if (jatomIndex >= yCloud.nop) {
+      if (jatomIndex < 0 || jatomIndex >= yCloud.nop) {
         continue;
       }
       neighStaggered = chill::numStaggered(yCloud, nList, jatomIndex);

@@ -986,7 +986,8 @@ std::vector<int> pntToPnt::relOrderDDC(const std::vector<int> &equatorial,
   } // end of looping through the elements of the equatorial ring
   // ------------------------------
   // Validate that peripheral rings and apices were found
-  if (peripheral1.size() != 3 || peripheral2.size() != 3) {
+  if (peripheral1.size() != 3 || peripheral2.size() != 3 || apex1 == -1 ||
+      apex2 == -1) {
     // Incomplete DDC structure; return empty vector to signal error
     return std::vector<int>();
   }

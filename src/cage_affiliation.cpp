@@ -608,7 +608,9 @@ ring::stackingPlanes(const std::vector<std::vector<int>> &rings,
       hc[i] = true;
       hc[static_cast<std::size_t>(j)] = true;
       for (const int k : ctx.prismaticOf(static_cast<int>(i), j)) {
-        hc[static_cast<std::size_t>(k)] = true;
+        if (k >= 0 && static_cast<std::size_t>(k) < nRings) {
+          hc[static_cast<std::size_t>(k)] = true;
+        }
       }
     }
   }
@@ -964,7 +966,8 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
     st.answersValid = false;
     return st.current;
   }
-  if (st.batchHot && st.prevSortedRows.size() == nList.size()) {
+  if (st.batchHot && st.warm && st.primed &&
+      st.prevSortedRows.size() == nList.size()) {
     st.fastAffiliation(rings, nList);
     return st.current;
   }
@@ -1192,7 +1195,10 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
   st.flags(ctx, evaluated);
   std::size_t touched = 0;
   for (int i = 0; i < nR; i++) {
-    touched += isDirty[static_cast<std::size_t>(i)] ? 1 : 0;
+    touched += (isDirty[static_cast<std::size_t>(i)] ||
+                dirtyEq[static_cast<std::size_t>(i)])
+                   ? 1
+                   : 0;
   }
   st.lastReclassified = static_cast<int>(touched);
   st.remember(rings, rows);

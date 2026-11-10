@@ -579,12 +579,14 @@ bool ring::discardExtraTetragonBlocks(
       axialBasal1 = true;
     } // end of check for axial ring for basal1
   }   // y dim
-  // z dim. dumpAxialDim returns only 0, 1, or 2.
-  else {
+  else if (axialDim == 2) {
     if (areaXY > areaXZ && areaXY > areaYZ) {
       axialBasal1 = true;
     } // end of check for axial ring for basal1
-  }   // z dim
+  } else {
+    std::cerr << "Could not find the axial dimension.\n";
+    return false;
+  }
   // ----------------------------------------
   // Calculate projected area onto the XY, YZ and XZ planes for basal2
 
@@ -656,12 +658,14 @@ bool ring::discardExtraTetragonBlocks(
       axialBasal2 = true;
     } // end of check for axial ring for basal1
   }   // y dim
-  // z dim. dumpAxialDim returns only 0, 1, or 2.
-  else {
+  else if (axialDim == 2) {
     if (areaXY > areaXZ && areaXY > areaYZ) {
       axialBasal2 = true;
     } // end of check for axial ring for basal1
-  }   // z dim
+  } else {
+    std::cerr << "Could not find the axial dimension.\n";
+    return false;
+  }
   // ----------------------------------------
 
   // Now check if basal1 and basal2 are axial or not
@@ -787,6 +791,9 @@ int ring::rmAxialTranslations(
   double origin[3];
   nneigh::dumpBoundsToH(yCloud.box, yCloud.boxLow, H, origin);
   int axialDim = nneigh::dumpAxialDim(yCloud);
+  if (axialDim < 0 || axialDim > 2) {
+    axialDim = 2;
+  }
   if (currentFrame == firstFrame) {
     atomID = yCloud.pts[0].atomID;
     atomIndex = 0;

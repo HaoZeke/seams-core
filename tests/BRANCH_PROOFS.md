@@ -45,7 +45,7 @@
 
 `ddcFourteen` is called from `equatorialLarge` at line 861, inside `pairIsKept`, and at line 985. Both pass the same equator vector. The deleted `atom < 0 || atom >= nAtoms` test is the one `equatorialConditions` already applied.
 
-`ddcKeepRoom` is called from `equatorialLarge` at lines 832 and 833, once for the even chains and once for the odd chains. The deleted range test sat on that same equator vector before the stamp.
+The equator-atom range test that an earlier message called `ddcKeepRoom` is the stamp loop in `equatorialLarge`, not in `ddcKeepRoom`. `ddcKeepRoom` only drops a chain that fails `ddcChainRoom`. `equatorialLarge` now returns false when an equator atom is outside `0 .. nAtoms-1`, and `ring::equatorialConditions` returns false for the same atom before it calls the file-local search.
 
 `tryPair` is the lambda at line 933 inside `equatorialLarge`. It is called at lines 1088 and 1107. The even-pivot loop continues at line 1080 when `ddcPartnerMask(even.middles) & mask` is zero, and `mask` is the odd chain's bucket. The odd-pivot loop continues at line 1099 when `ddcPartnerMask(mask) & odd.middles` is zero, and `mask` is the even chain's bucket. `ddcChains` stores middle bits 1, 2, 4, and 7, each equal to itself masked with 7, so the bucket is the middles word. The deleted `(ddcPartnerMask(e.middles) & o.middles) == 0` test is the predicate the caller just rejected. `tryPair` still returns when the two chains repeat a ring.
 

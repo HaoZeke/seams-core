@@ -792,6 +792,9 @@ void ddcKeepRoom(const std::vector<std::vector<int>> &rings,
   }
   const int eqMark = ++eqTick;
   for (const int atom : equatorial) {
+    if (atom < 0 || atom >= nAtoms) {
+      return false;
+    }
     eqStamp[static_cast<size_t>(atom)] = eqMark;
   }
   thread_local std::array<IntBuf, 6> kept;
@@ -1973,6 +1976,10 @@ bool ring::equatorialConditions(const std::vector<std::vector<int>> &rings,
     return false;
   }
   for (const int atom : R) {
+    if (atom < 0 || index.ringOff.empty() ||
+        static_cast<std::size_t>(atom) + 1 >= index.ringOff.size()) {
+      return false;
+    }
     const auto row = atomRow(index, atom);
     int others = 0;
     for (const int r : row) {
@@ -2761,6 +2768,9 @@ void ring::NeighBond::build(const std::vector<std::vector<int>> &nList) {
   std::vector<int> row;
   for (int i = 0; i < n_; i++) {
     row.clear();
+    if (static_cast<size_t>(i) >= nList.size()) {
+      continue;
+    }
     const auto &nbrs = nList[static_cast<size_t>(i)];
     row.reserve(nbrs.size());
     for (size_t k = 1; k < nbrs.size(); k++) {

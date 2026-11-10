@@ -1,3 +1,17 @@
+//-----------------------------------------------------------------------------------
+// d-SEAMS - Deferred Structural Elucidation Analysis for Molecular Simulations
+//
+// Copyright (c) d-SEAMS developers
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the MIT License as published by
+// the Open Source Initiative.
+//
+// A copy of the MIT License is included in the LICENSE file of this repository.
+// You should have received a copy of the MIT License along with this program.
+// If not, see <https://opensource.org/licenses/MIT>.
+//-----------------------------------------------------------------------------------
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
@@ -2074,4 +2088,22 @@ TEST_CASE("frac box and triclinic image cover the rejected cells", "[bop]") {
       gen::triclinicMinImage(skew, 0.0, 0.0, 0.0, 0.0, 6.0, 0.0)[1]));
   REQUIRE(gen::periodicDistSq(skewFrame, skew, 0, 1) > 0.0);
   REQUIRE(std::isfinite(gen::relDistFromPoint(skewFrame, skew, 0, 0.0, 6.0, 0.0)[1]));
+}
+
+TEST_CASE("a neighbour index of -1 is skipped before any coordinate read", "[bop]") {
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  cloud.box = {10.0, 10.0, 10.0};
+  cloud.boxLow = {0.0, 0.0, 0.0};
+  molSys::Point<double> pt;
+  pt.type = 1;
+  pt.atomID = 0;
+  pt.x = 1.0;
+  pt.y = 1.0;
+  pt.z = 1.0;
+  cloud.pts.push_back(pt);
+  cloud.nop = 1;
+  cloud.idIndexMap[0] = 0;
+  cloud.idIndexMap[9] = -1;
+  const std::vector<std::vector<int>> nList = {{0, 9}};
+  REQUIRE_FALSE(chill::isInterfacial(cloud, nList, 0, 2, 0, true));
 }

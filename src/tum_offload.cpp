@@ -339,6 +339,9 @@ tum::hostCageCounts(const std::vector<std::vector<int>> &nList) {
       ++out.nDdcRings;
     }
     for (const int a : six[r]) {
+      if (a < 0 || a >= nAtoms) {
+        continue;
+      }
       ++out.atomSix[static_cast<std::size_t>(a)];
       if (aff.hc[r]) {
         out.atomHc[static_cast<std::size_t>(a)] = 1;

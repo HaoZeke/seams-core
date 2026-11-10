@@ -238,7 +238,7 @@ topoparam::rodgerF4(const molSys::PointCloud<molSys::Point<double>, double> &yCl
       continue;
     }
     const auto hit = hydrogens.find(pi.molID);
-    if (hit == hydrogens.end()) {
+    if (hit == hydrogens.end() || hit->second.empty()) {
       continue;
     }
     if (static_cast<std::size_t>(i) >= nList.size() ||
@@ -265,7 +265,7 @@ topoparam::rodgerF4(const molSys::PointCloud<molSys::Point<double>, double> &yCl
         continue;
       }
       const auto hjt = hydrogens.find(pj.molID);
-      if (hjt == hydrogens.end()) {
+      if (hjt == hydrogens.end() || hjt->second.empty()) {
         continue;
       }
       const int h1 = outerHydrogen(yCloud, hit->second, j);
