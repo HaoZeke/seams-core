@@ -79,3 +79,11 @@ src/sphericart_ylm.cpp
 src/structure_desc.cpp
 src/topo_fingerprint.cpp
 src/topo_two_dim.cpp
+
+Branch coverage
+The bar is branches taken on one merged run.
+gcovr 8.8 is run with --exclude-throw-branches.
+Branches executed is not that bar.
+On the five-profile merge, src/insitu.cpp is 1265 of 1348
+branches taken, which is 93 percent.
+Each profile alone takes 75.71 percent of 844 branches.

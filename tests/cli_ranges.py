@@ -1,7 +1,7 @@
 # Copyright (c) d-SEAMS developers
 """Frame ranges, carried state, and extension fallbacks.
 
-usage: cli_ranges.py SEAMS ROOT
+usage: cli_ranges.py SEAMS ROOT CONFIG_H
 """
 
 import os
@@ -12,6 +12,7 @@ from pathlib import Path
 
 seams = sys.argv[1]
 root = Path(sys.argv[2])
+config_h = Path(sys.argv[3])
 tiny = root / "input" / "traj" / "agi_water_tiny.lammpstrj"
 water = root / "input" / "traj" / "exampleTraj.lammpstrj"
 
@@ -122,8 +123,9 @@ def main():
     expect(["cages", str(ice_or_tiny()), "--frame", "1", "--last", "1",
             "--graph", "cutoff", "--signature", "512",
             "--cage-edge", "0,1"], 0, out_has="nop ")
-    feat = run(["--features"])
-    if "IRA/SOFI: enabled" in feat.stdout:
+    ira = any(line.startswith("#define SEAMS_HAS_IRA")
+              for line in config_h.read_text().splitlines())
+    if ira:
         expect(["cages", str(ice_or_tiny()), "--frame", "1", "--last", "1",
                 "--graph", "cutoff", "--shape"], 0, out_has="nop ")
     else:

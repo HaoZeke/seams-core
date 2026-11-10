@@ -1,0 +1,4 @@
+#ifndef SEAMS_BUILD_CONFIG_H
+#define SEAMS_BUILD_CONFIG_H
+#mesondefine SEAMS_HAS_IRA
+#endif

@@ -1,7 +1,7 @@
 # Copyright (c) d-SEAMS developers
 """Run seams on real trajectories and check a printed count or token.
 
-usage: cli_commands.py SEAMS ROOT
+usage: cli_commands.py SEAMS ROOT CONFIG_H
 """
 
 import subprocess
@@ -11,6 +11,7 @@ from pathlib import Path
 
 seams = sys.argv[1]
 root = Path(sys.argv[2])
+config_h = Path(sys.argv[3])
 water = root / "input" / "traj" / "exampleTraj.lammpstrj"
 ice = root / "input" / "traj" / "genice_sI.lammpstrj"
 tiny = root / "input" / "traj" / "agi_water_tiny.lammpstrj"
@@ -98,8 +99,9 @@ def main():
             "--guest-types", "3", "--inside", "--incomplete"], 0, out_has="nop ")
     expect(["cages", str(mw), *one, "--graph", "cutoff", "--cage-edge", "0,1",
             "--water-types", "1"], 0, out_has="nop ")
-    feat = run(["--features"])
-    if "IRA/SOFI: enabled" in feat.stdout:
+    ira = any(line.startswith("#define SEAMS_HAS_IRA")
+              for line in config_h.read_text().splitlines())
+    if ira:
         expect(["cages", str(mw), *one, "--graph", "cutoff", "--shape"], 0,
                out_has="nop ")
     else:

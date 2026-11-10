@@ -12,6 +12,7 @@ from pathlib import Path
 
 seams = sys.argv[1]
 root = Path(sys.argv[2])
+config_h = Path(sys.argv[3])
 water = root / "input" / "traj" / "exampleTraj.lammpstrj"
 ice = root / "input" / "traj" / "genice_sI.lammpstrj"
 tiny = root / "input" / "traj" / "agi_water_tiny.lammpstrj"
@@ -221,9 +222,10 @@ with tempfile.TemporaryDirectory() as tmp:
     blank_rc = subprocess.run([seams, "rings", str(blank), "--frame", "1", "--last", "1"], capture_output=True).returncode
     ok = blank_rc in (0, 2) and ok
     ok = run(["chill-plus", str(water), "--family", "not-a-family"], expect=2) and ok
-    feat = subprocess.run([seams, "--features"], capture_output=True, text=True)
-    shape_rc = 0 if "IRA/SOFI: enabled" in feat.stdout else 2
-    ok = run(["cages", str(tiny), *one, "--graph", "cutoff", "--shape"], expect=shape_rc) and ok
+    ira = any(line.startswith("#define SEAMS_HAS_IRA")
+              for line in config_h.read_text().splitlines())
+    ok = run(["cages", str(tiny), *one, "--graph", "cutoff", "--shape"],
+             expect=0 if ira else 2) and ok
     ok = run(["rdf", str(water), "--types", "1,2,3"], expect=2) and ok
     ok = run(["rdf", str(water), "--types", "a,b"], expect=2) and ok
     ok = run(["rdf", str(water), "--types", "1,"], expect=2) and ok

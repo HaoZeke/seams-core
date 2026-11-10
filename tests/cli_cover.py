@@ -1,7 +1,7 @@
 # Copyright (c) d-SEAMS developers
 """Cover the remaining seams command paths on real inputs.
 
-usage: cli_cover.py SEAMS ROOT
+usage: cli_cover.py SEAMS ROOT CONFIG_H
 """
 
 import os
@@ -12,6 +12,7 @@ from pathlib import Path
 
 seams = sys.argv[1]
 root = Path(sys.argv[2])
+config_h = Path(sys.argv[3])
 tiny = root / "input" / "traj" / "agi_water_tiny.lammpstrj"
 water = root / "input" / "traj" / "exampleTraj.lammpstrj"
 mw = root / "input" / "traj" / "mW_cubic.lammpstrj"
@@ -105,8 +106,9 @@ def main():
     expect(["cages", str(mw), *one, "--cutoff", "3.0", "--graph", "cutoff",
             "--signature", "512", "--water-types", "1",
             "--cage-edge", "2.5,3.2"], 0, out_has="nop ")
-    feat_now = run(["--features"])
-    if "IRA/SOFI: enabled" in feat_now.stdout:
+    ira = any(line.startswith("#define SEAMS_HAS_IRA")
+              for line in config_h.read_text().splitlines())
+    if ira:
         expect(["cages", str(mw), *one, "--graph", "cutoff", "--shape"], 0,
                out_has="nop ")
     else:

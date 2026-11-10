@@ -515,6 +515,16 @@ summary({
   'Cage certificates (nauty)': nauty_found,
 }, section: 'Optional backends', bool_yn: true)
 
+# Tests read this header. The define is the configured build, not a
+# probe of a running binary.
+seams_build_config = configuration_data()
+seams_build_config.set('SEAMS_HAS_IRA', ira_found)
+seams_config_h = configure_file(
+  input: 'src/config.h.in',
+  output: 'config.h',
+  configuration: seams_build_config,
+)
+
 if not readcon_dep.found()
   message('readcon-core was not found. It installs its own pkg-config file ' +
           'through cargo-c, so `cargo cinstall --prefix=$CONDA_PREFIX` in a ' +
@@ -845,6 +855,7 @@ if get_option('with_cli')
       files('tests/cli_commands.py'),
       seams_exe.full_path(),
       meson.project_source_root(),
+      seams_config_h,
     ],
     depends: [seams_exe],
     timeout: 300)
@@ -855,6 +866,7 @@ if get_option('with_cli')
       files('tests/cli_ranges.py'),
       seams_exe.full_path(),
       meson.project_source_root(),
+      seams_config_h,
     ],
     depends: [seams_exe],
     timeout: 300)
@@ -865,6 +877,7 @@ if get_option('with_cli')
       files('tests/cli_cover.py'),
       seams_exe.full_path(),
       meson.project_source_root(),
+      seams_config_h,
     ],
     depends: [seams_exe],
     timeout: 300)
@@ -907,6 +920,7 @@ if get_option('with_cli')
       files('tests/cli_every.py'),
       seams_exe.full_path(),
       meson.project_source_root(),
+      seams_config_h,
     ],
     depends: [seams_exe],
     timeout: 600)
