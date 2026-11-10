@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Run the shipped extras/lammps/in.dseams on both LAMMPS routes."""
 
 import os

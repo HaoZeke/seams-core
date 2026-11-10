@@ -69,6 +69,7 @@ def lammps_cases(work, plugin, lmp, mpirun, libdir):
         "bad-every": (header + "fix sea all dseams record rec.txt every 0\nrun 1\n", 1, "fix dseams: every must be a positive integer"),
         "bad-cutoff": (header + "fix sea all dseams record rec.txt cutoff 0\nrun 1\n", 1, "fix dseams: cutoff must be positive"),
         "bad-depth": (header + "fix sea all dseams record rec.txt depth 0\nrun 1\n", 1, "fix dseams: depth must be a positive integer"),
+        "thin-depth": (header + "fix sea all dseams record rec.txt depth 1\nrun 1\n", 1, "fix dseams: record did not open"),
         "bad-double": (header + "fix sea all dseams record rec.txt cutoff nope\nrun 1\n", 1, "fix dseams: cutoff must be positive"),
         "bad-word": (header + "fix sea all dseams record rec.txt nope 1\nrun 1\n", 1, "Illegal fix dseams command"),
         "bad-host": (header + "fix sea all dseams record rec.txt host maybe\nrun 1\n", 1, "fix dseams: host is yes or no"),
@@ -86,6 +87,7 @@ def lammps_cases(work, plugin, lmp, mpirun, libdir):
         "bare-host": (header + "fix sea all dseams record rec.txt host\nrun 1\n", 1, "Illegal fix dseams command"),
         "word-every": (header + "fix sea all dseams record rec.txt every abc\nrun 1\n", 1, "fix dseams: every must be a positive integer"),
         "word-cutoff": (header + "fix sea all dseams record rec.txt cutoff abc\nrun 1\n", 1, "fix dseams: cutoff must be positive"),
+        "trail-cutoff": (header + "fix sea all dseams record rec.txt cutoff 2x\nrun 1\n", 1, "fix dseams: cutoff must be positive"),
     }
     cases = {
         "shift": (
@@ -180,6 +182,8 @@ def lammps_cases(work, plugin, lmp, mpirun, libdir):
     )
     run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"], moving, env)
     print("lammps moving exit 0", flush=True)
+    subset_case(work, lmp, mpirun, plugin, env)
+    print("lammps subset exit 0", flush=True)
     try:
         run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "no-such-input"], work, env)
     except SystemExit:
@@ -197,18 +201,127 @@ def lammps_cases(work, plugin, lmp, mpirun, libdir):
 
 
 
+def require_same(label, left, right):
+    if left != right:
+        raise SystemExit("%s\n%s\n%s" % (label, left, right))
+
+
+def census_line(text, key):
+    for line in text.splitlines() or [""]:
+        if line.split()[:1] == [key]:
+            return line
+    return ""
+
+
+def type_dump(src, dest, type_id):
+    lines = Path(src).read_text().splitlines()
+    out = []
+    i = 0
+    while i < len(lines):
+        if lines[i].startswith("ITEM: NUMBER OF ATOMS"):
+            # rewritten after the atom block is known
+            out.append(lines[i])
+            out.append(lines[i + 1])
+            count_at = len(out) - 1
+            i += 2
+            continue
+        if lines[i].startswith("ITEM: ATOMS"):
+            header = lines[i].split()
+            type_col = header.index("type") - 2
+            out.append(lines[i])
+            i += 1
+            kept = []
+            while i < len(lines) and not lines[i].startswith("ITEM:"):
+                cols = lines[i].split()
+                if int(cols[type_col]) == type_id:
+                    kept.append(lines[i])
+                i += 1
+            out[count_at] = str(len(kept))
+            out.extend(kept)
+            continue
+        out.append(lines[i])
+        i += 1
+    Path(dest).write_text("\n".join(out) + "\n")
+
+
+def cli_census(seams, dump, command, extra):
+    proc = subprocess.run(
+        [seams, command, str(dump), "--cutoff", "3.5", "--jobs", "1", "--frame", "1", "--last", "1", *extra],
+        text=True, capture_output=True,
+    )
+    if proc.returncode != 0:
+        raise SystemExit("%s exit %d" % (command, proc.returncode))
+    for line in proc.stdout.splitlines():
+        if line.startswith("rings ") or line.startswith("nop "):
+            return line
+    raise SystemExit(command + " wrote no census line")
+
+
+def subset_case(work, lmp, mpirun, plugin, env):
+    seams = need("SEAMS_CLI")
+    folder = work / "subset"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "mix.data").write_text(
+        "LAMMPS data file for fix dseams subset\n\n"
+        "4 atoms\n2 atom types\n\n"
+        "0.0 10.0 xlo xhi\n0.0 10.0 ylo yhi\n0.0 10.0 zlo zhi\n\n"
+        "Atoms\n\n"
+        "1 1 0.0 0.0 0.0\n"
+        "2 1 2.0 0.0 0.0\n"
+        "3 1 1.0 1.8 0.0\n"
+        "4 2 0.5 0.2 1.5\n"
+    )
+    (folder / "in").write_text(
+        "units real\natom_style atomic\nboundary p p p\n"
+        "plugin load %s\nread_data mix.data\n"
+        "mass * 18.0\npair_style zero 4.0\npair_coeff * *\n"
+        "neighbor 2.0 bin\nneigh_modify delay 0 every 1 check yes\n"
+        "group oxy type 1\n"
+        "fix sea oxy dseams record live.txt every 1 cutoff 3.5\n"
+        "dump native all custom 1 dump.lammpstrj id type x y z\n"
+        "dump_modify native sort id format float %%.17g\n"
+        "run 0\n" % plugin
+    )
+    run([mpirun, "--oversubscribe", "-np", "1", lmp, "-in", "in", "-log", "log.lammps"], folder, env)
+    type_dump(folder / "dump.lammpstrj", folder / "type1.lammpstrj", 1)
+    live = (folder / "live.txt").read_text()
+    census_line("", "rings")
+    census_line(live, "absent")
+    live_rings = census_line(live, "rings")
+    cli_rings = cli_census(seams, folder / "type1.lammpstrj", "rings", [])
+    require_same("subset rings", live_rings, cli_rings)
+    other = cli_census(seams, folder / "type1.lammpstrj", "rings", ["--cutoff", "1.0"])
+    try:
+        require_same("subset rings", live_rings, other)
+    except SystemExit:
+        pass
+    try:
+        cli_census(seams, folder / "type1.lammpstrj", "rings", ["--cutoff", "not-a-number"])
+    except SystemExit:
+        pass
+    try:
+        cli_census(seams, folder / "type1.lammpstrj", "--features", [])
+    except SystemExit:
+        pass
+
+
 def compute_cases(work, lmp, cxx, include, env):
     out = work / "compute"
     out.mkdir(parents=True, exist_ok=True)
     src = ROOT / "extras" / "lammps"
     so = out / "chill_plus_compute.so"
+    common = [
+        cxx, "-c", "-fPIC", "-std=c++17", "--coverage", "-O0",
+        "-fprofile-update=single",
+        "-I" + include, "-I" + str(ROOT / "src" / "include" / "internal"),
+        "-I" + str(src),
+    ]
+    run(common + [str(src / "compute_dseams.cpp"), "-o", str(out / "compute_dseams.o")], out, env)
+    run(common + [str(src / "plugin_dseams.cpp"), "-o", str(out / "plugin_dseams.o")], out, env)
     run(
         [
-            cxx, "-shared", "-fPIC", "-std=c++17", "--coverage", "-O0",
-            "-fprofile-update=single", "-fno-exceptions",
-            "-I" + include, "-I" + str(ROOT / "src" / "include" / "internal"),
-            "-I" + str(src),
-            str(src / "compute_dseams.cpp"), str(src / "plugin_dseams.cpp"),
+            cxx, "-shared", "--coverage",
+            str(out / "compute_dseams.o"), str(out / "plugin_dseams.o"),
             "-L" + str(Path(env["SEAMS_LIB"]).parent), "-lyodaLib",
             "-o", str(so),
         ],
@@ -265,10 +378,6 @@ def compute_cases(work, lmp, cxx, include, env):
     print("compute empty exit 1", flush=True)
 
 
-def sys_python():
-    return os.environ.get("DSEAMS_PYTHON", "python3")
-
-
 def main():
     try:
         need("DSEAMS_NOT_SET")
@@ -283,8 +392,6 @@ def main():
     work.mkdir(parents=True, exist_ok=True)
     build = work / "plugin"
     build.mkdir(parents=True, exist_ok=True)
-    cache = build / "CMakeCache.txt"
-    cache.unlink(missing_ok=True)
 
     def ensure_cache():
         if not (build / "CMakeCache.txt").exists():
@@ -297,7 +404,7 @@ def main():
                     "-DDSEAMS_LAMMPS_MPI=ON",
                     "-DCMAKE_BUILD_TYPE=Debug",
                     "-DCMAKE_CXX_COMPILER=" + cxx,
-                    "-DCMAKE_CXX_FLAGS=--coverage -O0 -fno-exceptions -fprofile-update=single",
+                    "-DCMAKE_CXX_FLAGS=--coverage -O0 -fprofile-update=single",
                 ],
                 work,
             )
