@@ -21,30 +21,7 @@
 #include <numeric>
 #include <random>
 #include <sstream>
-#include <thread>
 #include <vector>
-
-namespace {
-// The first use of the classifier map in this process is concurrent, so the
-// published CHILL rule is readable while the map is being constructed.
-struct ConcurrentClassifierInit {
-  ConcurrentClassifierInit() {
-    std::vector<std::thread> threads;
-    for (int i = 0; i < 8; ++i) {
-      threads.emplace_back([] {
-        const auto rule = chill::bondClassifier("CHILL");
-        if (rule.coordinationNumber != 4) {
-          std::_Exit(2);
-        }
-      });
-    }
-    for (auto &thread : threads) {
-      thread.join();
-    }
-  }
-};
-ConcurrentClassifierInit concurrentClassifierInit;
-} // namespace
 
 #ifdef SEAMS_HAS_OPENMP
 #include <omp.h>

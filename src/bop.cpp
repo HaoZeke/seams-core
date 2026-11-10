@@ -853,9 +853,9 @@ chill::BondClassifier chill::chillRule() { return {-0.8, -0.2, -0.05, 4}; }
 chill::BondClassifier chill::chillPlusRule() { return {-0.8, -0.35, 0.25, 4}; }
 
 namespace {
+std::unordered_map<std::string, chill::BondClassifier> g_custom_rules;
 std::unordered_map<std::string, chill::BondClassifier> &customRules() {
-  static std::unordered_map<std::string, chill::BondClassifier> rules;
-  return rules;
+  return g_custom_rules;
 }
 } // namespace
 

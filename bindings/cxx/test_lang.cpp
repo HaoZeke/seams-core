@@ -8,9 +8,27 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <dlfcn.h>
 #include <vector>
 
 namespace {
+
+using ArmFn = void (*)(int, int);
+using LiveFn = long (*)();
+using ResetFn = void (*)();
+
+ArmFn fault_arm() {
+  return reinterpret_cast<ArmFn>(dlsym(RTLD_DEFAULT, "seams_test_arm"));
+}
+LiveFn fault_live() {
+  return reinterpret_cast<LiveFn>(dlsym(RTLD_DEFAULT, "seams_test_live"));
+}
+LiveFn fault_peak() {
+  return reinterpret_cast<LiveFn>(dlsym(RTLD_DEFAULT, "seams_test_peak"));
+}
+ResetFn fault_reset() {
+  return reinterpret_cast<ResetFn>(dlsym(RTLD_DEFAULT, "seams_test_reset_peak"));
+}
 
 int fail(const std::string &message) {
   std::cerr << message;
@@ -308,7 +326,8 @@ int main(int argc, char **argv) {
   if (seams_last_error() == nullptr) return fail("error string");
 
   if (seams_path_nframes(nullptr) != -1) return fail("null path");
-  if (seams_path_nframes("missing.xyz") != 1) return fail("xyz frames");
+  if (seams_path_nframes("missing.xyz") != -1) return fail("xyz frames");
+  if (std::string(seams_last_error()).find("cannot read") == std::string::npos) return fail("xyz text");
   if (seams_frame_read(nullptr, 1, 1) != nullptr) return fail("null read");
   seams_frame *missing = seams_frame_read("missing-lang.xyz", 1, 1);
   if (missing != nullptr) return fail("missing xyz opened");
@@ -518,7 +537,8 @@ int main(int argc, char **argv) {
   if (seams_frame_prisms(oxygen, 3.5, 1, 4, nullptr, prismWide.data(), nullptr) == 0) return fail("prism null count");
   if (seams_frame_prisms(oxygen, 3.5, 1, 4, slash.c_str(), nullptr, &prismCount) != 0) return fail("prism slash");
   if (seams_path_nframes("missing-frames.lammpstrj") > 0) return fail("missing frames");
-  if (seams_path_nframes("missing-frames.xyz") != 1) return fail("xyz frames");
+  if (seams_path_nframes("missing-frames.xyz") != -1) return fail("xyz frames");
+  if (std::string(seams_last_error()).find("cannot read") == std::string::npos) return fail("xyz error");
   if (seams_frame_read("missing-frames.xyz", 1, 1) != nullptr) return fail("missing xyz read");
   if (seams_frame_read("missing-frames.con", 1, 1) != nullptr) return fail("missing con read");
   double pairXyz[6] = {0, 0, 0, 1, 0, 0};
@@ -551,31 +571,38 @@ int main(int argc, char **argv) {
   int faultPrismN = 4;
   int faultCages = 0;
   int faultAtoms = 0;
-  seams_arm_fault(1);
-  if (seams_path_nframes("plain.lammpstrj") != -1) return fail("fault frames");
-  seams_arm_fault(1);
-  if (seams_frame_read(ice1h.c_str(), 1, 1) != nullptr) return fail("fault read");
-  seams_arm_fault(1);
-  if (seams_frame_from_arrays(faultXyz, 1, faultBox, nullptr, nullptr) != nullptr) return fail("fault arrays");
-  seams_arm_fault(1);
-  if (seams_frame_chill(oxygen, 3.5, 1, "cutoff", nullptr, nullptr) == 0) return fail("fault chill");
-  seams_arm_fault(1);
-  if (seams_frame_rings(oxygen, 3.5, 1, "mutual", 6, faultRings, 8) == 0) return fail("fault rings");
-  seams_arm_fault(1);
-  if (seams_frame_steinhardt(oxygen, 3.5, 1, 4, faultR, faultG) == 0) return fail("fault steinhardt");
-  seams_arm_fault(1);
-  if (seams_frame_cages(oxygen, 3.5, 1, 4, "cutoff", 0, nullptr, &cageHex, nullptr, nullptr, nullptr) == 0) return fail("fault cages");
-  seams_arm_fault(1);
-  if (seams_frame_signature(oxygen, 3.5, 1, "cutoff", "512", &faultCages, &faultAtoms) == 0) return fail("fault signature");
-  seams_arm_fault(1);
-  if (seams_frame_rdf(oxygen, 6.0, 4, 1, 1, faultR, faultG, faultC, nullptr) == 0) return fail("fault rdf");
-  seams_arm_fault(1);
-  if (seams_frame_rdf2d(oxygen, 3.5, 0.5, nullptr, faultR, faultG) == 0) return fail("fault rdf2d");
-  seams_arm_fault(1);
-  if (seams_frame_prisms(oxygen, 3.5, 1, 4, nullptr, faultPrism, &faultPrismN) == 0) return fail("fault prisms");
-  seams_arm_fault(1);
-  if (seams_frame_monolayer(oxygen, 3.5, 1, 4, 1.0, nullptr, faultSheet, 8) == 0) return fail("fault sheet");
-  seams_arm_fault(0);
+  auto caught = [](const char *label, auto &&call) -> int {
+    if (fault_arm() == nullptr || fault_live() == nullptr) return fail("no fault allocator");
+    const long before = fault_live()();
+    fault_reset()();
+    fault_arm()(1, 1);
+    const int code = call();
+    fault_arm()(0, 0);
+    if (code == 0) return fail(label);
+    if (std::string(seams_last_error()).find("bad_alloc") == std::string::npos) return fail(label);
+    if (fault_live()() != before) return fail(label);
+    if (fault_peak()() <= before) return fail(label);
+    return 0;
+  };
+  const std::string longMissing(80, 'q');
+  if (caught("fault frames", [&] { return seams_path_nframes((longMissing + ".lammpstrj").c_str()) == -1 ? 1 : 0; })) return 1;
+  if (caught("fault read", [&] { return seams_frame_read(ice1h.c_str(), 1, 1) == nullptr ? 1 : 0; })) return 1;
+  if (caught("fault arrays", [&] { return seams_frame_from_arrays(faultXyz, 1, faultBox, nullptr, nullptr) == nullptr ? 1 : 0; })) return 1;
+  if (caught("fault chill", [&] { return seams_frame_chill(oxygen, 3.5, 1, "cutoff", nullptr, nullptr) != 0 ? 1 : 0; })) return 1;
+  if (caught("fault rings", [&] { return seams_frame_rings(oxygen, 3.5, 1, "mutual", 6, faultRings, 8) != 0 ? 1 : 0; })) return 1;
+  if (caught("fault steinhardt", [&] { return seams_frame_steinhardt(oxygen, 3.5, 1, 4, faultR, faultG) != 0 ? 1 : 0; })) return 1;
+  if (caught("fault cages", [&] { return seams_frame_cages(oxygen, 3.5, 1, 4, "cutoff", 0, nullptr, &cageHex, nullptr, nullptr, nullptr) != 0 ? 1 : 0; })) return 1;
+  if (caught("fault signature", [&] { return seams_frame_signature(oxygen, 3.5, 1, "cutoff", "512", &faultCages, &faultAtoms) != 0 ? 1 : 0; })) return 1;
+  if (caught("fault rdf", [&] { return seams_frame_rdf(oxygen, 6.0, 4, 1, 1, faultR, faultG, faultC, nullptr) != 0 ? 1 : 0; })) return 1;
+  if (caught("fault rdf2d", [&] { return seams_frame_rdf2d(oxygen, 3.5, 0.5, nullptr, faultR, faultG) != 0 ? 1 : 0; })) return 1;
+  if (caught("fault prisms", [&] { return seams_frame_prisms(oxygen, 3.5, 1, 4, nullptr, faultPrism, &faultPrismN) != 0 ? 1 : 0; })) return 1;
+  if (caught("fault sheet", [&] { return seams_frame_monolayer(oxygen, 3.5, 1, 4, 1.0, nullptr, faultSheet, 8) != 0 ? 1 : 0; })) return 1;
+  const long beforeUnknown = fault_live()();
+  fault_arm()(1, 2);
+  if (seams_frame_chill(oxygen, 3.5, 1, "cutoff", nullptr, nullptr) == 0) return fail("unknown chill");
+  fault_arm()(0, 0);
+  if (std::string(seams_last_error()) != "unknown error") return fail("unknown text");
+  if (fault_live()() != beforeUnknown) return fail("unknown leak");
   if (seams_frame_prisms(oxygen, 3.5, 1, 4, nullptr, nullptr, nullptr) != 0) return fail("prism both null");
   const std::string withSlash = outDir + "/";
   if (seams_frame_rdf2d(oxygen, 3.5, 0.5, withSlash.c_str(), rr, gg) != 0) return fail("rdf2d slash again");

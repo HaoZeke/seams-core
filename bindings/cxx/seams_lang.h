@@ -27,8 +27,6 @@ typedef struct seams_frame seams_frame;
 
 const char *seams_lang_version(void);
 const char *seams_last_error(void);
-/* The next `count` library operations throw before they do their work. */
-void seams_arm_fault(int count);
 
 int seams_path_nframes(const char *path);
 

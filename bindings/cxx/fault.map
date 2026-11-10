@@ -1,0 +1,16 @@
+GLIBCXX_3.4 {
+  global:
+    _Znwm;
+    _Znam;
+    _ZdlPv;
+    _ZdaPv;
+    _ZdlPvm;
+    _ZdaPvm;
+};
+SEAMS_TEST {
+  global:
+    seams_test_arm;
+    seams_test_live;
+    seams_test_peak;
+    seams_test_reset_peak;
+};

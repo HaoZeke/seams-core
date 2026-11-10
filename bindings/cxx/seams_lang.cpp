@@ -19,10 +19,10 @@
 
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <exception>
+#include <fstream>
 #include <memory>
 #include <set>
 #include <string>
@@ -37,17 +37,20 @@ namespace {
 using Cloud = molSys::PointCloud<molSys::Point<double>, double>;
 
 thread_local std::string g_error;
-std::atomic<int> g_faults{0};
-
-void fault_point() {
-  if (g_faults.load(std::memory_order_relaxed) <= 0) {
-    return;
-  }
-  g_faults.fetch_sub(1, std::memory_order_relaxed);
-  throw std::runtime_error("injected fault");
-}
 
 void set_error(const std::string &message) { g_error = message; }
+
+// Called from a handler. A standard exception keeps its text.
+// Any other type is reported as unknown and does not leave the handler.
+void remember_exception() {
+  try {
+    throw;
+  } catch (const std::exception &ex) {
+    set_error(ex.what());
+  } catch (...) {
+    set_error("unknown error");
+  }
+}
 
 void clear_error() { g_error.clear(); }
 
@@ -197,10 +200,6 @@ struct seams_frame {
   }
 };
 
-void seams_arm_fault(int count) {
-  g_faults.store(count < 0 ? 0 : count, std::memory_order_relaxed);
-}
-
 const char *seams_lang_version(void) { return SEAMS_LANG_VERSION; }
 
 const char *seams_last_error(void) { return g_error.c_str(); }
@@ -212,14 +211,18 @@ int seams_path_nframes(const char *path) {
     return -1;
   }
   try {
-    fault_point();
     const auto ext = extension_of(path);
     if (ext == "xyz") {
+      std::ifstream in(path);
+      if (!in) {
+        set_error("cannot read " + std::string(path));
+        return -1;
+      }
       return 1;
     }
     return sinp::nLammpsFrames(path);
-  } catch (const std::exception &ex) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-    set_error(ex.what());
+  } catch (...) {
+    remember_exception();
     return -1;
   }
 }
@@ -231,7 +234,6 @@ seams_frame *seams_frame_read(const char *path, int frame, int type_filter) {
     return nullptr;
   }
   try {
-    fault_point();
     auto owned = std::make_unique<seams_frame>();
     seams_frame *out = owned.get();
     out->cloud = load_path(path, frame, type_filter);
@@ -240,8 +242,8 @@ seams_frame *seams_frame_read(const char *path, int frame, int type_filter) {
     }
     out->sync_arrays();
     return owned.release();
-  } catch (const std::exception &ex) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-    set_error(ex.what());
+  } catch (...) {
+    remember_exception();
     return nullptr;
   }
 }
@@ -255,7 +257,6 @@ seams_frame *seams_frame_from_arrays(const double *xyz, int n,
     return nullptr;
   }
   try {
-    fault_point();
     auto owned = std::make_unique<seams_frame>();
     seams_frame *out = owned.get();
     Cloud &cloud = out->cloud;
@@ -275,8 +276,8 @@ seams_frame *seams_frame_from_arrays(const double *xyz, int n,
     }
     out->sync_arrays();
     return owned.release();
-  } catch (const std::exception &ex) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-    set_error(ex.what());
+  } catch (...) {
+    remember_exception();
     return nullptr;
   }
 }
@@ -330,7 +331,6 @@ int classify_chill(seams_frame *frame, double cutoff, int type,
     return 1;
   }
   try {
-    fault_point();
     const int typ = resolve_type(frame->cloud, type);
     const std::string which =
         (graph == nullptr || graph[0] == '\0') ? "cutoff" : graph;
@@ -371,8 +371,8 @@ int classify_chill(seams_frame *frame, double cutoff, int type,
       std::memcpy(counts9, counts, sizeof(counts));
     }
     return 0;
-  } catch (const std::exception &ex) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-    set_error(ex.what());
+  } catch (...) {
+    remember_exception();
     return 1;
   }
 }
@@ -418,7 +418,6 @@ int seams_frame_rings(seams_frame *frame, double cutoff, int type,
     return 1;
   }
   try {
-    fault_point();
     const int typ = resolve_type(frame->cloud, type);
     const std::string which = graph == nullptr ? "mutual" : graph;
     auto idx = index_graph(frame, cutoff, typ, which, 4);
@@ -428,8 +427,8 @@ int seams_frame_rings(seams_frame *frame, double cutoff, int type,
       counts[static_cast<int>(ring.size())] += 1;
     }
     return 0;
-  } catch (const std::exception &ex) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-    set_error(ex.what());
+  } catch (...) {
+    remember_exception();
     return 1;
   }
 }
@@ -442,7 +441,6 @@ int seams_frame_steinhardt(seams_frame *frame, double cutoff, int type,
     return 1;
   }
   try {
-    fault_point();
     const int typ = resolve_type(frame->cloud, type);
     const double cand = cutoff + 1.5;
     auto nList =
@@ -460,8 +458,8 @@ int seams_frame_steinhardt(seams_frame *frame, double cutoff, int type,
                   static_cast<std::size_t>(n) * sizeof(double));
     }
     return 0;
-  } catch (const std::exception &ex) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-    set_error(ex.what());
+  } catch (...) {
+    remember_exception();
     return 1;
   }
 }
@@ -478,7 +476,6 @@ int seams_frame_cages(seams_frame *frame, double cutoff, int type, int k,
     k = 4;
   }
   try {
-    fault_point();
     const int n = frame->cloud.nop;
     const int typ = resolve_type(frame->cloud, type);
     const std::string which = graph == nullptr ? "seeded" : graph;
@@ -585,8 +582,8 @@ int seams_frame_cages(seams_frame *frame, double cutoff, int type, int k,
     }
     tally_flags(hc, ddc);
     return 0;
-  } catch (const std::exception &ex) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-    set_error(ex.what());
+  } catch (...) {
+    remember_exception();
     return 1;
   }
 }
@@ -608,7 +605,6 @@ int seams_frame_signature_edge(seams_frame *frame, double cutoff, int type,
     return 1;
   }
   try {
-    fault_point();
     const int typ = resolve_type(frame->cloud, type);
     const std::string which =
         (graph == nullptr || graph[0] == '\0') ? "cutoff" : graph;
@@ -641,8 +637,8 @@ int seams_frame_signature_edge(seams_frame *frame, double cutoff, int type,
     *n_cages = static_cast<int>(found.size());
     *n_atoms = static_cast<int>(atoms.size());
     return 0;
-  } catch (const std::exception &ex) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-    set_error(ex.what());
+  } catch (...) {
+    remember_exception();
     return 1;
   }
 }
@@ -663,7 +659,6 @@ int seams_frame_rdf(const seams_frame *frame, double rmax, int nbins,
     return 1;
   }
   try {
-    fault_point();
     const int bins = seams_frame_rdf_nbins(rmax, nbins);
     const int typ_i = resolve_type(frame->cloud, type_i);
     const int typ_j = type_j > 0 ? type_j : typ_i;
@@ -684,8 +679,8 @@ int seams_frame_rdf(const seams_frame *frame, double rmax, int nbins,
       *volume = histogram.volume;
     }
     return 0;
-  } catch (const std::exception &ex) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-    set_error(ex.what());
+  } catch (...) {
+    remember_exception();
     return 1;
   }
 }
@@ -706,7 +701,6 @@ int seams_frame_rdf2d(seams_frame *frame, double cutoff, double binwidth,
     return 1;
   }
   try {
-    fault_point();
     const int nbin = seams_frame_rdf2d_nbin(cutoff, binwidth);
     if (output_dir != nullptr && output_dir[0] != '\0') {
       std::string dir(output_dir);
@@ -737,8 +731,8 @@ int seams_frame_rdf2d(seams_frame *frame, double cutoff, double binwidth,
       g[i] = values[static_cast<std::size_t>(i)];
     }
     return 0;
-  } catch (const std::exception &ex) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-    set_error(ex.what());
+  } catch (...) {
+    remember_exception();
     return 1;
   }
 }
@@ -763,7 +757,6 @@ int seams_frame_prisms(seams_frame *frame, double cutoff, int type,
     return 1;
   }
   try {
-    fault_point();
     const int typ = resolve_type(frame->cloud, type);
     auto ids = bond_list(frame->cloud, cutoff, typ, "mutual", 4);
     auto idx = nneigh::neighbourListByIndex(frame->cloud, ids);
@@ -799,8 +792,8 @@ int seams_frame_prisms(seams_frame *frame, double cutoff, int type,
     }
     *n_rows = expect;
     return 0;
-  } catch (const std::exception &ex) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-    set_error(ex.what());
+  } catch (...) {
+    remember_exception();
     return 1;
   }
 }
@@ -815,7 +808,6 @@ int seams_frame_monolayer(seams_frame *frame, double cutoff, int type,
     return 1;
   }
   try {
-    fault_point();
     const int typ = resolve_type(frame->cloud, type);
     auto ids = bond_list(frame->cloud, cutoff, typ, "cutoff", 4);
     auto idx = nneigh::neighbourListByIndex(frame->cloud, ids);
@@ -835,8 +827,8 @@ int seams_frame_monolayer(seams_frame *frame, double cutoff, int type,
       counts[static_cast<int>(ring.size())] += 1;
     }
     return 0;
-  } catch (const std::exception &ex) { // GCOVR_EXCL_BR_LINE the handler returns, so this edge is not a path
-    set_error(ex.what());
+  } catch (...) {
+    remember_exception();
     return 1;
   }
 }
