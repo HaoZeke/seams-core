@@ -766,13 +766,8 @@ struct ring::AffiliationUpdater::Impl {
   // Whole-frame evaluation that also fills the stored answers
   void batch(const std::vector<std::vector<int>> &rings,
              const std::vector<std::vector<int>> &nList,
-             std::vector<std::vector<int>> rows, const FrameContext *given) {
-    std::unique_ptr<FrameContext> own;
-    if (given == nullptr) {
-      own = std::make_unique<FrameContext>(rings, nList);
-      given = own.get();
-    }
-    const FrameContext &ctx = *given;
+             std::vector<std::vector<int>> rows) {
+    const FrameContext ctx(rings, nList);
     const int nR = static_cast<int>(rings.size());
     std::vector<int> all(rings.size());
     std::iota(all.begin(), all.end(), 0);
@@ -937,7 +932,7 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
   auto &rows = st.incoming;
   if (!st.primed || st.prevSortedRows.size() != nList.size()) {
     st.batchHot = false;
-    st.batch(rings, nList, rows, nullptr);
+    st.batch(rings, nList, rows);
     st.answersValid = true;
     return st.current;
   }
@@ -983,7 +978,7 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
     return st.current;
   }
   if (!st.answersValid) {
-    st.batch(rings, nList, rows, nullptr);
+    st.batch(rings, nList, rows);
     st.answersValid = true;
     return st.current;
   }
