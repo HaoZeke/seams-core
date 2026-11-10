@@ -1077,38 +1077,24 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
   // ring again if one of them has no image
   std::vector<int> pairData;
   std::vector<std::size_t> pairOffset(rings.size() + 1, 0);
-  std::vector<int> reeval;
   for (int i = 0; i < nR; i++) {
     if (isDirty[static_cast<std::size_t>(i)]) {
       pairOffset[static_cast<std::size_t>(i) + 1] = pairData.size();
       continue;
     }
     const auto was = static_cast<std::size_t>(prevOf[static_cast<std::size_t>(i)]);
-    const std::size_t mark = pairData.size();
-    bool ok = true;
-    for (std::size_t p = st.pairOffset[was]; p < st.pairOffset[was + 1] && ok;) {
+    for (std::size_t p = st.pairOffset[was]; p < st.pairOffset[was + 1];) {
       const int j = newOf[static_cast<std::size_t>(st.pairData[p])];
       const int m = st.pairData[p + 1];
-      ok = j >= 0;
       pairData.push_back(j);
       pairData.push_back(m);
-      for (int t = 0; t < m && ok; t++) {
+      for (int t = 0; t < m; t++) {
         const int k = newOf[static_cast<std::size_t>(st.pairData[p + 2 + t])];
-        ok = k >= 0;
         pairData.push_back(k);
       }
       p += 2 + static_cast<std::size_t>(m);
     }
-    if (!ok) {
-      pairData.resize(mark);
-      isDirty[static_cast<std::size_t>(i)] = 1;
-      reeval.push_back(i);
-    }
     pairOffset[static_cast<std::size_t>(i) + 1] = pairData.size();
-  }
-  if (!reeval.empty()) {
-    dirtyPairs.insert(dirtyPairs.end(), reeval.begin(), reeval.end());
-    std::sort(dirtyPairs.begin(), dirtyPairs.end());
   }
 
   const FrameContext ctx(rings, nList);
@@ -1145,14 +1131,8 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
     if (!dirtyEq[ii]) {
       const auto was = static_cast<std::size_t>(prevOf[ii]);
       eq[ii] = st.eq[was];
-      const std::size_t mark = periData.size();
       for (std::size_t p = st.periOffset[was]; p < st.periOffset[was + 1]; p++) {
         const int k = newOf[static_cast<std::size_t>(st.periData[p])];
-        if (k < 0) {
-          eq[ii] = -1;
-          periData.resize(mark);
-          break;
-        }
         periData.push_back(k);
       }
     }
