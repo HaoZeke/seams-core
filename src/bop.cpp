@@ -1489,9 +1489,6 @@ bool chill::isInterfacial(
   // and at least one neighbor with two staggered bonds
   if (num_staggrd == 3 && num_eclipsd == 0) {
     for (int jatomIndex : nearest) {
-      if (jatomIndex < 0 || jatomIndex >= yCloud.nop) {
-        continue;
-      }
       neighStaggered = chill::numStaggered(yCloud, nList, jatomIndex);
       if (chillPlus) {
         if (neighStaggered > 1) {
