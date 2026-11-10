@@ -45,7 +45,7 @@ endframe
 `host 0` means that step did not build a list. Each `row` starts with
 the central atom id. The following ids are the neighbours kept for the
 fix group. `pbc` is the LAMMPS boundary code on x, y, and z. Zero is
-periodic.
+periodic. The nine box numbers are printed with `%.17g`.
 
 The CHILL+ compute accepts `graph`, `cutoff`, and `file`. Without
 `file`, it writes no label file.

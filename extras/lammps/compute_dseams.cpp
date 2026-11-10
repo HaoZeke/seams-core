@@ -90,8 +90,11 @@ void ComputeDseams::compute_peratom() {
   out << "frame\n";
   out << "step " << update->ntimestep << "\n";
   out << "cutoff " << cutoff << "\n";
-  out << "box " << box9[0] << " " << box9[1] << " " << box9[2] << " " << box9[3] << " " << box9[4]
-      << " " << box9[5] << " " << box9[6] << " " << box9[7] << " " << box9[8] << "\n";
+  char box_line[320];
+  std::snprintf(box_line, sizeof(box_line),
+                "box %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g\n",
+                box9[0], box9[1], box9[2], box9[3], box9[4], box9[5], box9[6], box9[7], box9[8]);
+  out << box_line;
   out << "pbc " << domain->boundary[0][0] << " " << domain->boundary[1][0] << " "
       << domain->boundary[2][0] << "\n";
   out << "atoms " << nlocal << "\n";
