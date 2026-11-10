@@ -86,15 +86,10 @@ void ComputeDseams::compute_peratom() {
       domain->triclinic ? domain->xy : 0.0,
       domain->triclinic ? domain->xz : 0.0,
       domain->triclinic ? domain->yz : 0.0};
-  int local_atoms = nlocal;
-  int total_atoms = 0;
-  MPI_Allreduce(&local_atoms, &total_atoms, 1, MPI_INT, MPI_SUM, world);
   int failed = 0;
   if (nlocal > 0) {
     failed = seams_chill_plus_graph_lammps(xyz.data(), nlocal, box9, cutoff,
                                            graph.c_str(), labels.data()) != 0;
-  // nprocs is already 1, so nlocal equals total_atoms. The else side is
-  // nlocal equal to 0, which forces the total to 0.
   } else {
     failed = 1;
   }
