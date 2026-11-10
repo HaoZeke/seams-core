@@ -34,6 +34,8 @@
 #include <thread>
 #include <vector>
 
+extern "C" void __gcov_reset() __attribute__((weak));
+
 namespace fs = std::filesystem;
 
 using Cloud = molSys::PointCloud<molSys::Point<double>, double>;
@@ -152,6 +154,11 @@ Proc runSeams(const std::vector<std::string> &args) {
     ::close(errPipe[1]);
     ::unsetenv("DSEAMS_PHASE");
     ::setenv("OMP_NUM_THREADS", "1", 1);
+    // This image was forked from a coverage run. Drop its counters so
+    // the exec'd seams process is the one that records a profile.
+    if (__gcov_reset != nullptr) {
+      __gcov_reset();
+    }
     std::vector<char *> argv;
     argv.push_back(const_cast<char *>(bin.c_str()));
     for (const auto &arg : args) {
@@ -1250,7 +1257,8 @@ TEST_CASE("cli edges for ranges, axes, and unclassified ice", "[cover_io]") {
   writeText(xyz, "1\n\nO 0 0 0\n");
   auto late = runSeams({"read", xyz.string(), "--frame", "2", "--last", "3"});
   REQUIRE(late.exited);
-  REQUIRE(late.status == 0);
+  REQUIRE(late.status == 2);
+  REQUIRE(late.err.find("past the last frame") != std::string::npos);
 
   const auto nodot = dir / "nodot";
   writeText(nodot, dumpText(1, "1 1 0 0 0\n"));

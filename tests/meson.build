@@ -73,6 +73,7 @@ _test_env.prepend('LD_LIBRARY_PATH', meson.project_build_root() / 'src')
 if chemfiles_libdir != ''
   _test_env.prepend('LD_LIBRARY_PATH', chemfiles_libdir)
 endif
+_test_env.set('SEAMS_SOURCE_ROOT', meson.project_source_root())
 _test_env.set('SEAMS_INSITU_EXE', seams_insitu_exe.full_path())
 _test_env.set('SEAMS_GRO_IMD_EXE', seams_gromacs_imd_exe.full_path())
 _test_env.set('LC_ALL', 'C')

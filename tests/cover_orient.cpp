@@ -395,7 +395,13 @@ TEST_CASE("point-set fillers honour a wrapped start and a rejected start",
 TEST_CASE("HC cage template keeps the cloud readXYZ returns",
           "[orient][pnt]") {
   HcTemplate keep;
+  const char *root = std::getenv("SEAMS_SOURCE_ROOT");
+  const auto previous = std::filesystem::current_path();
+  if (root != nullptr) {
+    std::filesystem::current_path(root);
+  }
   const auto pts = pntToPnt::getPointSetCage(ring::strucType::HCbasal);
+  std::filesystem::current_path(previous);
   REQUIRE(pts.rows() == 12);
   REQUIRE(pts.cols() == 3);
   REQUIRE_THAT(pts(0, 0), WithinAbs(8.995, 1e-6));

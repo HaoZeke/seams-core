@@ -246,7 +246,11 @@ endif
 
 chemfiles_libdir = ''
 chemfiles_opt = get_option('with_chemfiles')
-chemfiles_dep = dependency('chemfiles', required: false)
+if chemfiles_opt.disabled()
+  chemfiles_dep = disabler()
+else
+  chemfiles_dep = dependency('chemfiles', required: false)
+endif
 # The cmake subproject translation links molfile plugins into one
 # archive and their init symbols collide. FetchContent in
 # cmake/CMakeLists.txt is the build that produces a working library.
