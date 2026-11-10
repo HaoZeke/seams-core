@@ -146,11 +146,9 @@ void fill_box(const Cloud &cloud, double box9[9]) {
   for (int i = 0; i < 9; ++i) {
     box9[i] = 0.0;
   }
-  if (cloud.boxLow.size() >= 3) {
-    box9[0] = cloud.boxLow[0];
-    box9[1] = cloud.boxLow[1];
-    box9[2] = cloud.boxLow[2];
-  }
+  box9[0] = cloud.boxLow[0];
+  box9[1] = cloud.boxLow[1];
+  box9[2] = cloud.boxLow[2];
   if (cloud.box.size() >= 3) {
     box9[3] = cloud.box[0];
     box9[4] = cloud.box[1];
