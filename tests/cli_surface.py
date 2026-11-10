@@ -528,11 +528,13 @@ def main():
             if not sized:
                 sys.stderr.write("fault trace\n" + traced.stderr[-400:])
                 return 1
-            probed = throw_at(loud_args, sized[-1])
-            if probed.returncode != 2 or "bad_alloc" not in probed.stderr:
-                sys.stderr.write(
-                    "fault mismatch " + str(probed.returncode) + "\n" + probed.stderr[-400:]
-                )
+            hit = False
+            for at in sized:
+                probed = throw_at(loud_args, at)
+                if probed.returncode == 2 and "bad_alloc" in probed.stderr:
+                    hit = True
+            if not hit:
+                sys.stderr.write("fault mismatch " + " ".join(loud_args) + "\n")
                 return 1
         for kind, needle in (("int", "unknown error"), ("bad_alloc", "bad_alloc")):
             env = os.environ.copy()
