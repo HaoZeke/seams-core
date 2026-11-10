@@ -384,9 +384,7 @@ int analyze_cloud(Engine *eng, Cloud &cloud, int step, bool do_sink) {
       mark("rings");
       for (const auto &ring : rings) {
         const int size = static_cast<int>(ring.size());
-        if (size >= 0 && size <= SEAMS_INSITU_RING_MAX) {
-          eng->rings[size] += 1;
-        }
+        eng->rings[size] += 1;
         eng->n_rings += 1;
       }
       std::vector<std::vector<int>> six;
