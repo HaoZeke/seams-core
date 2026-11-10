@@ -245,6 +245,31 @@ bool sameCount(const Result &a, const Result &b) {
   return a.cages == b.cages && a.hc == b.hc && a.ddc == b.ddc && a.six == b.six;
 }
 
+// Rings that meet one atom, at a size cap. The atom is a source vertex.
+// A shift keeps its index. A permutation moves it, and the count of rings
+// through that atom stays the same.
+struct RingCensus {
+  std::map<int, int> hist;
+  Rings rings;
+};
+
+RingCensus ringsThroughAtom(Cloud &cloud, double cutoff, int atomType, int cap, int source) {
+  RingCensus out;
+  if (cloud.nop <= 0 || source < 0 || source >= cloud.nop) {
+    return out;
+  }
+  const auto nl = nneigh::neighListO(cutoff, cloud, atomType);
+  const auto idx = nneigh::neighbourListByIndex(cloud, nl);
+  std::vector<char> meet(static_cast<std::size_t>(cloud.nop), 0);
+  meet[static_cast<std::size_t>(source)] = 1;
+  out.rings = primitive::ringNetwork(idx, cap, meet, true);
+  std::sort(out.rings.begin(), out.rings.end());
+  for (const auto &ring : out.rings) {
+    out.hist[static_cast<int>(ring.size())]++;
+  }
+  return out;
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -290,6 +315,8 @@ int main(int argc, char **argv) {
   int failures = 0;
   int frames = 0;
   int checked = 0;
+  int checkedCap4 = 0;
+  int checkedCap6 = 0;
   int skipped = 0;
   const int definedEmpty = 0;
   std::uint64_t shiftTrials = 0;
@@ -305,16 +332,49 @@ int main(int argc, char **argv) {
         std::printf("%s frame %d type %d EMPTY\n", path.filename().c_str(), frame, atomType);
       }
       const GraphSize g0 = graphSize(cloud, cutoff, atomType);
-      // The size cap is applied while the rings are built: a ring longer
-      // than the requested maximum is not stored. On dump-l frame 1 that
-      // cap still leaves tens of thousands of shortest-path rings at one
-      // vertex, and the frame does not finish. It is skipped, and a skip
-      // fails this run. mW_cubic is degree 4. One search returns in
-      // 0.97 s, so a frame above 2048 atoms is checked at one trial.
+      // A degree above 40 does not finish a full-frame search at cap 6
+      // inside this suite. dump-bcc is cap 4. dump-l is cap 6 on one
+      // source vertex. The shift keeps that index. The permutation
+      // follows the atom. A skip still fails the run.
+      // mW_cubic is degree 4. One search returns in 0.97 s, so a frame
+      // above 2048 atoms is checked at one trial.
       if (g0.maxDegree > 40) {
-        skipped++;
-        std::printf("%s frame %d type %d nop %d maxdeg %d SKIP ring walk does not finish\n",
-                    path.filename().c_str(), frame, atomType, cloud.nop, g0.maxDegree);
+        const int cap = g0.maxDegree > 80 ? 4 : 6;
+        const int source = 0;
+        const RingCensus ref = ringsThroughAtom(cloud, cutoff, atomType, cap, source);
+        bool ok = true;
+        Cloud moved = cloud;
+        shiftCloud(moved, 0.5, 0.0, 0.0);
+        const RingCensus shifted = ringsThroughAtom(moved, cutoff, atomType, cap, source);
+        shiftTrials++;
+        if (shifted.hist != ref.hist || shifted.rings != ref.rings) {
+          std::printf("FAIL %s frame %d cap %d shift rings %zu/%zu\n", path.filename().c_str(),
+                      frame, cap, ref.rings.size(), shifted.rings.size());
+          ok = false;
+        }
+        std::mt19937 rng(20261101u + static_cast<unsigned>(frames) * 9973u);
+        std::vector<int> perm(static_cast<std::size_t>(cloud.nop));
+        std::iota(perm.begin(), perm.end(), 0);
+        std::shuffle(perm.begin(), perm.end(), rng);
+        Cloud permuted = permuteCloud(cloud, perm);
+        const RingCensus pgot =
+            ringsThroughAtom(permuted, cutoff, atomType, cap, perm[static_cast<std::size_t>(source)]);
+        permTrials++;
+        if (pgot.hist != ref.hist) {
+          std::printf("FAIL %s frame %d cap %d perm rings %zu/%zu\n", path.filename().c_str(),
+                      frame, cap, ref.rings.size(), pgot.rings.size());
+          ok = false;
+        }
+        if (!ok) {
+          failures++;
+        } else if (cap == 4) {
+          checkedCap4++;
+        } else {
+          checkedCap6++;
+        }
+        std::printf("%s frame %d type %d nop %d maxdeg %d cap %d source %d rings %zu %s\n",
+                    path.filename().c_str(), frame, atomType, cloud.nop, g0.maxDegree, cap, source,
+                    ref.rings.size(), ok ? "CHECKED-AT-CAP" : "FAIL");
         std::fflush(stdout);
         continue;
       }
@@ -400,8 +460,9 @@ int main(int argc, char **argv) {
       std::fflush(stdout);
     }
   }
-  std::printf("frames %d checked %d skipped %d defined-empty %d failures %d shiftTrials %llu permTrials %llu\n",
-              frames, checked, skipped, definedEmpty, failures,
+  std::printf("frames %d checked %d checked-at-cap-4 %d checked-at-cap-6 %d skipped %d "
+              "defined-empty %d failures %d shiftTrials %llu permTrials %llu\n",
+              frames, checked, checkedCap4, checkedCap6, skipped, definedEmpty, failures,
               static_cast<unsigned long long>(shiftTrials),
               static_cast<unsigned long long>(permTrials));
   // A skipped frame was not compared. That is a failure.

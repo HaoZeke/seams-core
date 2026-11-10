@@ -436,3 +436,29 @@ TEST_CASE("the ring-size cap is applied while dump-l rings are built", "[franzbl
     REQUIRE(hist == *expected[i]);
   }
 }
+
+TEST_CASE("dump-l frame 1 matches the OVITO ring counts", "[franzblau]") {
+  // OVITO 3.17.2 FindRingsModifier, CreateBonds cutoff 3.5, frame 0.
+  // maximum_ring_size 4 reports size 4 = 118033 and no size 3.
+  // maximum_ring_size 6 reports size 4 = 118033, size 5 = 2986554,
+  // size 6 = 945837. Those are the counts locked here. OVITO does not
+  // report triangles, so size 3 is checked on our side only.
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  cloud = sinp::readLammpsTrjO("traj/dump-l.lammpstrj", 1, cloud, 1);
+  const auto idx = nneigh::neighbourListByIndex(cloud, nneigh::neighListO(3.5, cloud, 1));
+  auto histOf = [](const std::vector<std::vector<int>> &rings) {
+    std::map<int, int> hist;
+    for (const auto &ring : rings) {
+      hist[static_cast<int>(ring.size())]++;
+    }
+    return hist;
+  };
+  const auto cap4 = histOf(primitive::ringNetwork(idx, 4));
+  REQUIRE(cap4.at(3) == 125065);
+  REQUIRE(cap4.at(4) == 118033);
+  REQUIRE(cap4.count(5) == 0);
+  const auto cap6 = histOf(primitive::ringNetwork(idx, 6));
+  REQUIRE(cap6.at(4) == 118033);
+  REQUIRE(cap6.at(5) == 2986554);
+  REQUIRE(cap6.at(6) == 945837);
+}

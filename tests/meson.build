@@ -95,8 +95,8 @@ endif
 foreach name, src : test_sources
   # meson allows no nested ternary; the long-running suites get more time
   _timeout = 120
-  if name == 'cage_enum' or name == 'domain'
-    _timeout = 600
+  if name == 'cage_enum' or name == 'domain' or name == 'franzblau_extra'
+    _timeout = 1800
   elif name == 'bulkTUM'
     # The last case is PG(2, 5). Atomic counters push it past 900s.
     _timeout = 3600
@@ -424,29 +424,31 @@ test('invariance_empty_frame', _check_invariance,
   workdir: meson.project_source_root() / 'input',
   env: _test_env,
   should_fail: true)
-# 1000 translations and 1000 permutations on every deposited frame, plus
+# 1000 translations and 1000 permutations on every ordinary frame, plus
 # the eight half-box shifts. A frame above 2048 atoms is checked at one
-# trial. A degree above 40 is skipped, and a skip fails the run.
-# One thread, 1023 s, reported checked 22, skipped 402, defined-empty 0.
-# mW_cubic alone was 141 s. The limits sit above those runs.
-# A hang is a failure.
+# trial. A degree above 40 is checked at cap 4 or cap 6 on one source
+# vertex, with one shift and one permutation. A skip fails the run.
 _fuzz_summary = meson.current_source_dir() / 'fuzz_cage_summary.sh'
 test('fuzz_cage_shift_permute', find_program('bash'),
-  args: [_fuzz_summary, 'checked 22 skipped 402 defined-empty 0', _fuzz_cage,
-         meson.project_source_root() / 'input' / 'traj', '1000'],
+  args: [_fuzz_summary,
+         'checked 22 checked-at-cap-4 201 checked-at-cap-6 201 skipped 0 defined-empty 0',
+         _fuzz_cage, meson.project_source_root() / 'input' / 'traj', '1000'],
   env: _test_env,
-  timeout: 2400)
+  timeout: 14400)
 # mW_cubic is 4096 atoms at degree 4. One search returns (8192 six-rings,
-# 2048 cages, 0.97s). Eleven frames at one trial measured 141s.
+# 2048 cages, 0.97 s). Eleven frames at one trial measured 141 s.
 test('fuzz_cage_mw_cubic', find_program('bash'),
-  args: [_fuzz_summary, 'checked 11 skipped 0 defined-empty 0', _fuzz_cage,
+  args: [_fuzz_summary,
+         'checked 11 checked-at-cap-4 0 checked-at-cap-6 0 skipped 0 defined-empty 0',
+         _fuzz_cage,
          meson.project_source_root() / 'input' / 'traj' / 'mW_cubic.lammpstrj', '1'],
   env: _test_env,
   timeout: 360)
-# dump-l frame 1 is 512 atoms at degree 74. Source 32 of 512 already
-# holds 1197642 primitive rings after 180s. The file is skipped.
-test('fuzz_cage_dump_l_skipped', find_program('bash'),
-  args: [_fuzz_summary, 'checked 0 skipped 201 defined-empty 0', _fuzz_cage,
+# dump-l is degree 74. Each frame is checked at cap 6 through vertex 0.
+test('fuzz_cage_dump_l_capped', find_program('bash'),
+  args: [_fuzz_summary,
+         'checked 0 checked-at-cap-4 0 checked-at-cap-6 201 skipped 0 defined-empty 0',
+         _fuzz_cage,
          meson.project_source_root() / 'input' / 'traj' / 'dump-l.lammpstrj', '1'],
   env: _test_env,
-  timeout: 180)
+  timeout: 7200)

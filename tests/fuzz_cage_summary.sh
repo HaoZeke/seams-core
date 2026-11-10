@@ -17,10 +17,4 @@ case "$summary" in
     exit 1
     ;;
 esac
-if printf '%s\n' "$out" | grep -q 'CHECKED'; then
-  if printf '%s\n' "$expected" | grep -q 'checked 0'; then
-    printf 'a skipped file printed CHECKED\n' >&2
-    exit 1
-  fi
-fi
 exit "$rc"

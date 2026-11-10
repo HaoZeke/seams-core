@@ -120,10 +120,13 @@ std::vector<std::vector<int>> ringNetwork(const std::vector<std::vector<int>> &n
                                           int maxDepth);
 
 //! The rings ringNetwork returns whose lowest-indexed member is flagged in
-//! @a sources (by index; empty flags every vertex), in the same order
+//! @a sources (by index; empty flags every vertex), in the same order.
+//! With @a throughSources, each ring that meets a flagged vertex is returned
+//! once, from the lowest flagged vertex on that ring.
 std::vector<std::vector<int>> ringNetwork(const std::vector<std::vector<int>> &nList,
                                           int maxDepth,
-                                          const std::vector<char> &sources);
+                                          const std::vector<char> &sources,
+                                          bool throughSources = false);
 
 //! Creates a graph object and fills it with the information from a neighbour
 //! list and pointCloud created before. NOTE: the neighbourListIndex contains

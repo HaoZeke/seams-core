@@ -641,7 +641,7 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth)
  */
 std::vector<std::vector<int>>
 primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
-                       const std::vector<char> &sources) {
+                       const std::vector<char> &sources, bool throughSources) {
   std::vector<std::vector<int>> rings;
   if (maxDepth < 3 || nList.empty()) {
     return rings;
@@ -750,8 +750,9 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
       RingScratch scratch;
 #pragma omp for schedule(guided)
       for (int k = 0; k < nFrom; k++) {
-        enumerateFromSource(adjacency, balls, from[k], maxDepth, maxLvl,
-                            scratch,         perSource[static_cast<std::size_t>(k)]);
+        enumerateFromSource(adjacency, balls, from[k], maxDepth, maxLvl, scratch,
+                            perSource[static_cast<std::size_t>(k)],
+                            throughSources ? &sources : nullptr);
       }
     }
     gRingSplit.enumerate_ms = millisSince(enumStart);
@@ -789,8 +790,8 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
   const auto enumStart = std::chrono::steady_clock::now();
   RingScratch scratch;
   for (const int src : from) {
-    enumerateFromSource(adjacency, balls, src, maxDepth, maxLvl, scratch,
-                        rings);
+    enumerateFromSource(adjacency, balls, src, maxDepth, maxLvl, scratch, rings,
+                        throughSources ? &sources : nullptr);
   }
   gRingSplit.enumerate_ms = millisSince(enumStart);
   const auto mergeStart = std::chrono::steady_clock::now();
