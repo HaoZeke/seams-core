@@ -85,7 +85,6 @@ def configure_live(env, build):
             str(build / "seams" / "src"),
             str(build / "seams" / "chemfiles-prefix" / "lib"),
             env.get("LD_LIBRARY_PATH", ""),
-            "/usr/lib/x86_64-linux-gnu",
         )
         if part
     )
