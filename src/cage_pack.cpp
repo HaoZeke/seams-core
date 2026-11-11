@@ -959,6 +959,92 @@ void resetPackParts() { gPackParts = {}; }
 // Same order as sorting the rank keys. Digits are the key ints, least
 // significant first, so equal keys stay in input order and the run ids match
 // a comparison sort. Ranks above 16 bits fall back to that sort.
+// Ids are the sorted order of the packed rank keys. Equal keys share one
+// id. A hash collects the distinct words, then those few words are numbered
+// by sorting them, which is the same numbering as a full radix of every copy.
+bool assignPackedIds(const std::vector<PKey> &keys, std::vector<std::array<int, 2>> &ends,
+                     std::vector<int> &cliqueCount) {
+  const int nKeys = static_cast<int>(keys.size());
+  if (nKeys == 0) {
+    cliqueCount.clear();
+    return true;
+  }
+  thread_local std::vector<std::uint64_t> wordStore;
+  std::vector<std::uint64_t> *words = &wordStore;
+  asm volatile("" : "+r"(words));
+  words->resize(static_cast<std::size_t>(nKeys));
+  std::uint64_t *word = words->data();
+  for (int i = 0; i < nKeys; i++) {
+    const RankKey &key = keys[static_cast<std::size_t>(i)].k;
+    if (!key.ok || key.n != 4) {
+      return false;
+    }
+    std::uint64_t packed = 0;
+    for (int d = 0; d < 4; d++) {
+      if (key.id[d] < 0 || key.id[d] > 65535) {
+        return false;
+      }
+      packed |= static_cast<std::uint64_t>(key.id[3 - d]) << (16 * d);
+    }
+    word[i] = packed;
+  }
+  int nTab = 1;
+  while (nTab < nKeys) {
+    nTab <<= 1;
+  }
+  struct Ent {
+    std::uint64_t k;
+    int id;
+  };
+  thread_local std::vector<Ent> tabStore;
+  thread_local std::vector<std::uint64_t> uniqStore;
+  thread_local std::vector<int> tmpStore;
+  thread_local std::vector<int> orderStore;
+  thread_local std::vector<int> rankStore;
+  std::vector<Ent> *tabP = &tabStore;
+  asm volatile("" : "+r"(tabP));
+  tabP->assign(static_cast<std::size_t>(nTab), Ent{0, -1});
+  Ent *tab = tabP->data();
+  const std::size_t mask = static_cast<std::size_t>(nTab - 1);
+  uniqStore.clear();
+  tmpStore.resize(static_cast<std::size_t>(nKeys));
+  for (int i = 0; i < nKeys; i++) {
+    const std::uint64_t w = word[i];
+    std::size_t h = static_cast<std::size_t>(w * 0x9E3779B185EBCA87ULL) & mask;
+    int probes = 0;
+    while (tab[h].id >= 0 && tab[h].k != w) {
+      h = (h + 1) & mask;
+      if (++probes > nTab) {
+        return false;
+      }
+    }
+    if (tab[h].id < 0) {
+      tab[h] = Ent{w, static_cast<int>(uniqStore.size())};
+      uniqStore.push_back(w);
+    }
+    tmpStore[static_cast<std::size_t>(i)] = tab[h].id;
+  }
+  const int nU = static_cast<int>(uniqStore.size());
+  orderStore.resize(static_cast<std::size_t>(nU));
+  std::iota(orderStore.begin(), orderStore.end(), 0);
+  const std::uint64_t *uniq = uniqStore.data();
+  std::sort(orderStore.begin(), orderStore.end(),
+            [&](int a, int b) { return uniq[a] < uniq[b]; });
+  rankStore.resize(static_cast<std::size_t>(nU));
+  for (int i = 0; i < nU; i++) {
+    rankStore[static_cast<std::size_t>(orderStore[static_cast<std::size_t>(i)])] = i;
+  }
+  cliqueCount.assign(static_cast<std::size_t>(std::max(nU, 1)), 0);
+  for (int i = 0; i < nKeys; i++) {
+    const int id = rankStore[static_cast<std::size_t>(tmpStore[static_cast<std::size_t>(i)])];
+    const PKey &key = keys[static_cast<std::size_t>(i)];
+    cliqueCount[static_cast<std::size_t>(id)]++;
+    ends[static_cast<std::size_t>(key.ring)][static_cast<std::size_t>(key.slot)] = id;
+  }
+  gDdcKeyDigits += static_cast<std::uint64_t>(nKeys) * 4;
+  return true;
+}
+
 void orderCliqueKeys(std::vector<int> &ord, const std::vector<PKey> &keys) {
   const int n = static_cast<int>(ord.size());
   auto fallback = [&]() {
@@ -1371,11 +1457,13 @@ bool linePack(const std::vector<Row> &conf, const std::vector<int> &mem,
   // sum of the run starts assigns those ids, and equal keys keep one id.
   std::vector<std::array<int, 2>> ends(static_cast<size_t>(nAll), std::array<int, 2>{-1, -1});
   const int nKeys = static_cast<int>(keys.size());
-  std::vector<int> ord(static_cast<std::size_t>(nKeys));
+  std::vector<int> ord;
+  std::vector<int> cliqueCount;
+  if (!assignPackedIds(keys, ends, cliqueCount)) {
+  ord.resize(static_cast<std::size_t>(nKeys));
   std::iota(ord.begin(), ord.end(), 0);
   gPackedLive = nullptr;
   orderCliqueKeys(ord, keys);
-  std::vector<int> cliqueCount;
   if (gPackedLive != nullptr && static_cast<int>(gPackedLive->size()) == nKeys) {
     const std::uint64_t *word = gPackedLive->data();
     int runs = 0;
@@ -1419,6 +1507,7 @@ bool linePack(const std::vector<Row> &conf, const std::vector<int> &mem,
     const int id = runId[static_cast<std::size_t>(i)];
     cliqueCount[static_cast<std::size_t>(id)]++;
     ends[static_cast<std::size_t>(key.ring)][static_cast<std::size_t>(key.slot)] = id;
+  }
   }
   }
   gPackParts.clique_ms += std::chrono::duration<double, std::milli>(
