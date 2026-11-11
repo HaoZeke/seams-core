@@ -58,8 +58,9 @@ void compute(const std::string &op,
   }
   const std::vector<std::vector<int>> *rows = nullptr;
   static std::vector<std::vector<int>> ownedRows;
-  if (nneigh::blockWindowRows(work.cloud, cutoff, single ? nullptr : &work.share.owned,
-                              ownedRows)) {
+  const bool window =
+      nneigh::blockWindowRows(work.cloud, cutoff, single ? nullptr : &work.share.owned, ownedRows);
+  if (window) {
     rows = &ownedRows;
   } else if (single || work.cloud.nop < 40000) {
     ownedRows = nneigh::neighListO(cutoff, work.cloud, 1);

@@ -18,6 +18,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -751,35 +752,38 @@ bool nneigh::blockWindowRows(
   if (wide == 3) {
     return false;
   }
-  // Fold anchors onto the first one. A block that does not wrap keeps its
-  // span; an owned atom that crossed the boundary does not stretch the
-  // interval across the whole box.
+  // The owned atoms sit in one arc of the circle. The largest empty gap
+  // is the outside of that arc, including when the arc is wider than half
+  // the box. Folding onto the first atom splits such an arc in two and the
+  // window then covers the whole box.
   {
-    double seed[3] = {};
-    bool haveSeed = false;
-    lo[0] = lo[1] = lo[2] = 1.0e300;
-    hi[0] = hi[1] = hi[2] = -1.0e300;
-    for (int i = 0; i < n; i++) {
-      if (source != nullptr &&
-          (static_cast<int>(source->size()) <= i || (*source)[static_cast<std::size_t>(i)] == 0)) {
-        continue;
+    std::vector<double> axis(static_cast<std::size_t>(nAnchor));
+    for (int d = 0; d < 3; d++) {
+      int m = 0;
+      for (int i = 0; i < n; i++) {
+        if (source != nullptr &&
+            (static_cast<int>(source->size()) <= i || (*source)[static_cast<std::size_t>(i)] == 0)) {
+          continue;
+        }
+        const auto &p = yCloud.pts[static_cast<std::size_t>(i)];
+        const double c[3] = {p.x, p.y, p.z};
+        axis[static_cast<std::size_t>(m++)] = c[d];
       }
-      const auto &p = yCloud.pts[static_cast<std::size_t>(i)];
-      if (!haveSeed) {
-        seed[0] = p.x;
-        seed[1] = p.y;
-        seed[2] = p.z;
-        haveSeed = true;
+      std::sort(axis.begin(), axis.begin() + m);
+      const double length = lenBox[d];
+      double bestGap = axis[0] + length - axis[static_cast<std::size_t>(m - 1)];
+      int after = m - 1;
+      for (int i = 0; i + 1 < m; i++) {
+        const double gap =
+            axis[static_cast<std::size_t>(i + 1)] - axis[static_cast<std::size_t>(i)];
+        if (gap > bestGap) {
+          bestGap = gap;
+          after = i;
+        }
       }
-      const double c[3] = {p.x, p.y, p.z};
-      for (int d = 0; d < 3; d++) {
-        double s = c[d];
-        double delta = s - seed[d];
-        delta -= lenBox[d] * std::floor(delta / lenBox[d] + 0.5);
-        s = seed[d] + delta;
-        lo[d] = std::min(lo[d], s);
-        hi[d] = std::max(hi[d], s);
-      }
+      const double start = after + 1 == m ? axis[0] : axis[static_cast<std::size_t>(after + 1)];
+      lo[d] = start;
+      hi[d] = start + std::max(length - bestGap, 0.0);
     }
   }
   // Owned atoms of one block do not wrap. Ghosts that do are shifted by a

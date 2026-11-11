@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <numeric>
 #include <unordered_map>
@@ -44,6 +45,7 @@ struct CountCut {
   int parts = -1;
   double halo = -1.0;
   double lx = 0, ly = 0, lz = 0;
+  double origin[3] = {0, 0, 0};
   int nxyz[3] = {0, 0, 0};
   double width[3] = {0, 0, 0};
   std::uint32_t hwidth[3] = {0, 0, 0};
@@ -52,6 +54,7 @@ struct CountCut {
 };
 
 CountCut gCount;
+bool gForceBlock = false;
 
 struct MeasuredCut {
   int nop = -1;
@@ -92,8 +95,11 @@ bool buildCountCut(const Cloud &cloud, double halo, int parts) {
     box.oz = cloud.boxLow[2];
   }
   std::size_t ncell = 0;
+  // Bins finer than the cutoff let the distance filter drop the outer
+  // part of a painted cell instead of keeping the whole neighbour bin.
+  const double hint = halo * 0.5;
   const int query = lc_mesh_cut(xyz.data(), static_cast<std::size_t>(cloud.nop), &box, halo,
-                                 nullptr, 0.0, static_cast<std::size_t>(parts), 2, 0.0, 0, nullptr,
+                                 nullptr, hint, static_cast<std::size_t>(parts), 2, 0.0, 0, nullptr,
                                  nullptr, nullptr, nullptr, 0, 0, &ncell);
   if (query != 0 || ncell == 0) {
     return false;
@@ -103,7 +109,7 @@ bool buildCountCut(const Cloud &cloud, double halo, int parts) {
   int nxyz[3] = {0, 0, 0};
   double width[3] = {0, 0, 0};
   const int filled =
-      lc_mesh_cut(xyz.data(), static_cast<std::size_t>(cloud.nop), &box, halo, nullptr, 0.0,
+      lc_mesh_cut(xyz.data(), static_cast<std::size_t>(cloud.nop), &box, halo, nullptr, hint,
                   static_cast<std::size_t>(parts), 2, 0.0, 0, nxyz, width, assign.data(),
                   point.data(), ncell, static_cast<std::size_t>(cloud.nop), &ncell);
   if (filled != 0) {
@@ -119,6 +125,9 @@ bool buildCountCut(const Cloud &cloud, double halo, int parts) {
   gCount.lx = cloud.box[0];
   gCount.ly = cloud.box[1];
   gCount.lz = cloud.box[2];
+  gCount.origin[0] = cloud.boxLow.size() > 0 ? cloud.boxLow[0] : 0.0;
+  gCount.origin[1] = cloud.boxLow.size() > 1 ? cloud.boxLow[1] : 0.0;
+  gCount.origin[2] = cloud.boxLow.size() > 2 ? cloud.boxLow[2] : 0.0;
   for (int d = 0; d < 3; d++) {
     gCount.nxyz[d] = nxyz[d];
     gCount.width[d] = width[d];
@@ -134,67 +143,54 @@ bool shareFromAssign(const Cloud &cloud, int rank, const std::vector<int> &assig
     return false;
   }
   const int ncell = static_cast<int>(assign.size());
-  std::size_t nGhost = 0;
-  if (lc_halo(gCount.nxyz, assign.data(), assign.size(), rank, gCount.hwidth, nullptr, 0,
-              &nGhost) != 0) {
+  std::vector<double> packed(static_cast<std::size_t>(cloud.nop) * 3);
+  for (int i = 0; i < cloud.nop; i++) {
+    const auto &p = cloud.pts[static_cast<std::size_t>(i)];
+    packed[static_cast<std::size_t>(i) * 3] = p.x;
+    packed[static_cast<std::size_t>(i) * 3 + 1] = p.y;
+    packed[static_cast<std::size_t>(i) * 3 + 2] = p.z;
+  }
+  const double lengths[3] = {gCount.lx, gCount.ly, gCount.lz};
+  std::vector<int> hit(static_cast<std::size_t>(cloud.nop), 0);
+  if (lc_within_reach(packed.data(), static_cast<std::size_t>(cloud.nop), lengths, gCount.nxyz,
+                      assign.data(), assign.size(), gCount.pointCell.data(), gCount.hwidth, rank,
+                      gCount.halo, hit.data()) != 0) {
     return false;
-  }
-  std::vector<int> ghosts(nGhost, 0);
-  if (nGhost > 0 &&
-      lc_halo(gCount.nxyz, assign.data(), assign.size(), rank, gCount.hwidth, ghosts.data(),
-              nGhost, &nGhost) != 0) {
-    return false;
-  }
-  std::vector<char> keep(static_cast<std::size_t>(ncell), 0);
-  for (int c = 0; c < ncell; c++) {
-    if (assign[static_cast<std::size_t>(c)] == rank) {
-      keep[static_cast<std::size_t>(c)] = 2;
-    }
-  }
-  for (std::size_t g = 0; g < nGhost; g++) {
-    const int c = ghosts[g];
-    if (c >= 0 && c < ncell && keep[static_cast<std::size_t>(c)] == 0) {
-      keep[static_cast<std::size_t>(c)] = 1;
-    }
   }
   share.local.clear();
   share.owned.clear();
   share.owner.clear();
   for (int i = 0; i < cloud.nop; i++) {
-    const int cell = gCount.pointCell[static_cast<std::size_t>(i)];
-    if (cell < 0 || cell >= ncell || keep[static_cast<std::size_t>(cell)] == 0) {
+    const int flag = hit[static_cast<std::size_t>(i)];
+    if (flag == 0) {
       continue;
     }
+    const int cell = gCount.pointCell[static_cast<std::size_t>(i)];
     share.local.push_back(i);
-    share.owned.push_back(keep[static_cast<std::size_t>(cell)] == 2 ? 1 : 0);
-    share.owner.push_back(assign[static_cast<std::size_t>(cell)]);
+    share.owned.push_back(flag == 2 ? 1 : 0);
+    share.owner.push_back(cell >= 0 && cell < ncell ? assign[static_cast<std::size_t>(cell)] : rank);
   }
   return true;
 }
 
-void linkcellSends(const Share &share, const std::vector<int> &assign,
+void linkcellSends(const Cloud &cloud, const Share &share, const std::vector<int> &assign,
                    const std::vector<int> &nbrs, std::vector<std::vector<int>> &sendAt) {
-  const int ncell = static_cast<int>(assign.size());
   sendAt.assign(nbrs.size(), {});
+  std::vector<double> packed(static_cast<std::size_t>(cloud.nop) * 3);
+  for (int i = 0; i < cloud.nop; i++) {
+    const auto &p = cloud.pts[static_cast<std::size_t>(i)];
+    packed[static_cast<std::size_t>(i) * 3] = p.x;
+    packed[static_cast<std::size_t>(i) * 3 + 1] = p.y;
+    packed[static_cast<std::size_t>(i) * 3 + 2] = p.z;
+  }
+  const double lengths[3] = {gCount.lx, gCount.ly, gCount.lz};
+  std::vector<int> hit(static_cast<std::size_t>(cloud.nop), 0);
   for (std::size_t sidx = 0; sidx < nbrs.size(); sidx++) {
-    std::size_t nGhost = 0;
     const int other = nbrs[sidx];
-    if (lc_halo(gCount.nxyz, assign.data(), assign.size(), other, gCount.hwidth, nullptr, 0,
-                &nGhost) != 0) {
+    if (lc_within_reach(packed.data(), static_cast<std::size_t>(cloud.nop), lengths, gCount.nxyz,
+                        assign.data(), assign.size(), gCount.pointCell.data(), gCount.hwidth, other,
+                        gCount.halo, hit.data()) != 0) {
       continue;
-    }
-    std::vector<int> ghosts(nGhost, 0);
-    if (nGhost > 0 &&
-        lc_halo(gCount.nxyz, assign.data(), assign.size(), other, gCount.hwidth, ghosts.data(),
-                nGhost, &nGhost) != 0) {
-      continue;
-    }
-    std::vector<char> want(static_cast<std::size_t>(ncell), 0);
-    for (std::size_t g = 0; g < nGhost; g++) {
-      const int c = ghosts[g];
-      if (c >= 0 && c < ncell) {
-        want[static_cast<std::size_t>(c)] = 1;
-      }
     }
     auto &dest = sendAt[sidx];
     for (std::size_t k = 0; k < share.local.size(); k++) {
@@ -202,11 +198,8 @@ void linkcellSends(const Share &share, const std::vector<int> &assign,
         continue;
       }
       const int frame = share.local[k];
-      if (frame < 0 || static_cast<std::size_t>(frame) >= gCount.pointCell.size()) {
-        continue;
-      }
-      const int cell = gCount.pointCell[static_cast<std::size_t>(frame)];
-      if (cell >= 0 && cell < ncell && want[static_cast<std::size_t>(cell)]) {
+      if (frame >= 0 && static_cast<std::size_t>(frame) < hit.size() &&
+          hit[static_cast<std::size_t>(frame)] == 1) {
         dest.push_back(static_cast<int>(k));
       }
     }
@@ -346,7 +339,7 @@ Share decompose(const Cloud &cloud, int rank, int nRanks, double halo) {
   }
 
 #ifdef SEAMS_HAS_LINKCELL
-  if (cloud.box.size() == 3 && buildCountCut(cloud, halo, nRanks)) {
+  if (!gForceBlock && cloud.box.size() == 3 && buildCountCut(cloud, halo, nRanks)) {
     Share cut;
     if (shareFromAssign(cloud, rank, gCount.assign, cut)) {
       return cut;
@@ -749,6 +742,48 @@ Work &gatheredWork() {
   return work;
 }
 
+namespace {
+#ifdef SEAMS_HAS_LINKCELL
+// The block cut is cheaper when its ranks already hold the same work.
+// A 5% gap is enough to pay for a fresh bisection.
+bool blocksAreUneven(const std::vector<std::uint64_t> &weight, int nRanks, double halo) {
+  if (weight.empty() || nRanks <= 1 || gCount.nxyz[0] <= 0) {
+    return false;
+  }
+  const double wlen[3] = {gCount.lx, gCount.ly, gCount.lz};
+  const BlockGrid grid = chooseGrid(nRanks, wlen, halo);
+  std::vector<double> load(static_cast<std::size_t>(nRanks), 0.0);
+  const int nx = gCount.nxyz[0];
+  const int ny = gCount.nxyz[1];
+  const int nz = gCount.nxyz[2];
+  double total = 0.0;
+  for (std::size_t c = 0; c < weight.size(); c++) {
+    if (weight[c] == 0) {
+      continue;
+    }
+    const int ix = static_cast<int>(c) % nx;
+    const int iy = (static_cast<int>(c) / nx) % ny;
+    const int iz = static_cast<int>(c) / (nx * ny);
+    const double s[3] = {(ix + 0.5) / nx, (iy + 0.5) / ny, (iz + 0.5) / nz};
+    const int blk = cellAlong(s[0], grid.n[0]) +
+                    grid.n[0] * (cellAlong(s[1], grid.n[1]) + grid.n[1] * cellAlong(s[2], grid.n[2]));
+    if (blk >= 0 && blk < nRanks) {
+      load[static_cast<std::size_t>(blk)] += static_cast<double>(weight[c]);
+    }
+    total += static_cast<double>(weight[c]);
+  }
+  if (!(total > 0.0)) {
+    return false;
+  }
+  double most = 0.0;
+  for (const double v : load) {
+    most = std::max(most, v);
+  }
+  return most / (total / nRanks) >= 1.05;
+}
+#endif
+} // namespace
+
 Work &gatherWork(const Cloud &cloud, double halo, MPI_Comm comm, int workTag) {
   Work &work = gatheredWork();
   int rank = 0;
@@ -801,13 +836,29 @@ Work &gatherWork(const Cloud &cloud, double halo, MPI_Comm comm, int workTag) {
   bool usedCut = false;
   if (!reuse) {
 #ifdef SEAMS_HAS_LINKCELL
+    bool useCell = false;
     if (cloud.box.size() == 3 && buildCountCut(cloud, halo, nRanks)) {
-      const std::vector<int> &assign =
-          weighted ? gMeasured[workTag].assign : gCount.assign;
-      usedCut = shareFromAssign(cloud, rank, assign, work.share);
+      if (weighted) {
+        useCell = blocksAreUneven(gMeasured[workTag].weight, nRanks, halo);
+      } else {
+        std::vector<std::uint64_t> counts(gCount.assign.size(), 0);
+        for (const int cell : gCount.pointCell) {
+          if (cell >= 0 && static_cast<std::size_t>(cell) < counts.size()) {
+            counts[static_cast<std::size_t>(cell)]++;
+          }
+        }
+        useCell = blocksAreUneven(counts, nRanks, halo);
+      }
+      if (useCell) {
+        const std::vector<int> &assign =
+            weighted ? gMeasured[workTag].assign : gCount.assign;
+        usedCut = shareFromAssign(cloud, rank, assign, work.share);
+      }
     }
     if (!usedCut) {
+      gForceBlock = true;
       work.share = decompose(cloud, rank, nRanks, halo);
+      gForceBlock = false;
     }
 #else
     work.share = decompose(cloud, rank, nRanks, halo);
@@ -841,7 +892,7 @@ Work &gatherWork(const Cloud &cloud, double halo, MPI_Comm comm, int workTag) {
     if (usedCut) {
       const std::vector<int> &assign =
           weighted ? gMeasured[workTag].assign : gCount.assign;
-      linkcellSends(work.share, assign, cache.nbrs, cache.sendAt);
+      linkcellSends(cloud, work.share, assign, cache.nbrs, cache.sendAt);
     } else
 #endif
     {

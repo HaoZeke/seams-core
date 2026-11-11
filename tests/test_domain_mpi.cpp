@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
     chill::getIceTypePlusNoPrint(serialOvito, rows, false, false);
     auto gotOvito = base;
     chill::distributedChillPlus(gotOvito, cutoff, ovito, false, MPI_COMM_WORLD);
-    const auto share = seams::domain::decompose(base, rank, nRanks, cutoff);
+    const auto share = seams::domain::gatheredWork().share;
     for (std::size_t k = 0; k < share.local.size(); k++) {
       if (!share.owned[k]) {
         continue;
@@ -174,7 +174,7 @@ int main(int argc, char **argv) {
     chill::getIceTypePlusNoPrint(serial, rows, false, true);
     auto got = base;
     chill::distributedChillPlus(got, cut, chill::chillPlusRule(), true, MPI_COMM_WORLD);
-    const auto share = seams::domain::decompose(base, rank, nRanks, cut);
+    const auto share = seams::domain::gatheredWork().share;
     for (std::size_t k = 0; k < share.local.size(); k++) {
       if (!share.owned[k]) {
         continue;
@@ -295,7 +295,7 @@ int main(int argc, char **argv) {
     auto got = base;
     chill::distributedChillPlus(got, cut, chill::chillPlusRule(), true, MPI_COMM_WORLD);
     const auto q = chill::distributedSteinhardt(base, cut, 6, MPI_COMM_WORLD);
-    const auto share = seams::domain::decompose(base, rank, nRanks, cut);
+    const auto share = seams::domain::gatheredWork().share;
     for (std::size_t k = 0; k < share.local.size(); k++) {
       if (!share.owned[k]) {
         continue;
