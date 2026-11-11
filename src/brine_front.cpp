@@ -147,7 +147,8 @@ void visitNearby(const Cells &cells, int index, const Cloud &cloud, Visit visit)
   const int cx = bin(p.x, x0, lx, cells.nx);
   const int cy = bin(p.y, y0, ly, cells.ny);
   const int cz = bin(p.z, z0, lz, cells.nz);
-  std::unordered_set<int> seen;
+  // A repeated cell only happens when an axis has fewer than three bins.
+  // Visiting it twice is safe: the caller rejects a self pair.
   for (int dx = -1; dx <= 1; ++dx) {
     for (int dy = -1; dy <= 1; ++dy) {
       for (int dz = -1; dz <= 1; ++dz) {
@@ -155,9 +156,6 @@ void visitNearby(const Cells &cells, int index, const Cloud &cloud, Visit visit)
         const int iy = (cy + dy + cells.ny) % cells.ny;
         const int iz = (cz + dz + cells.nz) % cells.nz;
         const int key = (ix * cells.ny + iy) * cells.nz + iz;
-        if (!seen.insert(key).second) {
-          continue;
-        }
         for (int other : cells.buckets[static_cast<std::size_t>(key)]) {
           visit(other);
         }
@@ -435,18 +433,27 @@ PocketCensus brinePockets(const Cloud &cloud, const std::vector<bool> &iceFlag,
   };
   const Cells cells = makeCells(cloud, liquid, cutoff);
   const double cut2 = cutoff * cutoff;
+  const gen::FracBox frame = gen::makeFracBox(cloud);
+  // Cloud index to the liquid slot. The cell list already returns cloud
+  // indices, so the old linear scan of `liquid` dominated the frame.
+  std::vector<int> slot(cloud.pts.size(), -1);
+  for (int i = 0; i < n; ++i) {
+    const int index = liquid[static_cast<std::size_t>(i)];
+    if (index >= 0 && static_cast<std::size_t>(index) < slot.size()) {
+      slot[static_cast<std::size_t>(index)] = i;
+    }
+  }
   for (int i = 0; i < n; ++i) {
     visitNearby(cells, liquid[static_cast<std::size_t>(i)], cloud, [&](int other) {
-      if (other == liquid[static_cast<std::size_t>(i)]) {
+      if (other < 0 || static_cast<std::size_t>(other) >= slot.size()) {
         return;
       }
-      const auto where = std::find(liquid.begin(), liquid.end(), other);
-      if (where == liquid.end()) {
+      const int j = slot[static_cast<std::size_t>(other)];
+      if (j < 0 || j == i) {
         return;
       }
-      const auto d = gen::relDist(cloud, liquid[static_cast<std::size_t>(i)], other);
-      if (d[0] * d[0] + d[1] * d[1] + d[2] * d[2] <= cut2) {
-        unite(i, static_cast<int>(where - liquid.begin()));
+      if (gen::periodicDistSq(frame, cloud, liquid[static_cast<std::size_t>(i)], other) <= cut2) {
+        unite(i, j);
       }
     });
   }
@@ -488,16 +495,19 @@ PocketCensus brinePockets(const Cloud &cloud, const std::vector<bool> &iceFlag,
     }
     int nearest = -1;
     double best = cutoff * cutoff;
-    // Ions are not in the liquid cell list. Search every liquid water;
-    // pocket assignment is a post-pass on an already small component.
-    for (int water : liquid) {
-      const auto d = gen::relDist(cloud, ion, water);
-      const double r2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+    visitNearby(cells, ion, cloud, [&](int other) {
+      if (other < 0 || static_cast<std::size_t>(other) >= slot.size()) {
+        return;
+      }
+      if (slot[static_cast<std::size_t>(other)] < 0) {
+        return;
+      }
+      const double r2 = gen::periodicDistSq(frame, cloud, ion, other);
       if (r2 <= best) {
         best = r2;
-        nearest = water;
+        nearest = other;
       }
-    }
+    });
     if (nearest < 0) {
       continue;
     }
@@ -555,9 +565,16 @@ FrontLayerReport frontLayer(const Cloud &cloud, const std::vector<int> &waterInd
   }
   const Cells cells = makeCells(cloud, waterIndices, cutoff);
   const double cut2 = cutoff * cutoff;
-  std::vector<std::vector<int>> rows(cloud.pts.size());
-  for (std::size_t i = 0; i < rows.size(); ++i) {
-    rows[i].push_back(static_cast<int>(i));
+  const gen::FracBox frame = gen::makeFracBox(cloud);
+  // Rings are searched on the front layer only. A row per atom in the
+  // whole cell made the primitive-ring walk pay for the bulk ice.
+  std::vector<int> localOf(cloud.pts.size(), -1);
+  for (int i = 0; i < static_cast<int>(report.waters.size()); ++i) {
+    localOf[static_cast<std::size_t>(report.waters[static_cast<std::size_t>(i)])] = i;
+  }
+  std::vector<std::vector<int>> rows(report.waters.size());
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    rows[static_cast<std::size_t>(i)].push_back(i);
   }
   auto addCoord = [&](int count) {
     const int cap = static_cast<int>(report.coordination.size()) - 1;
@@ -576,13 +593,13 @@ FrontLayerReport frontLayer(const Cloud &cloud, const std::vector<int> &waterInd
       if (other == water || !seen.insert(other).second) {
         return;
       }
-      const auto d = gen::relDist(cloud, water, other);
-      if (d[0] * d[0] + d[1] * d[1] + d[2] * d[2] > cut2) {
+      if (gen::periodicDistSq(frame, cloud, water, other) > cut2) {
         return;
       }
       neighbours += 1;
-      if (inLayer[static_cast<std::size_t>(other)]) {
-        rows[static_cast<std::size_t>(water)].push_back(other);
+      const int local = localOf[static_cast<std::size_t>(other)];
+      if (local >= 0) {
+        rows[static_cast<std::size_t>(localOf[static_cast<std::size_t>(water)])].push_back(local);
       }
     });
     addCoord(neighbours);
@@ -606,17 +623,6 @@ FrontLayerReport frontLayer(const Cloud &cloud, const std::vector<int> &waterInd
     const auto rings = primitive::ringNetwork(rows, maxRing + 1);
     for (const auto &ring : rings) {
       if (ring.empty()) {
-        continue;
-      }
-      bool inside = true;
-      for (int member : ring) {
-        if (member < 0 || static_cast<std::size_t>(member) >= inLayer.size() ||
-            !inLayer[static_cast<std::size_t>(member)]) {
-          inside = false;
-          break;
-        }
-      }
-      if (!inside) {
         continue;
       }
       const int size = static_cast<int>(ring.size());

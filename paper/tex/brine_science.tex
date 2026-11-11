@@ -45,11 +45,31 @@ against the front.
 Those components are the brine pockets when ions are present.
 The pure-water frames used to time the analysis have no ions, so
 they do not measure exclusion.
-Eight serial repeats of one $9984$-atom frame, neighbour list plus
-CHILL+ plus those reductions, took
-$367$, $411$, $429$, $431$, $448$, $453$, $486$ and
-$503\,\mathrm{ms}$.
-The median is $440\,\mathrm{ms}$.
+A release build of one $9984$-atom frame spends
+$2.5\,\mathrm{ms}$ in the linked-cell neighbour list,
+$1.1\,\mathrm{ms}$ in published CHILL+,
+$0.05\,\mathrm{ms}$ binning the molality,
+$2.9\,\mathrm{ms}$ on the front-layer rings and
+$19.5\,\mathrm{ms}$ walking brine pockets, because each cell-list
+hit scanned the liquid array.
+Neighbours and CHILL+ are already the cutoff shell and the
+closed-form $\ell=3$ harmonic from the fast CHILL+ path.
+Replacing that scan by a direct cloud-index slot, and searching
+rings only on the front layer, leaves the pocket walk at
+$2.0\,\mathrm{ms}$ and the rings at $2.0\,\mathrm{ms}$.
+Eight serial repeats of the whole frame then take
+$7.93$, $7.88$, $8.27$, $7.91$, $7.85$, $7.94$, $7.98$ and
+$7.87\,\mathrm{ms}$.
+The median is $7.92\,\mathrm{ms}$, against $26.6\,\mathrm{ms}$
+for the same release build before that change.
+The $440\,\mathrm{ms}$ figure was an unoptimized build of the old
+pocket walk.
+A $768$-atom frame with four NaCl ions, from a $10\,\mathrm{ps}$
+run at $1\,\mathrm{mol\,kg^{-1}}$, takes $0.78\,\mathrm{ms}$
+(median of eight). On every saved frame of that run the four ions
+are in the liquid and none is in ice or in the front shell, so
+$k=0$. That is one short trajectory, not an equilibrium
+rejection coefficient.
 Frames and restart files are written under \texttt{data/brine-front/}
 and are not part of the source tree.
 

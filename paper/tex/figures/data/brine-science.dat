@@ -20,6 +20,12 @@ crystal 2.0443 0.0008
 # 245: front -0.03 +/- 0.62, dN/dt -48.9 +/- 46.1 (n=16)
 # 255: front -3.10 +/- 0.64, dN/dt -264 +/- 50 (n=16)
 # 255 K melts. 245 K does not grow. Gate not passed.
-# One 9984-atom frame, serial, neighbour list + CHILL+ + front
-# reductions, milliseconds. Median 439.7.
-timing_frame_ms 366.552 411.036 428.904 431.004 448.374 452.743 486.054 503.231
+# Release build, one 9984-atom frame, serial, milliseconds.
+# Before the pocket-slot change, median 26.608:
+# 25.944 26.940 26.986 26.670 26.547 26.372 26.740 26.468
+# Stage means before: neigh 2.53 chill 1.13 bins 0.055 pockets 19.53 rings 2.93 ions 0.001
+# After, median 7.921:
+timing_after_ms 7.933 7.884 8.272 7.908 7.854 7.945 7.981 7.871
+# Stage means after: neigh 2.69 chill 1.21 bins 0.055 pockets 1.97 rings 2.05 ions 0.001
+# Salted 768-atom frame, four ions, median 0.783:
+timing_salt_ms 0.780 0.786 0.850 0.872 0.768 0.777 0.762 0.881
