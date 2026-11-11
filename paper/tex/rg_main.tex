@@ -982,6 +982,29 @@ rings & 173.848 & 0.591 & 170.674 & 0.610 \\
 \end{tabular}
 \end{table}
 
+\subsection{Cell-grid partition}
+\label{sec:cell-partition}
+
+The slab, pencil, and block cut is replaced by the linkcell partition of the periodic cell grid. The method is recursive coordinate bisection. The balance bound is the tightest a cell-aligned cut can promise, one plus the rank count times the heaviest cell divided by the total weight. The first call of an analysis weights each cell by its point count. That call records the work in the cell, and later calls cut on that measurement. Neighbour, CHILL+, and $q_6$ work is the length of the owned rows. Ring work is the enumeration time of each owned source. The halo is the cells painted around the cells a rank owns, out to one cutoff for the neighbour analyses and three cutoffs for the rings. The exchange is still the distributed graph. Table~\ref{tab:partition-strong} and Table~\ref{tab:partition-weak} are one session. Each configuration runs the block cut and then this cut. Figure~\ref{fig:partition-strong} is the strong-scaling speedup. The imbalance ratio is the slowest rank's compute time divided by the mean.
+
+\input{figures/data/tab-partition}
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/partition-scale.pdf}
+\caption{\textbf{Speedup of the cell-grid cut against one rank and one thread.}
+Solid marks are the linkcell cut and dashed marks are the block cut from the same session.
+The black dashed line is ideal speedup.}
+\label{fig:partition-strong}
+\end{figure}
+
+\input{figures/data/partition-prose}
+
+The host is one Intel Xeon socket in a KVM guest: 8 cores, 1 thread per core, AVX-512, 320 MiB of L3, and \texttt{MemTotal} 49342816 kB. The same host and the same protocol reproduce the tables and the figure:
+\begin{verbatim}
+python3 paper/tex/repro/partition_session.py
+\end{verbatim}
+
 The same host and the same protocol reproduce both tables:
 \begin{verbatim}
 python3 scripts/rank_scale.py && python3 scripts/weak_scale.py && python3 scripts/plot_strong_scale.py

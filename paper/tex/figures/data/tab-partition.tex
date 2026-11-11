@@ -1,0 +1,40 @@
+\begin{table}[tbp]
+\centering
+\caption{\textbf{Strong scaling of the block cut and the cell-grid cut.}
+Both run in the same session, one thread per rank.
+Efficiency is the one-rank time divided by the eight-rank time and by eight.
+The imbalance is the eight-rank ratio of the cell-grid cut.}
+\label{tab:partition-strong}
+\begin{tabular}{llrrrrrrr}
+\toprule
+Molecules & Operation & Block 1 & Block 8 & Block eff. & Cell 1 & Cell 8 & Cell eff. & Imbalance \\
+\midrule
+110592 & neighbours & 31.108 & 4.854 & 0.801 & 29.749 & 7.190 & 0.517 & 1.151 \\
+ & CHILL+ & 50.213 & 9.064 & 0.693 & 49.855 & 11.567 & 0.539 & 1.006 \\
+ & $q_6$ & 58.141 & 9.545 & 0.761 & 56.776 & 13.555 & 0.524 & 1.005 \\
+ & rings & 107.774 & 24.517 & 0.549 & 106.610 & 25.763 & 0.517 & 1.051 \\
+884736 & neighbours & 316.375 & 42.284 & 0.935 & 319.272 & 59.844 & 0.667 & 1.157 \\
+ & CHILL+ & 496.559 & 78.003 & 0.796 & 487.367 & 102.448 & 0.595 & 1.004 \\
+ & $q_6$ & 587.067 & 91.082 & 0.806 & 572.967 & 108.514 & 0.660 & 1.003 \\
+ & rings & 967.526 & 202.713 & 0.597 & 960.675 & 184.368 & 0.651 & 1.022 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\caption{\textbf{Weak scaling at 110592 molecules per rank.}
+Efficiency is the one-rank time divided by the eight-rank time.
+The imbalance is the eight-rank ratio of the cell-grid cut.}
+\label{tab:partition-weak}
+\begin{tabular}{lrrrrr}
+\toprule
+Operation & Block 8 (ms) & Block eff. & Cell 8 (ms) & Cell eff. & Imbalance \\
+\midrule
+neighbours & 44.999 & 0.641 & 56.974 & 0.498 & 1.148 \\
+CHILL+ & 75.417 & 0.674 & 90.507 & 0.506 & 1.003 \\
+$q_6$ & 86.047 & 0.625 & 100.243 & 0.535 & 1.003 \\
+rings & 180.265 & 0.579 & 191.762 & 0.547 & 1.046 \\
+\bottomrule
+\end{tabular}
+\end{table}
