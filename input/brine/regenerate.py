@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build NaCl brine frames with the TIP4P/2005 + Joung-Cheatham deck.
+"""Build NaCl brine frames with TIP4P/2005 and Madrid-2019 scaled charges.
 
 Writes data files and LAMMPS dumps under input/brine/work/. Those frames
 are not committed. `--check` only tests the ice Ih cell.
@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-DECK = ROOT / "in.tip4p2005-jc.lmp"
+DECK = ROOT / "in.tip4p2005-madrid2019.lmp"
 WORK = ROOT / "work"
 
 # Orthogonal ice Ih, 16 oxygens, from GenIce's 1h cell (absolute angstrom).
@@ -49,6 +49,8 @@ OH = 0.9572
 HOH = math.radians(104.52)
 Q_O = -1.1128
 Q_H = 0.5564
+Q_NA = 0.85
+Q_CL = -0.85
 MOLAL_FACTOR = 18.01528 / 1000.0
 RHO = 0.997 * 0.602214
 
@@ -250,11 +252,11 @@ def write_data(path, waters, na, cl, box):
         atom_id += 3
         mol += 1
     for pos in na:
-        lines.append(f"{atom_id} {mol} 3 1.0 {pos[0]:.5f} {pos[1]:.5f} {pos[2]:.5f}\n")
+        lines.append(f"{atom_id} {mol} 3 {Q_NA:.4f} {pos[0]:.5f} {pos[1]:.5f} {pos[2]:.5f}\n")
         atom_id += 1
         mol += 1
     for pos in cl:
-        lines.append(f"{atom_id} {mol} 4 -1.0 {pos[0]:.5f} {pos[1]:.5f} {pos[2]:.5f}\n")
+        lines.append(f"{atom_id} {mol} 4 {Q_CL:.4f} {pos[0]:.5f} {pos[1]:.5f} {pos[2]:.5f}\n")
         atom_id += 1
         mol += 1
     lines.append("\nBonds\n\n")
