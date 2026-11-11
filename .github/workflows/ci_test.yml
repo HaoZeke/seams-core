@@ -26,9 +26,10 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           curl -sLO https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.0.sdk.tar.xz
-          sudo tar -xf MacOSX11.0.sdk.tar.xz -C /opt
-          echo "SDKROOT=/opt/MacOSX11.0.sdk" >> "$GITHUB_ENV"
-          echo "CONDA_BUILD_SYSROOT=/opt/MacOSX11.0.sdk" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/sdk"
+          tar -xf MacOSX11.0.sdk.tar.xz -C "$RUNNER_TEMP/sdk"
+          echo "SDKROOT=$RUNNER_TEMP/sdk/MacOSX11.0.sdk" >> "$GITHUB_ENV"
+          echo "CONDA_BUILD_SYSROOT=$RUNNER_TEMP/sdk/MacOSX11.0.sdk" >> "$GITHUB_ENV"
       - run: pixi run setup
       - run: pixi run build
       - run: pixi run test

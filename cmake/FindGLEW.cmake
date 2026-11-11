@@ -14,7 +14,6 @@ find_path(GLEW_INCLUDE_DIR GL/glew.h
     /usr
     /usr/local
     /sw
-    /opt/local
 
     PATH_SUFFIXES
     /include
@@ -34,7 +33,6 @@ find_library(GLEW_LIBRARY NAMES GLEW glew glew32 glew32s
     /usr
     /usr/local
     /sw
-    /opt/local
 
     # authors prefered choice for development
     /build

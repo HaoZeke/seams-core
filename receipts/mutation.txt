@@ -1521,7 +1521,7 @@ with expansion:
 test cases: 1 | 1 failed
 assertions: 1 | 1 failed
 
-libgcov profiling error:/home/ubuntu/seams-v13/bbuild/src/libyodaLib.so.p/cage_affiliation.cpp.gcda:overwriting an existing profile data with a different checksum
+libgcov profiling error:bbuild/src/libyodaLib.so.p/cage_affiliation.cpp.gcda:overwriting an existing profile data with a different checksum
 END row status 42
 BEGIN unsorted
 Filters: "*unsorted ring list*"
@@ -3792,7 +3792,7 @@ with messages:
 test cases: 1 | 1 failed
 assertions: 2 | 1 passed | 1 failed
 
-libgcov profiling error:/home/ubuntu/seams-v13/bbuild/src/libyodaLib.so.p/cage_affiliation.cpp.gcda:overwriting an existing profile data with a different checksum
+libgcov profiling error:bbuild/src/libyodaLib.so.p/cage_affiliation.cpp.gcda:overwriting an existing profile data with a different checksum
 END peripheral-pop status 42
 mutation clear flags on a 1024-row neighbour list
 ninja: Entering directory `bbuild'
@@ -3824,7 +3824,7 @@ with expansion:
 test cases: 1 | 1 failed
 assertions: 4 | 3 passed | 1 failed
 
-libgcov profiling error:/home/ubuntu/seams-v13/bbuild/src/libyodaLib.so.p/cage_affiliation.cpp.gcda:overwriting an existing profile data with a different checksum
+libgcov profiling error:bbuild/src/libyodaLib.so.p/cage_affiliation.cpp.gcda:overwriting an existing profile data with a different checksum
 END warm-wide status 42
 mutation append a zero flag and an index past the list
 ninja: Entering directory `bbuild'
@@ -3861,8 +3861,8 @@ with messages:
 test cases:  1 |  0 passed | 1 failed
 assertions: 18 | 17 passed | 1 failed
 
-libgcov profiling error:/home/ubuntu/seams-v13/bbuild/src/libyodaLib.so.p/topo_bulk.cpp.gcda:overwriting an existing profile data with a different checksum
-libgcov profiling error:/home/ubuntu/seams-v13/bbuild/src/libyodaLib.so.p/cage_affiliation.cpp.gcda:overwriting an existing profile data with a different checksum
+libgcov profiling error:bbuild/src/libyodaLib.so.p/topo_bulk.cpp.gcda:overwriting an existing profile data with a different checksum
+libgcov profiling error:bbuild/src/libyodaLib.so.p/cage_affiliation.cpp.gcda:overwriting an existing profile data with a different checksum
 END peripheral-ddc status 42
 BEGIN fuzz
 generated n 8 RULE OK
@@ -3871,7 +3871,7 @@ generated n 24 RULE OK
 generated n 32 RULE OK
 FAIL ice1h.lammpstrj frame 1 ring index out of range
 ice1h.lammpstrj frame 1 type 1 nop 128 six 256 cages -1 (hc 0 ddc 0) FAIL
-libgcov profiling error:/home/ubuntu/seams-v13/bbuild/tests/fuzz_cage_invariance.p/fuzz_cage_invariance.cpp.gcda:overwriting an existing profile data with a different checksum
+libgcov profiling error:bbuild/tests/fuzz_cage_invariance.p/fuzz_cage_invariance.cpp.gcda:overwriting an existing profile data with a different checksum
 frames 5 checked 5 skipped 0 failures 1 shiftTrials 1 permTrials 1
 END fuzz status 1
 ninja: Entering directory `bbuild'

@@ -27,8 +27,6 @@ find_path (LIBBFD_INCLUDE_DIRS
     PATHS
       /usr/include
       /usr/local/include
-      /opt/local/include
-      /opt/include
       ENV CPATH)
 
 # Ugly, yes ugly...
@@ -41,8 +39,6 @@ find_library (LIBBFD_BFD_LIBRARY
       /usr/local/lib
       /usr/local/lib64
       /usr/include
-      /opt/local/lib
-      /opt/usr/lib64
       ENV LIBRARY_PATH
       ENV LD_LIBRARY_PATH)
 
@@ -55,8 +51,6 @@ find_library (LIBBFD_BFD_LIBRARY
 #      /usr/local/lib
 #      /usr/local/lib64
 #      /usr/include
-#      /opt/local/lib
-#      /opt/usr/lib64
 #      ENV LIBRARY_PATH
 #      ENV LD_LIBRARY_PATH)
 
@@ -69,8 +63,6 @@ find_library (LIBBFD_BFD_LIBRARY
 #      /usr/local/lib
 #      /usr/local/lib64
 #      /usr/include
-#      /opt/local/lib
-#      /opt/usr/lib64
 #      ENV LIBRARY_PATH
 #      ENV LD_LIBRARY_PATH)
 

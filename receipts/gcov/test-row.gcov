@@ -1,4 +1,4 @@
-        -:    0:Source:../tests/test_cage_affiliation.cpp
+        -:    0:Source:tests/test_cage_affiliation.cpp
         -:    0:Graph:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcno
         -:    0:Data:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcda
         -:    0:Runs:1

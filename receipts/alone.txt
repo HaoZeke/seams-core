@@ -9,12 +9,12 @@ All tests passed (7 assertions in 1 test case)
 
 status 0
 gcov-exit 0 cage_affiliation.cpp.gcov
-        -:    0:Source:../src/cage_affiliation.cpp
+        -:    0:Source:src/cage_affiliation.cpp
         -:    0:Graph:src/libyodaLib.so.p/cage_affiliation.cpp.gcno
         -:    0:Data:src/libyodaLib.so.p/cage_affiliation.cpp.gcda
         -:    0:Runs:1
 gcov-exit 0 test_cage_affiliation.cpp.gcov
-        -:    0:Source:../tests/test_cage_affiliation.cpp
+        -:    0:Source:tests/test_cage_affiliation.cpp
         -:    0:Graph:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcno
         -:    0:Data:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcda
         -:    0:Runs:1
@@ -27,12 +27,12 @@ All tests passed (14 assertions in 1 test case)
 
 status 0
 gcov-exit 0 cage_affiliation.cpp.gcov
-        -:    0:Source:../src/cage_affiliation.cpp
+        -:    0:Source:src/cage_affiliation.cpp
         -:    0:Graph:src/libyodaLib.so.p/cage_affiliation.cpp.gcno
         -:    0:Data:src/libyodaLib.so.p/cage_affiliation.cpp.gcda
         -:    0:Runs:1
 gcov-exit 0 test_cage_affiliation.cpp.gcov
-        -:    0:Source:../tests/test_cage_affiliation.cpp
+        -:    0:Source:tests/test_cage_affiliation.cpp
         -:    0:Graph:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcno
         -:    0:Data:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcda
         -:    0:Runs:1
@@ -45,12 +45,12 @@ All tests passed (12 assertions in 1 test case)
 
 status 0
 gcov-exit 0 cage_affiliation.cpp.gcov
-        -:    0:Source:../src/cage_affiliation.cpp
+        -:    0:Source:src/cage_affiliation.cpp
         -:    0:Graph:src/libyodaLib.so.p/cage_affiliation.cpp.gcno
         -:    0:Data:src/libyodaLib.so.p/cage_affiliation.cpp.gcda
         -:    0:Runs:1
 gcov-exit 0 test_cage_affiliation.cpp.gcov
-        -:    0:Source:../tests/test_cage_affiliation.cpp
+        -:    0:Source:tests/test_cage_affiliation.cpp
         -:    0:Graph:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcno
         -:    0:Data:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcda
         -:    0:Runs:1
@@ -63,12 +63,12 @@ All tests passed (30 assertions in 1 test case)
 
 status 0
 gcov-exit 0 cage_affiliation.cpp.gcov
-        -:    0:Source:../src/cage_affiliation.cpp
+        -:    0:Source:src/cage_affiliation.cpp
         -:    0:Graph:src/libyodaLib.so.p/cage_affiliation.cpp.gcno
         -:    0:Data:src/libyodaLib.so.p/cage_affiliation.cpp.gcda
         -:    0:Runs:1
 gcov-exit 0 test_cage_affiliation.cpp.gcov
-        -:    0:Source:../tests/test_cage_affiliation.cpp
+        -:    0:Source:tests/test_cage_affiliation.cpp
         -:    0:Graph:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcno
         -:    0:Data:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcda
         -:    0:Runs:1
@@ -81,17 +81,17 @@ All tests passed (80 assertions in 1 test case)
 
 status 0
 gcov-exit 0 cage_affiliation.cpp.gcov
-        -:    0:Source:../src/cage_affiliation.cpp
+        -:    0:Source:src/cage_affiliation.cpp
         -:    0:Graph:src/libyodaLib.so.p/cage_affiliation.cpp.gcno
         -:    0:Data:src/libyodaLib.so.p/cage_affiliation.cpp.gcda
         -:    0:Runs:1
 gcov-exit 0 topo_bulk.cpp.gcov
-        -:    0:Source:../src/topo_bulk.cpp
+        -:    0:Source:src/topo_bulk.cpp
         -:    0:Graph:src/libyodaLib.so.p/topo_bulk.cpp.gcno
         -:    0:Data:src/libyodaLib.so.p/topo_bulk.cpp.gcda
         -:    0:Runs:1
 gcov-exit 0 test_cage_affiliation.cpp.gcov
-        -:    0:Source:../tests/test_cage_affiliation.cpp
+        -:    0:Source:tests/test_cage_affiliation.cpp
         -:    0:Graph:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcno
         -:    0:Data:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcda
         -:    0:Runs:1
@@ -104,12 +104,12 @@ All tests passed (6 assertions in 1 test case)
 
 status 0
 gcov-exit 0 cage_affiliation.cpp.gcov
-        -:    0:Source:../src/cage_affiliation.cpp
+        -:    0:Source:src/cage_affiliation.cpp
         -:    0:Graph:src/libyodaLib.so.p/cage_affiliation.cpp.gcno
         -:    0:Data:src/libyodaLib.so.p/cage_affiliation.cpp.gcda
         -:    0:Runs:1
 gcov-exit 0 test_cage_affiliation.cpp.gcov
-        -:    0:Source:../tests/test_cage_affiliation.cpp
+        -:    0:Source:tests/test_cage_affiliation.cpp
         -:    0:Graph:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcno
         -:    0:Data:tests/test_cage_affiliation.p/test_cage_affiliation.cpp.gcda
         -:    0:Runs:1
@@ -123,12 +123,12 @@ ice1h.lammpstrj frame 1 type 1 nop 128 six 256 cages 64 (hc 64 ddc 0) OK
 frames 5 checked 5 skipped 0 failures 0 shiftTrials 9 permTrials 1
 status 0
 gcov-exit 0 topo_bulk.cpp.gcov
-        -:    0:Source:../src/topo_bulk.cpp
+        -:    0:Source:src/topo_bulk.cpp
         -:    0:Graph:src/libyodaLib.so.p/topo_bulk.cpp.gcno
         -:    0:Data:src/libyodaLib.so.p/topo_bulk.cpp.gcda
         -:    0:Runs:1
 gcov-exit 0 fuzz_cage_invariance.cpp.gcov
-        -:    0:Source:../tests/fuzz_cage_invariance.cpp
+        -:    0:Source:tests/fuzz_cage_invariance.cpp
         -:    0:Graph:tests/fuzz_cage_invariance.p/fuzz_cage_invariance.cpp.gcno
         -:    0:Data:tests/fuzz_cage_invariance.p/fuzz_cage_invariance.cpp.gcda
         -:    0:Runs:1

@@ -1,4 +1,4 @@
-        -:    0:Source:../tests/fuzz_cage_invariance.cpp
+        -:    0:Source:tests/fuzz_cage_invariance.cpp
         -:    0:Graph:tests/fuzz_cage_invariance.p/fuzz_cage_invariance.cpp.gcno
         -:    0:Data:tests/fuzz_cage_invariance.p/fuzz_cage_invariance.cpp.gcda
         -:    0:Runs:1

@@ -16,7 +16,6 @@ find_path(ASSIMP_INCLUDE_DIR assimp/Importer.hpp
     /usr
     /usr/local
     /sw
-    /opt/local
 
     PATH_SUFFIXES
     /include
@@ -39,7 +38,6 @@ find_library(ASSIMP_LIBRARY_RELEASE NAMES assimp
     /usr
     /usr/local
     /sw
-    /opt/local
 
     PATH_SUFFIXES
     /lib
@@ -59,7 +57,6 @@ find_library(ASSIMP_LIBRARY_DEBUG NAMES assimpd
     /usr
     /usr/local
     /sw
-    /opt/local
 
     PATH_SUFFIXES
     /lib
