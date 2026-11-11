@@ -1,8 +1,8 @@
 # Copyright (c) d-SEAMS developers
 """Shared helpers for the serial results measurements.
 
-Paths written to logs are relative to the repository root. Absolute
-locations under the agent, home, workspace, cursor or tmp trees are stripped.
+Paths written to logs are relative to the repository root. An absolute
+path is replaced before the log is written.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ WARMUP = 1
 REPEATS = 6
 CORE = "0"
 CUTOFF = 3.5
-FORBIDDEN = re.compile(r"/(?:home|workspace|cursor|tmp|agent)(?:/[^\s\"']*)?")
+FORBIDDEN = re.compile(r"(?<![A-Za-z0-9._+-])/(?:[^\s\"']+)")
 
 ENV = os.environ.copy()
 ENV.update({
