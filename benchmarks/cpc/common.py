@@ -80,7 +80,7 @@ def summary(values: list[float]) -> dict[str, float]:
 
 def run(cmd: list[str], log: Path, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
     log.parent.mkdir(parents=True, exist_ok=True)
-    full = ["taskset", "-c", CORE, *cmd]
+    full = ["taskset", "-c", CORE, *[str(part) for part in cmd]]
     shown = " ".join(full)
     proc = subprocess.run(
         full,
@@ -125,10 +125,7 @@ def parse_counts(stdout: str) -> dict[str, str]:
 
 
 def rel(path: Path) -> str:
-    try:
-        return str(path.resolve().relative_to(ROOT))
-    except ValueError:
-        return path.name
+    return os.path.relpath(path, ROOT)
 
 
 NAMES = (

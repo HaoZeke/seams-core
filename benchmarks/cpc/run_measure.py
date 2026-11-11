@@ -548,7 +548,7 @@ def measure_brine() -> None:
         ])
         print("e-brine absent")
         return
-    proc = run([PY, rel(script), rel(root)], out / "brine_summary.log")
+    proc = run(["benchmarks/cpc/.venv/bin/python", rel(script), rel(root)], out / "brine_summary.log")
     (out / "summary.tsv").write_text(proc.stdout)
     write_lines(out / "status.txt", [
         "The atomic brine trajectories are not in dseams2_repro.",
