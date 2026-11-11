@@ -39,6 +39,7 @@ ydslib_sources = files(
   'seams_c_api.cpp',
   'water_select.cpp',
   'site.cpp',
+  'brine_front.cpp',
   'steinhardt_parallel.cpp',
   'topo_bulk.cpp',
   'cage_pack.cpp',

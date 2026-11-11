@@ -33,6 +33,7 @@ test_sources = {
   'cage_canon': 'test_cage_canon.cpp',
   'topo_fingerprint': 'test_topo_fingerprint.cpp',
   'ion_env': 'test_ion_env.cpp',
+  'brine_front': 'test_brine_front.cpp',
   'guest_occupancy': 'test_guest_occupancy.cpp',
   'shell_rings': 'test_shell_rings.cpp',
   'voronoi': 'test_voronoi.cpp',
