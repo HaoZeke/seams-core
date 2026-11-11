@@ -490,8 +490,9 @@ TEST_CASE("an empty xyz range and a con path name the failure", "[chemfiles]") {
 TEST_CASE("the ice XXI cif is one cell of 152 oxygens", "[chemfiles]") {
   std::string path;
   for (const char *candidate :
-       {"traj/iceXXI_lee2026.cif", "input/traj/iceXXI_lee2026.cif",
-        "../input/traj/iceXXI_lee2026.cif"}) {
+       {"traj/iceXXI_lee2026.cif", "traj/iceXXI_lee2026.lammpstrj",
+        "input/traj/iceXXI_lee2026.cif",
+        "input/traj/iceXXI_lee2026.lammpstrj"}) {
     if (fs::exists(candidate)) {
       path = candidate;
       break;

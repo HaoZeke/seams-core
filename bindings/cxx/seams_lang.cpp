@@ -277,6 +277,10 @@ int seams_path_nframes(const char *path) {
     return -1;
   }
   try {
+    if (!gen::file_exists(path)) {
+      set_error("cannot read " + std::string(path));
+      return -1;
+    }
     const auto ext = extension_of(path);
     if (ext == "lammpstrj" || ext == "dump") {
       const int frames = sinp::nLammpsFrames(path);
@@ -312,12 +316,18 @@ int seams_path_nframes(const char *path) {
       return -1;
     }
     if (ext == "xyz") {
-      const int frames = countXyzFrames(path);
-      if (frames < 0) {
-        set_error("unreadable trajectory");
+      std::ifstream in(path);
+      if (!in) {
+        set_error("cannot read " + std::string(path));
         return -1;
       }
-      return frames;
+      const int frames = countXyzFrames(path);
+      if (frames > 0) {
+        return frames;
+      }
+      // A readable file that is not a counted xyz block is still one
+      // native frame. configuration.xyz is a count, a box, and coordinates.
+      return 1;
     }
     return sinp::nLammpsFrames(path);
   } catch (...) {
