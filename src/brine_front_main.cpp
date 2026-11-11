@@ -28,6 +28,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -62,6 +63,7 @@ struct Args {
   int every = 5000;
   int timeRepeats = 0;
   int maxFrames = 0;
+  std::string labels;
 };
 
 std::vector<int> splitInts(const std::string &text) {
@@ -102,6 +104,8 @@ Args parse(int argc, char **argv) {
       args.timeRepeats = std::stoi(need("--time"));
     } else if (key == "--max-frames") {
       args.maxFrames = std::stoi(need("--max-frames"));
+    } else if (key == "--labels") {
+      args.labels = need("--labels");
     } else if (key[0] != '-') {
       args.path = key;
     } else {
@@ -206,6 +210,16 @@ int main(int argc, char **argv) {
       }
       previous = snap.ions;
       havePrevious = true;
+      if (!args.labels.empty() && used == 0) {
+        std::ofstream labels(args.labels);
+        labels << "# index atom x y z chill crystal\n";
+        for (int water : labelled.waters) {
+          const auto &point = cloud.pts[static_cast<std::size_t>(water)];
+          labels << water << " " << point.atomID << " " << point.x << " " << point.y << " " << point.z
+                 << " " << static_cast<int>(point.iceType) << " "
+                 << (labelled.ice[static_cast<std::size_t>(water)] ? 1 : 0) << "\n";
+        }
+      }
       std::cout << "frame " << used << " t_ns " << tNs << " thickness " << snap.fronts.thickness
                 << " z_enter " << snap.fronts.zEnter << " z_exit " << snap.fronts.zExit
                 << " c_ice " << snap.rejection.cIce << " c_liquid " << snap.rejection.cLiquid

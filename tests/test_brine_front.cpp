@@ -85,6 +85,23 @@ TEST_CASE("front crossings and the rejection coefficient on a labelled slab", "[
   REQUIRE_THAT(rejection.k, WithinAbs(1.5, 1e-9));
 }
 
+TEST_CASE("empty bins between crystal planes stay inside one slab", "[brine]") {
+  auto cloud = emptyCloud(10, 10, 10);
+  std::vector<bool> ice;
+  std::vector<int> waters;
+  for (int bin : {0, 2, 4, 7, 8}) {
+    waters.push_back(addPoint(cloud, 1, 1, bin + 0.5, 1));
+    ice.push_back(bin <= 4);
+  }
+  const auto profile = site::concentrationProfile(cloud, ice, waters, {}, 10, 2, 2);
+  const auto fronts = site::locateFronts(profile, 0.5);
+  REQUIRE(fronts.found);
+  REQUIRE_FALSE(fronts.wrapped);
+  REQUIRE_THAT(fronts.zEnter, WithinAbs(9.5, 1e-9));
+  REQUIRE_THAT(fronts.zExit, WithinAbs(6.0, 1e-9));
+  REQUIRE_THAT(fronts.thickness, WithinAbs(6.5, 1e-9));
+}
+
 TEST_CASE("an ice slab that crosses the periodic boundary is one slab", "[brine]") {
   auto cloud = emptyCloud(10, 10, 10);
   std::vector<bool> ice;

@@ -237,11 +237,24 @@ FrontPair locateFronts(const ConcentrationProfile &profile, double cut) {
   if (n == 0 || profile.length <= 0) {
     return fronts;
   }
-  std::vector<char> solid(static_cast<std::size_t>(n), 0);
-  int nSolid = 0;
+  // Bins with no water are gaps between crystal planes, not liquid.
+  // The front is located on the occupied bins only.
+  std::vector<int> occupied;
+  occupied.reserve(static_cast<std::size_t>(n));
   for (int i = 0; i < n; ++i) {
-    const auto &bin = profile.bins[static_cast<std::size_t>(i)];
-    solid[static_cast<std::size_t>(i)] = bin.nWater > 0 && bin.iceFraction >= cut;
+    if (profile.bins[static_cast<std::size_t>(i)].nWater > 0) {
+      occupied.push_back(i);
+    }
+  }
+  const int m = static_cast<int>(occupied.size());
+  if (m == 0) {
+    return fronts;
+  }
+  std::vector<char> solid(static_cast<std::size_t>(m), 0);
+  int nSolid = 0;
+  for (int i = 0; i < m; ++i) {
+    const auto &bin = profile.bins[static_cast<std::size_t>(occupied[static_cast<std::size_t>(i)])];
+    solid[static_cast<std::size_t>(i)] = bin.iceFraction >= cut;
     nSolid += solid[static_cast<std::size_t>(i)] ? 1 : 0;
   }
   if (nSolid == 0) {
@@ -249,7 +262,7 @@ FrontPair locateFronts(const ConcentrationProfile &profile, double cut) {
   }
   const double origin = profile.zOrigin;
   const double length = profile.length;
-  if (nSolid == n) {
+  if (nSolid == m) {
     fronts.found = true;
     fronts.wrapped = true;
     fronts.thickness = length;
@@ -259,13 +272,13 @@ FrontPair locateFronts(const ConcentrationProfile &profile, double cut) {
   }
   int bestStart = 0;
   int bestLen = -1;
-  for (int i = 0; i < n; ++i) {
-    const int prev = (i + n - 1) % n;
+  for (int i = 0; i < m; ++i) {
+    const int prev = (i + m - 1) % m;
     if (!solid[static_cast<std::size_t>(i)] || solid[static_cast<std::size_t>(prev)]) {
       continue;
     }
     int len = 0;
-    while (len < n && solid[static_cast<std::size_t>((i + len) % n)]) {
+    while (len < m && solid[static_cast<std::size_t>((i + len) % m)]) {
       ++len;
     }
     if (len > bestLen) {
@@ -274,13 +287,15 @@ FrontPair locateFronts(const ConcentrationProfile &profile, double cut) {
     }
   }
   auto crossing = [&](int left, int right) {
-    double zLeft = profile.bins[static_cast<std::size_t>(left)].zMid;
-    double zRight = profile.bins[static_cast<std::size_t>(right)].zMid;
+    const int leftBin = occupied[static_cast<std::size_t>(left)];
+    const int rightBin = occupied[static_cast<std::size_t>(right)];
+    double zLeft = profile.bins[static_cast<std::size_t>(leftBin)].zMid;
+    double zRight = profile.bins[static_cast<std::size_t>(rightBin)].zMid;
     if (zRight < zLeft) {
       zRight += length;
     }
-    const double fLeft = profile.bins[static_cast<std::size_t>(left)].iceFraction;
-    const double fRight = profile.bins[static_cast<std::size_t>(right)].iceFraction;
+    const double fLeft = profile.bins[static_cast<std::size_t>(leftBin)].iceFraction;
+    const double fRight = profile.bins[static_cast<std::size_t>(rightBin)].iceFraction;
     const double denom = fRight - fLeft;
     double frac = std::abs(denom) < 1e-12 ? 0.5 : (cut - fLeft) / denom;
     if (frac < 0) {
@@ -292,12 +307,12 @@ FrontPair locateFronts(const ConcentrationProfile &profile, double cut) {
     return fold(zLeft + frac * (zRight - zLeft), origin, length);
   };
   const int enterSolid = bestStart;
-  const int enterLiquid = (bestStart + n - 1) % n;
-  const int exitSolid = (bestStart + bestLen - 1) % n;
-  const int exitLiquid = (exitSolid + 1) % n;
+  const int enterLiquid = (bestStart + m - 1) % m;
+  const int exitSolid = (bestStart + bestLen - 1) % m;
+  const int exitLiquid = (exitSolid + 1) % m;
   fronts.zEnter = crossing(enterLiquid, enterSolid);
   fronts.zExit = crossing(exitSolid, exitLiquid);
-  fronts.wrapped = bestStart + bestLen > n;
+  fronts.wrapped = bestStart + bestLen > m;
   fronts.found = true;
   if (fronts.wrapped) {
     fronts.thickness = (origin + length - fronts.zEnter) + (fronts.zExit - origin);
