@@ -1,22 +1,23 @@
 \begin{table}[tbp]
 \centering
 \caption{\textbf{Strong scaling of the block cut and the cell-grid cut.}
-Both run in the same session, one thread per rank.
+Block and cell alternate in one loop, twelve times, ranks bound to cores.
 Efficiency is the one-rank time divided by the eight-rank time and by eight.
-The imbalance is the eight-rank ratio of the cell-grid cut.}
+IQR is the type-7 interquartile range of the eight-rank walls.
+A gap smaller than the two ranges is not a difference.}
 \label{tab:partition-strong}
 \begin{tabular}{llrrrrrrr}
 \toprule
-Molecules & Operation & Block 1 & Block 8 & Block eff. & Cell 1 & Cell 8 & Cell eff. & Imbalance \\
+Molecules & Operation & Block 8 & Block IQR & Cell 8 & Cell IQR & Cell eff. & Imbalance & Halo \\
 \midrule
-110592 & neighbours & 30.914 & 6.080 & 0.636 & 31.342 & 5.396 & 0.726 & 1.020 \\
- & CHILL+ & 49.252 & 9.398 & 0.655 & 49.143 & 9.179 & 0.669 & 1.002 \\
- & $q_6$ & 56.869 & 13.412 & 0.530 & 56.670 & 11.891 & 0.596 & 1.021 \\
- & rings & 110.835 & 25.243 & 0.549 & 127.277 & 24.199 & 0.657 & 1.030 \\
-884736 & neighbours & 306.973 & 57.678 & 0.665 & 305.485 & 48.209 & 0.792 & 1.018 \\
- & CHILL+ & 466.373 & 85.921 & 0.678 & 476.550 & 91.639 & 0.650 & 1.004 \\
- & $q_6$ & 572.333 & 100.482 & 0.712 & 566.063 & 107.873 & 0.656 & 1.030 \\
- & rings & 964.340 & 206.519 & 0.584 & 982.219 & 207.292 & 0.592 & 1.052 \\
+110592 & neighbours & 8.741 & 0.726 & 7.652 & 0.291 & 0.559 & 1.027 & 0.115 \\
+ & CHILL+ & 14.959 & 2.842 & 11.681 & 1.407 & 0.495 & 1.003 & 0.115 \\
+ & $q_6$ & 13.350 & 1.022 & 11.394 & 0.744 & 0.577 & 1.004 & 0.115 \\
+ & rings & 22.433 & 1.911 & 21.447 & 0.190 & 0.636 & 1.055 & 0.481 \\
+884736 & neighbours & 75.131 & 4.664 & 60.643 & 1.448 & 0.750 & 1.006 & 0.060 \\
+ & CHILL+ & 120.526 & 8.356 & 95.862 & 3.242 & 0.621 & 1.003 & 0.060 \\
+ & $q_6$ & 130.905 & 4.779 & 107.800 & 4.475 & 0.656 & 1.002 & 0.060 \\
+ & rings & 183.325 & 11.405 & 159.544 & 1.829 & 0.782 & 1.027 & 0.293 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -24,17 +25,16 @@ Molecules & Operation & Block 1 & Block 8 & Block eff. & Cell 1 & Cell 8 & Cell 
 \begin{table}[tbp]
 \centering
 \caption{\textbf{Weak scaling at 110592 molecules per rank.}
-Efficiency is the one-rank time divided by the eight-rank time.
-The imbalance is the eight-rank ratio of the cell-grid cut.}
+Block and cell alternate in one loop. IQR is the type-7 range of the eight-rank walls.}
 \label{tab:partition-weak}
-\begin{tabular}{lrrrrr}
+\begin{tabular}{lrrrrrr}
 \toprule
-Operation & Block 8 (ms) & Block eff. & Cell 8 (ms) & Cell eff. & Imbalance \\
+Operation & Block 8 & Block IQR & Cell 8 & Cell IQR & Cell eff. & Imbalance \\
 \midrule
-neighbours & 44.869 & 0.719 & 44.556 & 0.714 & 1.008 \\
-CHILL+ & 82.267 & 0.619 & 77.390 & 0.621 & 1.003 \\
-$q_6$ & 93.184 & 0.599 & 91.089 & 0.614 & 1.005 \\
-rings & 198.552 & 0.540 & 196.450 & 0.538 & 1.110 \\
+neighbours & 76.038 & 1.271 & 60.532 & 3.698 & 0.606 & 1.022 \\
+CHILL+ & 111.517 & 12.625 & 88.623 & 18.288 & 0.527 & 1.003 \\
+$q_6$ & 129.733 & 16.065 & 107.652 & 4.068 & 0.505 & 1.003 \\
+rings & 186.355 & 5.998 & 159.727 & 7.257 & 0.732 & 1.064 \\
 \bottomrule
 \end{tabular}
 \end{table}

@@ -1,0 +1,19 @@
+\begin{table}[tbp]
+\centering
+\caption{\textbf{884736 molecules on eight cores, after the threaded neighbour list.} Pure MPI is one thread on each rank. Hybrid uses the same eight cores. Efficiency divides the one-rank, one-thread time by the wall and by the workers. Six repeats, type-7 median and IQR.}
+\label{tab:partition-v17}
+\begin{tabular}{llrrrrrr}
+\toprule
+Layout & Operation & Block & IQR & Cell & IQR & Cell eff. & Rule \\
+\midrule
+8$\times$1 & neighbours & 50.717 & 4.900 & 41.700 & 3.753 & 0.984 & cell \\
+ & CHILL+ & 81.191 & 1.141 & 71.506 & 1.759 & 0.818 & cell \\
+ & $q_6$ & 90.077 & 4.256 & 79.336 & 7.083 & 0.920 & cell \\
+ & rings & 175.894 & 1.245 & 178.672 & 1.432 & 0.685 & cell \\
+4$\times$2 & CHILL+ & 100.301 & 3.807 & 86.724 & 3.809 & 0.674 & cell \\
+ & $q_6$ & 128.920 & 2.279 & 114.053 & 0.949 & 0.640 & cell \\
+2$\times$4 & CHILL+ & 133.081 & 3.834 & 122.555 & 2.683 & 0.477 & cell \\
+ & $q_6$ & 195.169 & 2.707 & 182.736 & 5.650 & 0.399 & cell \\
+\bottomrule
+\end{tabular}
+\end{table}

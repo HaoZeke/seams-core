@@ -17,9 +17,11 @@
  *  bisection of the periodic cell grid. The bound is the tightest a
  *  cell-aligned cut can promise. The first call of an analysis weights
  *  cells by how many points they hold. Later calls of that analysis
- *  weight them by the work measured on the first call. The halo is the
- *  cells painted around each rank's owned cells. A skewed frame keeps
- *  the slab, pencil, or block cut.
+ *  weight them by the work measured on the first call. A painted cell
+ *  only contributes a point that lies within the cutoff of an owned
+ *  atom. The cut whose heaviest rank load plus thickest ghost fraction
+ *  is smaller is the one that runs. A skewed frame keeps the slab,
+ *  pencil, or block cut.
  */
 
 namespace seams::domain {
@@ -131,6 +133,19 @@ Work &gatherWork(const Cloud &cloud, double halo, MPI_Comm comm, int workTag = 0
 //! and keep the resulting cut for the next gather of @a workTag.
 //! Later calls with the same tag are ignored.
 void captureLocalWork(int workTag, const double *perLocal, int nLocal, MPI_Comm comm);
+
+//! 0 chooses the cheaper of the block and cell cuts, 1 forces the block cut, 2 the cell cut.
+//! The choice adds the thickest ghost fraction to the heaviest-rank load.
+void setCutMode(int mode);
+
+//! Called from gatherWork after owned coordinates are in place and the ghost
+//! exchange has been posted, before those ghost coordinates are written.
+//! The hook reads owned atoms and must not touch the exchange.
+void setHaloHook(void (*fn)(void *), void *ctx);
+
+//! Owned atoms whose every neighbour within @a cutoff is also owned.
+//! A boundary atom is left clear. Indices are the latest share.
+void markInterior(const Work &work, double cutoff, std::vector<char> &interior);
 
 //! The cloud and timers from the latest gatherWork on this rank.
 Work &gatheredWork();

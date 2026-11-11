@@ -37,7 +37,9 @@ inline void adoptThreads() {
     n = 1;
   }
 #ifdef SEAMS_HAS_LINKCELL
-  lc_set_threads(n);
+  // OpenMP owns the cores of this rank. A second pool of the same width
+  // stacks on those cores and the hybrid layouts fall behind one thread.
+  lc_set_threads(1);
 #else
   (void)n;
 #endif

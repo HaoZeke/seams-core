@@ -245,7 +245,7 @@ struct BondOrder {
 
 void bondOrder(const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
                const std::vector<std::vector<int>> &nList, const BondClassifier &rule,
-               BondOrder &order, const std::vector<char> *which);
+               BondOrder &order, const std::vector<char> *which, bool fresh = true);
 
 //! c_ij for atoms @a which selects, from a bond-order vector that already
 //! holds every neighbour the bond reads. Atoms outside @a which are left

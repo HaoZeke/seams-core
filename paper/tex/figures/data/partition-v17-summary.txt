@@ -1,0 +1,28 @@
+strong 884736 n=1 t=1 neigh 328.117 iqr 3.878 eff 1.000 rule 
+strong 884736 n=1 t=1 chill 467.889 iqr 16.597 eff 1.000 rule 
+strong 884736 n=1 t=1 q6 583.662 iqr 5.162 eff 1.000 rule 
+strong 884736 n=1 t=1 rings 978.841 iqr 11.472 eff 1.000 rule 
+strong 884736 n=8 t=1 neigh 41.700 iqr 3.753 eff 0.984 rule cell
+strong 884736 n=8 t=1 chill 71.506 iqr 1.759 eff 0.818 rule cell
+strong 884736 n=8 t=1 q6 79.336 iqr 7.083 eff 0.920 rule cell
+strong 884736 n=8 t=1 rings 178.672 iqr 1.432 eff 0.685 rule cell
+hybrid 884736 n=4 t=2 chill 86.724 iqr 3.809 eff 0.674 rule cell
+hybrid 884736 n=4 t=2 q6 114.053 iqr 0.949 eff 0.640 rule cell
+hybrid 884736 n=2 t=4 chill 122.555 iqr 2.683 eff 0.477 rule cell
+hybrid 884736 n=2 t=4 q6 182.736 iqr 5.650 eff 0.399 rule cell
+interface 864 n=1 t=1 neigh 0.254 iqr 0.028 eff 1.000 rule 
+interface 864 n=1 t=1 chill 0.456 iqr 0.007 eff 1.000 rule 
+interface 864 n=1 t=1 q6 0.448 iqr 0.007 eff 1.000 rule 
+interface 864 n=1 t=1 rings 2.168 iqr 0.026 eff 1.000 rule 
+interface 864 n=8 t=1 neigh 0.144 iqr 0.009 eff 0.220 rule cell
+interface 864 n=8 t=1 chill 0.240 iqr 0.030 eff 0.238 rule cell
+interface 864 n=8 t=1 q6 0.220 iqr 0.012 eff 0.255 rule cell
+interface 864 n=8 t=1 rings 1.077 iqr 0.096 eff 0.252 rule cell
+nucleation 4096 n=1 t=1 neigh 1.341 iqr 0.075 eff 1.000 rule 
+nucleation 4096 n=1 t=1 chill 2.620 iqr 0.067 eff 1.000 rule 
+nucleation 4096 n=1 t=1 q6 2.337 iqr 0.060 eff 1.000 rule 
+nucleation 4096 n=1 t=1 rings 10.411 iqr 0.203 eff 1.000 rule 
+nucleation 4096 n=8 t=1 neigh 0.444 iqr 0.040 eff 0.377 rule cell
+nucleation 4096 n=8 t=1 chill 0.923 iqr 0.063 eff 0.355 rule cell
+nucleation 4096 n=8 t=1 q6 0.638 iqr 0.026 eff 0.458 rule cell
+nucleation 4096 n=8 t=1 rings 2.878 iqr 0.193 eff 0.452 rule cell

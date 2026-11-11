@@ -13,6 +13,7 @@
 //-----------------------------------------------------------------------------------
 
 #include <algorithm>
+#include <atomic>
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -722,6 +723,7 @@ bool nneigh::blockWindowRows(
                             yCloud.boxLow.size() > 1 ? yCloud.boxLow[1] : 0.0,
                             yCloud.boxLow.size() > 2 ? yCloud.boxLow[2] : 0.0};
   const int n = yCloud.nop;
+  const double windowT0 = omp_get_wtime();
   double lo[3] = {1.0e300, 1.0e300, 1.0e300};
   double hi[3] = {-1.0e300, -1.0e300, -1.0e300};
   int nAnchor = 0;
@@ -741,25 +743,20 @@ bool nneigh::blockWindowRows(
   if (nAnchor == 0) {
     return false;
   }
-  // Every axis already reaches both ends of the box, so there is no
-  // empty slab to drop. This is the one-rank case.
-  int wide = 0;
-  for (int d = 0; d < 3; d++) {
-    if (hi[d] - lo[d] > lenBox[d] - rcutoff) {
-      ++wide;
-    }
-  }
-  if (wide == 3) {
-    return false;
-  }
+  // A wrapped ghost sits at the other end of the box, so the raw bounds
+  // cover every axis even when the atoms occupy one arc. The gap below
+  // finds that arc. A window that still fills the box returns later.
   // The owned atoms sit in one arc of the circle. The largest empty gap
   // is the outside of that arc, including when the arc is wider than half
   // the box. Folding onto the first atom splits such an arc in two and the
   // window then covers the whole box.
   {
-    std::vector<double> axis(static_cast<std::size_t>(nAnchor));
+    // Owned atoms of one block sit in one arc. The raw min and max are that
+    // arc when it does not wrap. An arc that does wrap spans the whole box
+    // here, and the pair walk below uses the periodic image for that axis.
     for (int d = 0; d < 3; d++) {
-      int m = 0;
+      double mn = 1.0e300;
+      double mx = -1.0e300;
       for (int i = 0; i < n; i++) {
         if (source != nullptr &&
             (static_cast<int>(source->size()) <= i || (*source)[static_cast<std::size_t>(i)] == 0)) {
@@ -767,23 +764,11 @@ bool nneigh::blockWindowRows(
         }
         const auto &p = yCloud.pts[static_cast<std::size_t>(i)];
         const double c[3] = {p.x, p.y, p.z};
-        axis[static_cast<std::size_t>(m++)] = c[d];
+        mn = std::min(mn, c[d]);
+        mx = std::max(mx, c[d]);
       }
-      std::sort(axis.begin(), axis.begin() + m);
-      const double length = lenBox[d];
-      double bestGap = axis[0] + length - axis[static_cast<std::size_t>(m - 1)];
-      int after = m - 1;
-      for (int i = 0; i + 1 < m; i++) {
-        const double gap =
-            axis[static_cast<std::size_t>(i + 1)] - axis[static_cast<std::size_t>(i)];
-        if (gap > bestGap) {
-          bestGap = gap;
-          after = i;
-        }
-      }
-      const double start = after + 1 == m ? axis[0] : axis[static_cast<std::size_t>(after + 1)];
-      lo[d] = start;
-      hi[d] = start + std::max(length - bestGap, 0.0);
+      lo[d] = mn;
+      hi[d] = mx;
     }
   }
   // Owned atoms of one block do not wrap. Ghosts that do are shifted by a
@@ -873,43 +858,176 @@ bool nneigh::blockWindowRows(
                       : local[static_cast<std::size_t>(i) * 3 + static_cast<std::size_t>(d)];
     }
   }
-  const double volume = edge[0] * edge[1] * edge[2];
-  const double hint = std::max(
-      rcutoff, std::cbrt(kAtomsPerLinkcellCell * volume / static_cast<double>(n)));
-  thread_local std::vector<linkcell::ShiftedPair> found;
-  try {
-    const linkcell::Cell cell = linkcell::Cell::from_vectors(
-        {edge[0], 0.0, 0.0}, {0.0, edge[1], 0.0}, {0.0, 0.0, edge[2]},
-        {originW[0], originW[1], originW[2]});
-    const lc_cell raw = cell.raw();
-    std::size_t count = 0;
-    // One side of each pair. Both atoms are written onto an anchor row below.
-    if (lc_pairs_within_rows(xyz.data(), static_cast<std::size_t>(n), &raw, rcutoff, nullptr,
-                             hint, 1, nullptr, 0, &count) != 0) {
-      return false;
+  // A bin of one cutoff, wrapped on the axes that still see the whole box.
+  // The previous periodic walk built that full box in linkcell and did not
+  // get faster as the rank count grew, so two or four ranks stayed near the
+  // one-rank time. Threads of one rank share this loop.
+  const double cut2 = rcutoff * rcutoff;
+  int nc[3];
+  for (int d = 0; d < 3; d++) {
+    nc[d] = std::max(1, static_cast<int>(std::floor(edge[d] / rcutoff)));
+  }
+  const int nCells = nc[0] * nc[1] * nc[2];
+  std::vector<int> cellOf(static_cast<std::size_t>(n), 0);
+  std::vector<int> cellCount(static_cast<std::size_t>(nCells), 0);
+  auto cellIndex = [&](double s, int axis) {
+    int ix = static_cast<int>(std::floor(s / rcutoff));
+    if (ix < 0) {
+      ix = 0;
     }
-    found.resize(count);
-    if (count > 0 &&
-        lc_pairs_within_rows(xyz.data(), static_cast<std::size_t>(n), &raw, rcutoff, nullptr,
-                             hint, 1, reinterpret_cast<lc_pair *>(found.data()), count,
-                             &count) != 0) {
-      return false;
+    if (ix >= nc[axis]) {
+      ix = nc[axis] - 1;
     }
-    found.resize(count);
-  } catch (const linkcell::Error &) {
-    return false;
+    return ix;
+  };
+  for (int i = 0; i < n; i++) {
+    const double *p = xyz.data() + static_cast<std::size_t>(i) * 3;
+    const int c = (cellIndex(p[2], 2) * nc[1] + cellIndex(p[1], 1)) * nc[0] + cellIndex(p[0], 0);
+    cellOf[static_cast<std::size_t>(i)] = c;
+    cellCount[static_cast<std::size_t>(c)]++;
+  }
+  std::vector<int> cellStart(static_cast<std::size_t>(nCells) + 1, 0);
+  for (int c = 0; c < nCells; c++) {
+    cellStart[static_cast<std::size_t>(c) + 1] =
+        cellStart[static_cast<std::size_t>(c)] + cellCount[static_cast<std::size_t>(c)];
+  }
+  std::vector<int> cellAtom(static_cast<std::size_t>(n));
+  {
+    std::vector<int> fill = cellStart;
+    for (int i = 0; i < n; i++) {
+      const int c = cellOf[static_cast<std::size_t>(i)];
+      cellAtom[static_cast<std::size_t>(fill[static_cast<std::size_t>(c)]++)] = i;
+    }
+  }
+  const double *xyzp = xyz.data();
+  const double pairT0 = omp_get_wtime();
+  if (const char *split = std::getenv("SEAMS_SPLIT")) {
+    if (split[0] == '1') {
+      std::fprintf(stderr, "prep ms %.3f\n", (pairT0 - windowT0) * 1.0e3);
+    }
+  }
+#ifdef SEAMS_HAS_OPENMP
+  const int nThreads = std::max(1, omp_get_max_threads());
+#else
+  const int nThreads = 1;
+#endif
+  std::vector<std::vector<std::pair<int, int>>> partial(static_cast<std::size_t>(nThreads));
+  for (auto &part : partial) {
+    part.reserve(static_cast<std::size_t>(n) * 4 / static_cast<std::size_t>(nThreads) + 16);
+  }
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel if (nThreads > 1)
+#endif
+  {
+#ifdef SEAMS_HAS_OPENMP
+    const int tid = omp_get_thread_num();
+#else
+    const int tid = 0;
+#endif
+    auto &mine = partial[static_cast<std::size_t>(tid)];
+    mine.clear();
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp for schedule(static)
+#endif
+    for (int i = 0; i < n; i++) {
+      const double ixv = xyzp[static_cast<std::size_t>(i) * 3];
+      const double iyv = xyzp[static_cast<std::size_t>(i) * 3 + 1];
+      const double izv = xyzp[static_cast<std::size_t>(i) * 3 + 2];
+      const int home[3] = {cellIndex(ixv, 0), cellIndex(iyv, 1), cellIndex(izv, 2)};
+      for (int dz = -1; dz <= 1; dz++) {
+        int jz = home[2] + dz;
+        if (periodic[2]) {
+          if (jz < 0) {
+            jz += nc[2];
+          } else if (jz >= nc[2]) {
+            jz -= nc[2];
+          }
+        } else if (jz < 0 || jz >= nc[2]) {
+          continue;
+        }
+        for (int dy = -1; dy <= 1; dy++) {
+          int jy = home[1] + dy;
+          if (periodic[1]) {
+            if (jy < 0) {
+              jy += nc[1];
+            } else if (jy >= nc[1]) {
+              jy -= nc[1];
+            }
+          } else if (jy < 0 || jy >= nc[1]) {
+            continue;
+          }
+          for (int dx = -1; dx <= 1; dx++) {
+            int jx = home[0] + dx;
+            if (periodic[0]) {
+              if (jx < 0) {
+                jx += nc[0];
+              } else if (jx >= nc[0]) {
+                jx -= nc[0];
+              }
+            } else if (jx < 0 || jx >= nc[0]) {
+              continue;
+            }
+            const int c = (jz * nc[1] + jy) * nc[0] + jx;
+            const int begin = cellStart[static_cast<std::size_t>(c)];
+            const int end = cellStart[static_cast<std::size_t>(c) + 1];
+            for (int t = begin; t < end; t++) {
+              const int j = cellAtom[static_cast<std::size_t>(t)];
+              if (j <= i) {
+                continue;
+              }
+              double dxv = ixv - xyzp[static_cast<std::size_t>(j) * 3];
+              double dyv = iyv - xyzp[static_cast<std::size_t>(j) * 3 + 1];
+              double dzv = izv - xyzp[static_cast<std::size_t>(j) * 3 + 2];
+              if (periodic[0]) {
+                if (dxv > 0.5 * edge[0]) {
+                  dxv -= edge[0];
+                } else if (dxv < -0.5 * edge[0]) {
+                  dxv += edge[0];
+                }
+              }
+              if (periodic[1]) {
+                if (dyv > 0.5 * edge[1]) {
+                  dyv -= edge[1];
+                } else if (dyv < -0.5 * edge[1]) {
+                  dyv += edge[1];
+                }
+              }
+              if (periodic[2]) {
+                if (dzv > 0.5 * edge[2]) {
+                  dzv -= edge[2];
+                } else if (dzv < -0.5 * edge[2]) {
+                  dzv += edge[2];
+                }
+              }
+              if (dxv * dxv + dyv * dyv + dzv * dzv < cut2) {
+                mine.emplace_back(i, j);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  std::size_t nPairs = 0;
+  for (const auto &part : partial) {
+    nPairs += part.size();
+  }
+  if (const char *split = std::getenv("SEAMS_SPLIT")) {
+    if (split[0] == '1') {
+      std::fprintf(stderr, "pairs threads %d n %d cells %d hits %zu ms %.3f\n", nThreads, n, nCells,
+                   nPairs, (omp_get_wtime() - pairT0) * 1.0e3);
+    }
   }
   const std::vector<int> indexToID = indexToIDTable(yCloud);
   std::vector<int> degree(static_cast<std::size_t>(n), 0);
-  for (const auto &sp : found) {
-    if (sp.i == sp.j || sp.i < 0 || sp.j < 0 || sp.i >= n || sp.j >= n) {
-      continue;
-    }
-    if (anchor[static_cast<std::size_t>(sp.i)]) {
-      ++degree[static_cast<std::size_t>(sp.i)];
-    }
-    if (anchor[static_cast<std::size_t>(sp.j)]) {
-      ++degree[static_cast<std::size_t>(sp.j)];
+  for (const auto &part : partial) {
+    for (const auto &hit : part) {
+      if (anchor[static_cast<std::size_t>(hit.first)]) {
+        ++degree[static_cast<std::size_t>(hit.first)];
+      }
+      if (anchor[static_cast<std::size_t>(hit.second)]) {
+        ++degree[static_cast<std::size_t>(hit.second)];
+      }
     }
   }
   std::vector<int> cursor(static_cast<std::size_t>(n) + 1, 0);
@@ -918,16 +1036,15 @@ bool nneigh::blockWindowRows(
         cursor[static_cast<std::size_t>(i)] + degree[static_cast<std::size_t>(i)];
   }
   std::vector<int> partner(static_cast<std::size_t>(cursor[static_cast<std::size_t>(n)]));
-  std::vector<int> at = cursor;
-  for (const auto &sp : found) {
-    if (sp.i == sp.j || sp.i < 0 || sp.j < 0 || sp.i >= n || sp.j >= n) {
-      continue;
-    }
-    if (anchor[static_cast<std::size_t>(sp.i)]) {
-      partner[static_cast<std::size_t>(at[static_cast<std::size_t>(sp.i)]++)] = sp.j;
-    }
-    if (anchor[static_cast<std::size_t>(sp.j)]) {
-      partner[static_cast<std::size_t>(at[static_cast<std::size_t>(sp.j)]++)] = sp.i;
+  std::vector<int> atCursor = cursor;
+  for (const auto &part : partial) {
+    for (const auto &hit : part) {
+      if (anchor[static_cast<std::size_t>(hit.first)]) {
+        partner[static_cast<std::size_t>(atCursor[static_cast<std::size_t>(hit.first)]++)] = hit.second;
+      }
+      if (anchor[static_cast<std::size_t>(hit.second)]) {
+        partner[static_cast<std::size_t>(atCursor[static_cast<std::size_t>(hit.second)]++)] = hit.first;
+      }
     }
   }
   if (static_cast<int>(rows.size()) != n) {
@@ -937,12 +1054,23 @@ bool nneigh::blockWindowRows(
       row.clear();
     }
   }
+  auto idOf = [&](int i) {
+    const int mapped = indexToID[static_cast<std::size_t>(i)];
+    if (mapped >= 0) {
+      return mapped;
+    }
+    return yCloud.pts[static_cast<std::size_t>(i)].atomID;
+  };
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) if (nThreads > 1)
+#endif
   for (int i = 0; i < n; i++) {
-    if (indexToID[static_cast<std::size_t>(i)] == -1) {
+    const int idi = idOf(i);
+    if (idi < 0) {
       continue;
     }
     auto &row = rows[static_cast<std::size_t>(i)];
-    row.push_back(indexToID[static_cast<std::size_t>(i)]);
+    row.push_back(idi);
     if (!anchor[static_cast<std::size_t>(i)]) {
       continue;
     }
@@ -956,9 +1084,15 @@ bool nneigh::blockWindowRows(
         continue;
       }
       prev = j;
-      if (indexToID[static_cast<std::size_t>(j)] != -1) {
-        row.push_back(indexToID[static_cast<std::size_t>(j)]);
+      const int idj = idOf(j);
+      if (idj >= 0) {
+        row.push_back(idj);
       }
+    }
+  }
+  if (const char *split = std::getenv("SEAMS_SPLIT")) {
+    if (split[0] == '1') {
+      std::fprintf(stderr, "rows ms %.3f\n", (omp_get_wtime() - pairT0) * 1.0e3);
     }
   }
   return true;

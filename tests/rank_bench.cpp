@@ -7,6 +7,7 @@
 #include <domain.hpp>
 #include <mol_sys.hpp>
 #include <neighbours.hpp>
+#include <seams_input.hpp>
 
 #include "slab_frames.hpp"
 
@@ -100,7 +101,16 @@ int main(int argc, char **argv) {
   bool slab = false;
   std::string kind = "ice";
   int which = 110;
-  if (argc >= 2 && std::string(argv[1]) == "slab") {
+  bool fromFile = false;
+  std::string framePath;
+  if (argc >= 2 && std::string(argv[1]) == "file") {
+    fromFile = true;
+    framePath = argc > 2 ? argv[2] : "";
+    reps = argc > 3 ? std::atoi(argv[3]) : 6;
+    if (argc > 4) {
+      op = argv[4];
+    }
+  } else if (argc >= 2 && std::string(argv[1]) == "slab") {
     slab = true;
     kind = argc > 2 ? argv[2] : "ice";
     which = argc > 3 ? std::atoi(argv[3]) : 110;
@@ -124,7 +134,9 @@ int main(int argc, char **argv) {
   }
   const double cutoff = 3.5;
   molSys::PointCloud<molSys::Point<double>, double> cloud;
-  if (!slab) {
+  if (fromFile) {
+    cloud = sinp::readLammpsTrj(framePath, 1, cloud);
+  } else if (!slab) {
     cloud = seams::frames::iceLattice(mx, my, mz);
   } else if (kind == "hydrate") {
     cloud = which >= 800 ? seams::frames::hydrateLiquidSlab(40, 24, 20)
@@ -133,9 +145,11 @@ int main(int argc, char **argv) {
     cloud = seams::frames::iceWaterSlab(which >= 800 ? 48 : 24);
   }
   if (rank == 0) {
-    std::fprintf(stderr, "frame %s nop %d\n", slab ? kind.c_str() : "ice", cloud.nop);
+    std::fprintf(stderr, "frame %s nop %d\n",
+                 fromFile ? framePath.c_str() : (slab ? kind.c_str() : "ice"), cloud.nop);
   }
-  for (int n = 0; n < reps + 1; n++) {
+  auto timeCut = [&](int mode, const char *tag, bool print) {
+    seams::domain::setCutMode(mode);
     MPI_Barrier(MPI_COMM_WORLD);
     const auto wall0 = std::chrono::steady_clock::now();
     const auto compute0 = std::chrono::steady_clock::now();
@@ -160,9 +174,17 @@ int main(int argc, char **argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &nRanks);
     const double mean = nRanks > 0 ? computeSum / nRanks : 0.0;
     const double imbalance = mean > 0.0 ? computeMax / mean : 1.0;
-    if (rank == 0 && n > 0) {
-      std::printf("%.6f %.6f %.6f %.6f %.6f\n", wall, comm, computeMax, haloFrac, imbalance);
+    if (rank == 0 && print) {
+      std::printf("%s %.6f %.6f %.6f %.6f %.6f\n", tag, wall, comm, computeMax, haloFrac,
+                  imbalance);
     }
+  };
+  // One warm-up of each cut, then block and cell in the same loop.
+  timeCut(1, "block", false);
+  timeCut(2, "cell", false);
+  for (int n = 0; n < reps; n++) {
+    timeCut(1, "block", true);
+    timeCut(2, "cell", true);
   }
   MPI_Finalize();
   return 0;

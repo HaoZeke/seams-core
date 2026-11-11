@@ -1005,6 +1005,28 @@ const std::vector<std::vector<int>> &qRows(
   return window;
 }
 
+struct Q6During {
+  double cutoff = 3.5;
+  int orderL = 6;
+  std::vector<char> interior;
+  std::vector<double> qlm;
+  std::vector<std::vector<int>> rows;
+  bool ran = false;
+};
+
+Q6During gQ6;
+
+void duringQ6Halo(void *) {
+  auto &work = seams::domain::gatheredWork();
+  const auto &live = qRows(work.cloud, gQ6.cutoff, work.share.owned);
+  gQ6.rows.assign(live.begin(), live.end());
+  const NeighbourCSR graph = flatten(work.cloud, gQ6.rows);
+  const int width = steinhardtQlmWidth(gQ6.orderL);
+  gQ6.qlm.assign(static_cast<std::size_t>(graph.nop) * static_cast<std::size_t>(width), 0.0);
+  runPass1Mask(graph, gQ6.orderL, gQ6.qlm, &work.share.owned);
+  gQ6.ran = true;
+}
+
 } // namespace
 
 SteinhardtQl distributedSteinhardt(
@@ -1020,16 +1042,27 @@ SteinhardtQl distributedSteinhardt(
     const auto rows = nneigh::neighListO(cutoff, full, 1);
     return steinhardtQl(full, rows, orderL);
   }
+  gQ6.cutoff = cutoff;
+  gQ6.orderL = orderL;
+  gQ6.ran = false;
   auto &work = seams::domain::gatherWork(full, cutoff, comm, seams::domain::kWorkQ6);
-  const auto &rows = qRows(work.cloud, cutoff, work.share.owned);
   const int width = steinhardtQlmWidth(orderL);
+  const std::vector<std::vector<int>> &rows =
+      gQ6.ran ? gQ6.rows : qRows(work.cloud, cutoff, work.share.owned);
   const NeighbourCSR graph = flatten(work.cloud, rows);
-  std::vector<double> qlm(static_cast<std::size_t>(graph.nop) * static_cast<std::size_t>(width),
-                          0.0);
-  runPass1Mask(graph, orderL, qlm, &work.share.owned);
+  std::vector<double> qlm;
+  if (gQ6.ran && static_cast<int>(gQ6.qlm.size()) == graph.nop * width) {
+    qlm = std::move(gQ6.qlm);
+  } else {
+    qlm.assign(static_cast<std::size_t>(graph.nop) * static_cast<std::size_t>(width), 0.0);
+    runPass1Mask(graph, orderL, qlm, &work.share.owned);
+  }
   seams::domain::postBoundaryValues(qlm.data(), width, comm);
   std::vector<char> interior(static_cast<std::size_t>(work.cloud.nop), 0);
   std::vector<char> boundary(interior.size(), 0);
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) if (omp_get_max_threads() > 1)
+#endif
   for (int i = 0; i < work.cloud.nop; i++) {
     if (!work.share.owned[static_cast<std::size_t>(i)] ||
         static_cast<std::size_t>(i) >= rows.size()) {

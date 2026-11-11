@@ -1328,6 +1328,9 @@ void assignIceTypePlus(
   molSys::bond_type bondType;
   int nnumNeighbours;
 
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) if (omp_get_max_threads() > 1) reduction(+ : ih, ic, water, interIce, total, clath, interClath) private(num_staggrd, num_eclipsd, na, bondType, nnumNeighbours)
+#endif
   for (int iatom = 0; iatom < yCloud.nop; iatom++) {
     // if(yCloud.pts[iatom].type!=typeO){continue;}
     // if this is a slice and the particle is not in the slice
@@ -1781,23 +1784,29 @@ int resolveId(const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
 void chill::bondOrder(const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
                       const std::vector<std::vector<int>> &nList,
                       const BondClassifier &rule, BondOrder &order,
-                      const std::vector<char> *which) {
+                      const std::vector<char> *which, bool fresh) {
   seams::adoptThreads();
   const int nop = yCloud.nop;
   const int keepMax = rule.coordinationNumber;
   order.keepMax = keepMax;
-  order.q.assign(static_cast<std::size_t>(std::max(nop, 0)) * kRealL3, 0.0);
-  order.norm.assign(static_cast<std::size_t>(std::max(nop, 0)), 0.0);
-  order.nkeep.assign(static_cast<std::size_t>(std::max(nop, 0)), 0);
-  order.chosen.clear();
-  order.rows.clear();
+  const bool reset = fresh || static_cast<int>(order.norm.size()) != nop ||
+                     static_cast<int>(order.q.size()) != nop * kRealL3;
+  if (reset) {
+    order.q.assign(static_cast<std::size_t>(std::max(nop, 0)) * kRealL3, 0.0);
+    order.norm.assign(static_cast<std::size_t>(std::max(nop, 0)), 0.0);
+    order.nkeep.assign(static_cast<std::size_t>(std::max(nop, 0)), 0);
+    order.chosen.clear();
+    order.rows.clear();
+    if (nop > 0) {
+      if (keepMax > 0) {
+        order.chosen.assign(static_cast<std::size_t>(nop) * static_cast<std::size_t>(keepMax), -1);
+      } else {
+        order.rows.assign(static_cast<std::size_t>(nop), {});
+      }
+    }
+  }
   if (nop <= 0) {
     return;
-  }
-  if (keepMax > 0) {
-    order.chosen.assign(static_cast<std::size_t>(nop) * static_cast<std::size_t>(keepMax), -1);
-  } else {
-    order.rows.assign(static_cast<std::size_t>(nop), {});
   }
   int maxId = 0;
   for (int i = 0; i < nop; i++) {
@@ -1826,6 +1835,8 @@ void chill::bondOrder(const molSys::PointCloud<molSys::Point<double>, double> &y
   const bool useAvx = __builtin_cpu_supports("avx2") && __builtin_cpu_supports("fma");
   const bool fixedKeep = keepMax > 0;
 #ifdef SEAMS_HAS_OPENMP
+  const double orderT0 = omp_get_wtime();
+  const int orderThreads = omp_get_max_threads();
 #pragma omp parallel for schedule(static) if (omp_get_max_threads() > 1)
 #endif
   for (int iatom = 0; iatom < nop; iatom++) {
@@ -1907,6 +1918,14 @@ void chill::bondOrder(const molSys::PointCloud<molSys::Point<double>, double> &y
     order.norm[static_cast<std::size_t>(iatom)] =
         useAvx ? realL3Dot(acc, acc) : realL3DotScalar(acc, acc);
   }
+#ifdef SEAMS_HAS_OPENMP
+  if (const char *split = std::getenv("SEAMS_SPLIT")) {
+    if (split[0] == '1') {
+      std::fprintf(stderr, "order threads %d nop %d ms %.3f\n", orderThreads, nop,
+                   (omp_get_wtime() - orderT0) * 1.0e3);
+    }
+  }
+#endif
 }
 
 void chill::correlFromOrder(molSys::PointCloud<molSys::Point<double>, double> &yCloud,
@@ -1984,6 +2003,29 @@ const std::vector<std::vector<int>> &shellRows(
   return window;
 }
 
+struct ChillDuring {
+  double cutoff = 3.5;
+  chill::BondClassifier rule = chill::chillPlusRule();
+  chill::BondOrder order;
+  std::vector<char> interior;
+  std::vector<std::vector<int>> rows;
+  bool ran = false;
+};
+
+ChillDuring gDuring;
+
+void duringChillHalo(void *) {
+  // Ghost coordinates were copied from the frame this rank already holds,
+  // so the owned bond-order kernel can run while the exchange is in flight.
+  // The result is the same list the blocking path builds after the wait.
+  auto &work = seams::domain::gatheredWork();
+  const auto &live = shellRows(work.cloud, gDuring.cutoff, work.share.owned);
+  gDuring.rows.assign(live.begin(), live.end());
+  chill::bondOrder(work.cloud, gDuring.rows, gDuring.rule, gDuring.order, &work.share.owned,
+                   true);
+  gDuring.ran = true;
+}
+
 void writeStaggered(molSys::PointCloud<molSys::Point<double>, double> &cloud, int atom,
                     int count) {
   auto &bonds = cloud.pts[static_cast<std::size_t>(atom)].c_ij;
@@ -2009,13 +2051,35 @@ void chill::distributedChillPlus(molSys::PointCloud<molSys::Point<double>, doubl
     getIceTypePlusNoPrint(full, rows, false, neighbourTest);
     return;
   }
+  gDuring.cutoff = cutoff;
+  gDuring.rule = rule;
+  gDuring.ran = false;
+#ifdef SEAMS_HAS_OPENMP
+  const double gatherT0 = omp_get_wtime();
+#endif
   auto &work = seams::domain::gatherWork(full, cutoff, comm, seams::domain::kWorkChill);
-  const auto &rows = shellRows(work.cloud, cutoff, work.share.owned);
-  BondOrder order;
-  bondOrder(work.cloud, rows, rule, order, &work.share.owned);
+#ifdef SEAMS_HAS_OPENMP
+  const double gatherT1 = omp_get_wtime();
+  if (const char *split = std::getenv("SEAMS_SPLIT")) {
+    if (split[0] == '1') {
+      std::fprintf(stderr, "gather ms %.3f local %zu\n", (gatherT1 - gatherT0) * 1.0e3,
+                   work.share.local.size());
+    }
+  }
+#endif
+  BondOrder &order = gDuring.order;
+  const std::vector<std::vector<int>> &rows = gDuring.ran
+                                                   ? gDuring.rows
+                                                   : shellRows(work.cloud, cutoff, work.share.owned);
+  if (!gDuring.ran) {
+    bondOrder(work.cloud, rows, rule, order, &work.share.owned, true);
+  }
   const int nop = work.cloud.nop;
   constexpr int stride = kRealL3 + 1;
   std::vector<double> packed(static_cast<std::size_t>(nop) * stride, 0.0);
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) if (omp_get_max_threads() > 1)
+#endif
   for (int i = 0; i < nop; i++) {
     if (!work.share.owned[static_cast<std::size_t>(i)]) {
       continue;
@@ -2028,6 +2092,9 @@ void chill::distributedChillPlus(molSys::PointCloud<molSys::Point<double>, doubl
   seams::domain::postBoundaryValues(packed.data(), stride, comm);
   std::vector<char> interior(static_cast<std::size_t>(nop), 0);
   std::vector<char> boundary(static_cast<std::size_t>(nop), 0);
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) if (omp_get_max_threads() > 1)
+#endif
   for (int i = 0; i < nop; i++) {
     if (!work.share.owned[static_cast<std::size_t>(i)]) {
       continue;
@@ -2047,6 +2114,9 @@ void chill::distributedChillPlus(molSys::PointCloud<molSys::Point<double>, doubl
     }
     (inside ? interior : boundary)[static_cast<std::size_t>(i)] = 1;
   }
+#ifdef SEAMS_HAS_OPENMP
+  const double corrT0 = omp_get_wtime();
+#endif
   correlFromOrder(work.cloud, order, rule, false, &interior);
   seams::domain::waitBoundaryValues();
   for (int i = 0; i < nop; i++) {
@@ -2109,7 +2179,19 @@ void chill::distributedChillPlus(molSys::PointCloud<molSys::Point<double>, doubl
       writeStaggered(work.cloud, i, static_cast<int>(std::lround(stag[static_cast<std::size_t>(i)])));
     }
   }
+#ifdef SEAMS_HAS_OPENMP
+  const double typeT0 = omp_get_wtime();
+#endif
   getIceTypePlusNoPrint(work.cloud, rows, false, neighbourTest);
+#ifdef SEAMS_HAS_OPENMP
+  if (const char *split = std::getenv("SEAMS_SPLIT")) {
+    if (split[0] == '1') {
+      const double now = omp_get_wtime();
+      std::fprintf(stderr, "chill rest corr %.3f type %.3f\n", (typeT0 - corrT0) * 1.0e3,
+                   (now - typeT0) * 1.0e3);
+    }
+  }
+#endif
   if (!rows.empty()) {
     std::vector<double> effort(rows.size(), 0.0);
     for (std::size_t k = 0; k < rows.size() && k < work.share.owned.size(); k++) {
