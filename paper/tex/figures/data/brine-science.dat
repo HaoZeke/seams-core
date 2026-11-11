@@ -1,6 +1,6 @@
 # v2 direct-coexistence accounting. The v1 front slopes are not used.
-# Throughput of one 3328-water TIP4P/2005 slab (9984 atoms), LAMMPS
-# 29 Aug 2024, OpenMP, cutoff 10 A, 2 fs, PPPM.
+# Throughput of one 3328-water TIP4P/2005 slab (9984 atoms).
+# LAMMPS 29 Aug 2024, CMAKE_BUILD_TYPE=Release, OpenMP, cutoff 10 A, 2 fs.
 # threads  steps_per_s  ns_per_day
 8  77.25  13.35
 4  46.91  8.11

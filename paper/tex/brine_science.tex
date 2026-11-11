@@ -16,7 +16,8 @@ average was taken over $500\,\mathrm{ns}$.
 That average is out of scope on this machine.
 A $3328$-water TIP4P/2005 cell ($9984$ atoms, cross section
 $31.4\times 36.9\,\mathrm{\AA}$) integrates at
-$13.4\,\mathrm{ns\,day^{-1}}$ on eight OpenMP threads in LAMMPS.
+$13.4\,\mathrm{ns\,day^{-1}}$ on eight OpenMP threads in a Release
+build of LAMMPS (29 Aug 2024, g++ 15.2.0).
 Five hundred nanoseconds at that rate is $37\,\mathrm{days}$ of
 eight-core time, for one temperature and one seed.
 The salinity series is not reported.
@@ -45,31 +46,45 @@ against the front.
 Those components are the brine pockets when ions are present.
 The pure-water frames used to time the analysis have no ions, so
 they do not measure exclusion.
-A release build of one $9984$-atom frame spends
-$2.5\,\mathrm{ms}$ in the linked-cell neighbour list,
-$1.1\,\mathrm{ms}$ in published CHILL+,
-$0.05\,\mathrm{ms}$ binning the molality,
-$2.9\,\mathrm{ms}$ on the front-layer rings and
-$19.5\,\mathrm{ms}$ walking brine pockets, because each cell-list
-hit scanned the liquid array.
-Neighbours and CHILL+ are already the cutoff shell and the
-closed-form $\ell=3$ harmonic from the fast CHILL+ path.
-Replacing that scan by a direct cloud-index slot, and searching
-rings only on the front layer, leaves the pocket walk at
-$2.0\,\mathrm{ms}$ and the rings at $2.0\,\mathrm{ms}$.
-Eight serial repeats of the whole frame then take
+The timings below are a Release build
+(\texttt{meson -Dbuildtype=release}, g++ 15.2.0) on this eight-core
+host, with \texttt{OMP\_NUM\_THREADS=1}.
+Eight serial repeats of one $9984$-atom frame take
 $7.93$, $7.88$, $8.27$, $7.91$, $7.85$, $7.94$, $7.98$ and
 $7.87\,\mathrm{ms}$.
-The median is $7.92\,\mathrm{ms}$, against $26.6\,\mathrm{ms}$
-for the same release build before that change.
-The $440\,\mathrm{ms}$ figure was an unoptimized build of the old
-pocket walk.
+The median is $7.92\,\mathrm{ms}$.
+The same binary, before the pocket index, took $26.6\,\mathrm{ms}$
+because the pocket walk scanned the liquid array at every cell-list hit.
+The stage means of the $7.92\,\mathrm{ms}$ build are in
+Table~\ref{tab:brine-stage}.
+Neighbours and CHILL+ are the cutoff shell and the closed-form
+$\ell=3$ harmonic.
 A $768$-atom frame with four NaCl ions, from a $10\,\mathrm{ps}$
-run at $1\,\mathrm{mol\,kg^{-1}}$, takes $0.78\,\mathrm{ms}$
-(median of eight). On every saved frame of that run the four ions
-are in the liquid and none is in ice or in the front shell, so
-$k=0$. That is one short trajectory, not an equilibrium
-rejection coefficient.
+Release-LAMMPS run at $1\,\mathrm{mol\,kg^{-1}}$, takes $0.78\,\mathrm{ms}$
+(median of eight, same Release analysis build).
+On every saved frame of that run the four ions are in the liquid
+and none is in ice or in the front shell, so $k=0$.
+That is one short trajectory, not an equilibrium rejection coefficient.
+
+\begin{table}[t]
+\centering
+\caption{Stage means on one $9984$-atom frame.
+Release build, g++ 15.2.0, one thread, eight-core host.
+Eight repeats; the whole-frame median is $7.92\,\mathrm{ms}$.}
+\label{tab:brine-stage}
+\begin{tabular}{lr}
+\hline
+stage & ms \\
+\hline
+linked-cell neighbours & 2.69 \\
+published CHILL+ & 1.21 \\
+molality bins & 0.05 \\
+brine pockets & 1.97 \\
+front-layer rings & 2.05 \\
+ion shells & 0.00 \\
+\hline
+\end{tabular}
+\end{table}
 Frames and restart files are written under \texttt{data/brine-front/}
 and are not part of the source tree.
 
