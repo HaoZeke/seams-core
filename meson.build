@@ -474,6 +474,14 @@ _incdirs += include_directories([
 # Library
 subdir('src')
 
+# The LAMMPS fix calls this replay entry. The test suite shells out to it.
+lammps_observe_exe = executable(
+  'lammps-observe',
+  files('src/lammps_observe_main.cpp'),
+  dependencies: [yds_dep],
+  include_directories: _incdirs,
+  install: false)
+
 # Tests
 if get_option('with_tests')
   subdir('tests')
