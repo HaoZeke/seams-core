@@ -49,33 +49,38 @@ sorted. ~seams rings~ is the ~rings 3:a 4:b 5:c 6:d 7:e 8:f~ line
 (primitive rings, depth 8). ~seams chill~ is the text after the census
 prefix ~chill~. ~seams chill-plus~ is the text after ~chill-plus~.
 
-~tests/openmm/test_reporter.py~ runs 251 TIP4P/Ew waters for 100 steps
-of 2 fs and checks those four texts at steps 50 and 100. OpenMM comes
-from pip. The script builds the box at run time and writes the dump in
-a temporary directory. That file is not committed. See ~data/README~.
+~tests/openmm/test_reporter.py~ builds both boxes when it runs. The
+2 nm box (251 waters) is checked at steps 50 and 100. The 4.93 nm box
+(3910 waters) is checked at steps 100 and 200. On each of those frames
+the in-situ rings line and the CHILL+ line equal ~seams rings~ and
+~seams chill-plus~. The neighbour list and CHILL match as well. The
+dumps are temporary. See ~data/README~. OpenMM comes from pip.
 
 * Overhead
 
-~tests/openmm/bench_overhead.py~ times the same box, serially. The
-plain leg is ~Simulation.step~. The in-situ leg is that call with the
-reporter. Build and minimisation sit outside the timer. One warmup of
-each leg is discarded. The sample is six paired trials. The overhead of
-a trial is the in-situ time minus the plain time. The IQR is the Tukey
-hinge: the median of the upper half minus the median of the lower half.
+~tests/openmm/bench_overhead.py~ times plain ~Simulation.step~ and the
+same call with the reporter. The stride is the third argument of
+~DseamsReporter~: 10, 100, or 1000 steps. Each timed leg is 1000 steps
+of 2 fs, so those strides analyse 100, 10, and 1 frames. Build and
+minimisation sit outside the timer. One warmup of each leg is discarded
+for each box. The sample is six paired trials, run one after another.
+The overhead of a trial is the in-situ time minus the plain time. The
+IQR is the Tukey hinge: the median of the upper half minus the median
+of the lower half.
 
-| leg | median (s) | IQR (s) |
-|-----+------------+---------|
-| plain OpenMM | 0.340006 | 0.008444 |
-| with the reporter | 0.465702 | 0.004705 |
-| overhead | 0.127378 | 0.002541 |
+| waters | interval | plain median (s) | plain IQR (s) | in-situ median (s) | in-situ IQR (s) | overhead median (s) | overhead IQR (s) |
+|--------+----------+------------------+---------------+--------------------+-----------------+---------------------+------------------|
+| 251 | 10 | 3.285409 | 0.021652 | 4.634894 | 0.019467 | 1.356106 | 0.016076 |
+| 251 | 100 | 3.296226 | 0.027771 | 3.448135 | 0.041311 | 0.143138 | 0.052764 |
+| 251 | 1000 | 3.297198 | 0.011827 | 3.333070 | 0.038383 | 0.028786 | 0.054455 |
+| 3910 | 10 | 41.822152 | 0.671093 | 62.740334 | 0.264869 | 20.854141 | 0.431330 |
+| 3910 | 100 | 41.614041 | 0.290201 | 43.697378 | 0.365814 | 2.162122 | 0.390859 |
+| 3910 | 1000 | 41.422865 | 0.139625 | 41.704660 | 0.083812 | 0.282673 | 0.159722 |
 
-The six plain times, in trial order, are 0.339466, 0.340546, 0.343543,
-0.333098, 0.341542, 0.328743. The six in-situ times are 0.467032,
-0.470145, 0.463895, 0.460288, 0.468600, 0.464372.
-
-The system is 251 TIP4P/Ew waters in a 2 nm cube, PME cutoff 0.9 nm,
-Langevin 300 K, 2 fs, 100 steps, analysis every 10 steps. OpenMM uses
-its CPU platform with one thread. ~OMP_NUM_THREADS~ is 1.
+The 251-water box is a 2 nm cube. The 3910-water box is a 4.93 nm cube.
+Both use TIP4P/Ew, a PME cutoff of 0.9 nm, and Langevin dynamics at
+300 K. OpenMM uses its CPU platform with one thread. ~OMP_NUM_THREADS~
+is 1.
 
 The host is an Intel Xeon, 8 cores, 1 thread per core, L1d 384 KiB,
 L2 16 MiB, L3 320 MiB, 49342816 kB of RAM, Linux 6.12.113+. ~seams~ and

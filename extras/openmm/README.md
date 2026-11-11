@@ -35,6 +35,8 @@ seams chill-plus frames.lammpstrj --cutoff 3.5 --type 1 --graph cutoff --frame N
 the ice names as plain text. The census prefixes the CHILL line with
 `chill` and the CHILL+ line with `chill-plus`.
 
-The call, the match, and the measured overhead are in the OpenMM howto.
-The test builds the water box when it runs and leaves the dump out of
-git. See `data/README`.
+The third argument of `DseamsReporter` is the stride in steps. The
+OpenMM howto records the call, the match against `seams`, and the
+overhead at strides of 10, 100, and 1000 on a few hundred waters and
+on about four thousand. The test builds both boxes when it runs and
+leaves the dumps out of git. See `data/README`.

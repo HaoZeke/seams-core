@@ -6,7 +6,7 @@ in DVC. That store is being set up.
 
 Until it is ready, generate the data when the program runs. The OpenMM
 reporter test and the overhead script do that: `tests/openmm/water.py`
-builds a TIP4P/Ew box, and the dumps and census files are written in a
+builds the TIP4P/Ew boxes, and the dumps and census files are written in a
 temporary directory. They are not part of this repository.
 
 Anything placed under `data/` besides this note is generated output and
