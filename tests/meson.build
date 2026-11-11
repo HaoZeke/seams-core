@@ -260,3 +260,14 @@ executable('gen_figure_data', 'gen_figure_data.cpp',
   link_args: _test_link_args,
   include_directories: _incdirs,
   build_rpath: '$ORIGIN/../src')
+
+# The watch harness times this binary only. It is compiled when the
+# build is -O3 without debug, which is meson -Dbuildtype=release.
+if get_option('optimization') == '3' and not get_option('debug')
+  executable('bench_watch', 'bench_watch.cpp',
+    dependencies: [yds_dep],
+    cpp_args: _args + ['-DSEAMS_WATCH_RELEASE=1'],
+    link_args: _test_link_args,
+    include_directories: _incdirs,
+    build_rpath: '$ORIGIN/../src')
+endif
