@@ -367,5 +367,6 @@ proofs/CoqMakefile.conf
 repro/figshare/
 repro/results/
 repro/zenodo/payload/
+input/brine/work/
 .tip_sha
 /.lammps-src
