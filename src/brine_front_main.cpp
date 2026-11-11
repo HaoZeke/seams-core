@@ -220,7 +220,10 @@ int main(int argc, char **argv) {
                  << (labelled.ice[static_cast<std::size_t>(water)] ? 1 : 0) << "\n";
         }
       }
-      std::cout << "frame " << used << " t_ns " << tNs << " thickness " << snap.fronts.thickness
+      const int nCrystal = static_cast<int>(
+          std::count(labelled.ice.begin(), labelled.ice.end(), true));
+      std::cout << "frame " << used << " t_ns " << tNs << " n_crystal " << nCrystal
+                << " thickness " << snap.fronts.thickness
                 << " z_enter " << snap.fronts.zEnter << " z_exit " << snap.fronts.zExit
                 << " c_ice " << snap.rejection.cIce << " c_liquid " << snap.rejection.cLiquid
                 << " k " << snap.rejection.k << " k_defined " << (snap.rejection.defined ? 1 : 0)

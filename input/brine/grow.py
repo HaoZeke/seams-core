@@ -493,7 +493,7 @@ def grow(lmp, brine_front, nx, ny, nz, prod_ps, equil_ps, molalities, temperatur
                 brine_front,
                 str(work / "dump.lammpstrj"),
                 "--dt-ps",
-                "2",
+                "0.002",
                 "--every",
                 str(dump_every),
                 "--time",
