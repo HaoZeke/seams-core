@@ -221,6 +221,13 @@ executable('bench_cages', 'bench_cages.cpp',
   include_directories: _incdirs,
   build_rpath: '$ORIGIN/../src')
 
+executable('bench_ddc_ladder', 'bench_ddc_ladder.cpp',
+  dependencies: [yds_dep],
+  cpp_args: _args,
+  link_args: _test_link_args,
+  include_directories: _incdirs,
+  build_rpath: '$ORIGIN/../src')
+
 executable('bench_cage_h2h', 'bench_cage_h2h.cpp',
   dependencies: [yds_dep],
   cpp_args: _args,
