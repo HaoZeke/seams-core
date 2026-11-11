@@ -107,7 +107,7 @@ def claims() -> list[str]:
             "2.61 ms\t%s\t"
             "paper/tex/figures/data/macros.tex:314\t"
             "measure_cpc time cages benchmarks/cpc/frames/ic-1000.lammpstrj 1 1 1 6\t"
-            "regression introduced in df2a2be3"
+            "slowdown; cage counts identical"
         ) % cell(b / "ic-1000.csv", "ddc_ms"),
         (
             "Packing turns 2000 equators into 500 double-diamond cages on 1000 molecules of ice Ic.\t"
@@ -131,7 +131,7 @@ def claims() -> list[str]:
             "current code ddc exponent 0.823 on 216 to 4096 including 2744; 0.826 without 2744\t"
             "paper/tex/figures/data/macros.tex:706\t"
             "measure_cpc time cages benchmarks/cpc/frames/ic-*.lammpstrj\t"
-            "regression introduced in df2a2be3"
+            "slowdown; cage counts identical"
         ),
         (
             "Structure I holds 2 5^12 cages and 6 5^12 6^2 cages.\t"
@@ -293,7 +293,7 @@ def claims() -> list[str]:
         (
             "Tag v2.12.0 double-diamond stage on 1000 ice Ic molecules.\t"
             "2.61 ms\t"
-            "2.591 ms median, six repeats, one warm-up, this machine\t"
+            "2.590806 ms median, six repeats, one warm-up, this machine\t"
             "paper/tex/figures/data/tab-cost.tex:7\t"
             "v2.12.0 measure time cages ic-1000 1 1 1 6\t"
             "rerun"
@@ -301,10 +301,10 @@ def claims() -> list[str]:
         (
             "Current sources double-diamond stage on the same frame.\t"
             "2.61 ms at v2.12.0\t"
-            "3.270 ms on the current code\t"
+            "3.270127 ms; v2.12.0 rerun 2.590806 ms; 2000 equators and 500 cages on both\t"
             "df2a2be3\t"
             "measure_cpc time cages ic-1000\t"
-            "regression introduced in df2a2be3"
+            "slowdown; cage counts identical"
         ),
         (
             "Double-diamond exponent on the current code.\t"
@@ -312,11 +312,11 @@ def claims() -> list[str]:
             "0.823 on 216, 512, 1000, 1728, 2744 and 4096; about 0.82\t"
             "df2a2be3\t"
             "log-log least squares on the six paper sizes\t"
-            "regression introduced in df2a2be3"
+            "slowdown; cage counts identical"
         ),
         (
-            "Double-diamond fix on perf/ddc-regression-fix.\t"
-            "3.270 ms and exponent 0.823 on current code\t"
+            "Double-diamond timing on perf/ddc-regression-fix.\t"
+            "3.270127 ms and exponent 0.823 on current code\t"
             "about 2.74 ms at 1000 molecules, exponent 0.799, commit 2c0db67f\t"
             "perf/ddc-regression-fix 2c0db67f\t"
             "not run in this tree\t"
