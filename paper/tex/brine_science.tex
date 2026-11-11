@@ -1,118 +1,123 @@
-% Direct coexistence of Madrid-2019 ice and brine.
-% Front velocities from the 256-water, 0.5 ns, single-trajectory
-% set are not reported. They disagreed with the sign required by the
-% melting point and by the Lamas--Vega--Noya coexistence curve.
+% What this machine can defend. No front velocity is quoted:
+% one seed per temperature, and the 245 K slope is unresolved.
 
 \section{Salt at a Madrid-2019 freezing front}
 \label{sec:brine-science}
 
-Lamas, Vega and Noya measured the equilibrium molality of a
-Madrid-2019 solution against ice Ih by direct coexistence, not the
-structure of the front.\cite{lamas2022}
-Their NaCl results at $1\,\mathrm{bar}$ are
-$1.19(0.05)\,\mathrm{mol\,kg^{-1}}$ at $247\,\mathrm{K}$
-($\Delta T=-3\,\mathrm{K}$),
+Lamas, Vega and Noya measured equilibrium molalities of Madrid-2019
+solutions against ice Ih.\cite{lamas2022}
+For NaCl at $1\,\mathrm{bar}$ those are
+$1.19(0.05)\,\mathrm{mol\,kg^{-1}}$ at $247\,\mathrm{K}$,
 $2.13(0.08)\,\mathrm{mol\,kg^{-1}}$ at $243\,\mathrm{K}$,
 $4.07(0.08)\,\mathrm{mol\,kg^{-1}}$ at $236\,\mathrm{K}$ and
 $6.24(0.05)\,\mathrm{mol\,kg^{-1}}$ at $224\,\mathrm{K}$.
-The trajectory that produces the $236\,\mathrm{K}$ number was run for
-$1200\,\mathrm{ns}$ and averaged over the last $500\,\mathrm{ns}$.
-The slab was $2048$ molecules of ice and $3330$ of solution, with a
-cross section of about $3.6\times 3.1\,\mathrm{nm}$.
-Blazquez, Conde and Vega report $4.17\,\mathrm{mol\,kg^{-1}}$ for the
-same $236\,\mathrm{K}$ state with Madrid-2019 ($q=\pm 0.85$) and
-$3.73\,\mathrm{mol\,kg^{-1}}$ for their $q=\pm 0.75$ Madrid-Transport
-model, against an experimental $3.68\,\mathrm{mol\,kg^{-1}}$.\cite{blazquez2023}
-Soria, Espinosa, Ramirez, Valeriani, Vega and Sanz measured nucleation
-rates with Joung--Cheatham ions, not Madrid-2019, and took
-$250\,\mathrm{K}$ as the melting point of pure TIP4P/2005.\cite{soria2018}
-Goswami, Blazquez and co-workers extended Madrid-2019 to
-$\mathrm{Fe^{2+}}$ and did not freeze the
-solutions.\cite{goswami2026}
-Conde, Rovere and Gallo grew a TIP4P/2005 front on the microsecond
-scale with an earlier unit-charge ion model.\cite{conde2017}
-None of these papers reports a CHILL+ rejection coefficient, the ring
-census of the front layer, or a brine-pocket size distribution.
-Those front quantities are not reported here either: a single short
-trajectory on $256$ waters produced a pure-water front that still
-advanced at $255\,\mathrm{K}$, and salted fronts that retreated where
-the Lamas--Vega--Noya curve says the solution should freeze.
-That is interface noise, not a salinity trend.
+The $236\,\mathrm{K}$ trajectory ran for $1200\,\mathrm{ns}$ and the
+average was taken over $500\,\mathrm{ns}$.
+That average is out of scope on this machine.
+A $3328$-water TIP4P/2005 cell ($9984$ atoms, cross section
+$31.4\times 36.9\,\mathrm{\AA}$) integrates at
+$13.4\,\mathrm{ns\,day^{-1}}$ on eight OpenMP threads in LAMMPS.
+Five hundred nanoseconds at that rate is $37\,\mathrm{days}$ of
+eight-core time, for one temperature and one seed.
+The salinity series is not reported.
 
-The ion parameters are the Madrid-2019 set of Zeron, Abascal and
-Vega.\cite{zeron2019}
-A $512$-ion rock-salt crystal at $298.15\,\mathrm{K}$ and $1\,\mathrm{bar}$,
-averaged over the second half of $8\,\mathrm{ps}$, has density
-$2.044\pm 0.001\,\mathrm{g\,cm^{-3}}$ (six blocks).
+What is reported is the analysis that would be applied to such a
+trajectory, timed on this cell, and a density check of the ion
+parameters.
+
+The parameters are Madrid-2019, $q=\pm 0.85$, with the cross terms
+of Zeron, Abascal and Vega.\cite{zeron2019}
+A $512$-ion rock-salt crystal at $298.15\,\mathrm{K}$ and
+$1\,\mathrm{bar}$, averaged over the second half of $8\,\mathrm{ps}$,
+has density $2.044\pm 0.001\,\mathrm{g\,cm^{-3}}$ (six blocks).
 Table~V of that paper gives $2.050\,\mathrm{g\,cm^{-3}}$ for the
 scaled-charge crystal.
-The comparison is only at the level of $0.3\,\%$: their run was
-$10\,\mathrm{ns}$ on $1000$ ions.
+Their run was $10\,\mathrm{ns}$ on $1000$ ions, so the check is at
+the level of $0.3\,\%$.
 
-The coexistence cell used for the throughput measurement has $1280$
-ice Ih molecules and $2048$ liquid waters ($3328$ in total), cross
-section $31.4\times 36.9\,\mathrm{\AA}$, cutoff $10\,\mathrm{\AA}$,
-timestep $2\,\mathrm{fs}$, and an anisotropic barostat at
-$1\,\mathrm{bar}$.
-On this eight-core machine, LAMMPS with the OpenMP pair and PPPM
-styles integrates that cell at $77\,\mathrm{steps\,s^{-1}}$ on eight
-threads ($13.4\,\mathrm{ns\,day^{-1}}$) and at $70\,\mathrm{steps\,s^{-1}}$
-on four threads during the liquid melt ($12.0\,\mathrm{ns\,day^{-1}}$).
-One thread manages $2.6\,\mathrm{ns\,day^{-1}}$.
-Reproducing the $236\,\mathrm{K}$ molality at the published precision
-means a $500\,\mathrm{ns}$ average after the front has stopped.
-At $13.4\,\mathrm{ns\,day^{-1}}$ that average is $37\,\mathrm{days}$
-on all eight cores, and the $1200\,\mathrm{ns}$ trajectory Lamas,
-Vega and Noya actually ran is $90\,\mathrm{days}$.
-The salinity series asked for after that --- molalities $0$, $0.5$,
-$1$, $2$ and the coexistence value, three seeds each --- is fifteen
-such trajectories.
-Even a much shorter $20\,\mathrm{ns}$ per seed, which would not match
-their uncertainty, is $300\,\mathrm{ns}$, or $22\,\mathrm{days}$ at
-the eight-thread rate.
-This machine cannot produce those replicates.
+On one frame the library returns, for every oxygen, the published
+CHILL+ label; the ice thickness from the half-occupancy crossing of
+the occupied bins along $z$; the liquid molality on either side of
+that front; the ion state (liquid, front shell, or ice); the
+primitive-ring census and the coordination defects of the front
+layer; and the liquid-water components that are not the reservoir
+against the front.
+Those components are the brine pockets when ions are present.
+The pure-water frames used to time the analysis have no ions, so
+they do not measure exclusion.
+Eight serial repeats of one $9984$-atom frame, neighbour list plus
+CHILL+ plus those reductions, took
+$367$, $411$, $429$, $431$, $448$, $453$, $486$ and
+$503\,\mathrm{ms}$.
+The median is $440\,\mathrm{ms}$.
+Frames and restart files are written under \texttt{data/brine-front/}
+and are not part of the source tree.
 
-A pure-water gate has to come before any salted number: the same
-slab must grow below $250\,\mathrm{K}$ and melt above it.
-One trajectory at each of $245\,\mathrm{K}$ and $255\,\mathrm{K}$
-was integrated on four threads.
-At $0.36\,\mathrm{ns}$ the $255\,\mathrm{K}$ slab is losing crystal.
-The $245\,\mathrm{K}$ slab is not gaining crystal: after the first
-$0.06\,\mathrm{ns}$ the crystal-count slope is negative and smaller
-than twice its standard error, and the front velocity is consistent
-with zero.
-That window does not establish the melting point, so it is not
-quoted here as one.
-No rejection coefficient, pocket size or ring census from a salted
-front is reported.
-Finishing a $3\,\mathrm{ns}$ gate is a further few hours on this
-machine and still does not supply the $500\,\mathrm{ns}$ average.
+A published PME rate is enough to see what one GPU changes.
+The comparison is not a TIP4P measurement.
+It rescales a larger explicit-solvent PME benchmark by the atom
+count, which is an upper bound: a $10^{4}$-atom cell often does not
+fill a GPU, and a rigid four-site water is heavier than the
+three-site or virtual-site water in those benchmarks.
+No factor for that extra cost is applied, because none of the cited
+tables is TIP4P.
+
+On one A100, GROMACS 2021.2 does $1083\,\mathrm{ns\,day^{-1}}$ for
+the RNase PME case.\cite{nvidia2021}
+That benchmark is the $24040$-atom RNase system.\cite{sedova2022}
+Scaling the step time with the atom count gives
+$1083\times(24040/9984)\approx 2.6\times 10^{3}\,\mathrm{ns\,day^{-1}}$
+as a ceiling for this cell, and $1083\,\mathrm{ns\,day^{-1}}$ if the
+run is already latency bound at $24040$ atoms.
+On one RTX 4090, GROMACS 2022.3 does
+$798\,\mathrm{ns\,day^{-1}}$ for the RNASE cubic PME
+benchmark.\cite{exxact2022}
+The same two limits are $1.9\times 10^{3}$ and
+$798\,\mathrm{ns\,day^{-1}}$.
+OpenMM's DHFR PME benchmark is $23558$ atoms of explicit water at
+$4\,\mathrm{fs}$ with hydrogen masses of $1.5\,\mathrm{u}$.\cite{openmmbench}
+In that benchmark an A100 does $1276\,\mathrm{ns\,day^{-1}}$ and an
+RTX 4090 does $2250\,\mathrm{ns\,day^{-1}}$.\cite{openmm94}
+A $2\,\mathrm{fs}$ run with the same step rate would be half of
+that.
+At $10^{3}\,\mathrm{ns\,day^{-1}}$, which sits inside every one of
+these ranges, the $500\,\mathrm{ns}$ Lamas average is half a day on
+one GPU instead of $37\,\mathrm{days}$ on these eight cores.
 
 \begin{thebibliography}{9}
 \bibitem{lamas2022}
 C.~P. Lamas, C.~Vega and E.~G. Noya,
 J.~Chem.\ Phys.\ \textbf{156}, 134503 (2022),
 doi:10.1063/5.0085051.
-\bibitem{blazquez2023}
-S.~Blazquez, M.~M. Conde and C.~Vega,
-J.~Chem.\ Phys.\ \textbf{158}, 054505 (2023),
-doi:10.1063/5.0136498.
-\bibitem{soria2018}
-G.~D. Soria, J.~R. Espinosa, J.~Ramirez, C.~Valeriani, C.~Vega
-and E.~Sanz,
-J.~Chem.\ Phys.\ \textbf{148}, 222811 (2018),
-doi:10.1063/1.5008889.
-\bibitem{goswami2026}
-A.~Goswami, S.~Blazquez, L.~Fern{\'a}ndez-Sedano, E.~G. Noya,
-H.~J{\'o}nsson, J.~Troncoso and C.~Vega,
-J.~Phys.\ Chem.~B \textbf{130}, 3436 (2026),
-doi:10.1021/acs.jpcb.6c01329.
-\bibitem{conde2017}
-M.~M. Conde, M.~Rovere and P.~Gallo,
-Phys.\ Chem.\ Chem.\ Phys.\ \textbf{19}, 9566 (2017),
-doi:10.1039/c7cp00665a.
 \bibitem{zeron2019}
 I.~M. Zeron, J.~L.~F. Abascal and C.~Vega,
 J.~Chem.\ Phys.\ \textbf{151}, 134504 (2019),
 doi:10.1063/1.5121392.
+\bibitem{nvidia2021}
+A.~Gray and S.~P\'all,
+``Maximizing GROMACS Throughput with Multiple Simulations per GPU
+Using MPS and MIG,'' NVIDIA Technical Blog (2021),
+\url{https://developer.nvidia.com/blog/maximizing-gromacs-throughput-with-multiple-simulations-per-gpu-using-mps-and-mig/}.
+One A100, GROMACS 2021.2, isolated RNase PME:
+$1083\,\mathrm{ns\,day^{-1}}$ at about $24\mathrm{k}$ atoms.
+\bibitem{exxact2022}
+Exxact, ``GROMACS Benchmark NVIDIA RTX 4090,'' 22 November 2022,
+\url{https://www.exxactcorp.com/blog/Benchmark/GROMACS-Benchmark-NVIDIA-RTX-4090}.
+One RTX 4090, GROMACS 2022.3, RNASE cubic PME:
+$798\,\mathrm{ns\,day^{-1}}$.
+\bibitem{openmmbench}
+The DHFR PME case in \texttt{examples/benchmark.py} of OpenMM 8.1
+uses a $4\,\mathrm{fs}$ step when bonds to hydrogen are constrained
+and the hydrogen mass is $1.5\,\mathrm{u}$.
+The explicit-solvent DHFR system is $23558$ atoms.
+\bibitem{sedova2022}
+A.~Sedova, R.~B. Davidson, M.~Taillefumier and W.~Elwasif,
+``HPC Molecular Simulation Tries Out a New GPU,''
+Cray User Group proceedings (2022).
+The GROMACS RNase input in that suite has $24040$ atoms.
+\bibitem{openmm94}
+OpenMM issue thread,
+\url{https://github.com/openmm/openmm-org/issues/94}:
+A100 DHFR PME average $1276\,\mathrm{ns\,day^{-1}}$,
+RTX 4090 DHFR PME average $2250\,\mathrm{ns\,day^{-1}}$.
 \end{thebibliography}

@@ -140,8 +140,10 @@ velocity ice create {temperature:.2f} {seed + 17} dist gaussian
 reset_timestep 0
 fix prod all npt temp {temperature:.2f} {temperature:.2f} 200.0 &
     x 1.0 1.0 2000.0 y 1.0 1.0 2000.0 z 1.0 1.0 2000.0
-dump dmp all custom {dump_every} dump.lammpstrj id mol type x y z
+dump dmp all custom {dump_every} dump.lammpstrj id mol type x y z vx vy vz
 dump_modify dmp sort id
+# 0.25 ns at a 2 fs step. Two files so one is always complete.
+restart 125000 restart.a restart.b
 run {prod_steps}
 """
     )

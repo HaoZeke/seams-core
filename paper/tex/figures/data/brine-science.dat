@@ -20,3 +20,6 @@ crystal 2.0443 0.0008
 # 245: front -0.03 +/- 0.62, dN/dt -48.9 +/- 46.1 (n=16)
 # 255: front -3.10 +/- 0.64, dN/dt -264 +/- 50 (n=16)
 # 255 K melts. 245 K does not grow. Gate not passed.
+# One 9984-atom frame, serial, neighbour list + CHILL+ + front
+# reductions, milliseconds. Median 439.7.
+timing_frame_ms 366.552 411.036 428.904 431.004 448.374 452.743 486.054 503.231

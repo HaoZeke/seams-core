@@ -67,6 +67,8 @@ output/
 .gdb_history
 *.lammpstrj
 !input/traj/*.lammpstrj
+# Coexistence frames and restart files. Uploaded separately.
+data/brine-front/
 bin/
 build/
 # docs/source/*.rst is generated from orgmode, but track orgmode + conf.py
