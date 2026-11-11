@@ -269,3 +269,87 @@ TEST_CASE("a single-species cloud matches the untyped LAMMPS call", "[brine]") {
                                         mutual.data()) == 0);
   REQUIRE(typed == mutual);
 }
+
+// Two oxygens from the 1 mol/kg, 1000-water brine, each with the two-hop
+// shell unwrapped into a large box. Nguyen and Molinero, J. Phys. Chem. B
+// 2015, 119, 9369, Table 1: interfacial clathrate is three eclipsed bonds,
+// any number of staggered bonds, and four neighbours inside 3.5 A. Table 2:
+// eclipsed is -0.35 <= c(i,j) <= 0.25 and staggered is c(i,j) <= -0.8.
+// The first oxygen has c = -0.055, 0.234, -0.113, 0.750, so E=3 and one
+// bond out of range. That is interfacial clathrate. mdapy 2.0 calls it
+// other. The second has one eclipsed bond and one staggered bond. That is
+// liquid. mdapy 2.0 calls it interfacial hydrate.
+void pushShifted(std::vector<double> &xyz, double x, double y, double z) {
+  xyz.push_back(x + 20.0);
+  xyz.push_back(y + 20.0);
+  xyz.push_back(z + 20.0);
+}
+
+int labelAt(const std::vector<double> &xyz, int index) {
+  const int n = static_cast<int>(xyz.size() / 3);
+  std::vector<int> types(static_cast<std::size_t>(n), 1);
+  std::vector<int> labels(static_cast<std::size_t>(n), -1);
+  const double box9[9] = {0, 0, 0, 50, 50, 50, 0, 0, 0};
+  REQUIRE(seams_chill_plus_species(xyz.data(), n, box9, types.data(), nullptr, 1,
+                                   0, nullptr, 0, 3.5, "cutoff", labels.data(),
+                                   nullptr, nullptr, nullptr) == 0);
+  return labels[static_cast<std::size_t>(index)];
+}
+
+TEST_CASE("three eclipsed bonds are interfacial clathrate, one is liquid",
+          "[brine][chill][paper]") {
+  std::vector<double> threeEclipsed;
+  const double clusterE[][3] = {
+      {-0.40390000, -3.28911000, -3.00309000},
+      {2.63560000, -0.14011000, -3.01262000},
+      {-3.42890000, -3.17064000, -0.24502000},
+      {-0.17350000, -3.41073000, -0.01629000},
+      {0.01420000, -3.59929000, 2.98382000},
+      {0.00000000, 0.00000000, 0.00000000},
+      {-0.25480000, 0.40561000, 2.74172000},
+      {2.62380000, -3.34077000, 0.07012000},
+      {3.01770000, 0.09883000, 0.09341000},
+      {2.95420000, 0.13878000, 3.04742000},
+      {5.92800000, -0.00068000, -0.00017000},
+      {-3.84320000, 3.67924000, 0.25871000},
+      {-0.48080000, 3.22815000, 0.40350000},
+      {-0.21090000, 3.53271000, 3.19752000},
+      {-0.81990000, 6.03011000, -0.54107000},
+      {2.87800000, 3.22007000, -0.11282000},
+      {-0.25460000, -6.22597600, -0.05595000},
+  };
+  for (const auto &p : clusterE) {
+    pushShifted(threeEclipsed, p[0], p[1], p[2]);
+  }
+  // seams label 5 is interClathrate.
+  REQUIRE(labelAt(threeEclipsed, 5) == 5);
+
+  std::vector<double> oneEclipsed;
+  const double clusterL[][3] = {
+      {0.19365000, -6.01050000, 0.78753000},
+      {-0.03092000, -2.98450000, -2.43420000},
+      {0.29834000, -2.75870000, 0.84058000},
+      {0.08895000, -0.13310000, -2.66461000},
+      {0.00000000, 0.00000000, 0.00000000},
+      {3.18243000, -3.04970000, 0.49707000},
+      {3.23489000, 0.32100000, -2.39453000},
+      {-6.00450600, 0.18880000, 0.73629000},
+      {-2.99860600, -2.81700000, 0.68921000},
+      {-2.92910600, 0.21910000, -2.51959000},
+      {-3.29520600, 0.28500000, 0.64232000},
+      {0.05733000, 3.44860000, -2.40260000},
+      {0.15900000, 3.38230000, 0.49181000},
+      {0.06704000, 6.37860000, 0.58690000},
+      {3.23097000, 3.44040000, 0.72609000},
+      {-3.17410600, 3.32980000, 0.67909000},
+      {0.02458000, -3.04620000, 3.84724000},
+      {-2.92640600, 0.31480000, 3.70024000},
+      {0.17616000, 3.46690000, 3.97215000},
+      {0.41108000, 0.05340000, -5.91502600},
+  };
+  for (const auto &p : clusterL) {
+    pushShifted(oneEclipsed, p[0], p[1], p[2]);
+  }
+  // seams label 2 is water. One eclipsed bond is not Table 1's 3E row.
+  REQUIRE(labelAt(oneEclipsed, 4) == 2);
+}
