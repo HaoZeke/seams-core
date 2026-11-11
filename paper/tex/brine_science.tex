@@ -1,177 +1,83 @@
-% Proposed section for the d-SEAMS 2.0 paper.
-% Numbers are from single trajectories. The slope error is the
-% standard error of an ordinary-least-squares fit along that trajectory.
+% Direct coexistence of Madrid-2019 ice and brine.
+% Front velocities from the 256-water, 0.5 ns, single-trajectory
+% set are not reported. They disagreed with the sign required by the
+% melting point and by the Lamas--Vega--Noya coexistence curve.
 
 \section{Salt at a Madrid-2019 freezing front}
 \label{sec:brine-science}
 
-The electrolyte papers of the Madrid group measure a coexistence
-molality, not the structure of the moving front. Lamas, Vega and
-Noya put ice Ih in contact with a Madrid-2019 solution and followed
-the liquid molality until it stopped changing.\cite{lamas2022}
-For NaCl at $1\,\mathrm{bar}$ their equilibrium molalities are
-$1.19(0.05)\,\mathrm{mol\,kg^{-1}}$ at $247\,\mathrm{K}$,
+Lamas, Vega and Noya measured the equilibrium molality of a
+Madrid-2019 solution against ice Ih by direct coexistence, not the
+structure of the front.\cite{lamas2022}
+Their NaCl results at $1\,\mathrm{bar}$ are
+$1.19(0.05)\,\mathrm{mol\,kg^{-1}}$ at $247\,\mathrm{K}$
+($\Delta T=-3\,\mathrm{K}$),
 $2.13(0.08)\,\mathrm{mol\,kg^{-1}}$ at $243\,\mathrm{K}$,
 $4.07(0.08)\,\mathrm{mol\,kg^{-1}}$ at $236\,\mathrm{K}$ and
-$6.24(0.05)\,\mathrm{mol\,kg^{-1}}$ at $224\,\mathrm{K}$, from runs
-of $1.1$--$1.8\,\mu\mathrm{s}$.
-Blazquez, Conde and Vega repeated the $236\,\mathrm{K}$ point for
-several scaled charges and obtained
-$4.17\,\mathrm{mol\,kg^{-1}}$ for Madrid-2019
-($q=\pm 0.85$) against an experimental $3.68\,\mathrm{mol\,kg^{-1}}$;
-the $q=\pm 0.75$ Madrid-Transport model gave $3.73$.\cite{blazquez2023}
-Soria, Espinosa, Ramirez, Valeriani, Vega and Sanz measured
-nucleation rates, not a planar front, and they used Joung--Cheatham
-ions with TIP4P/2005 rather than Madrid-2019.\cite{soria2018}
-At $1.85\,\mathrm{mol\,kg^{-1}}$ their direct-coexistence melting
-point is $239\pm 1\,\mathrm{K}$, and they take $250\,\mathrm{K}$ as
-the melting point of pure TIP4P/2005.
-Goswami, Blazquez, Fern{\'a}ndez-Sedano, Noya, J{\'o}nsson, Troncoso
-and Vega extended Madrid-2019 to $\mathrm{Fe^{2+}}$ and used the
-viscosity to read the extent of complexation in $\mathrm{FeCl_2}$
-and $\mathrm{MgCl_2}$.\cite{goswami2026}
-That paper does not freeze the solution.
-No paper coauthored by Amrita Goswami and Eduardo Sanz appears in
-the arXiv or OpenAlex lists consulted for this section.
-Conde, Rovere and Gallo did grow a TIP4P/2005 front from a salty
-liquid, on the microsecond scale, and found that chloride replaces
-two water molecules while sodium sits in an interstitial
-site.\cite{conde2017}
-The ion model in that work is an earlier unit-charge parameterisation
-whose solubility they quote as $5.8\,\mathrm{mol\,kg^{-1}}$, not the
-scaled Madrid-2019 charges.
-None of these studies reports a CHILL+ rejection coefficient, the
-ring census of the front layer, or the size of a brine pocket.
+$6.24(0.05)\,\mathrm{mol\,kg^{-1}}$ at $224\,\mathrm{K}$.
+The trajectory that produces the $236\,\mathrm{K}$ number was run for
+$1200\,\mathrm{ns}$ and averaged over the last $500\,\mathrm{ns}$.
+The slab was $2048$ molecules of ice and $3330$ of solution, with a
+cross section of about $3.6\times 3.1\,\mathrm{nm}$.
+Blazquez, Conde and Vega report $4.17\,\mathrm{mol\,kg^{-1}}$ for the
+same $236\,\mathrm{K}$ state with Madrid-2019 ($q=\pm 0.85$) and
+$3.73\,\mathrm{mol\,kg^{-1}}$ for their $q=\pm 0.75$ Madrid-Transport
+model, against an experimental $3.68\,\mathrm{mol\,kg^{-1}}$.\cite{blazquez2023}
+Soria, Espinosa, Ramirez, Valeriani, Vega and Sanz measured nucleation
+rates with Joung--Cheatham ions, not Madrid-2019, and took
+$250\,\mathrm{K}$ as the melting point of pure TIP4P/2005.\cite{soria2018}
+Goswami, Blazquez and co-workers extended Madrid-2019 to
+$\mathrm{Fe^{2+}}$ and did not freeze the
+solutions.\cite{goswami2026}
+Conde, Rovere and Gallo grew a TIP4P/2005 front on the microsecond
+scale with an earlier unit-charge ion model.\cite{conde2017}
+None of these papers reports a CHILL+ rejection coefficient, the ring
+census of the front layer, or a brine-pocket size distribution.
+Those front quantities are not reported here either: a single short
+trajectory on $256$ waters produced a pure-water front that still
+advanced at $255\,\mathrm{K}$, and salted fronts that retreated where
+the Lamas--Vega--Noya curve says the solution should freeze.
+That is interface noise, not a salinity trend.
 
-The deck used here is TIP4P/2005 with the Madrid-2019 parameters of
-Zeron, Abascal and Vega, charges $q=\pm 0.85$, and the tabulated
-cross terms rather than Lorentz--Berthelot mixing.\cite{zeron2019}
-Madrid-Transport was not substituted for it: the freezing-point
-papers above, and the $\mathrm{FeCl_2}$ extension, are Madrid-2019.
-As a check on the ion parameters, a $4\times 4\times 4$ rock-salt
-crystal ($512$ ions) was run in the $NpT$ ensemble at $298.15\,\mathrm{K}$
-and $1\,\mathrm{bar}$ for $8\,\mathrm{ps}$ after a minimisation.
-The density over the second half is
-$2.044\pm 0.001\,\mathrm{g\,cm^{-3}}$
-(six blocks).
-Table~V of Zeron, Abascal and Vega gives
-$2.050\,\mathrm{g\,cm^{-3}}$ for the same scaled-charge crystal.
-The residual is $0.3\,\%$. Their average was $10\,\mathrm{ns}$ on
-$1000$ ions in GROMACS, so the comparison is only at that level.
+The ion parameters are the Madrid-2019 set of Zeron, Abascal and
+Vega.\cite{zeron2019}
+A $512$-ion rock-salt crystal at $298.15\,\mathrm{K}$ and $1\,\mathrm{bar}$,
+averaged over the second half of $8\,\mathrm{ps}$, has density
+$2.044\pm 0.001\,\mathrm{g\,cm^{-3}}$ (six blocks).
+Table~V of that paper gives $2.050\,\mathrm{g\,cm^{-3}}$ for the
+scaled-charge crystal.
+The comparison is only at the level of $0.3\,\%$: their run was
+$10\,\mathrm{ns}$ on $1000$ ions.
 
-The growth cell is $128$ ice Ih molecules and $128$ liquid waters
-($2\times 2\times 2$ orthogonal cells; cross section
-$15.7\times 14.8\,\mathrm{\AA}$).
-Hydrogens on the ice satisfy the ice rules; the liquid and the ions
-occupy the opened $z$ gap.
-The nominal molality is that of the liquid half.
-Each trajectory is one run of $0.50\,\mathrm{ns}$ after
-$10\,\mathrm{ps}$ with the ice pinned, in the $NpT$ ensemble with
-only $z$ barostatted, at $1\,\mathrm{bar}$.
-Frames are every $10\,\mathrm{ps}$ ($51$ frames) and are not stored
-in the repository; \texttt{input/brine/grow.py} regenerates them.
-Ice is the published CHILL+ label on the oxygens (hexagonal or cubic).
-The front position is the $z$ at which the occupied-bin ice fraction
-crosses one half. Empty bins, which are the gaps between ice planes,
-do not split the slab.
+The coexistence cell used for the throughput measurement has $1280$
+ice Ih molecules and $2048$ liquid waters ($3328$ in total), cross
+section $31.4\times 36.9\,\mathrm{\AA}$, cutoff $10\,\mathrm{\AA}$,
+timestep $2\,\mathrm{fs}$, and an anisotropic barostat at
+$1\,\mathrm{bar}$.
+On this eight-core machine, LAMMPS with the OpenMP pair and PPPM
+styles integrates that cell at $77\,\mathrm{steps\,s^{-1}}$ on eight
+threads ($13.4\,\mathrm{ns\,day^{-1}}$) and at $70\,\mathrm{steps\,s^{-1}}$
+on four threads during the liquid melt ($12.0\,\mathrm{ns\,day^{-1}}$).
+One thread manages $2.6\,\mathrm{ns\,day^{-1}}$.
+Reproducing the $236\,\mathrm{K}$ molality at the published precision
+means a $500\,\mathrm{ns}$ average after the front has stopped.
+At $13.4\,\mathrm{ns\,day^{-1}}$ that average is $37\,\mathrm{days}$
+on all eight cores, and the $1200\,\mathrm{ns}$ trajectory Lamas,
+Vega and Noya actually ran is $90\,\mathrm{days}$.
+The salinity series asked for after that --- molalities $0$, $0.5$,
+$1$, $2$ and the coexistence value, three seeds each --- is fifteen
+such trajectories.
+Even a much shorter $20\,\mathrm{ns}$ per seed, which would not match
+their uncertainty, is $300\,\mathrm{ns}$, or $22\,\mathrm{days}$ at
+the eight-thread rate.
+This machine cannot produce those replicates.
 
-\begin{table}[t]
-\centering
-\caption{Single-trajectory CHILL+ front on the Madrid-2019 slab.
-$v$ is the slope of the ice thickness per front
-(half the slope of the slab thickness).
-$\mathrm{d}N/\mathrm{d}t$ is the slope of the number of crystal
-oxygens. Both uncertainties are the standard error of the slope
-along that trajectory. $c_L$ is the liquid molality in the last
-frame. Defects and ring counts are means over the front layer.
-No ion entered a bulk-ice bin, so $k=c_\mathrm{ice}/c_L=0$, and
-there were no trapping transitions.}
-\label{tab:brine}
-\begin{tabular}{lrrrrrr}
-\hline
-$m_0$ & $T$ & $v$ & $\mathrm{d}N/\mathrm{d}t$ & $c_L$ & defects & 6-rings \\
-$\mathrm{mol\,kg^{-1}}$ & K & \AA\,ns$^{-1}$ & ns$^{-1}$ & $\mathrm{mol\,kg^{-1}}$ & & \\
-\hline
-0   & 220 & $1.39\pm 0.39$ & $28\pm 4$  & 0    & 7.8 & 72 \\
-0   & 236 & $1.10\pm 0.53$ & $15\pm 6$  & 0    & 7.8 & 75 \\
-0   & 240 & $4.74\pm 0.56$ & $61\pm 6$  & 0    & 9.1 & 75 \\
-0   & 255 & $3.62\pm 0.59$ & $41\pm 6$  & 0    & 11.5 & 76 \\
-0.5 & 220 & $-0.19\pm 0.38$ & $2\pm 3$ & 0.43 & 9.1 & 74 \\
-1   & 220 & $-3.10\pm 0.49$ & $-40\pm 5$ & 0.63 & 11.7 & 78 \\
-1   & 236 & $-2.71\pm 0.57$ & $-40\pm 6$ & 0.72 & 11.0 & 76 \\
-2   & 220 & $-1.14\pm 0.44$ & $-11\pm 4$ & 1.77 & 11.2 & 78 \\
-\hline
-\end{tabular}
-\end{table}
-
-On this slab the pure-water front advances.
-One {\AA}\,ns$^{-1}$ is $10\,\mathrm{cm\,s^{-1}}$, so the
-$220\,\mathrm{K}$ pure-water front moves at
-$14\pm 4\,\mathrm{cm\,s^{-1}}$ and the crystal count rises by
-$28\pm 4$ oxygens per nanosecond.
-Adding salt at the same temperature stops that advance.
-At $0.5\,\mathrm{mol\,kg^{-1}}$ the crystal-count slope is
-$2\pm 3\,\mathrm{ns^{-1}}$, indistinguishable from zero on this
-trajectory.
-At $1$ and $2\,\mathrm{mol\,kg^{-1}}$ the CHILL+ crystal shrinks
-($-40\pm 5$ and $-11\pm 4$ oxygens per nanosecond).
-The ordering of those two salted slopes is a property of these two
-trajectories, which contain four and ten ions.
-It is not a replicate estimate.
-The same shrinkage appears at $1\,\mathrm{mol\,kg^{-1}}$ and
-$236\,\mathrm{K}$.
-Lamas, Vega and Noya find that a $1$--$2\,\mathrm{mol\,kg^{-1}}$
-solution is still below the equilibrium molality at
-$224$--$236\,\mathrm{K}$, so a microsecond run should freeze, not
-melt.\cite{lamas2022}
-The loss of CHILL+ crystal seen here in $0.5\,\mathrm{ns}$ is the
-disorder of the front, not that coexistence molality.
-The pure-water run at $255\,\mathrm{K}$, five kelvin above the
-$250\,\mathrm{K}$ melting point used by that paper, still gains
-crystal oxygens.
-Half a nanosecond on a $15\,\mathrm{\AA}$ cross section does not
-locate the melting point.
-
-Every salted frame has $k=0$: no ion sits in a bulk-ice bin, and
-the ion state never changes from liquid to ice or to the front
-shell.
-With zero trapping events in $0.5\,\mathrm{ns}$, incorporation is
-rarer than the microsecond chloride substitution reported for the
-unit-charge model.\cite{conde2017}
-The liquid molality at the end of the salted runs lies below the
-prepared value when the crystal count falls, because water has
-joined the liquid.
-Five-membered rings in the front layer stay near six per frame
-while six-membered rings stay near $75$.
-The mean number of coordination defects in that layer rises from
-$7.8$ in pure water at $220\,\mathrm{K}$ to $11.7$ and $11.2$ at
-$1$ and $2\,\mathrm{mol\,kg^{-1}}$.
-Brine pockets, defined as liquid-water components that are not the
-reservoir in contact with the front, are rare.
-The mean count per frame is between $0.04$ and $0.24$, and the
-pockets that do appear contain one or two waters.
-A population of nanometre brine pockets is not present in this cell.
-
-On the first frame of the $220\,\mathrm{K}$ pure-water run, freud's
-Steinhardt $q_6$ (cutoff $3.5\,\mathrm{\AA}$) has median $0.628$ on
-the $98$ oxygens CHILL+ calls crystal and median $0.526$ on the
-others.
-The crystal values sit on a single peak: the $10$th and $90$th
-percentiles are $0.6279$ and $0.6285$.
-A pre-set threshold $q_6>0.45$ labels every crystal oxygen and also
-$118$ non-crystal oxygens, so the two assignments agree on $138$ of
-$256$ oxygens.
-freud does not implement CHILL+; the check is that the crystal
-label is the sharp high-$q_6$ peak, while a threshold below the
-liquid median is not.
-
-The analysis time is for one frame of this trajectory, serial, with
-the neighbour list, published CHILL+ and the front measurements
-together.
-Eight repeats give
-$9.30$, $9.00$, $8.40$, $8.51$, $8.54$, $8.69$, $8.97$ and
-$8.58\,\mathrm{ms}$.
-The median is $8.63\,\mathrm{ms}$.
+A pure-water gate is necessary before any salted number is trusted:
+the same slab must grow below $250\,\mathrm{K}$ and melt above it.
+Two trajectories, at $245\,\mathrm{K}$ and $255\,\mathrm{K}$, are the
+test. Until those signs are opposite and the slopes exceed their
+standard errors, no front velocity, rejection coefficient or pocket
+size from this potential belongs in the paper.
 
 \begin{thebibliography}{9}
 \bibitem{lamas2022}
@@ -190,7 +96,7 @@ doi:10.1063/1.5008889.
 \bibitem{goswami2026}
 A.~Goswami, S.~Blazquez, L.~Fern{\'a}ndez-Sedano, E.~G. Noya,
 H.~J{\'o}nsson, J.~Troncoso and C.~Vega,
-J.~Phys.\ Chem.~B (2026),
+J.~Phys.\ Chem.~B \textbf{130}, 3436 (2026),
 doi:10.1021/acs.jpcb.6c01329.
 \bibitem{conde2017}
 M.~M. Conde, M.~Rovere and P.~Gallo,
