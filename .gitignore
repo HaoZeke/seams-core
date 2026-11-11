@@ -67,6 +67,9 @@ output/
 .gdb_history
 *.lammpstrj
 !input/traj/*.lammpstrj
+# Generated frames and trajectories. data/README stays. See data/README.
+/data/*
+!/data/README
 bin/
 build/
 # docs/source/*.rst is generated from orgmode, but track orgmode + conf.py

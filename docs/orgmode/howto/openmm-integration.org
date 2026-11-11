@@ -51,7 +51,8 @@ prefix ~chill~. ~seams chill-plus~ is the text after ~chill-plus~.
 
 ~tests/openmm/test_reporter.py~ runs 251 TIP4P/Ew waters for 100 steps
 of 2 fs and checks those four texts at steps 50 and 100. OpenMM comes
-from pip.
+from pip. The script builds the box at run time and writes the dump in
+a temporary directory. That file is not committed. See ~data/README~.
 
 * Overhead
 

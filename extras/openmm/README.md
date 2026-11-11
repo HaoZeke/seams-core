@@ -36,3 +36,5 @@ the ice names as plain text. The census prefixes the CHILL line with
 `chill` and the CHILL+ line with `chill-plus`.
 
 The call, the match, and the measured overhead are in the OpenMM howto.
+The test builds the water box when it runs and leaves the dump out of
+git. See `data/README`.

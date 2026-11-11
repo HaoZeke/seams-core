@@ -1,0 +1,13 @@
+Frames, trajectories, and other large outputs stay out of git.
+
+Commit code, fixtures of a few KB, and scripts that regenerate or fetch
+the data. Large data will live in a Hugging Face dataset repository, or
+in DVC. That store is being set up.
+
+Until it is ready, generate the data when the program runs. The OpenMM
+reporter test and the overhead script do that: `tests/openmm/water.py`
+builds a TIP4P/Ew box, and the dumps and census files are written in a
+temporary directory. They are not part of this repository.
+
+Anything placed under `data/` besides this note is generated output and
+is ignored.
