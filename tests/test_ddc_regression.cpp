@@ -2,6 +2,7 @@
 ** This file is part of d-SEAMS.
 **
 ** SPDX-License-Identifier: MIT
+** Copyright (c) d-SEAMS developers
 **
 ** The DDC search used to build a rotation key for every ring and to split
 ** the conflict graph by pointer jumping. Ideal ice distinguishes rings by
@@ -143,6 +144,9 @@ struct CageRun {
   std::uint64_t membership = 0;
   std::uint64_t cycles = 0;
   std::uint64_t steps = 0;
+  std::uint64_t copies = 0;
+  std::uint64_t digits = 0;
+  std::uint64_t buckets = 0;
 };
 
 std::uint64_t fnv1a(const std::string &text) {
@@ -213,10 +217,19 @@ CageRun classify(Cloud &cloud) {
   run.membership = fnv1a(body);
   const Counter cycles = counter("seams_ddc_cycle_evals");
   const Counter steps = counter("seams_ddc_match_steps");
+  const Counter copies = counter("seams_ddc_row_copies");
+  const Counter digits = counter("seams_ddc_key_digits");
+  const Counter buckets = counter("seams_ddc_bucket_steps");
   REQUIRE(cycles != nullptr);
   REQUIRE(steps != nullptr);
+  REQUIRE(copies != nullptr);
+  REQUIRE(digits != nullptr);
+  REQUIRE(buckets != nullptr);
   run.cycles = cycles();
   run.steps = steps();
+  run.copies = copies();
+  run.digits = digits();
+  run.buckets = buckets();
   return run;
 }
 
@@ -266,6 +279,12 @@ TEST_CASE("ideal ice keeps its cages and the DDC search stays linear",
     // visits each arc once per doubling step, which is past this bound.
     REQUIRE(run.steps >= static_cast<std::uint64_t>(2 * want.molecules));
     REQUIRE(run.steps <= static_cast<std::uint64_t>(8 * want.molecules));
+    // Ice rows hold six neighbours, so the inline eight never spill.
+    // Clique ids are four 16-bit digits. Five digits of the same ranks,
+    // or a copy of every conflict row, is past these bounds.
+    REQUIRE(run.copies == 0);
+    REQUIRE(run.digits <= static_cast<std::uint64_t>(16) * want.molecules);
+    REQUIRE(run.buckets <= static_cast<std::uint64_t>(8) * want.molecules);
   }
   for (const Expect &want : hexagonal) {
     const int cells = static_cast<int>(std::lround(std::cbrt(want.molecules / 8.0)));
