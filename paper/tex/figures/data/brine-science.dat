@@ -12,6 +12,11 @@
 # and the 1200 ns trajectory is 90 days.
 # Five molalities times three seeds, even at 20 ns each, is
 # 300 ns / 13.35 ns/day = 22 days on 8 threads.
-# Crystal-density check from v1, 512 ions, 8 ps, g/cm^3, block SE.
+# Crystal-density check, 512 ions, 8 ps, g/cm^3, block SE.
 # Zeron, Abascal, Vega Table V: 2.050 g/cm^3.
 crystal 2.0443 0.0008
+# Pure-water gate at 0.36 ns, one trajectory, not a melting point.
+# Fit from 0.06 ns onward: front velocity A/ns and crystal waters per ns.
+# 245: front -0.03 +/- 0.62, dN/dt -48.9 +/- 46.1 (n=16)
+# 255: front -3.10 +/- 0.64, dN/dt -264 +/- 50 (n=16)
+# 255 K melts. 245 K does not grow. Gate not passed.
