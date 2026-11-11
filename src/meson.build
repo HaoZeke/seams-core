@@ -16,6 +16,7 @@ ydslib_sources = files(
   'generic.cpp',
   'ira_sofi.cpp',
   'cage_canon.cpp',
+  'chemfiles_io.cpp',
   'chill_offload.cpp',
   'chill_plus_scheme.cpp',
   'topo_fingerprint.cpp',

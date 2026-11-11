@@ -1,3 +1,4 @@
+// Copyright (c) d-SEAMS developers
 #include "seams_lang.h"
 
 #include <bop.hpp>
@@ -19,6 +20,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cmath>
 #include <cstring>
 #include <exception>
@@ -54,6 +56,98 @@ void remember_exception() {
 
 void clear_error() { g_error.clear(); }
 
+// A gro frame is a title, an atom count, that many atom lines, and a box.
+// A missing file or a short frame is -1.
+int countGroFrames(const std::string &path) {
+  std::ifstream in(path);
+  if (!in) {
+    return -1;
+  }
+  int frames = 0;
+  std::string line;
+  while (std::getline(in, line)) {
+    if (!std::getline(in, line)) {
+      return -1;
+    }
+    const char *first = line.data();
+    const char *last = first + line.size();
+    while (first < last && (*first == ' ' || *first == '\t')) {
+      ++first;
+    }
+    int n = 0;
+    const auto parsed = std::from_chars(first, last, n);
+    if (parsed.ec != std::errc{} || n < 0) {
+      return -1;
+    }
+    for (int i = 0; i < n; ++i) {
+      if (!std::getline(in, line)) {
+        return -1;
+      }
+    }
+    if (!std::getline(in, line)) {
+      return -1;
+    }
+    frames += 1;
+  }
+  return frames > 0 ? frames : -1;
+}
+
+// MODEL records are one frame each. A file with atoms and no MODEL is
+// one frame. A missing file is -1.
+int countPdbFrames(const std::string &path) {
+  std::ifstream in(path);
+  if (!in) {
+    return -1;
+  }
+  int models = 0;
+  int atoms = 0;
+  std::string line;
+  while (std::getline(in, line)) {
+    if (line.rfind("MODEL", 0) == 0) {
+      models += 1;
+    } else if (line.rfind("ATOM", 0) == 0 || line.rfind("HETATM", 0) == 0) {
+      atoms += 1;
+    }
+  }
+  if (models > 0) {
+    return models;
+  }
+  return atoms > 0 ? 1 : -1;
+}
+
+// One xyz frame is a count, a comment, and that many atom lines.
+// A missing file, a non-numeric count, or a short frame is -1.
+int countXyzFrames(const std::string &path) {
+  std::ifstream in(path);
+  if (!in) {
+    return -1;
+  }
+  int frames = 0;
+  std::string line;
+  while (std::getline(in, line)) {
+    if (line.empty()) {
+      continue;
+    }
+    int n = 0;
+    const char *first = line.data();
+    const char *last = first + line.size();
+    const auto parsed = std::from_chars(first, last, n);
+    if (parsed.ec != std::errc{} || parsed.ptr != last || n < 0) {
+      return -1;
+    }
+    if (!std::getline(in, line)) {
+      return -1;
+    }
+    for (int i = 0; i < n; ++i) {
+      if (!std::getline(in, line)) {
+        return -1;
+      }
+    }
+    frames += 1;
+  }
+  return frames > 0 ? frames : -1;
+}
+
 std::string extension_of(const std::string &path) {
   const auto dot = path.find_last_of('.');
   if (dot == std::string::npos) {
@@ -63,45 +157,12 @@ std::string extension_of(const std::string &path) {
 }
 
 Cloud load_path(const std::string &path, int frame, int typeI) {
-  Cloud cloud;
-  const auto ext = extension_of(path);
-  if (ext == "xyz") {
-    return sinp::readXYZ(path);
+  // A missing CON path is an error. readCon clears the cloud and returns
+  // it, which would look like an empty frame.
+  if (extension_of(path) == "con" && !gen::file_exists(path)) {
+    throw std::runtime_error("cannot read " + path);
   }
-  if (ext == "con") {
-#ifdef SEAMS_HAS_READCON
-    // A missing path is an error. readCon clears the cloud and returns
-    // it, which would look like an empty frame.
-    if (!gen::file_exists(path)) {
-      throw std::runtime_error("cannot read " + path);
-    }
-    return sinp::readCon(path, frame, cloud);
-#else
-    throw std::runtime_error(
-        "readcon-core is not in this build; CON input needs it");
-#endif
-  }
-  if (ext == "pdb" || ext == "gro" || ext == "dcd") {
-#ifdef SEAMS_HAS_CHEMFILES
-    const int filter = typeI > 0 ? typeI : -1;
-    return sinp::readChemfiles(path, frame, cloud, filter);
-#else
-    throw std::runtime_error("chemfiles is not in this build; " + ext +
-                             " input needs it");
-#endif
-  }
-  if (typeI < 0) {
-    return sinp::readLammpsTrj(path, frame, cloud);
-  }
-  if (typeI > 0) {
-    return sinp::readLammpsTrjO(path, frame, cloud, typeI);
-  }
-  cloud = sinp::readLammpsTrjO(path, frame, cloud, 2);
-  if (cloud.nop > 0) {
-    return cloud;
-  }
-  Cloud again;
-  return sinp::readLammpsTrjO(path, frame, again, 1);
+  return sinp::openFrame(path, frame, typeI);
 }
 
 int resolve_type(const Cloud &cloud, int requested) {
@@ -217,13 +278,46 @@ int seams_path_nframes(const char *path) {
   }
   try {
     const auto ext = extension_of(path);
-    if (ext == "xyz") {
-      std::ifstream in(path);
-      if (!in) {
-        set_error("cannot read " + std::string(path));
+    if (ext == "lammpstrj" || ext == "dump") {
+      const int frames = sinp::nLammpsFrames(path);
+      if (frames <= 0) {
+        set_error("unreadable dump");
         return -1;
       }
-      return 1;
+      return frames;
+    }
+    // Chemfiles first. A miss falls through to the native counters.
+    const int steps = sinp::chemfilesSteps(path);
+    if (steps >= 0) {
+      return steps;
+    }
+    if (ext == "gro") {
+      const int frames = countGroFrames(path);
+      if (frames < 0) {
+        set_error("unreadable trajectory");
+        return -1;
+      }
+      return frames;
+    }
+    if (ext == "pdb") {
+      const int frames = countPdbFrames(path);
+      if (frames < 0) {
+        set_error("unreadable trajectory");
+        return -1;
+      }
+      return frames;
+    }
+    if (ext == "dcd") {
+      set_error("unreadable trajectory");
+      return -1;
+    }
+    if (ext == "xyz") {
+      const int frames = countXyzFrames(path);
+      if (frames < 0) {
+        set_error("unreadable trajectory");
+        return -1;
+      }
+      return frames;
     }
     return sinp::nLammpsFrames(path);
   } catch (...) {
