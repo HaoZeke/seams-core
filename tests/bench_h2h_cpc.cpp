@@ -12,7 +12,9 @@
 ** asks for one thread again.
 */
 
+#include <chill_plus_scheme.hpp>
 #include <franzblau.hpp>
+#include <mol_sys.hpp>
 #include <neighbours.hpp>
 #include <seams_input.hpp>
 
@@ -71,7 +73,7 @@ std::vector<int> neighbourIndices(const std::vector<int> &row, int self) {
 int main(int argc, char **argv) {
   if (argc != 6) {
     std::fprintf(stderr,
-                 "usage: bench_h2h_cpc neighbours|rings TRAJ CUTOFF MAX_RING CSV\n");
+                 "usage: bench_h2h_cpc neighbours|rings|chill-plus TRAJ CUTOFF MAX_RING CSV\n");
     return 2;
   }
   pinOneThread();
@@ -80,7 +82,8 @@ int main(int argc, char **argv) {
   const double cutoff = std::atof(argv[3]);
   const int maxRing = std::atoi(argv[4]);
   const std::string csvPath = argv[5];
-  if ((mode != "neighbours" && mode != "rings") || cutoff <= 0.0 || maxRing < 3) {
+  if ((mode != "neighbours" && mode != "rings" && mode != "chill-plus") ||
+      cutoff <= 0.0 || maxRing < 3) {
     std::fprintf(stderr, "bad arguments\n");
     return 2;
   }
@@ -96,13 +99,65 @@ int main(int argc, char **argv) {
   std::vector<std::vector<int>> idx;
   double ms = 0.0;
   std::map<int, int> tally;
+  std::string chillHist;
   std::ofstream csv(csvPath);
   if (!csv) {
     std::perror(csvPath.c_str());
     return 1;
   }
 
-  if (mode == "neighbours") {
+  if (mode == "chill-plus") {
+    const auto tNeigh0 = Clock::now();
+    const auto nList = nneigh::neighListO(cutoff, cloud, 1);
+    const auto tNeigh1 = Clock::now();
+    const auto tClass0 = Clock::now();
+    chill::applyChillPlus(cloud, nList, chill::ChillPlusRule::Ovito, false);
+    std::map<std::string, int> labels;
+    for (const auto &pt : cloud.pts) {
+      const char *name = "water";
+      switch (pt.iceType) {
+      case molSys::atom_state_type::cubic:
+        name = "cubic";
+        break;
+      case molSys::atom_state_type::hexagonal:
+        name = "hexagonal";
+        break;
+      case molSys::atom_state_type::interfacial:
+        name = "interfacial";
+        break;
+      case molSys::atom_state_type::clathrate:
+        name = "hydrate";
+        break;
+      case molSys::atom_state_type::interClathrate:
+        name = "interfacial-hydrate";
+        break;
+      case molSys::atom_state_type::water:
+        name = "other";
+        break;
+      default:
+        name = "other";
+        break;
+      }
+      labels[name] += 1;
+    }
+    const auto tClass1 = Clock::now();
+    const double neighMs =
+        std::chrono::duration<double, std::milli>(tNeigh1 - tNeigh0).count();
+    const double classMs =
+        std::chrono::duration<double, std::milli>(tClass1 - tClass0).count();
+    ms = neighMs + classMs;
+    csv << "label,count\n";
+    std::printf("neigh_ms %.6f\nclass_ms %.6f\n", neighMs, classMs);
+    for (const auto &kv : labels) {
+      csv << kv.first << ',' << kv.second << '\n';
+      if (!chillHist.empty()) {
+        chillHist.push_back(' ');
+      }
+      chillHist += kv.first;
+      chillHist.push_back(':');
+      chillHist += std::to_string(kv.second);
+    }
+  } else if (mode == "neighbours") {
     std::vector<std::vector<int>> nList;
     const auto t0 = Clock::now();
     nList = nneigh::neighListO(cutoff, cloud, 1);
@@ -170,10 +225,14 @@ int main(int argc, char **argv) {
   std::printf("molecules %d\n", n);
   std::printf("time_ms %.6f\n", ms);
   std::printf("omp_threads %d\n", threadCount());
-  std::printf("tally");
-  for (const auto &kv : tally) {
-    std::printf(" %d:%d", kv.first, kv.second);
+  if (!chillHist.empty()) {
+    std::printf("histogram %s\n", chillHist.c_str());
+  } else {
+    std::printf("tally");
+    for (const auto &kv : tally) {
+      std::printf(" %d:%d", kv.first, kv.second);
+    }
+    std::printf("\n");
   }
-  std::printf("\n");
   return 0;
 }

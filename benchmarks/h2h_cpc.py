@@ -28,6 +28,17 @@ SYSTEMS = [
 ]
 
 
+def _prepare(system: str) -> None:
+    done = subprocess.run(
+        ["python3.12", "scripts/h2h_cpc.py", "prepare", system],
+        cwd=ROOT, env=ENV, check=False, text=True, stdout=subprocess.PIPE,
+    )
+    if done.stdout.startswith("skip"):
+        raise NotImplementedError(done.stdout.strip())
+    if done.returncode != 0:
+        raise RuntimeError(done.stderr or done.stdout)
+
+
 def _run(comparison: str, tool: str, system: str) -> None:
     cmd = [
         "taskset", "-c", "0",
@@ -42,10 +53,7 @@ class NeighbourLists:
     param_names = ["system"]
 
     def setup(self, system):
-        subprocess.run(
-            ["python3.12", "scripts/h2h_cpc.py", "prepare", system],
-            cwd=ROOT, env=ENV, check=True,
-        )
+        _prepare(system)
 
     def time_dseams(self, system):
         _run("neighbours", "dseams", system)
@@ -62,10 +70,7 @@ class PrimitiveRings:
     param_names = ["system"]
 
     def setup(self, system):
-        subprocess.run(
-            ["python3.12", "scripts/h2h_cpc.py", "prepare", system],
-            cwd=ROOT, env=ENV, check=True,
-        )
+        _prepare(system)
 
     def time_dseams(self, system):
         _run("rings", "dseams", system)

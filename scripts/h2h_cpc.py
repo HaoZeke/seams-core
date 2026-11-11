@@ -272,7 +272,18 @@ def build_frame(name: str) -> tuple[np.ndarray, np.ndarray]:
     return interface_frame()
 
 
-def prepare_system(name: str) -> Path:
+def seed_ready(name: str) -> bool:
+    kind, _reps, _molecules = frame_table()[name]
+    if kind == "ice":
+        return True
+    return LIQUID_SEED.is_file()
+
+
+def prepare_system(name: str) -> Path | None:
+    """Write the frame when it is missing. Liquid and interface frames need
+    the in-tree seed; return None when that seed is absent."""
+    if not seed_ready(name):
+        return None
     path = dump_path(name)
     if not path.is_file():
         pos, box = build_frame(name)
@@ -293,6 +304,8 @@ def lattice_self_check() -> None:
     rdeg = reference_degrees(rpos, rbox, CUTOFF)
     if not np.all(rdeg == 4):
         raise SystemExit("dump round-trip changed the ice neighbour counts")
+    if not LIQUID_SEED.is_file():
+        return
     liquid, liquid_box = liquid_seed()
     if len(liquid) != 512:
         raise SystemExit(f"liquid seed has {len(liquid)} molecules, expected 512")
@@ -676,6 +689,9 @@ def run_comparison(comparison: str, only: str) -> None:
     done_lines = []
     for name in selected(only):
         dump = prepare_system(name)
+        if dump is None:
+            print(f"[{comparison}] {name} skipped, liquid seed absent", flush=True)
+            continue
         pos, _box = read_dump(dump)
         molecules = len(pos)
         _kind, _reps, expected = frame_table()[name]
@@ -962,6 +978,8 @@ def run_probe() -> None:
 
 def asv_call(comparison: str, tool: str, system: str) -> None:
     dump = prepare_system(system)
+    if dump is None:
+        raise SystemExit(f"skip {system}")
     dest = ROOT / "h2h-cpc" / "asv-tmp" / comparison / system / tool
     dest.mkdir(parents=True, exist_ok=True)
     csv_path = dest / "once.csv"
@@ -995,6 +1013,9 @@ def main() -> None:
     if args.action == "prepare":
         name = args.rest[0]
         path = prepare_system(name)
+        if path is None:
+            print(f"skip {name}")
+            return
         print(path.relative_to(ROOT))
         return
     if args.action == "asv-call":

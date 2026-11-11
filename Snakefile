@@ -230,6 +230,17 @@ rule h2h_neighbours:
         "PYTHONPATH=.h2h-py python3.12 scripts/h2h_cpc.py run neighbours && python3.12 scripts/h2h_cpc_summary.py"
 
 
+rule h2h_chill:
+    input:
+        "scripts/h2h_chill.py",
+        "tests/bench_h2h_cpc.cpp",
+        "h2h-cpc/summary.tsv",
+    output:
+        "h2h-cpc/timings.csv",
+    shell:
+        "PYTHONPATH=.h2h-py python3.12 scripts/h2h_chill.py"
+
+
 rule h2h_rings:
     input:
         "scripts/h2h_cpc.py",
