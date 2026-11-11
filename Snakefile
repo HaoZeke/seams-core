@@ -343,6 +343,38 @@ rule cpc_summary:
         "benchmarks/cpc/.venv/bin/python benchmarks/cpc/summarize.py"
 
 
+rule explain_liquid:
+    input:
+        "benchmarks/cpc/records/explain/main.tsv",
+        "benchmarks/cpc/records/explain/published.tsv",
+        "benchmarks/cpc/records/explain/ovito-rule.tsv",
+        "benchmarks/cpc/records/a-chill/mW-liquid-T215-ovito.txt",
+        "benchmarks/cpc/explain_liquid.py",
+    output:
+        "benchmarks/cpc/records/explain/liquid-steps.tsv",
+    shell:
+        "benchmarks/cpc/.venv/bin/python benchmarks/cpc/explain_liquid.py"
+
+
+rule explain_cages_v212:
+    input:
+        "benchmarks/cpc/frames/ic-1000.lammpstrj",
+        "benchmarks/cpc/frames/ic-2744.lammpstrj",
+    output:
+        "benchmarks/cpc/records/explain/v212-ic-1000.csv",
+        "benchmarks/cpc/records/explain/v212-ic-216.csv",
+        "benchmarks/cpc/records/explain/v212-ic-512.csv",
+        "benchmarks/cpc/records/explain/v212-ic-1728.csv",
+        "benchmarks/cpc/records/explain/v212-ic-2744.csv",
+        "benchmarks/cpc/records/explain/v212-ic-4096.csv",
+    shell:
+        "test -x ../seams-v212/build/measure_v212 && "
+        "for n in 216 512 1000 1728 2744 4096; do "
+        "OMP_NUM_THREADS=1 taskset -c 0 ../seams-v212/build/measure_v212 "
+        "time cages benchmarks/cpc/frames/ic-$$n.lammpstrj 1 1 1 6 "
+        "> benchmarks/cpc/records/explain/v212-ic-$$n.csv; done"
+
+
 rule shipped_campaign:
     input:
         "paper/tex/repro/shipped_campaign.py",

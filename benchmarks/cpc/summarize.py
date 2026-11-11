@@ -92,21 +92,21 @@ def claims() -> list[str]:
             "5.28 ms\t%s\t"
             "paper/tex/rg_main.tex:508\t"
             "measure_cpc time cages benchmarks/cpc/frames/ic-1000.lammpstrj 1 1 1 6\t"
-            "measured"
+            "NOT_RERUN"
         ) % cell(b / "ic-1000.csv", "path_ms"),
         (
             "The hexagonal-cage stage on that frame takes 1.24 ms.\t"
             "1.24 ms\t%s\t"
             "paper/tex/figures/data/macros.tex:306\t"
             "measure_cpc time cages benchmarks/cpc/frames/ic-1000.lammpstrj 1 1 1 6\t"
-            "measured"
+            "NOT_RERUN"
         ) % cell(b / "ic-1000.csv", "hc_ms"),
         (
             "The double-diamond stage, packing included, takes 2.61 ms.\t"
             "2.61 ms\t%s\t"
             "paper/tex/figures/data/macros.tex:314\t"
             "measure_cpc time cages benchmarks/cpc/frames/ic-1000.lammpstrj 1 1 1 6\t"
-            "measured"
+            "NOT_RERUN"
         ) % cell(b / "ic-1000.csv", "ddc_ms"),
         (
             "Packing turns 2000 equators into 500 double-diamond cages on 1000 molecules of ice Ic.\t"
@@ -114,7 +114,7 @@ def claims() -> list[str]:
             "equators %s cages %s\t"
             "paper/tex/rg_supplement.tex:278\t"
             "measure_cpc time cages benchmarks/cpc/frames/ic-1000.lammpstrj 1 1 1 6\t"
-            "measured"
+            "NOT_RERUN"
         ) % (count_of(b / "ic-1000.csv", "ddc_equators"), count_of(b / "ic-1000.csv", "ddc_cages")),
         (
             "Every molecule of ideal ice Ih lies on hexagonal cages: 500 HC and 0 DDC at 1000 molecules.\t"
@@ -122,7 +122,7 @@ def claims() -> list[str]:
             "hc %s ddc %s\t"
             "paper/tex/figures/data/macros.tex:4301\t"
             "measure_cpc time cages benchmarks/cpc/frames/ih-1000.lammpstrj 1 1 1 6\t"
-            "measured"
+            "NOT_RERUN"
         ) % (count_of(b / "ih-1000.csv", "hc_cages"), count_of(b / "ih-1000.csv", "ddc_cages")),
         (
             "Fitted exponents of the hexagonal and double-diamond stages on ideal ice Ic are 0.889 and 0.76.\t"
@@ -130,7 +130,7 @@ def claims() -> list[str]:
             "hc 0.900 ddc 0.826 on 216, 512, 1000, 1728 and 4096 molecules\t"
             "paper/tex/figures/data/macros.tex:706\t"
             "measure_cpc time cages benchmarks/cpc/frames/ic-*.lammpstrj\t"
-            "measured"
+            "NOT_RERUN"
         ),
         (
             "Structure I holds 2 5^12 cages and 6 5^12 6^2 cages.\t"
@@ -138,7 +138,7 @@ def claims() -> list[str]:
             "see genice_sI-signature.txt\t"
             "paper/tex/figures/data/macros.tex:4310\t"
             "seams cages --graph cutoff --signature 512+51262+51264 input/traj/genice_sI.lammpstrj\t"
-            "measured"
+            "NOT_RERUN"
         ),
         (
             "On ice Ic and ice Ih, d-SEAMS CHILL+ and OVITO CHILL+ give the same class to every molecule.\t"
@@ -146,7 +146,7 @@ def claims() -> list[str]:
             "ice Ic %s ice Ih %s\t"
             "paper/tex/rg_supplement.tex:650\t"
             "measure_cpc labels chillplus plus ovito ChillPlusModifier cutoff 3.5\t"
-            "measured"
+            "NOT_RERUN"
         ) % (overall(a / "ice-Ic-chillplus-vs-ovito-merged.tsv"),
              overall(a / "ice-Ih-chillplus-vs-ovito-merged.tsv")),
         (
@@ -155,7 +155,7 @@ def claims() -> list[str]:
             "published %s ovito-chill+ %s\t"
             "benchmarks/cpc/records/a-chill/ice-Ic-tip-chillplus-vs-ovito-merged.tsv:2\t"
             "seams_chill_plus_rule rule chill+ and ovito-chill+ at e8610637\t"
-            "measured"
+            "NOT_RERUN"
         ) % (overall(a / "ice-Ic-tip-chillplus-vs-ovito-merged.tsv"),
              overall(a / "ice-Ic-tip-ovito-chillplus-vs-ovito-merged.tsv")),
         (
@@ -164,7 +164,7 @@ def claims() -> list[str]:
             "main chill+ %s published %s ovito-chill+ %s\t"
             "paper/tex/rg_main.tex:473\t"
             "measure_cpc labels chillplus benchmarks/cpc/frames/mw-liquid-512.lammpstrj\t"
-            "disagrees"
+            "NOT_RERUN"
         ) % (overall(a / "mW-liquid-T215-chillplus-vs-ovito-merged.tsv"),
              overall(a / "mW-liquid-T215-tip-chillplus-vs-ovito-merged.tsv"),
              overall(a / "mW-liquid-T215-tip-ovito-chillplus-vs-ovito-merged.tsv")),
@@ -174,7 +174,7 @@ def claims() -> list[str]:
             "chill+ %s chill %s\t"
             "paper/tex/rg_supplement.tex:666\t"
             "measure_cpc labels chillplus input/traj/genice_sI.lammpstrj\t"
-            "measured"
+            "NOT_RERUN"
         ) % (overall(a / "sI-chillplus-vs-ovito-merged.tsv"),
              overall(a / "sI-chill-vs-ovito-merged.tsv")),
         (
@@ -183,7 +183,7 @@ def claims() -> list[str]:
             "4096 of 4096 on every frame, both criteria\t"
             "src/cluster.cpp:386\t"
             "measure_cpc time cluster-q6 input/traj/mW_cubic.lammpstrj and cluster-chill\t"
-            "measured"
+            "NOT_RERUN"
         ),
         (
             "Largest ice-like cluster on the shipped nucleation first frame.\t"
@@ -191,7 +191,7 @@ def claims() -> list[str]:
             "q6 116 chill 155 of 4096\t"
             "src/cluster.cpp:386\t"
             "measure_cpc time cluster-q6 input/traj/nucleation_f1.lammpstrj\t"
-            "measured"
+            "NOT_RERUN"
         ),
         (
             "Shipped mW cubic frame, 4096 molecules, CHILL+ against OVITO.\t"
@@ -199,7 +199,7 @@ def claims() -> list[str]:
             "%s\t"
             "docs/orgmode/paper/benchmarks.org:218\t"
             "measure_cpc labels chillplus input/traj/mW_cubic.lammpstrj\t"
-            "measured"
+            "NOT_RERUN"
         ) % overall(a / "mW-cubic-chillplus-vs-ovito-merged.tsv"),
         (
             "Rodger F4 on exampleTraj, oxygen type 2 and hydrogen type 1.\t"
@@ -207,7 +207,7 @@ def claims() -> list[str]:
             "mean 0.221753 n 250, identical on all 6 repeats\t"
             "tests/test_order_parameter.cpp:454\t"
             "seams f4 input/traj/exampleTraj.lammpstrj --type 2 --htype 1\t"
-            "measured"
+            "NOT_RERUN"
         ),
         (
             "Ideal ice Ic at sigma 0 is entirely cubic for the cutoff cage labels and for CHILL+.\t"
@@ -215,7 +215,7 @@ def claims() -> list[str]:
             "see e-sota/sota.tsv\t"
             "docs/orgmode/paper/benchmarks.org is silent; scripts/sota_compare.py score\t"
             "seams cages --graph cutoff and measure_cpc labels chillplus\t"
-            "measured"
+            "NOT_RERUN"
         ),
         (
             "Substitutional ions on analytic ice, seams ions --complete.\t"
@@ -223,7 +223,7 @@ def claims() -> list[str]:
             "see e-ions/ions.tsv\t"
             "dseams2_repro/scripts/ion_atlas.py\t"
             "seams ions --ion-types 3,4 --type 1 --complete\t"
-            "measured"
+            "NOT_RERUN"
         ),
         (
             "Ice/brine direct-coexistence columns.\t"
@@ -231,7 +231,7 @@ def claims() -> list[str]:
             "see e-brine/status.txt\t"
             "dseams2_repro/results/brine/conditions.txt\t"
             "python brine_summary.py results/brine\t"
-            "digest_only"
+            "NOT_RERUN"
         ),
         (
             "Host-device ladder from 1000 to 32000 molecules.\t"
@@ -239,7 +239,7 @@ def claims() -> list[str]:
             "GPU_REQUIRED\t"
             "docs/orgmode/paper/benchmarks.org:292\t"
             "not run\t"
-            "GPU_REQUIRED"
+            "NOT_RERUN"
         ),
         (
             "d-SEAMS 1 against d-SEAMS 2 speedups on the 1000-molecule frame.\t"
@@ -247,7 +247,7 @@ def claims() -> list[str]:
             "not measured; commit 6e51956f is not in this checkout\t"
             "paper/tex/figures/data/tab-cost.tex:12\t"
             "not run\t"
-            "not_measured"
+            "NOT_RERUN"
         ),
         (
             "Ring update with three changed bonds is 59.9 times a full search.\t"
@@ -255,7 +255,7 @@ def claims() -> list[str]:
             "not measured; the 148-frame nucleation trajectory is not shipped\t"
             "paper/tex/rg_main.tex:637\t"
             "not run\t"
-            "not_measured"
+            "NOT_RERUN"
         ),
         (
             "57 v1 decimals with no raw field in REMOVED.tsv.\t"
@@ -263,7 +263,47 @@ def claims() -> list[str]:
             "not listed; branch submission/cpc-v3 is not on a reachable remote\t"
             "paper repo branch submission/cpc-v3 REMOVED.tsv\t"
             "not run\t"
-            "not_measured"
+            "NOT_RERUN"
+        ),
+        (
+            "Main CHILL+ agrees with OVITO on 0.857 of the 512-molecule mW liquid.\t"
+            "0.857\t"
+            "73 molecules: 40 shell_gate, 27 q3_averaging, 6 table1_interfacial_test; all DEFINITION, no BUG\t"
+            "paper/tex/rg_main.tex:491-493\t"
+            "benchmarks/cpc/explain_chill and explain_liquid.py\t"
+            "explained"
+        ),
+        (
+            "Published CHILL+ agrees with OVITO on 0.936 of that liquid; ovito-chill+ agrees on 1.000.\t"
+            "0.936 and 1.000\t"
+            "33 molecules, all shell 4: 27 q3_averaging, 6 table1_interfacial_test; all DEFINITION, no BUG\t"
+            "e8610637:src/include/internal/chill_plus_scheme.hpp:28-36\t"
+            "explain_tip chill+ and ovito-chill+\t"
+            "explained"
+        ),
+        (
+            "Tag v2.12.0 double-diamond stage on 1000 ice Ic molecules.\t"
+            "2.61 ms\t"
+            "2.591 ms median, six repeats, one warm-up, this machine\t"
+            "paper/tex/figures/data/tab-cost.tex:7\t"
+            "v2.12.0 measure time cages ic-1000 1 1 1 6\t"
+            "rerun"
+        ),
+        (
+            "Current sources double-diamond stage on the same frame.\t"
+            "2.61 ms at v2.12.0\t"
+            "3.270 ms; the gap is the cage packing after v2.12.0, not hardware\t"
+            "paper/tex/figures/data/macros.tex:314\t"
+            "measure_cpc time cages ic-1000\t"
+            "explained"
+        ),
+        (
+            "Double-diamond and hexagonal exponents.\t"
+            "0.761 and 0.889\t"
+            "v2.12.0 rerun 0.758 and 0.884; current sources 0.823 and 0.900 on the same six sizes\t"
+            "paper/tex/figures/data/macros.tex:706-709\t"
+            "log-log least squares on 216 512 1000 1728 2744 4096\t"
+            "explained"
         ),
     ]
     return rows
