@@ -572,6 +572,13 @@ TEST_CASE("a host neighbour list is the cutoff graph for one frame", "[insitu]")
   char arg3[] = "b";
   char *argv[] = {arg0, arg1, arg2, arg3};
   REQUIRE(seams_insitu_main(4, argv) == 2);
+  char replay[] = "replay";
+  char cutWord[] = "abc";
+  char cutTail[] = "1.5x";
+  char *argvWord[] = {arg0, replay, arg2, arg3, cutWord};
+  char *argvTail[] = {arg0, replay, arg2, arg3, cutTail};
+  REQUIRE(seams_insitu_main(5, argvWord) == 2);
+  REQUIRE(seams_insitu_main(5, argvTail) == 2);
   // Unknown ids, a repeated image and a non-water neighbour are ignored.
   const int counts[6] = {4, 1, 1, 1, 1, 1};
   const int mixed[9] = {1, 99, 2, 2, 2, 3, 4, 5, 6};
