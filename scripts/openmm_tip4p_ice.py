@@ -4,13 +4,16 @@
 Usage:
     python3 scripts/openmm_tip4p_ice.py LIBSEAMS_LANG SEAMS LOG
 
-4096 molecules on the CPU. One match trajectory is written and read back.
-Then 5000 steps, report intervals 100, 500 and 1000, one thread and eight,
-six bare repeats and six reporter repeats from the same minimized state.
+4096 molecules on the CPU, then 32768. The OpenMM thread count and the
+classifier's OpenMP team are the same number. One match trajectory is
+written and read back. The 4096-molecule timing is 5000 steps at report
+intervals 100, 500 and 1000. The 32768-molecule timing is shorter and
+reports every 100 steps.
 """
 
 from __future__ import annotations
 
+import ctypes
 import os
 import re
 import subprocess
@@ -42,6 +45,10 @@ THREADS = tuple(
 )
 MATCH_STEPS = int(os.environ.get("OPENMM_TIP4P_MATCH_STEPS", "400"))
 MATCH_INTERVAL = int(os.environ.get("OPENMM_TIP4P_MATCH_INTERVAL", "100"))
+LARGE_MOLECULES = int(os.environ.get("OPENMM_TIP4P_LARGE", "32768"))
+LARGE_STEPS = int(os.environ.get("OPENMM_TIP4P_LARGE_STEPS", "1000"))
+LARGE_REPEATS = int(os.environ.get("OPENMM_TIP4P_LARGE_REPEATS", "4"))
+LARGE_INTERVAL = int(os.environ.get("OPENMM_TIP4P_LARGE_INTERVAL", "100"))
 DT_NS = 2.0e-6
 CUTOFF = 3.5
 OUT = Path(os.environ.get("OPENMM_TIP4P_DIR", "/var/tmp/dseams/openmm-tip4p"))
@@ -118,6 +125,13 @@ def write_dump(path, frames):
 def snapshot(simulation):
     state = simulation.context.getState(getPositions=True, getVelocities=True)
     return state
+
+
+def set_classifier_threads(n):
+    """The OpenMP team inside CHILL+ and the ring search."""
+    os.environ["OMP_NUM_THREADS"] = str(int(n))
+    gomp = ctypes.CDLL("libgomp.so.1")
+    gomp.omp_set_num_threads(int(n))
 
 
 def ns_per_day(steps, seconds):
@@ -248,7 +262,8 @@ def main(argv):
     say("platform CPU")
     say(f"library {library}")
     say(f"seams {seams}")
-    say("classifier-threads 1")
+    say("classifier-threads follow the OpenMM thread count")
+    set_classifier_threads(1)
 
     from openmm import NonbondedForce
     from openmm.unit import nanometer
@@ -335,6 +350,7 @@ def main(argv):
         simulation.integrator.setRandomNumberSeed(1)
 
     for threads in THREADS:
+        set_classifier_threads(threads)
         simulation = prepared[threads]
         say(f"threads {threads}")
         bare = []
@@ -383,6 +399,107 @@ def main(argv):
                 f"chill {phase('chill'):.6f} rings {phase('rings'):.6f} "
                 f"reused {mean(item['reused'] / item['reports'] for item in profiles):.6f}"
             )
+
+    say(f"large-molecules {LARGE_MOLECULES}")
+    say(f"large-steps {LARGE_STEPS} interval {LARGE_INTERVAL} repeats {LARGE_REPEATS}")
+    large = {}
+    for threads in THREADS:
+        set_classifier_threads(1)
+        simulation = water_box(LARGE_MOLECULES, threads)
+        if "positions" not in large:
+            simulation.minimizeEnergy(maxIterations=25)
+            held = snapshot(simulation)
+            large["positions"] = held.getPositions()
+            large["velocities"] = held.getVelocities()
+            large["kinds"] = oxygen_index(simulation.topology)
+            say(f"large-atoms {simulation.system.getNumParticles()}")
+            say(f"large-oxygens {int(large['kinds'].sum())}")
+        else:
+            simulation.context.setPositions(large["positions"])
+            simulation.context.setVelocities(large["velocities"])
+        large[threads] = simulation
+    large_engine = InSitu(library, skin=0.0)
+    large_reporter = DseamsReporter(
+        large_engine, str(OUT / "large.dump"), interval=LARGE_INTERVAL, types=large["kinds"]
+    )
+
+    def rewind_large(simulation):
+        simulation.context.setPositions(large["positions"])
+        simulation.context.setVelocities(large["velocities"])
+        simulation.currentStep = 0
+        simulation.integrator.setRandomNumberSeed(1)
+
+    set_classifier_threads(1)
+    large_engine.keep_frames = True
+    large_engine.frames.clear()
+    say("large-match")
+    run_steps(large[THREADS[0]], LARGE_INTERVAL, large_reporter)
+    write_dump(OUT / "large-oxygens.lammpstrj", large_engine.frames)
+    if large_engine.frames:
+        labels, counts, rings = large_engine.analyse_file(OUT / "large-oxygens.lammpstrj", 1)
+        frame = large_engine.frames[0]
+        if not np.array_equal(labels, frame["labels"]) or not np.array_equal(rings, frame["rings"]):
+            raise SystemExit("32768-molecule frame does not match the file reader")
+        say(
+            f"large-frame step {frame['step']} labels-match rings "
+            + " ".join(f"{size}:{int(frame['rings'][size])}" for size in range(3, 7))
+        )
+    say("large-match exact")
+
+    for threads in THREADS:
+        set_classifier_threads(threads)
+        simulation = large[threads]
+        say(f"large-threads {threads}")
+        bare = []
+        for trial in range(1, LARGE_REPEATS + 1):
+            rewind_large(simulation)
+            seconds = run_steps(simulation, LARGE_STEPS, None)
+            bare.append(seconds)
+            say(
+                f"large-bare {threads} {trial} {seconds:.6f} "
+                f"ns/day {ns_per_day(LARGE_STEPS, seconds):.6f}"
+            )
+        bare_mean = mean(bare)
+        say(
+            f"large-bare-mean {threads} {bare_mean:.6f} "
+            f"ns/day {ns_per_day(LARGE_STEPS, bare_mean):.6f}"
+        )
+        large_engine.keep_frames = False
+        large_engine.frames.clear()
+        large_reporter.interval = LARGE_INTERVAL
+        reported = []
+        profiles = []
+        for trial in range(1, LARGE_REPEATS + 1):
+            rewind_large(simulation)
+            large_engine.reset_profile()
+            seconds = run_steps(simulation, LARGE_STEPS, large_reporter)
+            reported.append(seconds)
+            profiles.append(dict(large_engine.profile))
+            say(
+                f"large-reporter {threads} {trial} {seconds:.6f} "
+                f"ns/day {ns_per_day(LARGE_STEPS, seconds):.6f} "
+                f"reports {large_engine.profile['reports']}"
+            )
+        rep_mean = mean(reported)
+        reports = profiles[-1]["reports"]
+        if reports <= 0:
+            raise SystemExit("32768-molecule run produced no reports")
+        per_report = (rep_mean - bare_mean) / reports * 1.0e3
+        bare_rate = ns_per_day(LARGE_STEPS, bare_mean)
+        rep_rate = ns_per_day(LARGE_STEPS, rep_mean)
+        slowdown = (bare_rate - rep_rate) / bare_rate if bare_rate else 0.0
+
+        def large_phase(name):
+            return mean(item[name] / item["reports"] for item in profiles) * 1.0e3
+
+        say(f"large-reporter-mean {threads} {rep_mean:.6f} ns/day {rep_rate:.6f}")
+        say(f"large-per-report-ms {threads} {per_report:.6f}")
+        say(f"large-slowdown {threads} {slowdown:.6f}")
+        say(
+            f"large-split-ms {threads} "
+            f"copy {large_phase('copy'):.6f} neighbours {large_phase('neighbours'):.6f} "
+            f"chill {large_phase('chill'):.6f} rings {large_phase('rings'):.6f}"
+        )
     log_path.write_text("\n".join(lines) + "\n")
     return 0
 

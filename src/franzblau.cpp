@@ -384,6 +384,59 @@ bool ringIsPrimitive(const BoundedBalls &balls, const std::vector<int> &ring) {
   return true;
 }
 
+//! True when the sorted adjacency row of u contains v.
+template <typename Graph> bool rowHas(const Graph &adjacency, int u, int v) {
+  const auto row = adjacency[static_cast<std::size_t>(u)];
+  return std::binary_search(row.begin(), row.end(), v);
+}
+
+/**
+ * A strict shortcut on a ring of at most 7 members is a walk of 1 or 2
+ * edges. The separation around such a ring is at most 3, so a shorter
+ * path has length 1 (an edge) or, when the separation is 3, length 2
+ * (a shared neighbour). Both answers are reads of the adjacency rows.
+ * A larger ring can have a shortcut of 3 or more edges, which this test
+ * does not see.
+ */
+template <typename Graph>
+bool hopShortcut(const Graph &adjacency, int u, int v, int ringDist) {
+  if (ringDist <= 1 || u == v) {
+    return false;
+  }
+  if (rowHas(adjacency, u, v)) {
+    return true;
+  }
+  if (ringDist <= 2) {
+    return false;
+  }
+  const auto left = adjacency[static_cast<std::size_t>(u)];
+  const auto right = adjacency[static_cast<std::size_t>(v)];
+  const bool scanLeft = (left.end() - left.begin()) <= (right.end() - right.begin());
+  const auto scan = scanLeft ? left : right;
+  const int other = scanLeft ? v : u;
+  for (const int w : scan) {
+    if (w != u && w != v && rowHas(adjacency, w, other)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+template <typename Graph>
+bool ringIsPrimitiveHop(const Graph &adjacency, const std::vector<int> &ring) {
+  const int k = static_cast<int>(ring.size());
+  for (int i = 0; i < k; i++) {
+    for (int j = i + 2; j < k; j++) {
+      const int sep = j - i;
+      const int ringDist = std::min(sep, k - sep);
+      if (hopShortcut(adjacency, ring[i], ring[j], ringDist)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 //! Append v if absent; ring sizes are tiny, so a scan beats a set
 inline bool pushUniqueMember(std::vector<int> &ring, int v) {
   for (const int x : ring) {
@@ -495,7 +548,8 @@ struct alignas(64) RingPool {
 template <typename Graph, typename Out>
 void enumerateFromSource(const Graph &adjacency, const BoundedBalls &balls,
                          int src, int maxDepth, int maxLvl, RingScratch &scr,
-                         Out &out, const std::vector<char> *through = nullptr) {
+                         Out &out, const std::vector<char> *through = nullptr,
+                         bool hop = false) {
   const int nVertices = static_cast<int>(adjacency.size());
   if (static_cast<int>(scr.lvl.size()) != nVertices) {
     scr.lvl.assign(nVertices, -1);
@@ -555,7 +609,8 @@ void enumerateFromSource(const Graph &adjacency, const BoundedBalls &balls,
           for (int i = lp - 2; i >= 0 && ok; i--) {
             ok = pushUniqueMember(ring, pb[i]);
           }
-          if (ok && ringIsPrimitive(balls, ring)) {
+          if (ok && (hop ? ringIsPrimitiveHop(adjacency, ring)
+                        : ringIsPrimitive(balls, ring))) {
             keep(ring);
           }
         }
@@ -580,7 +635,8 @@ void enumerateFromSource(const Graph &adjacency, const BoundedBalls &balls,
             for (int i = lp - 1; i >= 0 && ok; i--) {
               ok = pushUniqueMember(ring, pb[i]);
             }
-            if (ok && ringIsPrimitive(balls, ring)) {
+            if (ok && (hop ? ringIsPrimitiveHop(adjacency, ring)
+                          : ringIsPrimitive(balls, ring))) {
               keep(ring);
             }
           }
@@ -612,9 +668,10 @@ void enumerateFromSource(const Graph &adjacency, const BoundedBalls &balls,
  *
  *  Candidates are then kept or dropped by the same criterion Franzblau's
  *  filter applied: no pair of members may be joined through the graph by
- *  fewer edges than around the ring. Each such question is answered by a
- *  lookup into per-vertex bounded neighbourhoods computed once for the whole
- *  search.
+ *  fewer edges than around the ring. For a ring of at most 7 members the
+ *  separation is at most 3, so a strict shortcut is a walk of 1 or 2
+ *  edges and is answered from the sorted adjacency rows. Larger rings
+ *  still use the per-vertex balls.
  *
  *  Each ring starts at its lowest-indexed member and runs toward the lesser
  *  of that member's two ring neighbours, and the rings are sorted
@@ -696,6 +753,25 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
 
   const int maxLvl = maxDepth / 2;
   const int radius = std::max(maxLvl - 1, 1);
+  // Rings of at most 7 vertices ask only for shortcuts of 1 or 2 edges.
+  // The rows are sorted so those questions are binary searches, and the
+  // per-vertex balls are not built.
+  const bool hop = maxDepth <= 7;
+  if (hop) {
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) if (!omp_in_parallel())
+#endif
+    for (int i = 0; i < nVertices; i++) {
+      const auto n = adjacency.first[static_cast<std::size_t>(i + 1)] -
+                     adjacency.first[static_cast<std::size_t>(i)];
+      if (n > 1) {
+        auto *row = adjacency.cols.data() +
+                    static_cast<std::ptrdiff_t>(
+                        adjacency.first[static_cast<std::size_t>(i)]);
+        std::sort(row, row + static_cast<std::ptrdiff_t>(n));
+      }
+    }
+  }
   std::vector<int> from;
   for (int v = 0; v < nVertices; v++) {
     if (sources.empty() || (v < static_cast<int>(sources.size()) && sources[v])) {
@@ -705,7 +781,11 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
   BoundedBalls balls;
   gRingSplit.adj_ms = millisSince(adjStart);
   const auto ballStart = std::chrono::steady_clock::now();
-  if (static_cast<int>(from.size()) == nVertices) {
+  if (hop) {
+    gRingSplit.ball_count_ms = 0;
+    gRingSplit.ball_fill_ms = 0;
+    gRingSplit.balls_ms = 0;
+  } else if (static_cast<int>(from.size()) == nVertices) {
     balls.fillList(adjacency, radius, from);
   } else {
     std::vector<int> lvl(nVertices, -1);
@@ -727,7 +807,9 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
     }
     balls.fillList(adjacency, radius, reached);
   }
-  gRingSplit.balls_ms = millisSince(ballStart);
+  if (!hop) {
+    gRingSplit.balls_ms = millisSince(ballStart);
+  }
   const int nFrom = static_cast<int>(from.size());
 
 #ifdef SEAMS_HAS_OPENMP
@@ -746,43 +828,40 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
     // size updates. A static share of the sources is even on a crystal
     // and keeps each thread on its own lines.
     const auto enumStart = std::chrono::steady_clock::now();
-    std::vector<RingPool> perSource(static_cast<std::size_t>(nFrom));
+    // One vector per thread. static gives each thread a rising block of
+    // sources, so concatenating the blocks keeps the serial source order.
+    const int nThreads = omp_get_max_threads();
+    std::vector<std::vector<std::vector<int>>> byThread(
+        static_cast<std::size_t>(nThreads));
 #pragma omp parallel
     {
+      const int tid = omp_get_thread_num();
+      auto &mine = byThread[static_cast<std::size_t>(tid)];
       RingScratch scratch;
-#pragma omp for schedule(guided)
+#pragma omp for schedule(static)
       for (int k = 0; k < nFrom; k++) {
-        enumerateFromSource(adjacency, balls, from[k], maxDepth, maxLvl,
-                            scratch,         perSource[static_cast<std::size_t>(k)]);
+        enumerateFromSource(adjacency, balls, from[k], maxDepth, maxLvl, scratch,
+                            mine, nullptr, hop);
       }
     }
     gRingSplit.enumerate_ms = millisSince(enumStart);
     const auto mergeStart = std::chrono::steady_clock::now();
-    // Every ring, source list and ball is a heap block of its own; moving
-    // and freeing them on one thread is a sizeable share of a threaded search
-    std::vector<std::size_t> offset(static_cast<std::size_t>(nFrom) + 1, 0);
-    for (int k = 0; k < nFrom; k++) {
-      offset[static_cast<std::size_t>(k + 1)] =
-          offset[static_cast<std::size_t>(k)] +
-          perSource[static_cast<std::size_t>(k)].size();
+    std::size_t total = 0;
+    for (const auto &part : byThread) {
+      total += part.size();
     }
-    rings.resize(offset[static_cast<std::size_t>(nFrom)]);
-#pragma omp parallel
-    {
-#pragma omp for schedule(static) nowait
-      for (int k = 0; k < nFrom; k++) {
-        auto &pool = perSource[static_cast<std::size_t>(k)];
-        std::move(pool.begin(), pool.end(),
-                  rings.begin() +
-                      static_cast<std::ptrdiff_t>(offset[static_cast<std::size_t>(k)]));
-        pool.release();
-      }
+    rings.resize(total);
+    std::size_t at = 0;
+    for (auto &part : byThread) {
+      std::move(part.begin(), part.end(),
+                rings.begin() + static_cast<std::ptrdiff_t>(at));
+      at += part.size();
     }
     balls.clear();
     std::vector<std::vector<int>>().swap(uniq);
     std::vector<int>().swap(adjacency.cols);
     std::vector<std::size_t>().swap(adjacency.first);
-    std::vector<RingPool>().swap(perSource);
+    std::vector<std::vector<std::vector<int>>>().swap(byThread);
     gRingSplit.merge_ms = millisSince(mergeStart);
     return rings;
   }
@@ -791,8 +870,8 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
   const auto enumStart = std::chrono::steady_clock::now();
   RingScratch scratch;
   for (const int src : from) {
-    enumerateFromSource(adjacency, balls, src, maxDepth, maxLvl, scratch,
-                        rings);
+    enumerateFromSource(adjacency, balls, src, maxDepth, maxLvl, scratch, rings,
+                        nullptr, hop);
   }
   gRingSplit.enumerate_ms = millisSince(enumStart);
   const auto mergeStart = std::chrono::steady_clock::now();

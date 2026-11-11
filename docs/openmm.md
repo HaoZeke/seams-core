@@ -14,55 +14,48 @@ CPU. The timestep is 2 fs. The third argument of the driver is the log.
 
 CHILL+ and the primitive rings share one cutoff neighbour list at
 3.5 Å, type 1, on the oxygen sites only. Rings run through size 6.
-A positive skin keeps a list built at cutoff plus that skin while every
-atom's minimum-image drift stays inside half the skin, and the bonds
-are the pairs still inside 3.5 Å. The timed driver passes skin 0: over
-100 steps the drift is past a skin that stays cheap to build, so each
-report builds one cutoff list and both classifiers use it.
+For a ring of at most 7 members the separation around the ring is at
+most 3, so a strict shortcut is a walk of one edge or of two. That
+question is answered from the sorted adjacency rows, and the per-vertex
+balls are not built. The OpenMP team inside the classifier is the same
+width as the OpenMM CPU thread count.
 
-A 400-step trajectory, reported every 100 steps, matched the dump
-reader and `seams chill-plus` on every label and every ring count.
-A 0.02 Å drift reuses the wide list and still matches a fresh cutoff
-list. A 2 Å drift rebuilds.
+A 400-step, 4096-molecule trajectory matched the dump reader and
+`seams chill-plus` on every label and every ring count. The same check
+on one 32768-molecule frame matched as well. On a saved 4096-oxygen
+frame the hop counts equal the ball counts: 1602, 1224, 2059, 2281
+rings of size 3, 4, 5, and 6.
 
 ## Cost
 
-Release library, classifier on one OpenMP thread, 5000 steps, six
-repeats from one minimized state. Intervals 100, 500, and 1000.
-OpenMM on 1 thread and on 8.
+Release library, 2 fs timestep. The 4096-molecule block is 2000 steps,
+four repeats, intervals 100 and 500. The 32768-molecule block is 1000
+steps, four repeats, one report every 100 steps. Bare time for 4096
+molecules is 50.940 s (6.785 ns/day) on one thread and 12.206 s
+(28.313 ns/day) on eight. For 32768 molecules it is 204.945 s
+(0.843 ns/day) and 45.846 s (3.769 ns/day).
 
-Bare time is 123.476 s (6.997 ns/day) on one thread and 30.368 s
-(28.451 ns/day) on eight. The clocks inside a report, in milliseconds:
+Clocks inside a report, in milliseconds:
 
-| threads | interval | copy | neighbours | CHILL+ | rings | sum |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1 | 100 | 0.57 | 1.66 | 1.47 | 9.64 | 13.34 |
-| 1 | 500 | 0.42 | 1.60 | 1.44 | 9.34 | 12.80 |
-| 1 | 1000 | 0.38 | 1.58 | 1.40 | 9.30 | 12.67 |
-| 8 | 100 | 0.30 | 1.38 | 1.31 | 9.29 | 12.29 |
-| 8 | 500 | 0.38 | 1.49 | 1.38 | 9.36 | 12.61 |
-| 8 | 1000 | 0.38 | 1.56 | 1.39 | 9.38 | 12.71 |
+| molecules | threads | interval | copy | neighbours | CHILL+ | rings | sum |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 4096 | 1 | 100 | 0.40 | 1.66 | 1.42 | 7.33 | 10.81 |
+| 4096 | 1 | 500 | 1.05 | 1.64 | 1.41 | 7.07 | 11.17 |
+| 4096 | 8 | 100 | 0.41 | 4.03 | 2.65 | 2.99 | 10.08 |
+| 4096 | 8 | 500 | 0.38 | 3.24 | 1.54 | 1.55 | 6.72 |
+| 32768 | 1 | 100 | 2.74 | 11.65 | 11.98 | 63.75 | 90.12 |
+| 32768 | 8 | 100 | 2.92 | 13.50 | 9.03 | 12.68 | 38.13 |
 
-No report reused a neighbour list. Adding that sum to the bare time
-slows one thread by 0.54%, 0.10%, and 0.051% at the three intervals,
-and eight threads by 2.0%, 0.42%, and 0.21%.
-
-The wall-clock means of the same six repeats:
-
-| threads | interval | ns/day | ms per report | slowdown |
-| --- | --- | --- | --- | --- |
-| 1 | 100 | 6.789 | 75.78 | 2.98% |
-| 1 | 500 | 6.968 | 51.48 | 0.42% |
-| 1 | 1000 | 7.068 | −245.77 | −1.01% |
-| 8 | 100 | 27.927 | 11.39 | 1.84% |
-| 8 | 500 | 28.511 | −6.33 | −0.21% |
-| 8 | 1000 | 28.218 | 50.19 | 0.82% |
-
-At eight threads and interval 100 the wall gap is 11.4 ms per report,
-next to the 12.3 ms inside the reporter. At one thread and interval 100
-three of the six runs took 128–133 s against bare runs of 122–124 s,
-so the wall mean sits above the phase sum. At intervals 500 and 1000
-the added time is smaller than the spread of the bare runs.
+The ring search is the part that scales. On 4096 oxygens it falls from
+7.33 ms on one thread to 2.99 ms on eight (2.4×) at interval 100, and
+from 7.07 ms to 1.55 ms (4.6×) at interval 500. On 32768 oxygens it
+falls from 63.75 ms to 12.68 ms (5.0×). Adding the 32768 eight-thread
+sum onto the bare run is 0.83% of the step time. The measured
+wall-clock means at eight threads are 27.665 ns/day for 4096 molecules
+at interval 100 (14.3 ms per report, 2.3% slower than bare) and
+3.704 ns/day for 32768 molecules (80.8 ms per report, 1.7% slower).
+At one thread the reporter's added time is smaller than the spread of
+the bare runs.
 
 Set `SEAMS_LANG_LIB` to `libseams_lang` before constructing `InSitu`.
 The reporter takes that engine, an unused dump name, the step interval,
