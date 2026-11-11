@@ -154,82 +154,29 @@ struct PackingCertificate {
 
 //! Peripheral rings of one equatorial candidate. n == 0 when the ring is
 //! not a candidate. The first six sit inline. A defect that names more
-//! conflicts stores the rest in past, so none are dropped. past is null
-//! unless a ring names more than six, so a crystal of candidates does not
-//! construct a vector per ring.
+//! conflicts stores the rest beside the row, so a crystal of candidates
+//! stays a plain block of integers.
+int equatorChoiceOverflow(const struct EquatorChoice *self, int at);
+void equatorChoiceOverflowPut(struct EquatorChoice *self, int at, int value);
+
 struct EquatorChoice {
   int ring[6]{};
   int n = 0;
-  int *past = nullptr;
-  int pastN = 0;
 
-  EquatorChoice() = default;
-
-  EquatorChoice(const EquatorChoice &other) : n(other.n) {
-    std::copy(other.ring, other.ring + 6, ring);
-    if (other.pastN > 0 && other.past != nullptr) {
-      pastN = other.pastN;
-      past = new int[static_cast<std::size_t>(pastN)];
-      std::copy(other.past, other.past + pastN, past);
-    }
+  [[nodiscard]] int idAt(int k) const {
+    return k < 6 ? ring[k] : equatorChoiceOverflow(this, k - 6);
   }
-
-  EquatorChoice &operator=(const EquatorChoice &other) {
-    if (this != &other) {
-      EquatorChoice tmp(other);
-      *this = std::move(tmp);
-    }
-    return *this;
-  }
-
-  EquatorChoice(EquatorChoice &&other) noexcept
-      : n(other.n), past(other.past), pastN(other.pastN) {
-    std::copy(other.ring, other.ring + 6, ring);
-    other.past = nullptr;
-    other.pastN = 0;
-    other.n = 0;
-  }
-
-  EquatorChoice &operator=(EquatorChoice &&other) noexcept {
-    if (this != &other) {
-      delete[] past;
-      std::copy(other.ring, other.ring + 6, ring);
-      n = other.n;
-      past = other.past;
-      pastN = other.pastN;
-      other.past = nullptr;
-      other.pastN = 0;
-      other.n = 0;
-    }
-    return *this;
-  }
-
-  ~EquatorChoice() { delete[] past; }
-
-  [[nodiscard]] int idAt(int k) const { return k < 6 ? ring[k] : past[k - 6]; }
 
   void put(int k, int value) {
     if (k < 6) {
       ring[k] = value;
       return;
     }
-    const int at = k - 6;
-    if (at >= pastN) {
-      int cap = pastN == 0 ? at + 1 : pastN;
-      while (cap <= at) {
-        cap *= 2;
-      }
-      int *grown = new int[static_cast<std::size_t>(cap)]();
-      if (pastN > 0 && past != nullptr) {
-        std::copy(past, past + pastN, grown);
-      }
-      delete[] past;
-      past = grown;
-      pastN = cap;
-    }
-    past[at] = value;
+    equatorChoiceOverflowPut(this, k - 6, value);
   }
 };
+
+void releaseEquatorOverflow();
 
 //! Maximum set of mutually non-conflicting equatorial rings. @a periph[i].n
 //! is 0 when ring i is not a candidate. The returned ids are a maximum

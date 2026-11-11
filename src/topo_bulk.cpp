@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <limits>
+#include <mutex>
 #include <numeric>
 #include <stdexcept>
 #include <string>
@@ -1836,6 +1837,35 @@ DdcSplitTimes gDdcSplit;
 std::atomic<std::uint64_t> gDdcCycleEvals{0};
 } // namespace
 
+namespace {
+std::mutex gEquatorOverflowMu;
+std::unordered_map<const ring::EquatorChoice *, std::vector<int>> gEquatorOverflow;
+} // namespace
+
+int ring::equatorChoiceOverflow(const ring::EquatorChoice *self, int at) {
+  std::lock_guard<std::mutex> lock(gEquatorOverflowMu);
+  const auto it = gEquatorOverflow.find(self);
+  if (it == gEquatorOverflow.end() || at < 0 ||
+      at >= static_cast<int>(it->second.size())) {
+    return 0;
+  }
+  return it->second[static_cast<std::size_t>(at)];
+}
+
+void ring::equatorChoiceOverflowPut(ring::EquatorChoice *self, int at, int value) {
+  std::lock_guard<std::mutex> lock(gEquatorOverflowMu);
+  auto &past = gEquatorOverflow[self];
+  if (at >= static_cast<int>(past.size())) {
+    past.resize(static_cast<std::size_t>(at) + 1);
+  }
+  past[static_cast<std::size_t>(at)] = value;
+}
+
+void ring::releaseEquatorOverflow() {
+  std::lock_guard<std::mutex> lock(gEquatorOverflowMu);
+  gEquatorOverflow.clear();
+}
+
 extern "C" __attribute__((visibility("default"), used)) std::uint64_t seams_ddc_cycle_evals() {
   return gDdcCycleEvals.load(std::memory_order_relaxed);
 }
@@ -1860,7 +1890,7 @@ std::vector<int> canonicalRingOrderByAtoms(
   std::vector<Key> keys(static_cast<size_t>(n));
   const int nShift = static_cast<int>(index.ringShift.size());
 #if defined(SEAMS_HAS_OPENMP)
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(static) if (omp_get_max_threads() > 1)
 #endif
   for (int i = 0; i < n; i++) {
     const auto &ring = rings[static_cast<size_t>(i)];
@@ -1935,7 +1965,7 @@ std::vector<int> canonicalRingOrderByAtoms(
   };
   const int nBuckets = maxAtom + 2;
 #if defined(SEAMS_HAS_OPENMP)
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(static) if (omp_get_max_threads() > 1)
 #endif
   for (int b = 0; b < nBuckets; b++) {
     const int lo = bucket[static_cast<size_t>(b)];
@@ -1977,17 +2007,16 @@ std::vector<int> ring::findDDC(const std::vector<std::vector<int>> &rings,
   }
   std::vector<ring::EquatorChoice> chosenPeriph(static_cast<size_t>(totalRingNum));
 #if defined(SEAMS_HAS_OPENMP)
-#pragma omp parallel for schedule(guided)
+#pragma omp parallel for schedule(static, 64) if (totalRingNum >= 256 && omp_get_max_threads() > 1)
 #endif
   for (int iring = 0; iring < totalRingNum; iring++) {
+    ring::EquatorChoice &local = chosenPeriph[static_cast<size_t>(iring)];
     if (notEquatorial[static_cast<size_t>(iring)]) {
       continue;
     }
-    ring::EquatorChoice local;
     if (!ring::equatorialConditions(rings, iring, index, nullptr, nullptr, &rank, &local)) {
       continue;
     }
-    chosenPeriph[static_cast<size_t>(iring)] = local;
   }
   const auto td2 = std::chrono::steady_clock::now();
   const std::vector<int> equators =
@@ -2034,6 +2063,7 @@ std::vector<int> ring::findDDC(const std::vector<std::vector<int>> &rings,
                     peripheralRings.end());
     cageList.push_back({cage::cageType::DoubleDiaC, DDCRings});
   }
+  ring::releaseEquatorOverflow();
   std::vector<ring::EquatorChoice>().swap(chosenPeriph);
   gDdcSplit.write_ms =
       std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - td3).count();
