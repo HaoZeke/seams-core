@@ -215,6 +215,134 @@ rule figure_pngs:
         "python3 paper/tex/figures/render_finish.py && python3 paper/tex/figures/rasterize_tikz.py"
 
 
+rule cpc_env:
+    output:
+        "benchmarks/cpc/records/environment.txt",
+    shell:
+        "benchmarks/cpc/.venv/bin/python benchmarks/cpc/record_env.py"
+
+
+rule cpc_frames:
+    output:
+        "benchmarks/cpc/frames/ic-1000.lammpstrj",
+        "benchmarks/cpc/frames/ih-1000.lammpstrj",
+        "benchmarks/cpc/frames/mw-liquid-512.lammpstrj",
+    shell:
+        "benchmarks/cpc/.venv/bin/python benchmarks/cpc/make_frames.py"
+
+
+rule cpc_a_chill:
+    input:
+        "benchmarks/cpc/frames/ic-1000.lammpstrj",
+        "benchmarks/cpc/frames/ih-1000.lammpstrj",
+        "benchmarks/cpc/frames/mw-liquid-512.lammpstrj",
+        "build/benchmarks/cpc/measure_cpc",
+    output:
+        "benchmarks/cpc/records/a-chill/ice-Ic-chillplus-vs-ovito-merged.tsv",
+    shell:
+        "benchmarks/cpc/.venv/bin/python benchmarks/cpc/run_measure.py a"
+
+
+rule cpc_b_cages:
+    input:
+        "benchmarks/cpc/frames/ic-1000.lammpstrj",
+        "build/benchmarks/cpc/measure_cpc",
+    output:
+        "benchmarks/cpc/records/b-cages/ic-1000.csv",
+    shell:
+        "benchmarks/cpc/.venv/bin/python benchmarks/cpc/run_measure.py b"
+
+
+rule cpc_c_cluster:
+    input:
+        "build/benchmarks/cpc/measure_cpc",
+    output:
+        "benchmarks/cpc/records/c-cluster/mW_cubic-cluster-q6.csv",
+    shell:
+        "benchmarks/cpc/.venv/bin/python benchmarks/cpc/run_measure.py c"
+
+
+rule cpc_d_qlm:
+    input:
+        "benchmarks/cpc/frames/ic-1000.lammpstrj",
+        "build/benchmarks/cpc/measure_cpc",
+    output:
+        "benchmarks/cpc/records/d-qlm/ic-1000-q6.csv",
+    shell:
+        "benchmarks/cpc/.venv/bin/python benchmarks/cpc/run_measure.py d"
+
+
+rule cpc_f4:
+    input:
+        "build/seams",
+    output:
+        "benchmarks/cpc/records/f-f4/exampleTraj.csv",
+    shell:
+        "benchmarks/cpc/.venv/bin/python benchmarks/cpc/run_measure.py f4"
+
+
+rule cpc_sota:
+    input:
+        "build/seams",
+        "build/benchmarks/cpc/measure_cpc",
+    output:
+        "benchmarks/cpc/records/e-sota/sota.tsv",
+    shell:
+        "benchmarks/cpc/.venv/bin/python benchmarks/cpc/run_measure.py sota"
+
+
+rule cpc_ions:
+    input:
+        "build/seams",
+    output:
+        "benchmarks/cpc/records/e-ions/ions.tsv",
+    shell:
+        "benchmarks/cpc/.venv/bin/python benchmarks/cpc/run_measure.py ions"
+
+
+rule cpc_brine:
+    output:
+        "benchmarks/cpc/records/e-brine/status.txt",
+    shell:
+        "benchmarks/cpc/.venv/bin/python benchmarks/cpc/run_measure.py brine"
+
+
+rule cpc_gpu:
+    output:
+        "benchmarks/cpc/records/e-gpu/host-device-ladder.txt",
+    shell:
+        "benchmarks/cpc/.venv/bin/python benchmarks/cpc/run_measure.py gpu"
+
+
+rule cpc_other:
+    input:
+        "build/seams",
+    output:
+        "benchmarks/cpc/records/e-other/genice_sI-signature.txt",
+    shell:
+        "benchmarks/cpc/.venv/bin/python benchmarks/cpc/run_measure.py e"
+
+
+rule cpc_summary:
+    input:
+        "benchmarks/cpc/records/environment.txt",
+        "benchmarks/cpc/records/a-chill/ice-Ic-chillplus-vs-ovito-merged.tsv",
+        "benchmarks/cpc/records/b-cages/ic-1000.csv",
+        "benchmarks/cpc/records/c-cluster/mW_cubic-cluster-q6.csv",
+        "benchmarks/cpc/records/d-qlm/ic-1000-q6.csv",
+        "benchmarks/cpc/records/f-f4/exampleTraj.csv",
+        "benchmarks/cpc/records/e-sota/sota.tsv",
+        "benchmarks/cpc/records/e-ions/ions.tsv",
+        "benchmarks/cpc/records/e-brine/status.txt",
+        "benchmarks/cpc/records/e-gpu/host-device-ladder.txt",
+        "benchmarks/cpc/records/e-other/genice_sI-signature.txt",
+    output:
+        "benchmarks/cpc/records/summary.tsv",
+        "benchmarks/cpc/records/CLAIMS.tsv",
+    shell:
+        "benchmarks/cpc/.venv/bin/python benchmarks/cpc/summarize.py"
+
+
 rule shipped_campaign:
     input:
         "paper/tex/repro/shipped_campaign.py",

@@ -474,6 +474,9 @@ _incdirs += include_directories([
 # Library
 subdir('src')
 
+# Serial result measurements. Not part of the test suite.
+subdir('benchmarks/cpc')
+
 # Tests
 if get_option('with_tests')
   subdir('tests')
