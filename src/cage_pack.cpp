@@ -8,7 +8,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 #include <numeric>
+#include <unordered_map>
 #include <vector>
 
 #ifdef SEAMS_HAS_OPENMP
@@ -23,54 +25,28 @@ std::uint64_t gDdcKeyDigits = 0;
 std::uint64_t gDdcBucketSteps = 0;
 thread_local std::vector<std::uint64_t> *gPackedLive = nullptr;
 
-// One conflict row per candidate. The first eight neighbours stay in the
-// row itself: ice degree is six, so the search does not allocate. A wider
-// neighbourhood spills into `more` and is still recorded. `more` is a raw
-// block so a row of an ordinary cage does not construct a heap vector.
+// One conflict row per candidate. Eight neighbours sit in the row, which is
+// the whole row on ice (degree six) and matches the dense layout of that
+// search. A wider neighbourhood spills into a side table so the inline row
+// stays a plain block of ints.
+struct SpillBlock {
+  int *p = nullptr;
+  int cap = 0;
+};
+std::mutex gRowSpillMu;
+std::unordered_map<const struct Row *, SpillBlock> gRowSpill;
+
 struct Row {
   static constexpr int kInline = 8;
   int head[kInline]{};
   int n = 0;
-  int *more = nullptr;
-  int moreCap = 0;
-
-  Row() = default;
-  Row(const Row &o) : n(0), more(nullptr), moreCap(0) {
-    std::copy(o.head, o.head + kInline, head);
-    for (int i = 0; i < o.n; i++) {
-      push(o[i]);
-    }
-  }
-  Row &operator=(const Row &o) {
-    if (this != &o) {
-      Row tmp(o);
-      *this = std::move(tmp);
-    }
-    return *this;
-  }
-  Row(Row &&o) noexcept : n(o.n), more(o.more), moreCap(o.moreCap) {
-    std::copy(o.head, o.head + kInline, head);
-    o.more = nullptr;
-    o.moreCap = 0;
-    o.n = 0;
-  }
-  Row &operator=(Row &&o) noexcept {
-    if (this != &o) {
-      delete[] more;
-      std::copy(o.head, o.head + kInline, head);
-      n = o.n;
-      more = o.more;
-      moreCap = o.moreCap;
-      o.more = nullptr;
-      o.moreCap = 0;
-      o.n = 0;
-    }
-    return *this;
-  }
-  ~Row() { delete[] more; }
 
   [[nodiscard]] int operator[](int i) const {
-    return i < kInline ? head[i] : more[i - kInline];
+    if (i < kInline) {
+      return head[i];
+    }
+    std::lock_guard<std::mutex> lock(gRowSpillMu);
+    return gRowSpill.find(this)->second.p[i - kInline];
   }
 
   bool push(int x) {
@@ -78,18 +54,20 @@ struct Row {
       head[n++] = x;
       return true;
     }
+    std::lock_guard<std::mutex> lock(gRowSpillMu);
+    SpillBlock &sp = gRowSpill[this];
     const int at = n - kInline;
-    if (at == moreCap) {
-      const int cap = moreCap == 0 ? 4 : moreCap * 2;
+    if (at == sp.cap) {
+      const int cap = sp.cap == 0 ? 4 : sp.cap * 2;
       int *grown = new int[static_cast<std::size_t>(cap)];
-      if (moreCap > 0) {
-        std::copy(more, more + moreCap, grown);
+      if (sp.cap > 0) {
+        std::copy(sp.p, sp.p + sp.cap, grown);
       }
-      delete[] more;
-      more = grown;
-      moreCap = cap;
+      delete[] sp.p;
+      sp.p = grown;
+      sp.cap = cap;
     }
-    more[at] = x;
+    sp.p[at] = x;
     ++n;
     return true;
   }
@@ -131,6 +109,14 @@ struct Row {
     }
     std::sort(buf, buf + filled);
     const int kept = static_cast<int>(std::unique(buf, buf + filled) - buf);
+    {
+      std::lock_guard<std::mutex> lock(gRowSpillMu);
+      const auto it = gRowSpill.find(this);
+      if (it != gRowSpill.end()) {
+        delete[] it->second.p;
+        gRowSpill.erase(it);
+      }
+    }
     n = 0;
     for (int i = 0; i < kept; i++) {
       push(buf[i]);
@@ -138,13 +124,30 @@ struct Row {
   }
 
   [[nodiscard]] bool has(int x) const {
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n && i < kInline; i++) {
+      if (head[i] == x) {
+        return true;
+      }
+    }
+    for (int i = kInline; i < n; i++) {
       if ((*this)[i] == x) {
         return true;
       }
     }
     return false;
   }
+};
+
+void releaseRowSpills() {
+  std::lock_guard<std::mutex> lock(gRowSpillMu);
+  for (auto &kv : gRowSpill) {
+    delete[] kv.second.p;
+  }
+  gRowSpill.clear();
+}
+
+struct RowSpillGuard {
+  ~RowSpillGuard() { releaseRowSpills(); }
 };
 
 // One bit per vertex of the component under search. The word count is
@@ -1127,33 +1130,30 @@ bool linePack(const std::vector<Row> &conf, const std::vector<int> &mem,
     for (int i = 0; i < m; i++) {
       const int v = mem[static_cast<size_t>(i)];
       const Row &nb = conf[static_cast<size_t>(v)];
+      // Degree is six here, so the neighbour test reads the inline block.
       auto near = [&](int x, int y) {
-        const Row &row = conf[static_cast<size_t>(x)];
-        for (int t = 0; t < row.n; t++) {
-          if (row[t] == y) {
-            return true;
-          }
-        }
-        return false;
+        const int *head = conf[static_cast<size_t>(x)].head;
+        return head[0] == y || head[1] == y || head[2] == y || head[3] == y || head[4] == y ||
+               head[5] == y;
       };
       int A[3];
       int B[3];
       int nA = 1;
       int nB = 0;
-      A[0] = nb[0];
+      A[0] = nb.head[0];
       bool ok = true;
       for (int t = 1; t < 6; t++) {
-        if (near(nb[0], nb[t])) {
+        if (near(nb.head[0], nb.head[t])) {
           if (nA >= 3) {
             ok = false;
             break;
           }
-          A[nA++] = nb[t];
+          A[nA++] = nb.head[t];
         } else if (nB >= 3) {
           ok = false;
           break;
         } else {
-          B[nB++] = nb[t];
+          B[nB++] = nb.head[t];
         }
       }
       if (!ok || nA != 3 || nB != 3 || !near(A[1], A[2]) || !near(B[0], B[1]) ||
@@ -1844,6 +1844,7 @@ int bruteMis(const std::vector<Row> &conf, const std::vector<int> &mem) {
 }
 
 void misSelfTest() {
+  RowSpillGuard spillGuard;
   auto check = [](const std::vector<std::pair<int, int>> &edges, int n, int expect) {
     std::vector<Row> conf(static_cast<size_t>(n));
     for (const auto &e : edges) {
@@ -1893,6 +1894,7 @@ void misSelfTest() {
 std::vector<int> ring::maximumEquators(const std::vector<ring::EquatorChoice> &periph,
                                        const std::vector<int> &order,
                                        ring::PackingCertificate *certificate) {
+  RowSpillGuard spillGuard;
   static int selfTested = 0;
   if (selfTested == 0 && std::getenv("DSEAMS_MIS_SELFTEST") != nullptr) {
     selfTested = 1;
