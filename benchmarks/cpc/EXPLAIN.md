@@ -8,7 +8,9 @@ value.
 ## Liquid agreement
 
 Main CHILL+ at 7f310225 agrees with OVITO 3.17.2 on 439 of 512
-molecules (0.857). The published rule at e8610637 agrees on 479
+molecules (0.857422). The value 0.857422 is pre-fix, counted before
+the shell-count bug fix, and pending the CHILL+ pr2 tip. The published
+rule at e8610637 agrees on 479
 (0.936). The ovito-chill+ option at that commit agrees on all 512.
 Those labels match OVITO's ChillPlusModifier on this frame.
 `records/explain/liquid-steps.tsv` names every molecule that disagrees.

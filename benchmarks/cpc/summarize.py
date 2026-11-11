@@ -165,7 +165,7 @@ def claims() -> list[str]:
             "main chill+ %s published %s ovito-chill+ %s\t"
             "paper/tex/rg_main.tex:473\t"
             "measure_cpc labels chillplus benchmarks/cpc/frames/mw-liquid-512.lammpstrj\t"
-            "NOT_RERUN"
+            "PRE_FIX_PENDING_CHILLPLUS_PR2"
         ) % (overall(a / "mW-liquid-T215-chillplus-vs-ovito-merged.tsv"),
              overall(a / "mW-liquid-T215-tip-chillplus-vs-ovito-merged.tsv"),
              overall(a / "mW-liquid-T215-tip-ovito-chillplus-vs-ovito-merged.tsv")),
@@ -267,12 +267,12 @@ def claims() -> list[str]:
             "NOT_RERUN"
         ),
         (
-            "Main CHILL+ agrees with OVITO on 0.857 of the 512-molecule mW liquid.\t"
-            "0.857\t"
-            "73 disagreements: 40 are the c_ij.size gate bug in src/bop.cpp:1118; 33 are the q3 definition, 479/512 on the published rule\t"
+            "Main CHILL+ agrees with OVITO on 0.857422 of the 512-molecule mW liquid.\t"
+            "0.857422\t"
+            "0.857422 is pre-fix, counted before the shell-count bug fix, and pending the CHILL+ pr2 tip; 40 of 73 miss the shell count and 33 are the q3 definition\t"
             "src/bop.cpp:1118\t"
             "benchmarks/cpc/explain_liquid.py\t"
-            "gate bug; CHILL+ PR series fixes the 40"
+            "PRE_FIX_PENDING_CHILLPLUS_PR2"
         ),
         (
             "Published CHILL+ agrees with OVITO on 0.936 of that liquid; ovito-chill+ agrees on 1.000.\t"
