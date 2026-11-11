@@ -4,10 +4,9 @@
 Usage:
     python3 scripts/openmm_tip4p_ice.py LIBSEAMS_LANG SEAMS LOG
 
-4096 molecules, CPU, six repeats of a bare run and six of the reporter.
-Frames written by the reporter are read back from disk. CHILL+ labels and
-primitive-ring counts must match. The seams chill-plus histogram is checked
-against the same counts.
+4096 molecules on the CPU. One match trajectory is written and read back.
+Then 5000 steps, report intervals 100, 500 and 1000, one thread and eight,
+six bare repeats and six reporter repeats from the same minimized state.
 """
 
 from __future__ import annotations
@@ -29,14 +28,26 @@ from dseams_insitu.engine import InSitu, _NAMES
 from dseams_insitu.openmm import DseamsReporter
 
 MOLECULES = int(os.environ.get("OPENMM_TIP4P_MOLECULES", "4096"))
-STEPS = int(os.environ.get("OPENMM_TIP4P_STEPS", "12"))
-INTERVAL = int(os.environ.get("OPENMM_TIP4P_INTERVAL", "6"))
+STEPS = int(os.environ.get("OPENMM_TIP4P_STEPS", "5000"))
 REPEATS = int(os.environ.get("OPENMM_TIP4P_REPEATS", "6"))
+INTERVALS = tuple(
+    int(item)
+    for item in os.environ.get("OPENMM_TIP4P_INTERVALS", "100,500,1000").split(",")
+    if item
+)
+THREADS = tuple(
+    int(item)
+    for item in os.environ.get("OPENMM_TIP4P_THREADS", "1,8").split(",")
+    if item
+)
+MATCH_STEPS = int(os.environ.get("OPENMM_TIP4P_MATCH_STEPS", "400"))
+MATCH_INTERVAL = int(os.environ.get("OPENMM_TIP4P_MATCH_INTERVAL", "100"))
+DT_NS = 2.0e-6
 CUTOFF = 3.5
 OUT = Path(os.environ.get("OPENMM_TIP4P_DIR", "/var/tmp/dseams/openmm-tip4p"))
 
 
-def water_box(n_mol):
+def water_box(n_mol, threads):
     from openmm.app import ForceField, Modeller, PME, Topology
     from openmm import LangevinMiddleIntegrator, Platform
     from openmm.unit import kelvin, nanometer, picosecond
@@ -58,8 +69,11 @@ def water_box(n_mol):
     platform = Platform.getPlatformByName("CPU")
     from openmm.app import Simulation
 
-    simulation = Simulation(modeller.topology, system, integrator, platform, {"Threads": "1"})
+    simulation = Simulation(
+        modeller.topology, system, integrator, platform, {"Threads": str(int(threads))}
+    )
     simulation.context.setPositions(modeller.positions)
+    simulation.integrator.setRandomNumberSeed(1)
     return simulation
 
 
@@ -106,10 +120,17 @@ def snapshot(simulation):
     return state
 
 
+def ns_per_day(steps, seconds):
+    if seconds <= 0.0:
+        return 0.0
+    return steps * DT_NS * 86400.0 / seconds
+
+
 def restore(simulation, state):
     simulation.context.setPositions(state.getPositions())
     simulation.context.setVelocities(state.getVelocities())
     simulation.currentStep = 0
+    simulation.integrator.setRandomNumberSeed(1)
 
 
 def run_steps(simulation, steps, reporter):
@@ -166,6 +187,45 @@ def cli_counts(seams, dump, frame):
     return found, text
 
 
+def check_skin(library, positions, box):
+    """A small drift must keep the cutoff pairs a fresh list would build."""
+    fresh = InSitu(library, skin=0.0)
+    fresh.keep_frames = False
+    base_labels, _base_counts, base_rings = fresh.analyse(positions, box)
+    held = InSitu(library, skin=0.5)
+    held.keep_frames = False
+    held.analyse(positions, box)
+    labels, _counts, rings = held.analyse(positions, box)
+    if held._phase.reused != 1:
+        raise SystemExit("identical coordinates rebuilt the neighbour list")
+    if not np.array_equal(labels, base_labels) or not np.array_equal(rings, base_rings):
+        raise SystemExit("reused list changed an unmoved frame")
+    rng = np.random.default_rng(215)
+    shift = rng.normal(size=positions.shape)
+    peak = np.max(np.linalg.norm(shift, axis=1))
+    moved = np.array(positions, copy=True)
+    moved += shift * (0.02 / peak)
+    expect_labels, _expect_counts, expect_rings = fresh.analyse(moved, box)
+    labels, _counts, rings = held.analyse(moved, box)
+    if held._phase.reused != 1:
+        raise SystemExit("a 0.02 Å drift rebuilt the neighbour list")
+    if not np.array_equal(labels, expect_labels) or not np.array_equal(rings, expect_rings):
+        raise SystemExit("skin reuse does not match a fresh cutoff list")
+    far = np.array(positions, copy=True)
+    far[0, 0] += 2.0
+    expect_labels, _expect_counts, expect_rings = fresh.analyse(far, box)
+    labels, _counts, rings = held.analyse(far, box)
+    if held._phase.reused != 0:
+        raise SystemExit("a 2 Å drift reused the neighbour list")
+    if not np.array_equal(labels, expect_labels) or not np.array_equal(rings, expect_rings):
+        raise SystemExit("rebuilt list does not match a fresh cutoff list")
+
+
+def mean(values):
+    values = list(values)
+    return sum(values) / len(values)
+
+
 def main(argv):
     if len(argv) < 4:
         print(__doc__, file=sys.stderr)
@@ -180,33 +240,70 @@ def main(argv):
     def say(text):
         print(text, flush=True)
         lines.append(text)
+        log_path.write_text("\n".join(lines) + "\n")
 
     say(f"molecules {MOLECULES}")
-    say(f"steps {STEPS} interval {INTERVAL} repeats {REPEATS}")
-    say("platform CPU threads 1")
+    say(f"steps {STEPS} intervals {','.join(str(v) for v in INTERVALS)} repeats {REPEATS}")
+    say(f"threads {','.join(str(v) for v in THREADS)}")
+    say("platform CPU")
     say(f"library {library}")
     say(f"seams {seams}")
-    simulation = water_box(MOLECULES)
-    say(f"atoms {simulation.system.getNumParticles()}")
-    span = simulation.topology.getUnitCellDimensions()
+    say("classifier-threads 1")
+
+    from openmm import NonbondedForce
     from openmm.unit import nanometer
 
-    edges = span.value_in_unit(nanometer)
-    say("box-nm " + " ".join(f"{float(v):.6f}" for v in edges))
-    from openmm import NonbondedForce
+    prepared = {}
+    for threads in THREADS:
+        simulation = water_box(MOLECULES, threads)
+        if threads == THREADS[0]:
+            say(f"atoms {simulation.system.getNumParticles()}")
+            edges = simulation.topology.getUnitCellDimensions().value_in_unit(nanometer)
+            say("box-nm " + " ".join(f"{float(v):.6f}" for v in edges))
+            for force in simulation.system.getForces():
+                if isinstance(force, NonbondedForce):
+                    say(
+                        "pme-cutoff-nm "
+                        f"{force.getCutoffDistance().value_in_unit(nanometer):.6f}"
+                    )
+            simulation.minimizeEnergy(maxIterations=40)
+            kinds = oxygen_index(simulation.topology)
+            say(f"oxygens {int(kinds.sum())}")
+            state = snapshot(simulation)
+            prepared["kinds"] = kinds
+            prepared["positions"] = None
+        else:
+            simulation.context.setPositions(prepared["positions"])
+            simulation.context.setVelocities(prepared["velocities"])
+        if prepared["positions"] is None:
+            held = snapshot(simulation)
+            prepared["positions"] = held.getPositions()
+            prepared["velocities"] = held.getVelocities()
+        prepared[threads] = simulation
 
-    for force in simulation.system.getForces():
-        if isinstance(force, NonbondedForce):
-            say(f"pme-cutoff-nm {force.getCutoffDistance().value_in_unit(nanometer):.6f}")
-    simulation.minimizeEnergy(maxIterations=40)
-    state = snapshot(simulation)
-    kinds = oxygen_index(simulation.topology)
-    say(f"oxygens {int(kinds.sum())}")
+    kinds = prepared["kinds"]
+    match_sim = prepared[THREADS[0]]
 
-    engine = InSitu(library)
-    reporter = DseamsReporter(engine, str(OUT / "reporter.dump"), interval=INTERVAL, types=kinds)
+    engine = InSitu(library, skin=0.0)
+    pulled = match_sim.context.getState(getPositions=True, enforcePeriodicBox=True)
+    from openmm.unit import angstrom
+
+    pos = pulled.getPositions(asNumpy=True).value_in_unit(angstrom)
+    oxy = pos[kinds == 1]
+    box = engine.box_from_rows(
+        pulled.getPeriodicBoxVectors(asNumpy=True).value_in_unit(angstrom)
+    )
+    say("skin-check")
+    check_skin(library, np.array(oxy, copy=True), np.array(box, copy=True))
+    say("skin-check exact")
+
+    reporter = DseamsReporter(
+        engine, str(OUT / "reporter.dump"), interval=MATCH_INTERVAL, types=kinds
+    )
     say("match-run")
-    elapsed = run_steps(simulation, STEPS, reporter)
+    engine.frames.clear()
+    engine.reset_profile()
+    elapsed = run_steps(match_sim, MATCH_STEPS, reporter)
     say(f"match-run seconds {elapsed:.6f} reports {len(engine.frames)}")
     dump = OUT / "oxygens.lammpstrj"
     write_dump(dump, engine.frames)
@@ -231,23 +328,61 @@ def main(argv):
         )
     say("match exact")
 
-    bare = []
-    reported = []
-    for trial in range(1, REPEATS + 1):
-        restore(simulation, state)
-        seconds = run_steps(simulation, STEPS, None)
-        bare.append(seconds)
-        say(f"bare {trial} {seconds:.6f}")
-        restore(simulation, state)
-        engine.frames.clear()
-        seconds = run_steps(simulation, STEPS, reporter)
-        reported.append(seconds)
-        say(f"reporter {trial} {seconds:.6f} reports {len(engine.frames)}")
-    bare_mean = sum(bare) / len(bare)
-    rep_mean = sum(reported) / len(reported)
-    say(f"bare-mean {bare_mean:.6f}")
-    say(f"reporter-mean {rep_mean:.6f}")
-    say(f"overhead-mean {rep_mean - bare_mean:.6f}")
+    def rewind(simulation):
+        simulation.context.setPositions(prepared["positions"])
+        simulation.context.setVelocities(prepared["velocities"])
+        simulation.currentStep = 0
+        simulation.integrator.setRandomNumberSeed(1)
+
+    for threads in THREADS:
+        simulation = prepared[threads]
+        say(f"threads {threads}")
+        bare = []
+        for trial in range(1, REPEATS + 1):
+            rewind(simulation)
+            seconds = run_steps(simulation, STEPS, None)
+            bare.append(seconds)
+            say(f"bare {threads} {trial} {seconds:.6f} ns/day {ns_per_day(STEPS, seconds):.6f}")
+        bare_mean = mean(bare)
+        say(f"bare-mean {threads} {bare_mean:.6f} ns/day {ns_per_day(STEPS, bare_mean):.6f}")
+        for interval in INTERVALS:
+            engine.keep_frames = False
+            engine.frames.clear()
+            reporter.interval = interval
+            reported = []
+            profiles = []
+            for trial in range(1, REPEATS + 1):
+                rewind(simulation)
+                engine.reset_profile()
+                seconds = run_steps(simulation, STEPS, reporter)
+                reported.append(seconds)
+                profiles.append(dict(engine.profile))
+                say(
+                    f"reporter {threads} {interval} {trial} {seconds:.6f} "
+                    f"ns/day {ns_per_day(STEPS, seconds):.6f} "
+                    f"reports {engine.profile['reports']} reused {engine.profile['reused']}"
+                )
+            rep_mean = mean(reported)
+            reports = profiles[-1]["reports"]
+            if reports <= 0:
+                raise SystemExit(f"interval {interval} produced no reports in {STEPS} steps")
+            per_report = (rep_mean - bare_mean) / reports * 1.0e3
+            bare_rate = ns_per_day(STEPS, bare_mean)
+            rep_rate = ns_per_day(STEPS, rep_mean)
+            slowdown = (bare_rate - rep_rate) / bare_rate if bare_rate else 0.0
+
+            def phase(name):
+                return mean(item[name] / item["reports"] for item in profiles) * 1.0e3
+
+            say(f"reporter-mean {threads} {interval} {rep_mean:.6f} ns/day {rep_rate:.6f}")
+            say(f"per-report-ms {threads} {interval} {per_report:.6f}")
+            say(f"slowdown {threads} {interval} {slowdown:.6f}")
+            say(
+                f"split-ms {threads} {interval} "
+                f"copy {phase('copy'):.6f} neighbours {phase('neighbours'):.6f} "
+                f"chill {phase('chill'):.6f} rings {phase('rings'):.6f} "
+                f"reused {mean(item['reused'] / item['reports'] for item in profiles):.6f}"
+            )
     log_path.write_text("\n".join(lines) + "\n")
     return 0
 

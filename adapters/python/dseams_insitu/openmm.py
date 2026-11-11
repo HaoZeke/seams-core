@@ -22,12 +22,16 @@ class DseamsReporter:
 
     def report(self, simulation, state):
         del state
+        import time
+
         from openmm.unit import angstrom
 
+        t0 = time.perf_counter()
         pulled = simulation.context.getState(getPositions=True, enforcePeriodicBox=True)
         pos = pulled.getPositions(asNumpy=True).value_in_unit(angstrom)
         vecs = pulled.getPeriodicBoxVectors(asNumpy=True).value_in_unit(angstrom)
         box = self.engine.box_from_rows(vecs)
+        copy_s = time.perf_counter() - t0
         self.engine.observe(
-            int(simulation.currentStep), pos, box, None, types=self.types
+            int(simulation.currentStep), pos, box, None, types=self.types, copy_s=copy_s
         )
