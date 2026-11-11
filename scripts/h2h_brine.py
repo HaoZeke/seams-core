@@ -223,15 +223,19 @@ def main():
         freud = freud_mod
     except ImportError as exc:
         print("freud unavailable:", exc)
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    libgl = "/usr/lib/x86_64-linux-gnu"
+    os.environ["LD_LIBRARY_PATH"] = libgl + ":" + os.environ.get("LD_LIBRARY_PATH", "")
     ovito_note = "not imported"
     try:
+        from ovito.data import DataCollection, Particles, SimulationCell
         from ovito.modifiers import ChillPlusModifier
-        from ovito.data import DataCollection, Particles
         from ovito.pipeline import Pipeline, StaticSource
 
         ovito_ok = True
-    except ImportError:
+    except ImportError as exc:
         ovito_ok = False
+        ovito_note = str(exc)
 
     rows = []
     for path in paths:
@@ -329,18 +333,29 @@ def main():
                 particles = Particles()
                 particles.create_property("Position", data=points)
                 data.objects.append(particles)
-                cell = data.create_cell(box, pbc=(True, True, True))
-                del cell
+                cell = SimulationCell(pbc=(True, True, True))
+                cell[:, 0] = (box[0], 0.0, 0.0)
+                cell[:, 1] = (0.0, box[1], 0.0)
+                cell[:, 2] = (0.0, 0.0, box[2])
+                data.objects.append(cell)
                 pipe = Pipeline(source=StaticSource(data=data))
                 pipe.modifiers.append(ChillPlusModifier(cutoff=CUTOFF))
-                return pipe.compute().particles["Structure Type"][:]
+                return np.asarray(pipe.compute().particles["Structure Type"])
 
             try:
                 samples, structure = time_calls(prep_ds, run_ovito)
                 med, iqr = summarize(samples)
-                # OVITO Chill+ codes follow the same order as mdapy in 3.x.
-                other = np.array([MDAPY_COARSE.get(int(v), "other") for v in structure], dtype=object)
-                rows.append((path.parent.name, "OVITO", "chill+", n, med, iqr, agreement(ref, other)))
+                # OVITO 3.17.2 Chill+ uses the same integers as mdapy:
+                # 0 other, 1 hexagonal, 2 cubic, 3 interfacial, 4 hydrate,
+                # 5 interfacial hydrate. That modifier is the open-edge
+                # rule, not Table 1's closed edges and neighbour test.
+                other = np.array(
+                    [MDAPY_COARSE.get(int(v), "other") for v in structure],
+                    dtype=object,
+                )
+                rows.append(
+                    (path.parent.name, "OVITO", "chill+", n, med, iqr, agreement(ref, other))
+                )
             except Exception as exc:
                 ovito_note = str(exc)
 
