@@ -48,11 +48,17 @@ The paper quotes the v2.12.0 measurement. Double-diamond time there is
 slope in `paper/tex/figures/stats.py`. The sizes are 216, 512, 1000,
 1728, 2744, 4096 molecules. We rebuilt tag v2.12.0 (`0fc9ec49`) on
 this machine with one warm-up and six repeats. The type-7 median is
-2.590806 ms, and the exponent is 0.758.
+2.590806 ms. The double-diamond slope is the line
+`series v212-ddc sizes 216,512,1000,1728,2744,4096 slope 0.7577465329225367 files benchmarks/cpc/records/explain/v212-ic-216.csv,benchmarks/cpc/records/explain/v212-ic-512.csv,benchmarks/cpc/records/explain/v212-ic-1000.csv,benchmarks/cpc/records/explain/v212-ic-1728.csv,benchmarks/cpc/records/explain/v212-ic-2744.csv,benchmarks/cpc/records/explain/v212-ic-4096.csv`
+in `benchmarks/cpc/records/explain/slopes.txt`.
 
 The current sources return a type-7 median of 3.270127 ms at 1000
-molecules. The double-diamond exponent on the six sizes is 0.823.
-Omitting 2744 moves that exponent to 0.826. Both builds report 2000
+molecules. The six-size double-diamond slope is the line
+`series current-ddc sizes 216,512,1000,1728,2744,4096 slope 0.8226255849606982 files benchmarks/cpc/records/b-cages/ic-216.csv,benchmarks/cpc/records/b-cages/ic-512.csv,benchmarks/cpc/records/b-cages/ic-1000.csv,benchmarks/cpc/records/b-cages/ic-1728.csv,benchmarks/cpc/records/explain/head-ic-2744.csv,benchmarks/cpc/records/b-cages/ic-4096.csv`
+in `benchmarks/cpc/records/explain/slopes.txt`. Dropping the 2744-molecule
+log leaves the line
+`series current-ddc-omit-2744 sizes 216,512,1000,1728,4096 slope 0.8259488853310087 files benchmarks/cpc/records/b-cages/ic-216.csv,benchmarks/cpc/records/b-cages/ic-512.csv,benchmarks/cpc/records/b-cages/ic-1000.csv,benchmarks/cpc/records/b-cages/ic-1728.csv,benchmarks/cpc/records/b-cages/ic-4096.csv`
+in the same file. Both builds report 2000
 equators and 500 double-diamond cages. The cage counts are identical.
 The slower stage follows the packing rewrite in `df2a2be3`, which keeps
 the rings of each atom in one list. Ring search time fell, and the

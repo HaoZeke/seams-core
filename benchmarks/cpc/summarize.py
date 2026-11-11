@@ -20,6 +20,14 @@ def load_text(path: Path) -> str:
     return path.read_text() if path.is_file() else ""
 
 
+def slope_line(name: str) -> str:
+    prefix = f"series {name} "
+    for line in (ROOT_RECORDS / "explain" / "slopes.txt").read_text().splitlines():
+        if line.startswith(prefix):
+            return line
+    raise SystemExit(f"missing slope line {name}")
+
+
 def series_rows() -> list[str]:
     rows = ["kind\tmeasurement\tsystem\tquantity\tn\tmedian\tq1\tq3\tiqr\tunit\tsource"]
     for path in sorted(ROOT_RECORDS.rglob("*")):
@@ -127,12 +135,12 @@ def claims() -> list[str]:
         ) % (count_of(b / "ih-1000.csv", "hc_cages"), count_of(b / "ih-1000.csv", "ddc_cages")),
         (
             "Fitted exponents of the hexagonal and double-diamond stages on ideal ice Ic are 0.889 and 0.76.\t"
-            "0.889 and 0.76\t"
-            "current code ddc exponent 0.823 on 216 to 4096 including 2744; 0.826 without 2744\t"
-            "paper/tex/figures/data/macros.tex:706\t"
-            "measure_cpc time cages benchmarks/cpc/frames/ic-*.lammpstrj\t"
-            "slowdown; cage counts identical"
-        ),
+                "0.889 and 0.76\t"
+                "%s | %s\t"
+                "paper/tex/figures/data/macros.tex:706\t"
+                "benchmarks/cpc/fit_slopes.py\t"
+                "slowdown; cage counts identical"
+            ) % (slope_line("current-ddc"), slope_line("current-ddc-omit-2744")),
         (
             "Structure I holds 2 5^12 cages and 6 5^12 6^2 cages.\t"
             "2 and 6\t"
@@ -292,12 +300,12 @@ def claims() -> list[str]:
         ),
         (
             "Tag v2.12.0 double-diamond stage on 1000 ice Ic molecules.\t"
-            "2.61 ms\t"
-            "2.590806 ms median, six repeats, one warm-up, this machine\t"
-            "paper/tex/figures/data/tab-cost.tex:7\t"
-            "v2.12.0 measure time cages ic-1000 1 1 1 6\t"
-            "rerun"
-        ),
+                "2.61 ms\t"
+                "2.590806 ms median, six repeats, one warm-up, this machine; %s\t"
+                "paper/tex/figures/data/tab-cost.tex:7\t"
+                "v2.12.0 measure time cages ic-1000 1 1 1 6\t"
+                "rerun"
+            ) % slope_line("v212-ddc"),
         (
             "Current sources double-diamond stage on the same frame.\t"
             "2.61 ms at v2.12.0\t"
@@ -308,20 +316,20 @@ def claims() -> list[str]:
         ),
         (
             "Double-diamond exponent on the current code.\t"
-            "0.76\t"
-            "0.823 on 216, 512, 1000, 1728, 2744 and 4096; about 0.82\t"
-            "df2a2be3\t"
-            "log-log least squares on the six paper sizes\t"
-            "slowdown; cage counts identical"
-        ),
+                "0.76\t"
+                "%s\t"
+                "df2a2be3\t"
+                "benchmarks/cpc/fit_slopes.py\t"
+                "slowdown; cage counts identical"
+            ) % slope_line("current-ddc"),
         (
             "Double-diamond timing on perf/ddc-regression-fix.\t"
-            "3.270127 ms and exponent 0.823 on current code\t"
-            "about 2.74 ms at 1000 molecules, exponent 0.799, commit 2c0db67f\t"
-            "perf/ddc-regression-fix 2c0db67f\t"
-            "not run in this tree\t"
-            "pending verify"
-        ),
+                "3.270127 ms; %s\t"
+                "about 2.74 ms at 1000 molecules, exponent 0.799, commit 2c0db67f\t"
+                "perf/ddc-regression-fix 2c0db67f\t"
+                "not run in this tree\t"
+                "pending verify"
+            ) % slope_line("current-ddc"),
     ]
     return rows
 
