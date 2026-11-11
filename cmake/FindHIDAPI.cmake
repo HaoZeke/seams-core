@@ -10,6 +10,7 @@ find_path(HIDAPI_INCLUDE_DIRS
 	/usr/include
 	/usr/local/include
 	/sw/include
+	/opt/local/include
 	DOC "The directory where hidapi/hidapi.h resides")
 
 find_library(HIDAPI_LIBRARIES
@@ -21,6 +22,7 @@ find_library(HIDAPI_LIBRARIES
 	/usr/lib
 	/usr/local/lib
 	/sw/lib
+	/opt/local/lib
 	DOC "The hidapi library")
 
 

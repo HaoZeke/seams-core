@@ -13,6 +13,7 @@ find_path(EGL_INCLUDE_DIR EGL/egl.h
     /usr
     /usr/local
     /sw
+    /opt/local
 
     PATH_SUFFIXES
     /include
@@ -26,6 +27,7 @@ find_library(EGL_LIBRARY NAMES EGL
     /usr
     /usr/local
     /sw
+    /opt/local
 
     # authors prefered choice for development
 

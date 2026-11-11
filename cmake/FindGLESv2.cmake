@@ -13,6 +13,7 @@ find_path(GLESv2_INCLUDE_DIR GLES2/gl2.h
     /usr
     /usr/local
     /sw
+    /opt/local
 
     PATH_SUFFIXES
     /include
@@ -26,6 +27,7 @@ find_library(GLESv2_LIBRARY NAMES GLESv2
     /usr
     /usr/local
     /sw
+    /opt/local
 
     # authors prefered choice for development
 

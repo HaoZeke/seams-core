@@ -17,6 +17,7 @@ find_path(NODEJS_INCLUDE_DIR node.h
     /usr/local/include
     /sw/include
     /usr/local/include/node
+    /opt/local/include
     DOC "The directory where node.h resides.")
 
 find_path(NODEJS_LIBUV_INCLUDE_DIR uv.h
@@ -31,6 +32,7 @@ find_path(NODEJS_LIBUV_INCLUDE_DIR uv.h
     /usr/include
     /usr/local/include
     /sw/include
+    /opt/local/include
     /usr/local/include/node
     DOC "The directory where uv.h resides.")
 
@@ -46,6 +48,7 @@ find_path(NODEJS_LIBV8_INCLUDE_DIR v8.h
     /usr/include
     /usr/local/include
     /sw/include
+    /opt/local/include
     /usr/local/include/node
     DOC "The directory where v8.h resides.")
 

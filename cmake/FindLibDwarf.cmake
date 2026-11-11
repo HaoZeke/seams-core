@@ -24,6 +24,7 @@ find_path (DWARF_INCLUDE_DIR
     /usr/include/libdwarf
     /usr/local/include
     /usr/local/include/libdwarf
+    /opt/local/include
     /sw/include
     ENV CPATH) # PATH and INCLUDE will also work
 
@@ -37,6 +38,7 @@ find_library (LIBDWARF_LIBRARIES
   PATHS
     /usr/lib
     /usr/local/lib
+    /opt/local/lib
     /sw/lib
     ENV LIBRARY_PATH   # PATH and LIB will also work
     ENV LD_LIBRARY_PATH)
