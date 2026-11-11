@@ -64,6 +64,7 @@ struct Args {
   int timeRepeats = 0;
   int maxFrames = 0;
   std::string labels;
+  bool profile = false;
 };
 
 std::vector<int> splitInts(const std::string &text) {
@@ -106,6 +107,8 @@ Args parse(int argc, char **argv) {
       args.maxFrames = std::stoi(need("--max-frames"));
     } else if (key == "--labels") {
       args.labels = need("--labels");
+    } else if (key == "--profile") {
+      args.profile = true;
     } else if (key[0] != '-') {
       args.path = key;
     } else {
@@ -258,6 +261,57 @@ int main(int argc, char **argv) {
     std::cout << "summary frames " << used << " front_A_per_ns " << front << " front_stderr " << frontErr
               << " thickness_slope " << fit.slope << " traps " << traps << " releases " << releases
               << " k_mean " << kMean << " c_liquid_last " << cLast << "\n";
+    if (args.profile && haveTimed) {
+      auto ms = [](auto a, auto b) {
+        return std::chrono::duration<double, std::milli>(b - a).count();
+      };
+      const int repeats = args.timeRepeats >= 2 ? args.timeRepeats : 8;
+      double neigh = 0, chill = 0, bins = 0, pockets = 0, rings = 0, ions = 0, total = 0;
+      for (int i = 0; i < repeats; ++i) {
+        Cloud again = timedCloud;
+        auto t0 = std::chrono::steady_clock::now();
+        std::sort(again.pts.begin(), again.pts.end(), gen::compareByAtomID);
+        again.nop = static_cast<int>(again.pts.size());
+        auto nList = nneigh::neighListO(args.cutoff, again, args.waterType);
+        auto t1 = std::chrono::steady_clock::now();
+        chill::applyChillPlus(again, nList, chill::ChillPlusRule::Published, false);
+        auto t2 = std::chrono::steady_clock::now();
+        std::vector<bool> ice(static_cast<std::size_t>(again.nop), false);
+        std::vector<int> waters, ionIdx;
+        for (int a = 0; a < again.nop; ++a) {
+          const auto &point = again.pts[static_cast<std::size_t>(a)];
+          if (point.type == args.waterType) {
+            waters.push_back(a);
+            ice[static_cast<std::size_t>(a)] = crystal(point.iceType);
+          } else if (isIonType(args, point.type)) {
+            ionIdx.push_back(a);
+          }
+        }
+        auto prof = site::concentrationProfile(again, ice, waters, ionIdx, options.nBins, options.axis,
+                                               options.ionsPerFormula);
+        auto fronts = site::locateFronts(prof, options.frontCut);
+        (void)site::rejectionCoefficient(prof, options.bulkIce, options.bulkLiquid);
+        auto t3 = std::chrono::steady_clock::now();
+        (void)site::brinePockets(again, ice, waters, ionIdx, options.shellCutoff);
+        auto t4 = std::chrono::steady_clock::now();
+        (void)site::frontLayer(again, waters, fronts, options.layerHalfWidth, options.shellCutoff,
+                               options.maxRing, options.axis);
+        auto t5 = std::chrono::steady_clock::now();
+        (void)site::ionEnvironment(again, ice, ionIdx, 0, options.shellCutoff);
+        auto t6 = std::chrono::steady_clock::now();
+        neigh += ms(t0, t1);
+        chill += ms(t1, t2);
+        bins += ms(t2, t3);
+        pockets += ms(t3, t4);
+        rings += ms(t4, t5);
+        ions += ms(t5, t6);
+        total += ms(t0, t6);
+      }
+      const double n = repeats;
+      std::cout << "profile_ms n " << repeats << " neigh " << neigh / n << " chill " << chill / n
+                << " bins " << bins / n << " pockets " << pockets / n << " rings " << rings / n
+                << " ions " << ions / n << " total " << total / n << "\n";
+    }
     if (args.timeRepeats >= 2 && haveTimed) {
       std::vector<double> samples;
       samples.reserve(static_cast<std::size_t>(args.timeRepeats));
