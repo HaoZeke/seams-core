@@ -661,6 +661,32 @@ def main():
     if ranged.returncode != 0:
         sys.stderr.write("two-frame read\n" + ranged.stderr)
         return 1
+    shaped = run(seams, ["cages", ice, "--type", "1", "--signature", "hc", "--shape"])
+    if shaped.returncode != 0 or "off" not in shaped.stdout:
+        sys.stderr.write("cage shape\n" + shaped.stdout + shaped.stderr)
+        return 1
+    seeded = run(seams, ["--graph", "seeded", "chill-plus", ice, "--type", "1"])
+    plain = run(seams, ["chill-plus", ice, "--type", "1"])
+    if seeded.returncode != 0 or plain.returncode != 0 or seeded.stdout != plain.stdout:
+        sys.stderr.write("seeded chill-plus\n" + seeded.stdout + plain.stdout)
+        return 1
+    axis_y = run(seams, ["--axis", "Y", "density-z", ice, "--type", "1", "--bins", "3"])
+    axis_x = run(seams, ["--axis", "x", "density-z", ice, "--type", "1", "--bins", "3"])
+    if axis_y.returncode != 0 or "# z rho" not in axis_y.stdout or axis_y.stdout == axis_x.stdout:
+        sys.stderr.write("axis Y\n" + axis_y.stdout + axis_x.stdout)
+        return 1
+    framed = run(seams, ["--frame", "zz", "read", ice])
+    if framed.returncode != 2 or "not a number" not in framed.stderr:
+        sys.stderr.write("frame zz\n" + framed.stderr)
+        return 1
+    bad_types = run(seams, ["--types", "2,zz", "rdf", ice, "--type", "1"])
+    if bad_types.returncode != 2 or "bad --types" not in bad_types.stderr:
+        sys.stderr.write("bad types\n" + bad_types.stderr)
+        return 1
+    bad_site = run(seams, ["--site", "zz=cationHead", "pairs", ice])
+    if bad_site.returncode != 2 or "not an integer" not in bad_site.stderr:
+        sys.stderr.write("bad site\n" + bad_site.stderr)
+        return 1
     return 1 if failed else 0
 
 
