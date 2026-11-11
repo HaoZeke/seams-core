@@ -1020,7 +1020,7 @@ SteinhardtQl distributedSteinhardt(
     const auto rows = nneigh::neighListO(cutoff, full, 1);
     return steinhardtQl(full, rows, orderL);
   }
-  auto &work = seams::domain::gatherWork(full, cutoff, comm);
+  auto &work = seams::domain::gatherWork(full, cutoff, comm, seams::domain::kWorkQ6);
   const auto &rows = qRows(work.cloud, cutoff, work.share.owned);
   const int width = steinhardtQlmWidth(orderL);
   const NeighbourCSR graph = flatten(work.cloud, rows);
@@ -1051,6 +1051,16 @@ SteinhardtQl distributedSteinhardt(
   runPass2Mask(graph, orderL, qlm, ql, qlBar, &interior);
   seams::domain::waitBoundaryValues();
   runPass2Mask(graph, orderL, qlm, ql, qlBar, &boundary);
+  if (!rows.empty()) {
+    std::vector<double> effort(rows.size(), 0.0);
+    for (std::size_t k = 0; k < rows.size() && k < work.share.owned.size(); k++) {
+      if (work.share.owned[k]) {
+        effort[k] = static_cast<double>(rows[k].size());
+      }
+    }
+    seams::domain::captureLocalWork(seams::domain::kWorkQ6, effort.data(),
+                                    static_cast<int>(effort.size()), comm);
+  }
   for (std::size_t k = 0; k < work.share.local.size(); k++) {
     if (!work.share.owned[k]) {
       continue;

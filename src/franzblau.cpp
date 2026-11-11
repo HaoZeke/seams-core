@@ -38,6 +38,7 @@ struct RingSplitTimes {
 };
 
 RingSplitTimes gRingSplit;
+double *gSourceWorkPtr = nullptr;
 
 double millisSince(std::chrono::steady_clock::time_point start) {
   return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
@@ -752,8 +753,21 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
       RingScratch scratch;
 #pragma omp for schedule(guided)
       for (int k = 0; k < nFrom; k++) {
-        enumerateFromSource(adjacency, balls, from[k], maxDepth, maxLvl,
-                            scratch,         perSource[static_cast<std::size_t>(k)]);
+        if (gSourceWorkPtr == nullptr) {
+          enumerateFromSource(adjacency, balls, from[k], maxDepth, maxLvl,
+                              scratch, perSource[static_cast<std::size_t>(k)]);
+        } else {
+          const auto srcStart = std::chrono::steady_clock::now();
+          enumerateFromSource(adjacency, balls, from[k], maxDepth, maxLvl,
+                              scratch, perSource[static_cast<std::size_t>(k)]);
+          const int src = from[static_cast<std::size_t>(k)];
+          if (src >= 0 && src < nVertices) {
+            gSourceWorkPtr[src] +=
+                std::chrono::duration<double, std::micro>(
+                    std::chrono::steady_clock::now() - srcStart)
+                    .count();
+          }
+        }
       }
     }
     gRingSplit.enumerate_ms = millisSince(enumStart);
@@ -790,9 +804,20 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
 
   const auto enumStart = std::chrono::steady_clock::now();
   RingScratch scratch;
-  for (const int src : from) {
-    enumerateFromSource(adjacency, balls, src, maxDepth, maxLvl, scratch,
-                        rings);
+  if (gSourceWorkPtr == nullptr) {
+    for (const int src : from) {
+      enumerateFromSource(adjacency, balls, src, maxDepth, maxLvl, scratch, rings);
+    }
+  } else {
+    for (const int src : from) {
+      const auto srcStart = std::chrono::steady_clock::now();
+      enumerateFromSource(adjacency, balls, src, maxDepth, maxLvl, scratch, rings);
+      if (src >= 0 && src < nVertices) {
+        gSourceWorkPtr[src] += std::chrono::duration<double, std::micro>(
+                                   std::chrono::steady_clock::now() - srcStart)
+                                   .count();
+      }
+    }
   }
   gRingSplit.enumerate_ms = millisSince(enumStart);
   const auto mergeStart = std::chrono::steady_clock::now();
@@ -804,6 +829,8 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
 
   return rings;
 }
+
+void primitive::setSourceWork(double *microseconds) { gSourceWorkPtr = microseconds; }
 
 primitive::RingSearchSplit primitive::lastRingSearchSplit() {
   return {gRingSplit.balls_ms, gRingSplit.enumerate_ms, gRingSplit.merge_ms,

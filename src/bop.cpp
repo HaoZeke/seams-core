@@ -2009,7 +2009,7 @@ void chill::distributedChillPlus(molSys::PointCloud<molSys::Point<double>, doubl
     getIceTypePlusNoPrint(full, rows, false, neighbourTest);
     return;
   }
-  auto &work = seams::domain::gatherWork(full, cutoff, comm);
+  auto &work = seams::domain::gatherWork(full, cutoff, comm, seams::domain::kWorkChill);
   const auto &rows = shellRows(work.cloud, cutoff, work.share.owned);
   BondOrder order;
   bondOrder(work.cloud, rows, rule, order, &work.share.owned);
@@ -2110,6 +2110,16 @@ void chill::distributedChillPlus(molSys::PointCloud<molSys::Point<double>, doubl
     }
   }
   getIceTypePlusNoPrint(work.cloud, rows, false, neighbourTest);
+  if (!rows.empty()) {
+    std::vector<double> effort(rows.size(), 0.0);
+    for (std::size_t k = 0; k < rows.size() && k < work.share.owned.size(); k++) {
+      if (work.share.owned[k]) {
+        effort[k] = static_cast<double>(rows[k].size());
+      }
+    }
+    seams::domain::captureLocalWork(seams::domain::kWorkChill, effort.data(),
+                                    static_cast<int>(effort.size()), comm);
+  }
   for (std::size_t k = 0; k < work.share.local.size(); k++) {
     if (!work.share.owned[k]) {
       continue;

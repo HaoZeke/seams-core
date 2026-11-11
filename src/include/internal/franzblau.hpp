@@ -234,6 +234,11 @@ struct RingSearchSplit {
 //! Balls, source enumeration and the gather from the last ringNetwork call.
 [[nodiscard]] RingSearchSplit lastRingSearchSplit();
 
+//! When non-null, ringNetwork adds each source's enumeration time, in
+//! microseconds, at that source's index. The buffer must hold one entry
+//! per neighbour-list row. A null buffer skips the clock.
+void setSourceWork(double *microseconds);
+
 } // namespace primitive
 
 #endif // SEAMS_FRANZBLAU_H_

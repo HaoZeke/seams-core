@@ -8,6 +8,8 @@
 #include <mol_sys.hpp>
 #include <neighbours.hpp>
 
+#include "slab_frames.hpp"
+
 #include <mpi.h>
 
 #ifdef SEAMS_HAS_OPENMP
@@ -21,42 +23,6 @@
 #include <string>
 
 namespace {
-
-molSys::PointCloud<molSys::Point<double>, double> ice(int mx, int my, int mz) {
-  molSys::PointCloud<molSys::Point<double>, double> cloud;
-  const double bond = 2.75;
-  const double lattice = 4.0 * bond / std::sqrt(3.0);
-  const double sideX = mx * lattice;
-  const double sideY = my * lattice;
-  const double sideZ = mz * lattice;
-  const double basis[8][3] = {{0, 0, 0},         {0.5, 0.5, 0},     {0.5, 0, 0.5},
-                              {0, 0.5, 0.5},     {0.25, 0.25, 0.25}, {0.75, 0.75, 0.25},
-                              {0.75, 0.25, 0.75}, {0.25, 0.75, 0.75}};
-  int id = 1;
-  for (int i = 0; i < mx; i++) {
-    for (int j = 0; j < my; j++) {
-      for (int k = 0; k < mz; k++) {
-        for (const auto &b : basis) {
-          molSys::Point<double> p;
-          p.type = 1;
-          p.atomID = id;
-          p.molID = id;
-          p.x = (i + b[0]) * lattice;
-          p.y = (j + b[1]) * lattice;
-          p.z = (k + b[2]) * lattice;
-          cloud.pts.push_back(p);
-          cloud.idIndexMap[id] = id - 1;
-          id++;
-        }
-      }
-    }
-  }
-  cloud.nop = static_cast<int>(cloud.pts.size());
-  cloud.currentFrame = 1;
-  cloud.box = {sideX, sideY, sideZ};
-  cloud.boxLow = {0.0, 0.0, 0.0};
-  return cloud;
-}
 
 void compute(const std::string &op,
              molSys::PointCloud<molSys::Point<double>, double> &full, double cutoff) {
@@ -82,7 +48,7 @@ void compute(const std::string &op,
     }
     return;
   }
-  auto &work = seams::domain::gatherWork(full, cutoff, MPI_COMM_WORLD);
+  auto &work = seams::domain::gatherWork(full, cutoff, MPI_COMM_WORLD, seams::domain::kWorkNeigh);
   bool single = true;
   for (const char owned : work.share.owned) {
     if (!owned) {
@@ -104,6 +70,14 @@ void compute(const std::string &op,
   if (rows->size() != work.share.local.size() && work.cloud.nop > 0) {
     std::fprintf(stderr, "neighbour rows %zu\n", rows->size());
   }
+  std::vector<double> effort(rows->size(), 0.0);
+  for (std::size_t k = 0; k < rows->size() && k < work.share.owned.size(); k++) {
+    if (work.share.owned[k]) {
+      effort[k] = static_cast<double>((*rows)[k].size());
+    }
+  }
+  seams::domain::captureLocalWork(seams::domain::kWorkNeigh, effort.data(),
+                                  static_cast<int>(effort.size()), MPI_COMM_WORLD);
 }
 
 } // namespace
@@ -122,7 +96,18 @@ int main(int argc, char **argv) {
 #endif
   int mx = 24, my = 24, mz = 24, reps = 6;
   std::string op = "rings";
-  if (argc >= 6) {
+  bool slab = false;
+  std::string kind = "ice";
+  int which = 110;
+  if (argc >= 2 && std::string(argv[1]) == "slab") {
+    slab = true;
+    kind = argc > 2 ? argv[2] : "ice";
+    which = argc > 3 ? std::atoi(argv[3]) : 110;
+    reps = argc > 4 ? std::atoi(argv[4]) : 6;
+    if (argc > 5) {
+      op = argv[5];
+    }
+  } else if (argc >= 6) {
     mx = std::atoi(argv[1]);
     my = std::atoi(argv[2]);
     mz = std::atoi(argv[3]);
@@ -137,7 +122,18 @@ int main(int argc, char **argv) {
     }
   }
   const double cutoff = 3.5;
-  auto cloud = ice(mx, my, mz);
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  if (!slab) {
+    cloud = seams::frames::iceLattice(mx, my, mz);
+  } else if (kind == "hydrate") {
+    cloud = which >= 800 ? seams::frames::hydrateLiquidSlab(40, 24, 20)
+                         : seams::frames::hydrateLiquidSlab(24, 24, 4);
+  } else {
+    cloud = seams::frames::iceWaterSlab(which >= 800 ? 48 : 24);
+  }
+  if (rank == 0) {
+    std::fprintf(stderr, "frame %s nop %d\n", slab ? kind.c_str() : "ice", cloud.nop);
+  }
   for (int n = 0; n < reps + 1; n++) {
     MPI_Barrier(MPI_COMM_WORLD);
     const auto wall0 = std::chrono::steady_clock::now();
@@ -154,11 +150,17 @@ int main(int argc, char **argv) {
     double comm = work.commMs + seams::domain::takeValueCommMs();
     double haloFrac = work.haloFraction;
     double computeMax = 0.0;
+    double computeSum = 0.0;
     MPI_Allreduce(&comm, &comm, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
     MPI_Allreduce(&haloFrac, &haloFrac, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
     MPI_Allreduce(&computeMs, &computeMax, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    MPI_Allreduce(&computeMs, &computeSum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    int nRanks = 1;
+    MPI_Comm_size(MPI_COMM_WORLD, &nRanks);
+    const double mean = nRanks > 0 ? computeSum / nRanks : 0.0;
+    const double imbalance = mean > 0.0 ? computeMax / mean : 1.0;
     if (rank == 0 && n > 0) {
-      std::printf("%.6f %.6f %.6f %.6f\n", wall, comm, computeMax, haloFrac);
+      std::printf("%.6f %.6f %.6f %.6f %.6f\n", wall, comm, computeMax, haloFrac, imbalance);
     }
   }
   MPI_Finalize();
