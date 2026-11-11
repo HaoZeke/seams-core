@@ -38,6 +38,7 @@ ydslib_sources = files(
   'selection.cpp',
   'shapeMatch.cpp',
   'seams_c_api.cpp',
+  'water_select.cpp',
   'site.cpp',
   'steinhardt_parallel.cpp',
   'topo_bulk.cpp',

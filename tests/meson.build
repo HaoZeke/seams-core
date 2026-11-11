@@ -40,6 +40,7 @@ test_sources = {
   'cage_affiliation': 'test_cage_affiliation.cpp',
   'cage_enum': 'test_cage_enum.cpp',
   'c_api': 'test_c_api.cpp',
+  'brine_select': 'test_brine_select.cpp',
   'chill_offload': 'test_chill_offload.cpp',
   'chill_plus_rule': 'test_chill_plus_rule.cpp',
   'thread_scale': 'test_thread_scale.cpp',
