@@ -1,27 +1,17 @@
-# Madrid-2019 (q = +/- 0.85) + TIP4P/2005.
-# One trajectory per row. v and its standard error are the ordinary-least-squares
-# slope of the CHILL+ ice thickness (angstrom per nanosecond) and of the
-# crystal-oxygen count (molecules per nanosecond). The error is the standard
-# error of that slope, not a replicate standard error.
-# c_L is the liquid molality in the last frame (mol/kg).
-# defects, rings6 and rings5 are means over 51 frames, in the front layer.
-# k is the mean rejection coefficient c_ice/c_liquid. It is 0 because no
-# ion occupied a bulk-ice bin.
-# run  m_0  T/K  v/(A/ns)  stderr  N0  N1  dN/ns  dN_stderr  c_L  defects  rings6  rings5  pockets  k
-m0.0-T220  0.0  220  1.3948  0.3860  98  99   28.4  4.3  0.000  7.8  72.2  5.8  0.22  0
-m0.0-T236  0.0  236  1.1012  0.5290 100  94   15.2  5.6  0.000  7.8  75.2  5.9  0.14  0
-m0.0-T240  0.0  240  4.7357  0.5570 100 100   60.9  6.2  0.000  9.1  74.6  6.4  0.14  0
-m0.0-T255  0.0  255  3.6220  0.5873 103 108   41.3  6.0  0.000 11.5  75.5  5.8  0.24  0
-m0.5-T220  0.5  220 -0.1898  0.3780 103  95    2.4  3.0  0.434  9.1  74.3  5.3  0.24  0
-m1.0-T220  1.0  220 -3.1037  0.4907 100  68  -40.1  4.8  0.631 11.7  78.3  5.3  0.04  0
-m1.0-T236  1.0  236 -2.7130  0.5711 104  66  -39.9  6.0  0.721 11.0  76.2  6.5  0.10  0
-m2.0-T220  2.0  220 -1.1359  0.4419  99  78  -11.3  4.0  1.768 11.2  78.4  4.5  0.12  0
-# crystal density check, g/cm^3, block standard error, second half of 8 ps
-# published Table V value 2.050 g/cm^3 (2050 kg/m^3)
+# v2 direct-coexistence accounting. The v1 front slopes are not used.
+# Throughput of one 3328-water TIP4P/2005 slab (9984 atoms), LAMMPS
+# 29 Aug 2024, OpenMP, cutoff 10 A, 2 fs, PPPM.
+# threads  steps_per_s  ns_per_day
+8  77.25  13.35
+4  46.91  8.11
+1  15.17  2.62
+# Melt loop on the production binary, 4 threads: 10000 steps in 143.643 s
+# = 69.6 steps/s = 12.0 ns/day.
+# Lamas, Vega, Noya 2022 NaCl at 236 K used 1200 ns to reach equilibrium
+# and averaged 500 ns. At 13.35 ns/day that average is 37 days on 8 threads,
+# and the 1200 ns trajectory is 90 days.
+# Five molalities times three seeds, even at 20 ns each, is
+# 300 ns / 13.35 ns/day = 22 days on 8 threads.
+# Crystal-density check from v1, 512 ions, 8 ps, g/cm^3, block SE.
+# Zeron, Abascal, Vega Table V: 2.050 g/cm^3.
 crystal 2.0443 0.0008
-# serial analysis of one 256-oxygen frame, milliseconds, n=8, median 8.633
-timing_ms 9.304 8.997 8.403 8.509 8.540 8.688 8.966 8.577
-# freud q6 versus CHILL+ crystal on the first 220 K frame, 256 oxygens
-# median q6 crystal 0.6281, other 0.5261
-# threshold 0.45: agree 138/256, chill_only 0, freud_only 118
-q6 0.6281 0.5261 138 256
