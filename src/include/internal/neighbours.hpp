@@ -381,7 +381,8 @@ bool cellListRowsThreaded(
     const std::vector<int> &subset, double rcutoff,
     std::vector<std::vector<int>> &rows);
 
-/// Full cutoff list as CSR of cloud indices.
+/// Full cutoff list as CSR of cloud indices. Orthorhombic, or a
+/// restricted triclinic cell stored as bound spans plus xy, xz, yz.
 ///
 /// Orthorhombic boxes (`box.size() == 3`) and restricted triclinic dump
 /// boxes (`box.size() >= 6`) both use the parallel cell sort. A null
