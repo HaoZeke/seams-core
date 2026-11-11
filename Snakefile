@@ -218,9 +218,35 @@ rule figure_pngs:
 
 # Head-to-head for the Computer Physics Communications timings.
 # One rule per comparison. The summary TSV is rebuilt from the raw logs.
+# Frames come from d-SEAMS/h2h-systems, or from the generator.
+
+H2H_SYSTEMS = [
+    "h2h-cpc/systems/ice-1k.lammpstrj",
+    "h2h-cpc/systems/ice-10k.lammpstrj",
+    "h2h-cpc/systems/ice-50k.lammpstrj",
+    "h2h-cpc/systems/ice-110k.lammpstrj",
+    "h2h-cpc/systems/liq-1k.lammpstrj",
+    "h2h-cpc/systems/liq-10k.lammpstrj",
+    "h2h-cpc/systems/liq-50k.lammpstrj",
+    "h2h-cpc/systems/liq-110k.lammpstrj",
+    "h2h-cpc/systems/interface-50k.lammpstrj",
+]
+
+
+rule h2h_systems:
+    input:
+        "scripts/h2h_fetch.py",
+        "scripts/h2h_cpc.py",
+        "input/traj/dump-l.lammpstrj",
+    output:
+        H2H_SYSTEMS,
+    shell:
+        "python3.12 scripts/h2h_fetch.py"
+
 
 rule h2h_neighbours:
     input:
+        H2H_SYSTEMS,
         "scripts/h2h_cpc.py",
         "scripts/h2h_cpc_summary.py",
         "tests/bench_h2h_cpc.cpp",
@@ -232,6 +258,7 @@ rule h2h_neighbours:
 
 rule h2h_chill:
     input:
+        H2H_SYSTEMS,
         "scripts/h2h_chill.py",
         "tests/bench_h2h_cpc.cpp",
         "h2h-cpc/summary.tsv",
@@ -243,6 +270,7 @@ rule h2h_chill:
 
 rule h2h_rings:
     input:
+        H2H_SYSTEMS,
         "scripts/h2h_cpc.py",
         "scripts/h2h_cpc_summary.py",
         "tests/bench_h2h_cpc.cpp",

@@ -1,14 +1,12 @@
 # Benchmark frames
 
-The ice, liquid and interface frames from about 1k to 110k molecules are
-built by `python3.12 scripts/h2h_cpc.py prepare <name>`. Ice is the
-cubic lattice. Liquid and the interface replicate
-`input/traj/dump-l.lammpstrj`. The written dumps stay out of git.
+The nine frames are the Hugging Face dataset `d-SEAMS/h2h-systems`.
+`python3.12 scripts/h2h_fetch.py` downloads each xz dump with
+huggingface_hub and unpacks it into `h2h-cpc/systems`. When that
+download fails, the script builds the frame with
+`scripts/h2h_cpc.py prepare`.
 
-Those frames are destined for a Hugging Face dataset repository, or for
-DVC once a remote exists. A fetch script can be added once that
-repository exists.
-
-Until the frames are published, the neighbour, ring and CHILL+ runs
-build a missing frame. Liquid and interface systems are skipped when
-the seed trajectory is absent.
+Ice Ic uses a conventional cell of a = 6.358 Å. Liquid and the
+interface replicate frame 1 of `input/traj/dump-l.lammpstrj`, scaled by
+7/3. The dumps stay out of git. The Snakemake rules `h2h_neighbours`,
+`h2h_rings` and `h2h_chill` take the unpacked frames from `h2h_systems`.
