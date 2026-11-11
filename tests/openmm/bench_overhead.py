@@ -1,9 +1,10 @@
 # Copyright (c) d-SEAMS developers
-"""Serial wall time of plain OpenMM against the same run with the reporter.
+"""Serial wall time of plain OpenMM against the reporter.
 
-One warmup of each leg is discarded. The recorded sample is n paired
-trials, run one after another on one thread. The overhead of a trial is
-the in-situ time minus the plain time.
+Two TIP4P/Ew boxes, report intervals 10, 100 and 1000, n paired trials.
+One warmup of each leg is discarded per box. Trials run one after another
+on one thread. The overhead of a trial is the in-situ time minus the plain
+time. Dumps stay in a temporary directory.
 """
 
 import os
@@ -25,8 +26,9 @@ from water import build_simulation, restore, save_state  # noqa: E402
 LIB = Path(
     os.environ.get("SEAMS_LIB", ROOT / "bbdir-eessi" / "bindings" / "libseams_lang.so")
 )
-STEPS = 100
-INTERVAL = 10
+BOXES_NM = (2.0, 4.93)
+INTERVALS = (10, 100, 1000)
+STEPS = 1000
 N = 6
 
 
@@ -36,9 +38,7 @@ def hinges(values):
     half = len(ordered) // 2
     lower = ordered[:half]
     upper = ordered[half:] if len(ordered) % 2 == 0 else ordered[half + 1 :]
-    q1 = statistics.median(lower)
-    q3 = statistics.median(upper)
-    return statistics.median(ordered), q3 - q1
+    return statistics.median(ordered), statistics.median(upper) - statistics.median(lower)
 
 
 def time_plain(simulation, state):
@@ -49,12 +49,12 @@ def time_plain(simulation, state):
     return time.perf_counter() - start
 
 
-def time_insitu(simulation, state, lib, dump, record, indices):
+def time_insitu(simulation, state, lib, dump, record, indices, interval):
     simulation.reporters.clear()
     restore(simulation, state)
     with Engine(lib, record, cutoff=3.5) as engine:
         simulation.reporters.append(
-            DseamsReporter(engine, dump, interval=INTERVAL, indices=indices)
+            DseamsReporter(engine, dump, interval=interval, indices=indices)
         )
         start = time.perf_counter()
         simulation.step(STEPS)
@@ -63,31 +63,73 @@ def time_insitu(simulation, state, lib, dump, record, indices):
     return elapsed
 
 
-def main():
-    os.environ["OMP_NUM_THREADS"] = "1"
-    os.environ["NO_COLOR"] = "1"
-    simulation, oxygens = build_simulation()
+def reports_in(path):
+    text = Path(path).read_text(encoding="ascii")
+    return sum(1 for line in text.splitlines() if line.startswith("step "))
+
+
+def run_box(box_nm, lib, tmp):
+    simulation, oxygens = build_simulation(box_nm)
+    waters = simulation.topology.getNumResidues()
     state = save_state(simulation)
-    lib = load(str(LIB))
-    with tempfile.TemporaryDirectory(prefix="dseams-openmm-bench-") as tmp:
-        warm_dump = str(Path(tmp) / "warm.lammpstrj")
-        warm_record = str(Path(tmp) / "warm.txt")
-        time_plain(simulation, state)
-        time_insitu(simulation, state, lib, warm_dump, warm_record, oxygens)
+    warm = Path(tmp) / f"warm-{box_nm}"
+    time_plain(simulation, state)
+    time_insitu(
+        simulation, state, lib, str(warm.with_suffix(".lammpstrj")),
+        str(warm.with_suffix(".txt")), oxygens, INTERVALS[-1],
+    )
+    rows = []
+    for interval in INTERVALS:
         plain = []
         live = []
         for trial in range(N):
             plain.append(time_plain(simulation, state))
-            dump = str(Path(tmp) / f"run-{trial}.lammpstrj")
-            record = str(Path(tmp) / f"run-{trial}.txt")
-            live.append(time_insitu(simulation, state, lib, dump, record, oxygens))
-            print(f"trial {trial + 1} plain {plain[-1]:.6f} insitu {live[-1]:.6f}", flush=True)
-    overhead = [b - a for a, b in zip(plain, live)]
-    for name, values in ("plain", plain), ("insitu", live), ("overhead", overhead):
-        median, iqr = hinges(values)
-        print(f"{name} n={len(values)} median {median:.6f} iqr {iqr:.6f}")
-        print(" ".join(f"{v:.6f}" for v in values))
-    print(f"waters {simulation.topology.getNumResidues()} steps {STEPS} interval {INTERVAL}")
+            dump = Path(tmp) / f"{box_nm}-{interval}-{trial}.lammpstrj"
+            record = Path(tmp) / f"{box_nm}-{interval}-{trial}.txt"
+            elapsed = time_insitu(
+                simulation, state, lib, str(dump), str(record), oxygens, interval
+            )
+            if trial == 0:
+                got = reports_in(record)
+                expect = STEPS // interval
+                if got != expect:
+                    raise SystemExit(
+                        f"{waters} waters interval {interval}: "
+                        f"{got} reports, expected {expect}"
+                    )
+            dump.unlink(missing_ok=True)
+            record.unlink(missing_ok=True)
+            live.append(elapsed)
+            print(
+                f"waters {waters} interval {interval} trial {trial + 1} "
+                f"plain {plain[-1]:.6f} insitu {elapsed:.6f}",
+                flush=True,
+            )
+        overhead = [b - a for a, b in zip(plain, live)]
+        rows.append((interval, plain, live, overhead))
+    return waters, rows
+
+
+def emit(waters, rows):
+    print(f"box waters {waters} steps {STEPS} n {N}")
+    for interval, plain, live, overhead in rows:
+        for name, values in ("plain", plain), ("insitu", live), ("overhead", overhead):
+            median, iqr = hinges(values)
+            print(
+                f"waters {waters} interval {interval} {name} "
+                f"median {median:.6f} iqr {iqr:.6f}"
+            )
+            print(" ".join(f"{v:.6f}" for v in values))
+
+
+def main():
+    os.environ["OMP_NUM_THREADS"] = "1"
+    os.environ["NO_COLOR"] = "1"
+    lib = load(str(LIB))
+    with tempfile.TemporaryDirectory(prefix="dseams-openmm-bench-") as tmp:
+        for box_nm in BOXES_NM:
+            waters, rows = run_box(box_nm, lib, tmp)
+            emit(waters, rows)
 
 
 if __name__ == "__main__":

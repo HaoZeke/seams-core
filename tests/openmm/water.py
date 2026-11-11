@@ -1,5 +1,10 @@
 # Copyright (c) d-SEAMS developers
-"""A short TIP4P/Ew box for the OpenMM reporter."""
+"""TIP4P/Ew boxes for the OpenMM reporter.
+
+``box_nm=2`` is a few hundred waters. ``box_nm=4.93`` is about four
+thousand. Both are built when the caller runs. The coordinates are not
+stored in the repository.
+"""
 
 from openmm import LangevinMiddleIntegrator, Platform, Vec3
 from openmm.app import ForceField, HBonds, Modeller, PME, Simulation, Topology
@@ -17,7 +22,7 @@ def oxygen_indices(topology):
 
 
 def build_simulation(box_nm=2.0, seed=1, threads=1):
-    """About two hundred TIP4P/Ew waters in a cubic box."""
+    """TIP4P/Ew waters in a cubic box of edge ``box_nm`` nanometres."""
     forcefield = ForceField("tip4pew.xml")
     modeller = Modeller(Topology(), [])
     modeller.addSolvent(

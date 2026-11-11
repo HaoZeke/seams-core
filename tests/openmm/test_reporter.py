@@ -72,55 +72,59 @@ def section(lines, head, tail=None):
     return "\n".join(lines[start : stop + 1])
 
 
-def test_insitu_matches_seams():
-    if not SEAMS.is_file():
-        raise SystemExit("seams binary is missing: " + str(SEAMS))
-    if not LIB.is_file():
-        raise SystemExit("libseams_lang is missing: " + str(LIB))
-    os.environ["OMP_NUM_THREADS"] = "1"
-    simulation, oxygens = build_simulation()
+def match_box(box_nm, steps, interval, min_waters):
+    simulation, oxygens = build_simulation(box_nm)
     n_mol = simulation.topology.getNumResidues()
-    if n_mol < 200:
-        raise SystemExit(f"expected a few hundred waters, got {n_mol}")
+    if n_mol < min_waters:
+        raise SystemExit(f"expected at least {min_waters} waters, got {n_mol}")
     with tempfile.TemporaryDirectory(prefix="dseams-openmm-") as tmp:
         dump = str(Path(tmp) / "frames.lammpstrj")
         record = str(Path(tmp) / "census.txt")
         with Engine(str(LIB), record, cutoff=float(CUTOFF)) as engine:
             simulation.reporters.append(
-                DseamsReporter(engine, dump, interval=50, indices=oxygens)
+                DseamsReporter(engine, dump, interval=interval, indices=oxygens)
             )
-            simulation.step(100)
-        text = Path(record).read_text(encoding="ascii")
-        parsed = blocks(text)
-        if len(parsed) != 2:
-            raise SystemExit(f"expected 2 analysed steps, got {len(parsed)}")
+            simulation.step(steps)
+        parsed = blocks(Path(record).read_text(encoding="ascii"))
+        expect = steps // interval
+        if len(parsed) != expect:
+            raise SystemExit(f"{n_mol} waters: {len(parsed)} frames, expected {expect}")
         for frame, lines in enumerate(parsed, start=1):
-            got_neighbours = section(lines, "neighbours", "end_neighbours")
-            got_rings = section(lines, next(l for l in lines if l.startswith("rings ")))
-            got_chill = next(l for l in lines if l.startswith("chill ")).split(" ", 1)[1]
-            got_plus = next(l for l in lines if l.startswith("chill-plus ")).split(
-                " ", 1
-            )[1]
+            live = {
+                "neighbours": section(lines, "neighbours", "end_neighbours"),
+                "rings": section(lines, next(line for line in lines if line.startswith("rings "))),
+                "chill": next(line for line in lines if line.startswith("chill ")).split(" ", 1)[1],
+                "chill-plus": next(
+                    line for line in lines if line.startswith("chill-plus ")
+                ).split(" ", 1)[1],
+            }
             offline = {
                 "neighbours": seams(dump, "neighbours", frame),
                 "rings": seams(dump, "rings", frame),
                 "chill": seams(dump, "chill", frame),
                 "chill-plus": seams(dump, "chill-plus", frame),
             }
-            live = {
-                "neighbours": got_neighbours,
-                "rings": got_rings,
-                "chill": got_chill,
-                "chill-plus": got_plus,
-            }
             for name in offline:
                 if live[name] != offline[name]:
                     raise SystemExit(
-                        f"frame {frame} {name} differs\n"
+                        f"{n_mol} waters frame {frame} {name} differs\n"
                         f"in-situ:\n{live[name]}\n"
                         f"seams:\n{offline[name]}"
                     )
-        print(f"matched {len(parsed)} frames, {n_mol} TIP4P/Ew waters")
+        print(
+            f"matched rings and chill-plus on {len(parsed)} frames, "
+            f"{n_mol} TIP4P/Ew waters"
+        )
+
+
+def test_insitu_matches_seams():
+    if not SEAMS.is_file():
+        raise SystemExit("seams binary is missing: " + str(SEAMS))
+    if not LIB.is_file():
+        raise SystemExit("libseams_lang is missing: " + str(LIB))
+    os.environ["OMP_NUM_THREADS"] = "1"
+    match_box(2.0, steps=100, interval=50, min_waters=200)
+    match_box(4.93, steps=200, interval=100, min_waters=3000)
 
 
 if __name__ == "__main__":
