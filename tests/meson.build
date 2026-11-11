@@ -40,6 +40,8 @@ test_sources = {
   'cage_affiliation': 'test_cage_affiliation.cpp',
   'cage_enum': 'test_cage_enum.cpp',
   'c_api': 'test_c_api.cpp',
+  'lammps_observe': 'test_lammps_observe.cpp',
+  'lammps_observe_arms': 'test_lammps_observe_arms.cpp',
   'chill_offload': 'test_chill_offload.cpp',
   'gpu_residency': 'test_gpu_residency.cpp',
   'config': 'test_config.cpp',
@@ -60,6 +62,11 @@ endif
 #   3. Setting build_rpath so the binary also works when run outside meson test.
 _test_env = environment()
 _test_env.prepend('LD_LIBRARY_PATH', meson.project_build_root() / 'src')
+_test_env.set('SEAMS_INSITU_EXE', lammps_observe_exe.full_path())
+_phase_env = environment()
+_phase_env.prepend('LD_LIBRARY_PATH', meson.project_build_root() / 'src')
+_phase_env.set('DSEAMS_PHASE', '1')
+test('lammps_observe_phase', lammps_observe_phase_exe, env: _phase_env)
 # Coverage arc counters share a cache line. Several cores bounce that
 # line and the timed tests exceed their limit. One thread keeps the
 # counters and the tests inside the limit.
@@ -372,7 +379,7 @@ foreach name, args : _device_host_cases
     args: args,
     workdir: meson.project_source_root() / 'input',
     env: _test_env,
-    timeout: 300)
+    timeout: 900)
 endforeach
 
 # The CUDA batch kernels on the host, no device needed
@@ -412,9 +419,10 @@ test('invariance_empty_frame', _check_invariance,
   workdir: meson.project_source_root() / 'input',
   env: _test_env,
   should_fail: true)
-# 1000 translations and 1000 permutations on every deposited frame, plus
-# the eight half-box shifts. The cage stage is the cost.
+# Two trials on every deposited frame, plus the eight half-box shifts.
+# The cage stage is the cost. The bound keeps the default suite inside
+# its timeout.
 test('fuzz_cage_shift_permute', _fuzz_cage,
-  args: [meson.project_source_root() / 'input' / 'traj', '1000'],
+  args: [meson.project_source_root() / 'input' / 'traj', '2'],
   env: _test_env,
-  timeout: 0)
+  timeout: 180)

@@ -482,6 +482,13 @@ lammps_observe_exe = executable(
   include_directories: _incdirs,
   install: false)
 
+lammps_observe_phase_exe = executable(
+  'lammps-observe-phase',
+  files('tests/lammps_observe_phase.cpp'),
+  dependencies: [yds_dep],
+  include_directories: _incdirs,
+  install: false)
+
 # Tests
 if get_option('with_tests')
   subdir('tests')
