@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -906,4 +907,32 @@ TEST_CASE("interactive molecular dynamics client round trip", "[insitu]") {
   std::remove(dump.c_str());
   std::remove(live.c_str());
   std::remove(post.c_str());
+}
+
+TEST_CASE("a later phase switch still names the filter and the search", "[insitu]") {
+  unsetenv("DSEAMS_PHASE");
+  const double xyz[6] = {0, 0, 0, 1.2, 0, 0};
+  seams_insitu_options opt;
+  seams_insitu_options_default(&opt);
+  auto *eng = seams_insitu_create(&opt);
+  auto frame = ortho(1, 2, xyz);
+  REQUIRE(seams_insitu_step(eng, &frame) == SEAMS_INSITU_OK);
+  REQUIRE(setenv("DSEAMS_PHASE", "1", 1) == 0);
+  const auto path = scratch("phase.txt");
+  FILE *cap = std::fopen(path.c_str(), "w");
+  REQUIRE(cap != nullptr);
+  FILE *saved = stderr;
+  stderr = cap;
+  frame.step = 2;
+  const int rc = seams_insitu_step(eng, &frame);
+  std::fflush(stderr);
+  stderr = saved;
+  std::fclose(cap);
+  unsetenv("DSEAMS_PHASE");
+  REQUIRE(rc == SEAMS_INSITU_OK);
+  const auto text = readFile(path);
+  REQUIRE(text.find("phase filt") != std::string::npos);
+  REQUIRE(text.find("phase neigh") != std::string::npos);
+  seams_insitu_destroy(eng);
+  std::remove(path.c_str());
 }

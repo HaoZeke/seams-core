@@ -232,7 +232,7 @@ std::vector<std::vector<int>> filter_cutoff(const Cloud &cloud,
   const auto indexOf = [&](int id) {
     return (id >= 0 && id <= maxId) ? at[static_cast<std::size_t>(id)] : -1;
   };
-  static const bool phase = std::getenv("DSEAMS_PHASE") != nullptr;
+  const bool phase = std::getenv("DSEAMS_PHASE") != nullptr;
   const auto filtT = phase ? std::chrono::steady_clock::now()
                            : std::chrono::steady_clock::time_point{};
   std::vector<std::vector<int>> out(static_cast<std::size_t>(cloud.nop));
@@ -333,7 +333,7 @@ int analyze_cloud(Engine *eng, Cloud &cloud, int step, bool do_sink) {
   const int water = water_type_of(eng, cloud);
   if (cloud.nop > 0) {
     try {
-      static const bool phase = std::getenv("DSEAMS_PHASE") != nullptr;
+      const bool phase = std::getenv("DSEAMS_PHASE") != nullptr;
       const auto phaseStart = std::chrono::steady_clock::now();
       auto stamp = phaseStart;
       auto mark = [&](const char *name) {
