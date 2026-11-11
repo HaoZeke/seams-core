@@ -1185,6 +1185,74 @@ int cmdChill(std::ostream &os, Cloud &cloud, double cutoff, int typeI,
   return 0;
 }
 
+constexpr int kRingDepth = 8;
+
+std::vector<std::vector<int>>
+sortedNeighbourRows(const Cloud &cloud,
+                    const std::vector<std::vector<int>> &nList) {
+  std::vector<std::vector<int>> rows(
+      static_cast<std::size_t>(std::max(cloud.nop, 0)));
+  for (const auto &row : nList) {
+    if (row.empty()) {
+      continue;
+    }
+    const auto found = cloud.idIndexMap.find(row[0]);
+    if (found == cloud.idIndexMap.end()) {
+      continue;
+    }
+    auto &dest = rows[static_cast<std::size_t>(found->second)];
+    for (std::size_t k = 1; k < row.size(); ++k) {
+      if (row[k] != row[0]) {
+        dest.push_back(row[k]);
+      }
+    }
+    std::sort(dest.begin(), dest.end());
+    dest.erase(std::unique(dest.begin(), dest.end()), dest.end());
+  }
+  return rows;
+}
+
+int cmdRings(std::ostream &os, Cloud &cloud, double cutoff, int typeI,
+             const std::string &graphName) {
+  int counts[13] = {};
+  if (cloud.nop > 0) {
+    const int typ = typeOf(cloud, typeI);
+    auto nList = chillGraph(cloud, cutoff, typ, graphName, {});
+    auto idx = nneigh::neighbourListByIndex(cloud, nList);
+    for (const auto &ring : primitive::ringNetwork(idx, kRingDepth)) {
+      const int size = static_cast<int>(ring.size());
+      if (size >= 0 && size <= 12) {
+        counts[size] += 1;
+      }
+    }
+  }
+  os << "rings";
+  for (int size = 3; size <= kRingDepth; ++size) {
+    os << " " << size << ":" << counts[size];
+  }
+  os << "\n";
+  return 0;
+}
+
+int cmdNeighbours(std::ostream &os, Cloud &cloud, double cutoff, int typeI,
+                  const std::string &graphName) {
+  os << "neighbours\n";
+  if (cloud.nop > 0) {
+    const int typ = typeOf(cloud, typeI);
+    auto nList = chillGraph(cloud, cutoff, typ, graphName, {});
+    const auto rows = sortedNeighbourRows(cloud, nList);
+    for (int i = 0; i < cloud.nop; ++i) {
+      os << cloud.pts[static_cast<std::size_t>(i)].atomID;
+      for (int id : rows[static_cast<std::size_t>(i)]) {
+        os << " " << id;
+      }
+      os << "\n";
+    }
+  }
+  os << "end_neighbours\n";
+  return 0;
+}
+
 int cmdF4(std::ostream &os, Cloud &cloud, double cutoff, int typeI, int hType) {
   if (cloud.nop == 0) {
     os << colorizer.heading("nop") << " 0 "
@@ -1956,9 +2024,9 @@ int main(int argc, char *argv[]) {
                  }));
 
   parser.add(Positional("command")
-                 .help("read | chill | chill-plus | cages | fingerprint | ions | "
-                       "f4 | steinhardt | rdf | cn | hbonds | pairs | density-z | "
-                       "domains")
+                 .help("read | chill | chill-plus | rings | neighbours | cages | "
+                       "fingerprint | ions | f4 | steinhardt | rdf | cn | "
+                       "hbonds | pairs | density-z | domains")
                  .occurs(zeroOrOneTime)
                  .handler([&](std::string_view value) { cmd = value; }));
 
@@ -2157,6 +2225,22 @@ int main(int argc, char *argv[]) {
     if (cmd == "chill") {
       try {
         return cmdChill(os, cloud, cutoff, typeI, graph, waterTypes);
+      } catch (const std::exception &e) {
+        os << colorizer.error(e.what()) << "\n";
+        return 2;
+      }
+    }
+    if (cmd == "rings") {
+      try {
+        return cmdRings(os, cloud, cutoff, typeI, graph);
+      } catch (const std::exception &e) {
+        os << colorizer.error(e.what()) << "\n";
+        return 2;
+      }
+    }
+    if (cmd == "neighbours") {
+      try {
+        return cmdNeighbours(os, cloud, cutoff, typeI, graph);
       } catch (const std::exception &e) {
         os << colorizer.error(e.what()) << "\n";
         return 2;

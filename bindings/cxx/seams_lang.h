@@ -54,6 +54,14 @@ int seams_frame_rings(seams_frame *frame, double cutoff, int type,
                       const char *graph, int max_depth, int *counts,
                       int counts_len);
 
+/* Cutoff (or mutual) neighbour ids, point order, self omitted, each row
+ * sorted. degrees has n entries. flat holds the packed ids. flat NULL
+ * only reports the packed length in *n_flat. A short flat_cap returns 1
+ * and the length that would have fit. */
+int seams_frame_neighbours(seams_frame *frame, double cutoff, int type,
+                           const char *graph, int *degrees, int *flat,
+                           int flat_cap, int *n_flat);
+
 int seams_frame_steinhardt(seams_frame *frame, double cutoff, int type,
                            int order_l, double *ql, double *qlbar);
 

@@ -410,6 +410,73 @@ int seams_frame_rings(seams_frame *frame, double cutoff, int type,
   }
 }
 
+int seams_frame_neighbours(seams_frame *frame, double cutoff, int type,
+                           const char *graph, int *degrees, int *flat,
+                           int flat_cap, int *n_flat) {
+  clear_error();
+  if (frame == nullptr || n_flat == nullptr) {
+    set_error("neighbours need a frame");
+    return 1;
+  }
+  try {
+    const int n = frame->cloud.nop;
+    const int typ = resolve_type(frame->cloud, type);
+    const std::string which =
+        (graph == nullptr || graph[0] == '\0') ? "cutoff" : graph;
+    if (which != "cutoff" && which != "mutual") {
+      throw std::invalid_argument("unknown neighbour graph '" + which +
+                                  "' (use cutoff or mutual)");
+    }
+    auto ids = bond_list(frame->cloud, cutoff, typ, which, 4);
+    std::vector<std::vector<int>> rows(
+        static_cast<std::size_t>(std::max(n, 0)));
+    for (const auto &row : ids) {
+      if (row.empty()) {
+        continue;
+      }
+      const auto found = frame->cloud.idIndexMap.find(row[0]);
+      if (found == frame->cloud.idIndexMap.end()) {
+        continue;
+      }
+      auto &dest = rows[static_cast<std::size_t>(found->second)];
+      for (std::size_t k = 1; k < row.size(); ++k) {
+        if (row[k] != row[0]) {
+          dest.push_back(row[k]);
+        }
+      }
+      std::sort(dest.begin(), dest.end());
+      dest.erase(std::unique(dest.begin(), dest.end()), dest.end());
+    }
+    int total = 0;
+    for (const auto &row : rows) {
+      total += static_cast<int>(row.size());
+    }
+    *n_flat = total;
+    if (degrees != nullptr) {
+      for (int i = 0; i < n; ++i) {
+        degrees[i] = static_cast<int>(rows[static_cast<std::size_t>(i)].size());
+      }
+    }
+    if (flat == nullptr) {
+      return 0;
+    }
+    if (flat_cap < total) {
+      set_error("neighbour buffer is short");
+      return 1;
+    }
+    int cursor = 0;
+    for (const auto &row : rows) {
+      for (int id : row) {
+        flat[cursor++] = id;
+      }
+    }
+    return 0;
+  } catch (const std::exception &ex) {
+    set_error(ex.what());
+    return 1;
+  }
+}
+
 int seams_frame_steinhardt(seams_frame *frame, double cutoff, int type,
                            int order_l, double *ql, double *qlbar) {
   clear_error();
