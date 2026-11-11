@@ -1,4 +1,6 @@
-/* Per-molecule CHILL+ bond record for the liquid-agreement explanation.
+/* Copyright (c) d-SEAMS developers
+**
+** Per-molecule CHILL+ bond record for the liquid-agreement explanation.
 **
 ** Prints one row: index shell nbonds stag ecl other label cij...
 ** Without SEAMS_TIP this is main's getCorrelPlus(..., 4) and

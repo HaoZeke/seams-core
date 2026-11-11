@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Shared helpers for the serial results measurements.
 
 Paths written to logs are relative to the repository root. Absolute

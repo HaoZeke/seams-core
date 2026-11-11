@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Ideal ice frames and the shipped mW liquid, as LAMMPS dumps.
 
 Ice Ic and Ih use the lattices of paper/tex/figures/worked_example.py

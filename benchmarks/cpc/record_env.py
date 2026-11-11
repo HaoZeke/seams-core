@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Hardware, compiler and library versions for the serial campaign."""
 
 from __future__ import annotations

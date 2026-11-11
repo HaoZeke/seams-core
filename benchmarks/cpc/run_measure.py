@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Serial remeasurement of the results-section claims.
 
 Subcommands write raw logs under benchmarks/cpc/records. Paths in those

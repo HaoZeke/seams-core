@@ -1,4 +1,5 @@
-/*
+/* Copyright (c) d-SEAMS developers
+**
 ** Serial measurements for the d-SEAMS 2.0 results section.
 **
 **   measure_cpc labels chill|chillplus FILE FRAME TYPE

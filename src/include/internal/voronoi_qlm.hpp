@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------------
 // d-SEAMS - Deferred Structural Elucidation Analysis for Molecular Simulations
 //
-// Copyright (c) 2018--present d-SEAMS core team
+// Copyright (c) d-SEAMS developers
 //
 // SPDX-License-Identifier: MIT
 //-----------------------------------------------------------------------------------
