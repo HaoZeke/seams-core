@@ -1,77 +1,62 @@
 # Liquid labels and cage times
 
-Both answers use the release build, one thread on core 0, and the
-512-molecule mW liquid at 215 K or the ideal ice Ic ladder. Nothing
-in the CHILL or CHILL+ thresholds was changed.
+Both answers use the release build, one thread on core 0. The liquid
+is the 512-molecule mW frame at 215 K. The cage ladder is ideal ice Ic.
+No CHILL or CHILL+ threshold was retuned.
 
 ## Liquid agreement
 
 Main CHILL+ at 7f310225 agrees with OVITO 3.17.2 on 439 of 512
 molecules (0.857). The published rule at e8610637 agrees on 479
-(0.936). The ovito-chill+ rule at that commit agrees on all 512.
-The ovito-chill+ labels match OVITO's ChillPlusModifier on every
-molecule, so that rule is the OVITO behaviour on this frame.
-`records/explain/liquid-steps.tsv` names the step for every molecule
-that still disagrees. No c_ij value lands on -0.8, -0.35 or 0.25, so
-the open versus closed edge does not decide a label here.
+(0.936). `ovito-chill+` at that commit agrees on all 512, and those
+labels match OVITO's ChillPlusModifier on this frame.
+`records/explain/liquid-steps.tsv` names every molecule that disagrees.
 
-Main and the published rule compute the same four-nearest c_ij on all
-512 molecules. They differ on 40 molecules, every one of them with a
-cutoff shell other than four (27 of shell 5, 12 of shell 6, one of
-shell 7). Main classifies the four nearest bonds. The published rule
-requires the cutoff shell itself to hold four neighbours, Nguyen and
-Molinero Table 1 footnote a, and labels the other shells water. That
-is the rule stated for d-SEAMS in the paper: four nearest neighbours
-inside the cutoff, while OVITO scores a molecule only when the cutoff
-shell has four neighbours (`paper/tex/rg_main.tex` lines 491 and 493).
-Main follows the paper. The shell gate is a definition difference, not
-a bug in main.
+Forty of the 73 main disagreements are a bug. `assignIceTypePlus` in
+`src/bop.cpp` reads `c_ij.size()` (line 1118) and accepts a crystal row
+only when that count is 4 (line 1135). `classifyBondsLeftFp64` has
+already kept at most four neighbours, the CHILL+ coordination, before
+it writes `c_ij`. A molecule with five, six, or seven neighbours inside
+3.5 angstrom still has four recorded bonds, so the gate lets it through.
+On this liquid that is 27 molecules of shell 5, 12 of shell 6, and one
+of shell 7. Main labels them hydrate, interfacial hydrate, or
+interfacial. OVITO labels every one of them other, and OVITO labels
+other for every shell that is not exactly four. The comment above the
+gate says the bound is the recorded bonds, not the neighbour list,
+which is how the extra shell neighbours disappear. Table 1 of Nguyen
+and Molinero requires the cutoff shell itself to contain four
+neighbours, and the neighbour column in `src/include/internal/bop.hpp`
+lists 4 for every crystal phase. The CHILL+ pull-request series,
+including the published rule at e8610637, applies that shell count.
+The agreement of that fixed code on this liquid is pending the CHILL+
+pr2 tip. That number is not invented here.
 
-The remaining 33 molecules, all with a shell of four, are where the
-published rule still differs from OVITO. Twenty-seven of them change
-bond-class counts because q_3 of a neighbour is averaged over a
-different set: the published rule uses the four nearest neighbours in
-the shell, and OVITO averages q_3 over the whole shell
-(`chill_plus_scheme.hpp` lines 28-36 at e8610637). The centre has four
-neighbours, but a partner often does not, so c_ij moves. The last six
-keep the same staggered and eclipsed counts. Their labels differ
-because the published rule still applies the Table 1 neighbour test
-and ovito-chill+ does not: two staggered bonds, or three staggered and
-no eclipsed bond, are interfacial without looking at the neighbour.
-Those six are the same definition, not a bug.
-
-Verdict: no BUG. No product change.
+The other 33 disagreements all have a shell of exactly four. They are
+the same 33 molecules on which the published rule still differs from
+OVITO, 479 of 512. Equation 1 averages q_3 over the four nearest
+neighbours. OVITO 3.17.2 averages q_3 over the whole cutoff shell.
+That is a definition difference, not a second copy of the gate bug.
+No c_ij on this frame sits on -0.8, -0.35, or 0.25.
 
 ## Cage times
 
-The paper's double-diamond median of 2.61 ms, whole path of 5.28 ms,
-and exponents 0.761 and 0.889 are the log-log least-squares fit in
-`paper/tex/figures/stats.py` to `dseams2-ic-*.txt`. Those logs cover
-216, 512, 1000, 1728, 2744 and 4096 molecules. The 1000-molecule log
-is thirty calls after five warm-ups. The machine line recorded with
-them is an Intel Xeon, model 207, and GCC 15.2.0. The tag those
-sources belong to is v2.12.0, commit 0fc9ec49.
+The paper still quotes the v2.12.0 measurement: double-diamond 2.61 ms
+and exponent 0.761 on ice Ic, from the log-log fit in
+`paper/tex/figures/stats.py` over 216, 512, 1000, 1728, 2744, and 4096
+molecules. Rebuilding tag v2.12.0 (`0fc9ec49`) on this machine, one
+warm-up and six repeats, returns 2.591 ms and exponent 0.758.
 
-On this machine the same protocol as the rest of this study, one
-warm-up and six repeats, rebuilds v2.12.0 and returns 2.591 ms for
-the double-diamond stage and 5.120 ms for the whole path at 1000
-molecules. The exponents on the six paper sizes are 0.758 and 0.884.
-The current sources, which match commit 7e9a2f4c, return 3.270 ms and
-5.385 ms, with exponents 0.823 and 0.900. Leaving 2744 out of the
-paper fit only moves 0.761 to 0.764, so the fit range is not the
-shift. The hardware rerun of v2.12.0 reproduces the paper's
-double-diamond time. The slower current stage is the cage code after
-that tag: `4b62df96` packs the neighbour rows for one ring search,
-`df2a2be3` keeps each atom's rings in one list, and `7e9a2f4c` stores
-neighbour bonds in sorted rows. The rings at 1000 molecules got
-faster and the double-diamond search got slower, and the whole path
-moved only from 5.12 ms to 5.39 ms.
+The current sources return 3.270 ms at 1000 molecules and a
+double-diamond exponent of 0.823 on those six sizes (0.826 on the
+five sizes that omit 2744). That slower stage is a regression
+introduced in `df2a2be3` (`perf(cages): keep the rings of each atom in
+one list`), which rewrites cage packing between 2.12.0 and 2.13.0.
+Rings got faster and the double-diamond search got slower, so the
+whole path stays near 5.39 ms. The machine is the same class the paper
+records, an Intel Xeon with GCC 15.2.0, so the shift is that commit,
+not the processor.
 
-A release build of tag v2.12.0 on this machine, one thread and the
-same six ice Ic sizes, recovers the paper's double-diamond time of
-2.61 ms and its exponents. The current tree is slower in that stage,
-3.27 ms, because the ring and cage packing changed after the tag;
-the whole path stays near 5.3 ms because the ring search got faster
-by about as much as the double-diamond search got slower. The
-exponent shift has the same cause. It is not the processor, the
-compiler, or the choice of sizes in the log-log fit.
+A C++ fix is on `perf/ddc-regression-fix` at `2c0db67f`. It is under
+independent verify. The reported figures are about 2.74 ms at 1000
+molecules and exponent 0.799. Those figures are recorded here as
+pending that verify. They were not rerun in this tree.

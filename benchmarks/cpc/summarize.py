@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Regenerate summary.tsv and CLAIMS.tsv from the raw records.
 
 Median and quartiles are Hyndman-Fan type 7. The interquartile range is
@@ -106,7 +107,7 @@ def claims() -> list[str]:
             "2.61 ms\t%s\t"
             "paper/tex/figures/data/macros.tex:314\t"
             "measure_cpc time cages benchmarks/cpc/frames/ic-1000.lammpstrj 1 1 1 6\t"
-            "NOT_RERUN"
+            "regression introduced in df2a2be3"
         ) % cell(b / "ic-1000.csv", "ddc_ms"),
         (
             "Packing turns 2000 equators into 500 double-diamond cages on 1000 molecules of ice Ic.\t"
@@ -127,10 +128,10 @@ def claims() -> list[str]:
         (
             "Fitted exponents of the hexagonal and double-diamond stages on ideal ice Ic are 0.889 and 0.76.\t"
             "0.889 and 0.76\t"
-            "hc 0.900 ddc 0.826 on 216, 512, 1000, 1728 and 4096 molecules\t"
+            "current code ddc exponent 0.823 on 216 to 4096 including 2744; 0.826 without 2744\t"
             "paper/tex/figures/data/macros.tex:706\t"
             "measure_cpc time cages benchmarks/cpc/frames/ic-*.lammpstrj\t"
-            "NOT_RERUN"
+            "regression introduced in df2a2be3"
         ),
         (
             "Structure I holds 2 5^12 cages and 6 5^12 6^2 cages.\t"
@@ -268,18 +269,26 @@ def claims() -> list[str]:
         (
             "Main CHILL+ agrees with OVITO on 0.857 of the 512-molecule mW liquid.\t"
             "0.857\t"
-            "73 molecules: 40 shell_gate, 27 q3_averaging, 6 table1_interfacial_test; all DEFINITION, no BUG\t"
-            "paper/tex/rg_main.tex:491-493\t"
-            "benchmarks/cpc/explain_chill and explain_liquid.py\t"
-            "explained"
+            "73 disagreements: 40 are the c_ij.size gate bug in src/bop.cpp:1118; 33 are the q3 definition, 479/512 on the published rule\t"
+            "src/bop.cpp:1118\t"
+            "benchmarks/cpc/explain_liquid.py\t"
+            "gate bug; CHILL+ PR series fixes the 40"
         ),
         (
             "Published CHILL+ agrees with OVITO on 0.936 of that liquid; ovito-chill+ agrees on 1.000.\t"
             "0.936 and 1.000\t"
-            "33 molecules, all shell 4: 27 q3_averaging, 6 table1_interfacial_test; all DEFINITION, no BUG\t"
+            "479/512 is the published q3 rule against OVITO full-shell average; ovito-chill+ matches OVITO\t"
             "e8610637:src/include/internal/chill_plus_scheme.hpp:28-36\t"
             "explain_tip chill+ and ovito-chill+\t"
-            "explained"
+            "q3 definition"
+        ),
+        (
+            "Fixed-code CHILL+ liquid agreement after the shell gate.\t"
+            "pending\t"
+            "pending the CHILL+ pr2 tip; value not measured here\t"
+            "src/bop.cpp:1118\t"
+            "not run\t"
+            "pending CHILL+ pr2 tip"
         ),
         (
             "Tag v2.12.0 double-diamond stage on 1000 ice Ic molecules.\t"
@@ -292,18 +301,26 @@ def claims() -> list[str]:
         (
             "Current sources double-diamond stage on the same frame.\t"
             "2.61 ms at v2.12.0\t"
-            "3.270 ms; the gap is the cage packing after v2.12.0, not hardware\t"
-            "paper/tex/figures/data/macros.tex:314\t"
+            "3.270 ms on the current code\t"
+            "df2a2be3\t"
             "measure_cpc time cages ic-1000\t"
-            "explained"
+            "regression introduced in df2a2be3"
         ),
         (
-            "Double-diamond and hexagonal exponents.\t"
-            "0.761 and 0.889\t"
-            "v2.12.0 rerun 0.758 and 0.884; current sources 0.823 and 0.900 on the same six sizes\t"
-            "paper/tex/figures/data/macros.tex:706-709\t"
-            "log-log least squares on 216 512 1000 1728 2744 4096\t"
-            "explained"
+            "Double-diamond exponent on the current code.\t"
+            "0.76\t"
+            "0.823 on 216, 512, 1000, 1728, 2744 and 4096; about 0.82\t"
+            "df2a2be3\t"
+            "log-log least squares on the six paper sizes\t"
+            "regression introduced in df2a2be3"
+        ),
+        (
+            "Double-diamond fix on perf/ddc-regression-fix.\t"
+            "3.270 ms and exponent 0.823 on current code\t"
+            "about 2.74 ms at 1000 molecules, exponent 0.799, commit 2c0db67f\t"
+            "perf/ddc-regression-fix 2c0db67f\t"
+            "not run in this tree\t"
+            "pending verify"
         ),
     ]
     return rows

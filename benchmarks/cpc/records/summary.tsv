@@ -3915,6 +3915,90 @@ time	e-sota	null-0.25-chillplus-time	kernel_ms	6	0.172617	0.167025	0.188654	0.02
 time	e-sota	null-0.25-chillplus-time	path_ms	6	0.289395	0.267402	0.325964	0.058562	ms	e-sota/null-0.25-chillplus-time.log
 time	e-sota	null-0.30-chillplus-time	kernel_ms	6	0.155309	0.151243	0.163556	0.012314	ms	e-sota/null-0.30-chillplus-time.log
 time	e-sota	null-0.30-chillplus-time	path_ms	6	0.246241	0.239521	0.252684	0.013162	ms	e-sota/null-0.30-chillplus-time.log
+time	explain	head-ic-2744	ddc_ms	6	7.377152	7.359469	7.405233	0.045764	ms	explain/head-ic-2744.csv
+time	explain	head-ic-2744	hc_ms	6	2.902680	2.893967	2.908939	0.014972	ms	explain/head-ic-2744.csv
+time	explain	head-ic-2744	path_ms	6	12.383173	12.339087	12.427233	0.088146	ms	explain/head-ic-2744.csv
+time	explain	head-ic-2744	rings_ms	6	2.091410	2.076456	2.102258	0.025802	ms	explain/head-ic-2744.csv
+count	explain	head-ic-2744	atoms	1	2744				count	explain/head-ic-2744.csv
+count	explain	head-ic-2744	rings	1	5488				count	explain/head-ic-2744.csv
+count	explain	head-ic-2744	six_rings	1	5488				count	explain/head-ic-2744.csv
+count	explain	head-ic-2744	hc_rings	1	0				count	explain/head-ic-2744.csv
+count	explain	head-ic-2744	ddc_rings	1	5488				count	explain/head-ic-2744.csv
+count	explain	head-ic-2744	ddc_equators	1	5488				count	explain/head-ic-2744.csv
+count	explain	head-ic-2744	hc_cages	1	0				count	explain/head-ic-2744.csv
+count	explain	head-ic-2744	ddc_cages	1	1372				count	explain/head-ic-2744.csv
+time	explain	v212-ic-1000	ddc_ms	6	2.590806	2.577415	2.606096	0.028681	ms	explain/v212-ic-1000.csv
+time	explain	v212-ic-1000	hc_ms	6	1.193856	1.191424	1.196663	0.005239	ms	explain/v212-ic-1000.csv
+time	explain	v212-ic-1000	path_ms	6	5.119782	5.108249	5.141650	0.033402	ms	explain/v212-ic-1000.csv
+time	explain	v212-ic-1000	rings_ms	6	1.339789	1.337607	1.349965	0.012359	ms	explain/v212-ic-1000.csv
+count	explain	v212-ic-1000	atoms	1	1000				count	explain/v212-ic-1000.csv
+count	explain	v212-ic-1000	rings	1	2000				count	explain/v212-ic-1000.csv
+count	explain	v212-ic-1000	six_rings	1	2000				count	explain/v212-ic-1000.csv
+count	explain	v212-ic-1000	hc_rings	1	0				count	explain/v212-ic-1000.csv
+count	explain	v212-ic-1000	ddc_rings	1	2000				count	explain/v212-ic-1000.csv
+count	explain	v212-ic-1000	ddc_equators	1	2000				count	explain/v212-ic-1000.csv
+count	explain	v212-ic-1000	hc_cages	1	0				count	explain/v212-ic-1000.csv
+count	explain	v212-ic-1000	ddc_cages	1	500				count	explain/v212-ic-1000.csv
+time	explain	v212-ic-1728	ddc_ms	6	3.894012	3.887379	3.923868	0.036489	ms	explain/v212-ic-1728.csv
+time	explain	v212-ic-1728	hc_ms	6	1.973193	1.966835	1.974956	0.008121	ms	explain/v212-ic-1728.csv
+time	explain	v212-ic-1728	path_ms	6	7.906565	7.900853	7.908615	0.007763	ms	explain/v212-ic-1728.csv
+time	explain	v212-ic-1728	rings_ms	6	2.030055	2.012955	2.041494	0.028539	ms	explain/v212-ic-1728.csv
+count	explain	v212-ic-1728	atoms	1	1728				count	explain/v212-ic-1728.csv
+count	explain	v212-ic-1728	rings	1	3456				count	explain/v212-ic-1728.csv
+count	explain	v212-ic-1728	six_rings	1	3456				count	explain/v212-ic-1728.csv
+count	explain	v212-ic-1728	hc_rings	1	0				count	explain/v212-ic-1728.csv
+count	explain	v212-ic-1728	ddc_rings	1	3456				count	explain/v212-ic-1728.csv
+count	explain	v212-ic-1728	ddc_equators	1	3456				count	explain/v212-ic-1728.csv
+count	explain	v212-ic-1728	hc_cages	1	0				count	explain/v212-ic-1728.csv
+count	explain	v212-ic-1728	ddc_cages	1	864				count	explain/v212-ic-1728.csv
+time	explain	v212-ic-216	ddc_ms	6	0.824655	0.817801	0.828171	0.010370	ms	explain/v212-ic-216.csv
+time	explain	v212-ic-216	hc_ms	6	0.327476	0.323817	0.331358	0.007542	ms	explain/v212-ic-216.csv
+time	explain	v212-ic-216	path_ms	6	1.598979	1.591653	1.607836	0.016183	ms	explain/v212-ic-216.csv
+time	explain	v212-ic-216	rings_ms	6	0.454700	0.444081	0.458179	0.014098	ms	explain/v212-ic-216.csv
+count	explain	v212-ic-216	atoms	1	216				count	explain/v212-ic-216.csv
+count	explain	v212-ic-216	rings	1	432				count	explain/v212-ic-216.csv
+count	explain	v212-ic-216	six_rings	1	432				count	explain/v212-ic-216.csv
+count	explain	v212-ic-216	hc_rings	1	0				count	explain/v212-ic-216.csv
+count	explain	v212-ic-216	ddc_rings	1	432				count	explain/v212-ic-216.csv
+count	explain	v212-ic-216	ddc_equators	1	432				count	explain/v212-ic-216.csv
+count	explain	v212-ic-216	hc_cages	1	0				count	explain/v212-ic-216.csv
+count	explain	v212-ic-216	ddc_cages	1	108				count	explain/v212-ic-216.csv
+time	explain	v212-ic-2744	ddc_ms	6	5.605968	5.581745	5.610994	0.029249	ms	explain/v212-ic-2744.csv
+time	explain	v212-ic-2744	hc_ms	6	2.982714	2.971229	2.989719	0.018490	ms	explain/v212-ic-2744.csv
+time	explain	v212-ic-2744	path_ms	6	11.526433	11.503007	11.539330	0.036323	ms	explain/v212-ic-2744.csv
+time	explain	v212-ic-2744	rings_ms	6	2.936148	2.923475	2.957656	0.034181	ms	explain/v212-ic-2744.csv
+count	explain	v212-ic-2744	atoms	1	2744				count	explain/v212-ic-2744.csv
+count	explain	v212-ic-2744	rings	1	5488				count	explain/v212-ic-2744.csv
+count	explain	v212-ic-2744	six_rings	1	5488				count	explain/v212-ic-2744.csv
+count	explain	v212-ic-2744	hc_rings	1	0				count	explain/v212-ic-2744.csv
+count	explain	v212-ic-2744	ddc_rings	1	5488				count	explain/v212-ic-2744.csv
+count	explain	v212-ic-2744	ddc_equators	1	5488				count	explain/v212-ic-2744.csv
+count	explain	v212-ic-2744	hc_cages	1	0				count	explain/v212-ic-2744.csv
+count	explain	v212-ic-2744	ddc_cages	1	1372				count	explain/v212-ic-2744.csv
+time	explain	v212-ic-4096	ddc_ms	6	7.775849	7.759156	7.788706	0.029549	ms	explain/v212-ic-4096.csv
+time	explain	v212-ic-4096	hc_ms	6	4.451864	4.450853	4.452485	0.001632	ms	explain/v212-ic-4096.csv
+time	explain	v212-ic-4096	path_ms	6	16.344349	16.326235	16.359780	0.033545	ms	explain/v212-ic-4096.csv
+time	explain	v212-ic-4096	rings_ms	6	4.126292	4.071053	4.154015	0.082961	ms	explain/v212-ic-4096.csv
+count	explain	v212-ic-4096	atoms	1	4096				count	explain/v212-ic-4096.csv
+count	explain	v212-ic-4096	rings	1	8192				count	explain/v212-ic-4096.csv
+count	explain	v212-ic-4096	six_rings	1	8192				count	explain/v212-ic-4096.csv
+count	explain	v212-ic-4096	hc_rings	1	0				count	explain/v212-ic-4096.csv
+count	explain	v212-ic-4096	ddc_rings	1	8192				count	explain/v212-ic-4096.csv
+count	explain	v212-ic-4096	ddc_equators	1	8192				count	explain/v212-ic-4096.csv
+count	explain	v212-ic-4096	hc_cages	1	0				count	explain/v212-ic-4096.csv
+count	explain	v212-ic-4096	ddc_cages	1	2048				count	explain/v212-ic-4096.csv
+time	explain	v212-ic-512	ddc_ms	6	1.590010	1.588258	1.591168	0.002909	ms	explain/v212-ic-512.csv
+time	explain	v212-ic-512	hc_ms	6	0.671850	0.669814	0.676206	0.006393	ms	explain/v212-ic-512.csv
+time	explain	v212-ic-512	path_ms	6	3.093040	3.081689	3.106092	0.024404	ms	explain/v212-ic-512.csv
+time	explain	v212-ic-512	rings_ms	6	0.827637	0.820500	0.840151	0.019652	ms	explain/v212-ic-512.csv
+count	explain	v212-ic-512	atoms	1	512				count	explain/v212-ic-512.csv
+count	explain	v212-ic-512	rings	1	1024				count	explain/v212-ic-512.csv
+count	explain	v212-ic-512	six_rings	1	1024				count	explain/v212-ic-512.csv
+count	explain	v212-ic-512	hc_rings	1	0				count	explain/v212-ic-512.csv
+count	explain	v212-ic-512	ddc_rings	1	1024				count	explain/v212-ic-512.csv
+count	explain	v212-ic-512	ddc_equators	1	1024				count	explain/v212-ic-512.csv
+count	explain	v212-ic-512	hc_cages	1	0				count	explain/v212-ic-512.csv
+count	explain	v212-ic-512	ddc_cages	1	256				count	explain/v212-ic-512.csv
 time	f-f4	clathrate-thf	process_ms	6	12.228431	12.038006	12.239637	0.201631	ms	f-f4/clathrate-thf.csv
 time	f-f4	exampleTraj	process_ms	6	4.194781	4.137043	5.919492	1.782449	ms	f-f4/exampleTraj.csv
 time	f-f4	genice-sI-oxygen	process_ms	6	3.158611	3.108980	3.176209	0.067229	ms	f-f4/genice-sI-oxygen.csv

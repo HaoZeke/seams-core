@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 """Classify every CHILL+ label that disagrees with OVITO on the mW liquid.
 
 Reads the three bond dumps written by explain_chill and the OVITO
@@ -54,18 +55,19 @@ def merged(row):
     return MERGE[row["label"]]
 
 
-def step(left, right):
-    """First rule step that separates left from the ovito-chill+ record."""
-    same_counts = (left["stag"], left["ecl"], left["other"]) == (
-        right["stag"], right["ecl"], right["other"])
-    same_cij = left["cij"] == right["cij"]
+def classify(left, right):
+    """Shell gate on main is a bug. The rest is the published q3 rule."""
     if left["shell"] != 4:
-        return "shell_gate"
-    if not same_cij and not same_counts:
-        return "q3_averaging"
-    if same_cij and not same_counts:
-        return "eclipsed_staggered_thresholds"
-    return "table1_interfacial_test"
+        return (
+            "shell_gate",
+            "BUG",
+            "src/bop.cpp:1118",
+        )
+    return (
+        "q3_definition",
+        "DEFINITION",
+        "e8610637:src/include/internal/chill_plus_scheme.hpp:28-36",
+    )
 
 
 def main():
@@ -84,16 +86,15 @@ def main():
         for left, right, ov in zip(rows, ovito_rule, ovito):
             if merged(left) == ov:
                 continue
-            which = step(left, right)
-            if which == "shell_gate":
-                verdict = "DEFINITION"
-                source = "paper/tex/rg_main.tex:491-493"
-            elif which == "q3_averaging":
-                verdict = "DEFINITION"
-                source = "e8610637:src/include/internal/chill_plus_scheme.hpp:28-36"
-            else:
-                verdict = "DEFINITION"
-                source = "e8610637:src/include/internal/chill_plus_scheme.hpp:32-36"
+            which, verdict, source = classify(left, right)
+            # Published code already applies the shell gate, so its
+            # remaining misses are the q3 definition, not the main bug.
+            if kind == "published":
+                which, verdict, source = (
+                    "q3_definition",
+                    "DEFINITION",
+                    "e8610637:src/include/internal/chill_plus_scheme.hpp:28-36",
+                )
             lines.append(
                 f"{left['index']} {left['shell']} {kind}-vs-ovito "
                 f"{merged(left)} {ov} {which} {verdict} {source}"
