@@ -1,0 +1,6 @@
+arm unknown-error
+A thrown int no longer prints unknown error.
+status 2
+assertion-failed true
+----
+known error

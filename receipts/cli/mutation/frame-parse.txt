@@ -1,0 +1,8 @@
+arm frame-parse
+The parse handler no longer returns the number message.
+status 2
+assertion-failed true
+----
+nope
+Usage: seams [--help] [--version] [--features] [--format KIND] [--strict-input] [--frame N] [--last N] [--jobs N] [--rebuild] [--type I] [--cutoff ANGSTROM] [--cage-edge SPEC] [--types I,J] [--family NAME] [--site SPEC] [--ions] [--subset KIND] [--bins N] [--axis XYZ] [-k N] [--rule NAME] [--graph KIND] [--complete] [--shape] [--signature SPEC] [--guest-types T,U] [--per-atom FILE] [--guest-radius R] [--inside] [--layers] [--tum-layers] [--water-types T,U] [--incomplete] [--colour-types] [--library FILE] [--emit-library LABEL] [--hops N] [--by-atom] [--ion-types I,J] [--ion-cutoff ANGSTROM] [--htype I] [--hdist ANGSTROM] [--hangle DEG] [--donors] [--config FILE] [--print-config] [--tpp N] [--block N] [--resident FRAC] [--cell ANGSTROM] [command] [file]
+libgcov profiling error:seams.p/

@@ -1,0 +1,6 @@
+arm types-throw
+An allocation failure during a type pair prints silent.
+status 2
+assertion-failed true
+----
+silent

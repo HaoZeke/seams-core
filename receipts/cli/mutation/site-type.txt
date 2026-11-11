@@ -1,0 +1,6 @@
+arm site-type
+The site handler no longer says integer.
+status 2
+assertion-failed true
+----
+site spec type 'zz' is not a whole number
