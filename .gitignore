@@ -1,5 +1,11 @@
 # Additions
 .pixi/
+.h2h-venv/
+h2h-py/
+h2h-cpc/asv-tmp/
+h2h-cpc/probe-tmp/
+h2h-cpc/raw/
+h2h-cpc/systems/
 /result
 /.ccls-cache/
 shellBuild/

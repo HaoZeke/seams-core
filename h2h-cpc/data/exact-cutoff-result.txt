@@ -1,0 +1,35 @@
+Two particles in an orthorhombic cell of side 20.
+Coordinates: (5, 10, 10) and (8.5, 10, 10). Separation 3.5.
+The ice campaign uses this same cutoff.
+
+d-SEAMS keeps a pair when the squared minimum-image distance
+lies strictly under the cutoff squared. neighListO drops a pair
+once distSq reaches rcutoffSq. The orthorhombic cell list keeps
+a pair when d2 < rc2. The reference count uses that predicate.
+freud AABBQuery with r_max 3.5 returns that same neighbour list,
+degree 0 on both particles.
+OVITO CreateBondsModifier(cutoff=3.5) bonds the pair, so a distance
+equal to the cutoff falls inside its upper cutoff.
+
+Measured degrees, particle 0 then particle 1:
+exact-cutoff reference strict-less degrees 0 0
+exact-cutoff dseams degrees 0 0 tally 0:2
+exact-cutoff freud degrees 0 0 tally 0:2
+exact-cutoff ovito degrees 1 1 tally 1:2
+exact-cutoff ovito degree leaves the strict minimum-image count
+tetrahedron Franzblau membership 0 0 0 12 0 0 0
+tetrahedron dseams size3 3 3 3 3
+tetrahedron freud unsupported
+tetrahedron ovito size3 3 3 3 3
+
+The ice Ic shells used for the timings sit near 2.75 and 4.50, so
+every timed frame keeps its pairs off the cutoff. The neighbour-count
+identity on those frames is in the raw CSVs.
+
+Primitive rings were checked on the complete graph K4 (regular
+tetrahedron, edge 1, cutoff 1.2). Franzblau's shortest-path criterion
+(Phys. Rev. B 44, 4925, 1991) keeps the four triangles. A 4-cycle
+falls outside that criterion, because both paths around it run longer
+than the direct edge. d-SEAMS ringNetwork and OVITO FindRingsModifier
+both report three 3-rings on every atom. Their 4-ring count is zero.
+freud's published interface stops at the neighbour list.

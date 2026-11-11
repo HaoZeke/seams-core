@@ -215,6 +215,31 @@ rule figure_pngs:
         "python3 paper/tex/figures/render_finish.py && python3 paper/tex/figures/rasterize_tikz.py"
 
 
+# Head-to-head for the Computer Physics Communications timings.
+# One rule per comparison. The summary TSV is rebuilt from the raw logs.
+
+rule h2h_neighbours:
+    input:
+        "scripts/h2h_cpc.py",
+        "scripts/h2h_cpc_summary.py",
+        "tests/bench_h2h_cpc.cpp",
+    output:
+        "h2h-cpc/raw/neighbours/done.txt",
+    shell:
+        "PYTHONPATH=.h2h-py python3.12 scripts/h2h_cpc.py run neighbours && python3.12 scripts/h2h_cpc_summary.py"
+
+
+rule h2h_rings:
+    input:
+        "scripts/h2h_cpc.py",
+        "scripts/h2h_cpc_summary.py",
+        "tests/bench_h2h_cpc.cpp",
+    output:
+        "h2h-cpc/raw/rings/done.txt",
+    shell:
+        "PYTHONPATH=.h2h-py python3.12 scripts/h2h_cpc.py run rings && python3.12 scripts/h2h_cpc_summary.py"
+
+
 rule shipped_campaign:
     input:
         "paper/tex/repro/shipped_campaign.py",

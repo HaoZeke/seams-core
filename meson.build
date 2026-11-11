@@ -473,6 +473,22 @@ _incdirs += include_directories([
 # Library
 subdir('src')
 
+# One-shot neighbour and primitive-ring timing used by the head-to-head.
+# The binary prints the algorithm time; the caller keeps I/O outside it.
+bench_h2h_link = _link_args
+if host_machine.system() == 'linux'
+  bench_h2h_link += ['-Wl,--enable-new-dtags']
+endif
+executable(
+  'bench_h2h_cpc',
+  files('tests/bench_h2h_cpc.cpp'),
+  dependencies: [yds_dep],
+  include_directories: _incdirs,
+  cpp_args: _args,
+  link_args: bench_h2h_link,
+  build_rpath: '$ORIGIN/src',
+  install: false)
+
 # Tests
 if get_option('with_tests')
   subdir('tests')
