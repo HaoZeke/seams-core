@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright (c) d-SEAMS developers
 # Time findDDC on the ideal-ice ladder.
 # Release build, one thread on core 0, one warm-up, six timed calls.
 # Usage: ddc_ladder.sh BENCH OUTDIR

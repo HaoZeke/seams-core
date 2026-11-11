@@ -2,6 +2,7 @@
 ** This file is part of d-SEAMS.
 **
 ** SPDX-License-Identifier: MIT
+** Copyright (c) d-SEAMS developers
 **
 ** Time findDDC alone. Neighbours, rings and findHC run before the timer.
 ** One warm-up and the timed repeats are the arguments after the trajectory.
