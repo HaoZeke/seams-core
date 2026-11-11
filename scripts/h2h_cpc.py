@@ -950,7 +950,7 @@ def run_probe() -> None:
         "Primitive rings were checked on the complete graph K4 (regular",
         "tetrahedron, edge 1, cutoff 1.2). Franzblau's shortest-path criterion",
         "(Phys. Rev. B 44, 4925, 1991) keeps the four triangles. A 4-cycle",
-        "falls outside that criterion, because both paths around it run longer",
+        "exceeds the shortest path by 1 edge, because both paths around it run longer",
         "than the direct edge. d-SEAMS ringNetwork and OVITO FindRingsModifier",
         "both report three 3-rings on every atom. Their 4-ring count is zero.",
         "freud's published interface stops at the neighbour list.",

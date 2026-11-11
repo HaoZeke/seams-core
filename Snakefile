@@ -1,3 +1,4 @@
+# Copyright (c) d-SEAMS developers
 # Figure products the paper reads and git does not store.
 # python3 paper/tex/figures/stats.py writes the plot tables and, when
 # ring-head2head.json is present, the ring table and its macros.
