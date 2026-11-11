@@ -114,6 +114,11 @@ def run_bench(mx, my, mz, ranks, op):
         op,
     ]
     proc = subprocess.run(cmd, env=env, capture_output=True, text=True, cwd=ROOT / "input")
+    with (DATA / "partition-raw.log").open("a") as raw:
+        raw.write(f"# {mx} {my} {mz} ranks {ranks} {op}\n")
+        raw.write(proc.stdout)
+        if proc.stderr:
+            raw.write(proc.stderr)
     if proc.returncode != 0:
         sys.stderr.write(proc.stderr)
         raise SystemExit(f"benchmark failed ({proc.returncode}): {' '.join(cmd)}")
@@ -180,6 +185,8 @@ def fill_efficiency(rows):
 
 
 def measure():
+    DATA.mkdir(parents=True, exist_ok=True)
+    (DATA / "partition-raw.log").write_text("")
     rows = []
     for mx, my, mz, molecules in STRONG:
         for ranks in (1, 2, 4, 8):
