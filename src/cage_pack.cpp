@@ -992,34 +992,52 @@ bool assignPackedIds(const std::vector<PKey> &keys, std::vector<std::array<int, 
   while (nTab < nKeys) {
     nTab <<= 1;
   }
-  struct Ent {
-    std::uint64_t k;
-    int id;
+  // A generation stamp marks live slots, so a repeat search does not clear
+  // the whole table. The ids are still the sorted order of the distinct words.
+  struct Slot {
+    std::uint64_t k = 0;
+    int id = -1;
+    std::uint32_t gen = 0;
   };
-  thread_local std::vector<Ent> tabStore;
+  thread_local std::vector<Slot> tabStore;
+  thread_local std::uint32_t tabGen = 0;
   thread_local std::vector<std::uint64_t> uniqStore;
   thread_local std::vector<int> tmpStore;
   thread_local std::vector<int> orderStore;
   thread_local std::vector<int> rankStore;
-  std::vector<Ent> *tabP = &tabStore;
+  std::vector<Slot> *tabP = &tabStore;
   asm volatile("" : "+r"(tabP));
-  tabP->assign(static_cast<std::size_t>(nTab), Ent{0, -1});
-  Ent *tab = tabP->data();
+  if (static_cast<int>(tabP->size()) < nTab) {
+    tabP->assign(static_cast<std::size_t>(nTab), Slot{});
+  }
+  if (++tabGen == 0) {
+    for (Slot &slot : *tabP) {
+      slot.gen = 0;
+    }
+    tabGen = 1;
+  }
+  const std::uint32_t gen = tabGen;
+  Slot *tab = tabP->data();
   const std::size_t mask = static_cast<std::size_t>(nTab - 1);
   uniqStore.clear();
+  if (uniqStore.capacity() < static_cast<std::size_t>(nKeys / 4 + 1)) {
+    uniqStore.reserve(static_cast<std::size_t>(nKeys / 4 + 1));
+  }
   tmpStore.resize(static_cast<std::size_t>(nKeys));
   for (int i = 0; i < nKeys; i++) {
     const std::uint64_t w = word[i];
     std::size_t h = static_cast<std::size_t>(w * 0x9E3779B185EBCA87ULL) & mask;
     int probes = 0;
-    while (tab[h].id >= 0 && tab[h].k != w) {
+    while (tab[h].gen == gen && tab[h].k != w) {
       h = (h + 1) & mask;
       if (++probes > nTab) {
         return false;
       }
     }
-    if (tab[h].id < 0) {
-      tab[h] = Ent{w, static_cast<int>(uniqStore.size())};
+    if (tab[h].gen != gen) {
+      tab[h].k = w;
+      tab[h].id = static_cast<int>(uniqStore.size());
+      tab[h].gen = gen;
       uniqStore.push_back(w);
     }
     tmpStore[static_cast<std::size_t>(i)] = tab[h].id;

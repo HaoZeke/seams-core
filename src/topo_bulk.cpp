@@ -1880,14 +1880,17 @@ constexpr int kTripleLoopProduct = kSmallParityProduct * kSmallParityProduct;
 std::vector<int> canonicalRingOrderByAtoms(
     const std::vector<std::vector<int>> &rings, const ring::RingSearchIndex &index) {
   const int n = static_cast<int>(rings.size());
+  // The rotation key is needed only when two rings share atom ids and a
+  // shift. Ideal ice never ties, so that key stays off this record.
   struct Key {
     std::array<int, 6> id{};
     int len = 0;
     std::array<int, 3> shift{};
-    CycleKey cycle{};
-    bool cycleReady = false;
   };
   std::vector<Key> keys(static_cast<size_t>(n));
+  std::vector<CycleKey> cycles;
+  std::vector<char> cycleReady;
+  std::mutex cycleMu;
   const int nShift = static_cast<int>(index.ringShift.size());
 #if defined(SEAMS_HAS_OPENMP)
 #pragma omp parallel for schedule(static) if (omp_get_max_threads() > 1)
@@ -1942,19 +1945,24 @@ std::vector<int> canonicalRingOrderByAtoms(
     // built only for a tie, which is the comparison the eager pass used to
     // skip.
     auto ensureCycle = [&](int id) {
-      Key &key = keys[static_cast<std::size_t>(id)];
-      if (key.cycleReady) {
+      std::lock_guard<std::mutex> lock(cycleMu);
+      if (cycles.empty()) {
+        cycles.resize(static_cast<std::size_t>(n));
+        cycleReady.assign(static_cast<std::size_t>(n), 0);
+      }
+      if (cycleReady[static_cast<std::size_t>(id)]) {
         return;
       }
       const auto &ring = rings[static_cast<std::size_t>(id)];
-      key.cycle = bestCycle(std::span<const int>(ring.data(), ring.size()));
-      key.cycleReady = true;
+      cycles[static_cast<std::size_t>(id)] =
+          bestCycle(std::span<const int>(ring.data(), ring.size()));
+      cycleReady[static_cast<std::size_t>(id)] = 1;
       gDdcCycleEvals.fetch_add(1, std::memory_order_relaxed);
     };
     ensureCycle(a);
     ensureCycle(b);
-    const CycleKey &ca = keys[static_cast<std::size_t>(a)].cycle;
-    const CycleKey &cb = keys[static_cast<std::size_t>(b)].cycle;
+    const CycleKey &ca = cycles[static_cast<std::size_t>(a)];
+    const CycleKey &cb = cycles[static_cast<std::size_t>(b)];
     if (ca < cb) {
       return true;
     }
@@ -2192,8 +2200,40 @@ bool ring::equatorialConditions(const std::vector<std::vector<int>> &rings,
     for (int k = 0; k < 6; k++) {
       take(rings[static_cast<size_t>(r[k])]);
     }
-    std::sort(atoms, atoms + nAtomsHere);
-    const auto nUnique = static_cast<int>(std::unique(atoms, atoms + nAtomsHere) - atoms);
+    // Only the number of distinct molecules matters. A stamp over the frame
+    // counts them without sorting the forty-two ids.
+    const int nAtoms = static_cast<int>(index.ringsContainingAtom.size());
+    int nUnique = 0;
+    bool counted = nAtoms > 0;
+    if (counted) {
+      thread_local std::vector<int> stampStore;
+      thread_local int era = 0;
+      std::vector<int> *stamp = &stampStore;
+      asm volatile("" : "+r"(stamp));
+      if (static_cast<int>(stamp->size()) < nAtoms) {
+        stamp->assign(static_cast<std::size_t>(nAtoms), 0);
+      }
+      if (++era == 0) {
+        std::fill(stamp->begin(), stamp->end(), 0);
+        era = 1;
+      }
+      int *seen = stamp->data();
+      for (int i = 0; i < nAtomsHere; i++) {
+        const int atom = atoms[i];
+        if (atom < 0 || atom >= nAtoms) {
+          counted = false;
+          break;
+        }
+        if (seen[atom] != era) {
+          seen[atom] = era;
+          nUnique++;
+        }
+      }
+    }
+    if (!counted) {
+      std::sort(atoms, atoms + nAtomsHere);
+      nUnique = static_cast<int>(std::unique(atoms, atoms + nAtomsHere) - atoms);
+    }
     bool folded = nUnique != 14;
     for (int k = 0; k < 6 && !folded; k++) {
       folded = share6(rings[static_cast<size_t>(r[k])], R) != 3;
