@@ -527,10 +527,12 @@ void runPass1(const NeighbourCSR &g, int orderL, int begin, int end,
 #endif
   const bool pairwise =
       seams::product::reduction() != seams::product::Reduction::Left && orderL <= 8;
-  // l = 6 batches the Cartesian harmonic eight bonds at a time. Each
-  // atom still sums its own bonds in list order, so the value matches
-  // the one-bond kernel and does not depend on the thread count.
-  const bool batchSolid = (orderL == 3 || orderL == 4 || orderL == 6) && !pairwise;
+  // Degrees 4 and 6 sum eight bonds through the Cartesian harmonic.
+  // Each atom still adds its own bonds in list order. Degree 3 stays
+  // on the one-bond kernel: the batch normalises by r^3, which is a
+  // square root and a divide, and on a four-neighbour shell that costs
+  // more than the seven components it writes.
+  const bool batchSolid = (orderL == 4 || orderL == 6) && !pairwise;
 #ifdef SEAMS_HAS_OPENMP
   const bool useThreads = g.nop >= kParallelThreshold && omp_get_max_threads() > 1;
 #pragma omp parallel for schedule(static) if (useThreads)
@@ -551,7 +553,8 @@ void runPass1Mask(const NeighbourCSR &g, int orderL, std::vector<double> &qlm,
                   const std::vector<char> *which) {
   const bool pairwise =
       seams::product::reduction() != seams::product::Reduction::Left && orderL <= 8;
-  const bool batchSolid = (orderL == 3 || orderL == 4 || orderL == 6) && !pairwise;
+  // Same split as runPass1: degree 3 stays on the one-bond kernel.
+  const bool batchSolid = (orderL == 4 || orderL == 6) && !pairwise;
 #ifdef SEAMS_HAS_OPENMP
   const bool useThreads = g.nop >= kParallelThreshold && omp_get_max_threads() > 1;
 #pragma omp parallel for schedule(static) if (useThreads)

@@ -368,6 +368,22 @@ TEST_CASE("fused q6 on a triclinic cell matches the cutoff call", "[ql][chill]")
   }
 }
 
+TEST_CASE("neighbour-list q3 stays with the one-bond value", "[ql][solid]") {
+  // Ideal ice Ic is one tetrahedral shell. q3 is scale-free, so every
+  // atom shares the one-bond value. The eight-bond batch is not used
+  // for this degree.
+  auto cloud = iceIc(2);
+  const auto rows = nneigh::neighListO(3.5, cloud, 1);
+  const auto q3 = chill::steinhardtQl(cloud, rows, 3);
+  REQUIRE(q3.ql.size() == static_cast<std::size_t>(cloud.nop));
+  for (double v : q3.ql) {
+    REQUIRE(std::fabs(v - 0.74535599249993) < 1e-12);
+  }
+  const auto mutual = chill::steinhardtQlMutual(cloud, 4, 5.0, 1, 3);
+  REQUIRE(maxAbs(q3.ql, mutual.ql) < 1e-12);
+  REQUIRE(maxAbs(q3.qlBar, mutual.qlBar) < 1e-12);
+}
+
 TEST_CASE("local q4 and q6 do not need the averaged row", "[ql][solid]") {
   auto ice = iceIc(3);
   molSys::PointCloud<molSys::Point<double>, double> liquid;
