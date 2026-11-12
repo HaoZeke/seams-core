@@ -7,7 +7,7 @@ is not on the loader path.
 """
 module Dseams
 
-export Frame, nop, nframes, read_frame, chill_plus, cages, primitive_rings, steinhardt
+export Frame, nop, nframes, read_frame, chill_plus, cages, primitive_rings, steinhardt, q4_q6
 
 const ICE_NAMES = (
     "cubic",
@@ -169,6 +169,28 @@ function steinhardt(frame::Frame, order_l::Integer; cutoff::Real = 3.5, type::In
     )
     _check(code)
     (ql = ql, qlbar = qlbar)
+end
+
+function q4_q6(frame::Frame; cutoff::Real = 3.5, type::Integer = 0)
+    n = nop(frame)
+    q4 = Vector{Cdouble}(undef, n)
+    q6 = Vector{Cdouble}(undef, n)
+    q4bar = Vector{Cdouble}(undef, n)
+    q6bar = Vector{Cdouble}(undef, n)
+    code = ccall(
+        (:seams_frame_q4_q6, _lib()),
+        Cint,
+        (Ptr{Cvoid}, Cdouble, Cint, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}),
+        frame.ptr,
+        cutoff,
+        type,
+        q4,
+        q6,
+        q4bar,
+        q6bar,
+    )
+    _check(code)
+    (q4 = q4, q6 = q6, q4bar = q4bar, q6bar = q6bar)
 end
 
 end

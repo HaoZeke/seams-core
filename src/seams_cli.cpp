@@ -1298,10 +1298,17 @@ int cmdSteinhardt(std::ostream &os, Cloud &cloud, double cutoff, int typeI) {
   }
   const int typ = typeOf(cloud, typeI);
   const auto q3 = chill::steinhardtQlCutoff(cloud, cutoff, 3, typ, true);
+  const auto q4 = chill::steinhardtQlCutoff(cloud, cutoff, 4, typ, true);
+  const auto q6 = chill::steinhardtQlCutoff(cloud, cutoff, 6, typ, true);
   const auto q12 = chill::steinhardtQlCutoff(cloud, cutoff, 12, typ, true);
   os << colorizer.heading("nop") << " " << cloud.nop << " "
      << colorizer.longOption("q3") << " " << topoparam::meanFinite(q3.ql) << " "
      << colorizer.longOption("q3bar") << " " << topoparam::meanFinite(q3.qlBar)
+     << " " << colorizer.longOption("q4") << " " << topoparam::meanFinite(q4.ql)
+     << " " << colorizer.longOption("q4bar") << " "
+     << topoparam::meanFinite(q4.qlBar) << " " << colorizer.longOption("q6")
+     << " " << topoparam::meanFinite(q6.ql) << " "
+     << colorizer.longOption("q6bar") << " " << topoparam::meanFinite(q6.qlBar)
      << " " << colorizer.longOption("q12") << " "
      << topoparam::meanFinite(q12.ql) << " "
      << colorizer.longOption("q12bar") << " "

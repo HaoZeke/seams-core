@@ -29,6 +29,10 @@ steinhardt_ <- function(ptr, cutoff, type, order_l) {
   .Call(`_dseams_steinhardt_`, ptr, cutoff, type, order_l)
 }
 
+q4_q6_ <- function(ptr, cutoff, type) {
+  .Call(`_dseams_q4_q6_`, ptr, cutoff, type)
+}
+
 cages_ <- function(ptr, cutoff, type, k, graph) {
   .Call(`_dseams_cages_`, ptr, cutoff, type, k, graph)
 }

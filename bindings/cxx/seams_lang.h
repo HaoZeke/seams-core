@@ -76,6 +76,12 @@ int seams_frame_steinhardt(seams_frame *frame, double cutoff, int type,
 int seams_frame_wl(seams_frame *frame, double cutoff, int type, int order_l,
                    double *wl);
 
+/* Local q4 and q6 on the cutoff shell. Degrees 4 and 6 use the
+ * solid-harmonic kernel. q4bar and q6bar may be null, and a null
+ * pointer skips that Lechner-Dellago average. Returns 1 on failure. */
+int seams_frame_q4_q6(seams_frame *frame, double cutoff, int type, double *q4,
+                      double *q6, double *q4bar, double *q6bar);
+
 /* One cutoff list. Local q4, local q6, Lechner-Dellago q4-bar and
  * q6-bar, and published CHILL+ labels. q4bar and q6bar may be null.
  * counts9 and labels may be null. Returns 1 on failure. */

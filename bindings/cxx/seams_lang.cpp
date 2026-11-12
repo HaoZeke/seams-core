@@ -539,6 +539,47 @@ int seams_frame_wl(seams_frame *frame, double cutoff, int type, int order_l,
   }
 }
 
+int seams_frame_q4_q6(seams_frame *frame, double cutoff, int type, double *q4,
+                      double *q6, double *q4bar, double *q6bar) {
+  clear_error();
+  if (frame == nullptr || q4 == nullptr || q6 == nullptr) {
+    set_error("q4, q6 and a frame are required");
+    return 1;
+  }
+  if (!(cutoff > 0.0)) {
+    set_error("q4 and q6 need a positive cutoff");
+    return 1;
+  }
+  try {
+    const int typ = resolve_type(frame->cloud, type);
+    const auto a4 =
+        chill::steinhardtQlCutoff(frame->cloud, cutoff, 4, typ, q4bar != nullptr);
+    const auto a6 =
+        chill::steinhardtQlCutoff(frame->cloud, cutoff, 6, typ, q6bar != nullptr);
+    const int n = frame->cloud.nop;
+    if (static_cast<int>(a4.ql.size()) != n || static_cast<int>(a6.ql.size()) != n) {
+      set_error("q4 and q6 were not computed");
+      return 1;
+    }
+    if (n > 0) {
+      std::memcpy(q4, a4.ql.data(), static_cast<std::size_t>(n) * sizeof(double));
+      std::memcpy(q6, a6.ql.data(), static_cast<std::size_t>(n) * sizeof(double));
+      if (q4bar != nullptr) {
+        std::memcpy(q4bar, a4.qlBar.data(), static_cast<std::size_t>(n) * sizeof(double));
+      }
+      if (q6bar != nullptr) {
+        std::memcpy(q6bar, a6.qlBar.data(), static_cast<std::size_t>(n) * sizeof(double));
+      }
+    }
+    frame->ql = a6.ql;
+    frame->qlbar = q6bar != nullptr ? a6.qlBar : std::vector<double>(static_cast<std::size_t>(std::max(n, 0)), 0.0);
+    return 0;
+  } catch (...) {
+    remember_exception();
+    return 1;
+  }
+}
+
 int seams_frame_q4_q6_chill(seams_frame *frame, double cutoff, int type,
                             double *q4, double *q6, double *q4bar,
                             double *q6bar, int *labels, int counts9[9]) {

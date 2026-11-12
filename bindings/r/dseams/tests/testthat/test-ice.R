@@ -26,7 +26,8 @@ test_that("CHILL+ on the mixed TIP4P frame matches the CLI", {
   rings <- primitive_rings(frame, max_depth = 8L)
   expect_equal(rings$n[rings$size == 6L], 224L)
   q3 <- steinhardt(frame, order_l = 3L)
-  expect_equal(mean(q3$ql[is.finite(q3$ql)]), 0.389362, tolerance = 1e-4)
+  # Orthorhombic frames use the cutoff shell. 0.389362 is the four-nearest mean.
+  expect_equal(mean(q3$ql[is.finite(q3$ql)]), 0.374897, tolerance = 1e-4)
 })
 
 test_that("seeded cages under SEAMS_OFFLOAD match the host and the CLI", {
