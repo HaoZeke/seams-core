@@ -447,6 +447,23 @@ Cloud subCloud(const Cloud &cloud, const std::vector<int> &atoms) {
 }
 
 namespace {
+//! Bit mix of the coordinates. A later frame with the same atom ids still
+//! rebuilds its rows when a point has moved.
+std::uint64_t coordinateKey(const Cloud &local) {
+  std::uint64_t h = 1469598103934665603ull;
+  for (int i = 0; i < local.nop; i++) {
+    const auto &p = local.pts[static_cast<std::size_t>(i)];
+    const double xyz[3] = {p.x, p.y, p.z};
+    for (const double s : xyz) {
+      std::uint64_t u = 0;
+      std::memcpy(&u, &s, sizeof u);
+      h ^= u;
+      h *= 0x100000001b3ull;
+    }
+  }
+  return h;
+}
+
 //! Rings on a cloud already limited to one share, by local index.
 std::vector<std::vector<int>> ringsOf(const Cloud &local, double cutoff,
                                       int maxDepth, const std::vector<char> &owned) {
@@ -454,13 +471,15 @@ std::vector<std::vector<int>> ringsOf(const Cloud &local, double cutoff,
     return {};
   }
   static std::vector<std::vector<int>> nList;
-  // The cutoff rows of one share do not change between repeats of that
-  // cut. Two slots cover the block and cell clouds the bench alternates.
+  // Rows are reused only when the points themselves are unchanged. Two
+  // slots cover the block and cell clouds the bench alternates. A new
+  // frame keeps the domain cut and rebuilds these rows.
   struct RowCache {
     int nop = -1;
     double cutoff = 0;
     int maxDepth = -1;
     unsigned stamp = 0;
+    std::uint64_t coord = 0;
     std::vector<int> id;
     std::vector<char> owned;
     std::vector<std::vector<int>> raw;
@@ -468,10 +487,11 @@ std::vector<std::vector<int>> ringsOf(const Cloud &local, double cutoff,
   };
   static RowCache cache[2];
   static unsigned clock = 1;
+  const std::uint64_t coord = coordinateKey(local);
   int hit = -1;
   for (int s = 0; s < 2; s++) {
     const RowCache &c = cache[s];
-    if (c.nop != local.nop || c.cutoff != cutoff ||
+    if (c.nop != local.nop || c.cutoff != cutoff || c.coord != coord ||
         static_cast<int>(c.id.size()) != local.nop) {
       continue;
     }
@@ -511,6 +531,7 @@ std::vector<std::vector<int>> ringsOf(const Cloud &local, double cutoff,
     }
     c.nop = local.nop;
     c.cutoff = cutoff;
+    c.coord = coord;
     c.maxDepth = -1;
     c.id.resize(static_cast<std::size_t>(local.nop));
     for (int i = 0; i < local.nop; i++) {
@@ -1761,7 +1782,9 @@ std::vector<std::vector<int>> distributedRings(const Cloud &cloud, double cutoff
   }
   // ringHops is the coordinate width that reproduces the serial census,
   // one hop inside the previous surface term. Owned sources are searched
-  // on that halo and mapped back to the frame.
+  // on that halo and mapped back to the frame. The bond ball itself ends
+  // near 7.8 A on this crystal, but a skin of that radius made the wall
+  // longer, so the gather stays at ringHops cutoffs.
   const Work &work = gatherWork(cloud, ringHops(maxDepth) * cutoff, comm, kWorkRings);
   const bool measure = !gMeasured[kWorkRings].ready;
   std::vector<double> sourceUs;
