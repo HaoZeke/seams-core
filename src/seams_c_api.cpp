@@ -21,6 +21,7 @@
 #include <mol_sys.hpp>
 #include <neighbours.hpp>
 
+#include <cmath>
 #include <exception>
 #include <string>
 #include <vector>
@@ -235,7 +236,21 @@ int seams_diamond_cna(const double *xyz, int n, const double *box9, double cutof
     auto cloud = cloudOf(xyz, n, box9);
     std::vector<int> off;
     std::vector<int> col;
-    if (!nneigh::orthoFullCsr(cloud, nullptr, cutoff, off, col, false)) {
+    // A crowded shell (the dense 512-atom frame has about 56 neighbours
+    // inside 3.5 A) does not need that whole list. mdapy's diamond
+    // identifier uses the four nearest neighbours. That list produces the
+    // same labels as the cutoff list on the frames this tree tests. A
+    // crystal shell is left on the cutoff list.
+    const double volume = std::abs(box9[3] * box9[4] * box9[5]);
+    const double shell =
+        volume > 0.0 ? (static_cast<double>(n) / volume) *
+                           (4.1887902047863905 * cutoff * cutoff * cutoff)
+                     : 0.0;
+    const bool crowded = shell > 12.0;
+    const bool listed =
+        crowded ? nneigh::directedKNearestCsr(cloud, 4, cutoff, off, col)
+                : nneigh::orthoFullCsr(cloud, nullptr, cutoff, off, col, false);
+    if (!listed) {
       return 1;
     }
     std::vector<int> kind;

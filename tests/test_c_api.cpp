@@ -1,6 +1,9 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <diamond_cna.hpp>
+#include <neighbours.hpp>
 #include <seams_c_api.h>
+#include <seams_input.hpp>
 
 #include <cmath>
 #include <vector>
@@ -188,4 +191,32 @@ TEST_CASE("diamond common-neighbour test labels ideal ice Ih hexagonal",
   REQUIRE(counts[4] == 0);
   REQUIRE(counts[5] == 0);
   REQUIRE(counts[6] == 2 * n);
+}
+
+TEST_CASE("crowded diamond labels match the cutoff list", "[c_api]") {
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  cloud = sinp::readLammpsTrjO("traj/dump-l.lammpstrj", 1, cloud, 1);
+  REQUIRE(cloud.nop == 512);
+  REQUIRE(cloud.box.size() >= 3);
+  std::vector<double> xyz(static_cast<std::size_t>(cloud.nop) * 3);
+  for (int i = 0; i < cloud.nop; i++) {
+    const auto &p = cloud.pts[static_cast<std::size_t>(i)];
+    xyz[static_cast<std::size_t>(3 * i)] = p.x;
+    xyz[static_cast<std::size_t>(3 * i + 1)] = p.y;
+    xyz[static_cast<std::size_t>(3 * i + 2)] = p.z;
+  }
+  double box9[9] = {cloud.boxLow[0], cloud.boxLow[1], cloud.boxLow[2],
+                    cloud.box[0],    cloud.box[1],    cloud.box[2],
+                    0,               0,               0};
+  std::vector<int> fast(static_cast<std::size_t>(cloud.nop), 9);
+  REQUIRE(seams_diamond_cna(xyz.data(), cloud.nop, box9, 3.5, fast.data()) == 0);
+  std::vector<int> off;
+  std::vector<int> col;
+  REQUIRE(nneigh::orthoFullCsr(cloud, nullptr, 3.5, off, col, false));
+  std::vector<int> full;
+  symm::diamondFromCsr(cloud, off, col, full);
+  REQUIRE(full.size() == fast.size());
+  for (int i = 0; i < cloud.nop; i++) {
+    REQUIRE(fast[static_cast<std::size_t>(i)] == full[static_cast<std::size_t>(i)]);
+  }
 }
