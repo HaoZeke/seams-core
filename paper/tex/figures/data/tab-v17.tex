@@ -1,19 +1,19 @@
 \begin{table}[tbp]
 \centering
-\caption{\textbf{884736 molecules on eight cores.} Pure MPI is one thread on each rank. Hybrid uses the same eight cores and is slower on CHILL+ and $q_6$. Efficiency divides the one-rank, one-thread time by the wall and by the workers. The one-rank CHILL+ IQR is 66 ms. Eight repeats, type-7 median and IQR.}
+\caption{\textbf{884736 molecules on eight cores.} Pure MPI is one thread on each rank. Hybrid uses the same eight cores and is slower. The eight-rank cell window holds 117645 atoms, about 2.8 MiB of coordinates, next to a 2 MiB L2. The four-rank window holds about 230000 atoms and the two-rank window 451584 atoms and 340605 cells, about 11 MiB, so the pair walk misses L2. Ring efficiency stays near 0.67: the ghost fraction is 0.29 and the imbalance is 1.02. That skin is floor(6/2) cutoffs. A shorter skin, hops times the longest edge, cut the ghost fraction to 0.25 and made one rank miss the open window; the wall then exceeded a second. Efficiency divides the one-rank, one-thread time by the wall and by the workers. Eight repeats, type-7 median and IQR.}
 \label{tab:partition-v17}
 \begin{tabular}{llrrrrrr}
 \toprule
 Layout & Operation & Block & IQR & Cell & IQR & Cell eff. & Rule \\
 \midrule
-8$\times$1 & neighbours & 36.884 & 11.993 & 26.492 & 8.460 & 1.530 & cell \\
- & CHILL+ & 69.543 & 3.228 & 63.005 & 2.850 & 1.169 & cell \\
- & $q_6$ & 109.412 & 32.567 & 82.732 & 14.733 & 0.917 & cell \\
- & rings & 180.991 & 6.446 & 181.441 & 10.648 & 0.666 & cell \\
-4$\times$2 & CHILL+ & 82.171 & 11.140 & 76.397 & 3.699 & 0.964 & cell \\
- & $q_6$ & 126.726 & 9.303 & 120.799 & 4.635 & 0.628 & cell \\
-2$\times$4 & CHILL+ & 106.937 & 1.921 & 100.535 & 2.771 & 0.733 & cell \\
- & $q_6$ & 225.512 & 17.032 & 211.780 & 3.880 & 0.358 & cell \\
+8$\times$1 & neighbours & 34.440 & 1.342 & 28.136 & 1.831 & 1.428 & cell \\
+ & CHILL+ & 74.755 & 3.430 & 67.483 & 2.976 & 0.871 & cell \\
+ & $q_6$ & 93.702 & 20.001 & 85.562 & 5.929 & 0.897 & cell \\
+ & rings & 193.403 & 15.248 & 190.440 & 10.243 & 0.683 & cell \\
+4$\times$2 & CHILL+ & 83.663 & 13.004 & 81.486 & 10.335 & 0.722 & cell \\
+ & $q_6$ & 145.665 & 17.934 & 128.942 & 7.527 & 0.595 & cell \\
+2$\times$4 & CHILL+ & 113.216 & 11.493 & 102.869 & 10.536 & 0.572 & cell \\
+ & $q_6$ & 234.713 & 14.323 & 219.115 & 16.758 & 0.350 & cell \\
 \bottomrule
 \end{tabular}
 \end{table}

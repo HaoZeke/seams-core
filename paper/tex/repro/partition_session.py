@@ -661,8 +661,12 @@ def write_v17(rows):
     lines = [
         "\\begin{table}[tbp]",
         "\\centering",
-        "\\caption{\\textbf{884736 molecules on eight cores, after the threaded neighbour list.} "
-        "Pure MPI is one thread on each rank. Hybrid uses the same eight cores. "
+        "\\caption{\\textbf{884736 molecules on eight cores.} "
+        "Pure MPI is one thread on each rank. Hybrid uses the same eight cores and is slower. "
+        "The eight-rank cell window holds 117645 atoms, about 2.8 MiB of coordinates, next to a 2 MiB L2. "
+        "The four-rank window holds about 230000 atoms and the two-rank window 451584 atoms and 340605 cells, about 11 MiB, so the pair walk misses L2. "
+        "Ring efficiency stays near 0.67: the ghost fraction is 0.29 and the imbalance is 1.02. "
+        "That skin is floor(6/2) cutoffs. A shorter skin, hops times the longest edge, cut the ghost fraction to 0.25 and made one rank miss the open window; the wall then exceeded a second. "
         "Efficiency divides the one-rank, one-thread time by the wall and by the workers. "
         "Eight repeats, type-7 median and IQR.}",
         "\\label{tab:partition-v17}",
