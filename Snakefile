@@ -233,6 +233,22 @@ rule related_watch:
         "--out benchmarks/h2h-watch.csv"
 
 
+rule literature_h2h:
+    input:
+        "scripts/h2h_protocol.py",
+        "scripts/h2h_literature.py",
+        "scripts/gen_ideal_ice.py",
+        "benchmarks/h2h_literature.py",
+    output:
+        "benchmarks/h2h-literature.csv",
+        "benchmarks/h2h-literature.txt",
+    shell:
+        "PY=\"${{H2H_PYTHON:-python3}}\"; "
+        "\"$PY\" scripts/h2h_literature.py "
+        "--out benchmarks/h2h-literature.csv "
+        "--log benchmarks/h2h-literature.txt"
+
+
 rule shipped_campaign:
     input:
         "paper/tex/repro/shipped_campaign.py",

@@ -1,6 +1,8 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <seams_c_api.h>
 
+#include <cmath>
 #include <vector>
 
 TEST_CASE("seams_chill_plus labels a four-atom tetrahedron without crashing",
@@ -53,4 +55,137 @@ TEST_CASE("seams_chill_plus_graph_lammps matches the ortho call and accepts tilt
   REQUIRE(a[1] == b[1]);
   const double tilted[9] = {0, 0, 0, 10, 8.660254037844386, 10, 5, 0, 0};
   REQUIRE(seams_chill_plus_graph_lammps(xyz, 2, tilted, 3.5, "cutoff", b) == 0);
+}
+
+namespace {
+
+void iceIc(int nrep, std::vector<double> &xyz, double box9[9]) {
+  const double bond = 2.75;
+  const double a = 4.0 * bond / std::sqrt(3.0);
+  const double basis[8][3] = {
+      {0, 0, 0},         {0.5, 0.5, 0},     {0.5, 0, 0.5},     {0, 0.5, 0.5},
+      {0.25, 0.25, 0.25},{0.75, 0.75, 0.25},{0.75, 0.25, 0.75},{0.25, 0.75, 0.75}};
+  const double side = nrep * a;
+  xyz.clear();
+  for (int i = 0; i < nrep; i++) {
+    for (int j = 0; j < nrep; j++) {
+      for (int k = 0; k < nrep; k++) {
+        for (int b = 0; b < 8; b++) {
+          xyz.push_back((i + basis[b][0]) * a);
+          xyz.push_back((j + basis[b][1]) * a);
+          xyz.push_back((k + basis[b][2]) * a);
+        }
+      }
+    }
+  }
+  box9[0] = box9[1] = box9[2] = 0;
+  box9[3] = box9[4] = box9[5] = side;
+  box9[6] = box9[7] = box9[8] = 0;
+}
+
+void iceIh(int nx, int ny, int nz, std::vector<double> &xyz, double box9[9]) {
+  const double d = 2.75;
+  const double z = 1.0 / 16.0;
+  const double c = d / 0.375;
+  const double a = c / std::sqrt(8.0 / 3.0);
+  const double basis[4][3] = {{1.0 / 3.0, 2.0 / 3.0, z},
+                              {2.0 / 3.0, 1.0 / 3.0, 0.5 + z},
+                              {2.0 / 3.0, 1.0 / 3.0, 1.0 - z},
+                              {1.0 / 3.0, 2.0 / 3.0, 0.5 - z}};
+  const double lx = nx * a;
+  const double ly = ny * a * std::sqrt(3.0) / 2.0;
+  const double lz = nz * c;
+  const double xy = ny * (-0.5 * a);
+  box9[0] = box9[1] = box9[2] = 0;
+  box9[3] = lx;
+  box9[4] = ly;
+  box9[5] = lz;
+  box9[6] = xy;
+  box9[7] = box9[8] = 0;
+  xyz.clear();
+  for (int i = 0; i < nx; i++) {
+    for (int j = 0; j < ny; j++) {
+      for (int k = 0; k < nz; k++) {
+        for (int b = 0; b < 4; b++) {
+          const double sx = (i + basis[b][0]) / nx;
+          const double sy = (j + basis[b][1]) / ny;
+          const double sz = (k + basis[b][2]) / nz;
+          xyz.push_back(sx * lx + sy * xy);
+          xyz.push_back(sy * ly);
+          xyz.push_back(sz * lz);
+        }
+      }
+    }
+  }
+}
+
+} // namespace
+
+TEST_CASE("cutoff list, q_l, diamond and primitive rings on ideal ice Ic",
+          "[c_api]") {
+  std::vector<double> xyz;
+  double box9[9];
+  iceIc(2, xyz, box9);
+  const int n = static_cast<int>(xyz.size() / 3);
+  REQUIRE(n == 64);
+  std::vector<int> offsets(static_cast<std::size_t>(n + 1));
+  int nCols = 0;
+  REQUIRE(seams_cutoff_csr(xyz.data(), n, box9, 3.5, offsets.data(), nullptr, 0,
+                           &nCols) == 0);
+  REQUIRE(nCols == 4 * n);
+  std::vector<int> cols(static_cast<std::size_t>(nCols));
+  REQUIRE(seams_cutoff_csr(xyz.data(), n, box9, 3.5, offsets.data(), cols.data(),
+                           nCols, &nCols) == 0);
+  for (int i = 0; i < n; i++) {
+    REQUIRE(offsets[static_cast<std::size_t>(i + 1)] -
+                offsets[static_cast<std::size_t>(i)] ==
+            4);
+  }
+  std::vector<double> q4(static_cast<std::size_t>(n));
+  std::vector<double> q6(static_cast<std::size_t>(n));
+  REQUIRE(seams_ql_cutoff(xyz.data(), n, box9, 3.5, 4, q4.data()) == 0);
+  REQUIRE(seams_ql_cutoff(xyz.data(), n, box9, 3.5, 6, q6.data()) == 0);
+  for (int i = 0; i < n; i++) {
+    REQUIRE(q4[static_cast<std::size_t>(i)] == Catch::Approx(0.509175077).margin(1e-6));
+    REQUIRE(q6[static_cast<std::size_t>(i)] == Catch::Approx(0.628539361).margin(1e-6));
+  }
+  std::vector<int> labels(static_cast<std::size_t>(n), -3);
+  REQUIRE(seams_diamond_cna(xyz.data(), n, box9, 3.5, labels.data()) == 0);
+  for (int label : labels) {
+    REQUIRE(label == 1);
+  }
+  int counts[7] = {};
+  REQUIRE(seams_primitive_rings(xyz.data(), n, box9, 3.5, 6, counts, 7) == 0);
+  REQUIRE(counts[3] == 0);
+  REQUIRE(counts[4] == 0);
+  REQUIRE(counts[5] == 0);
+  REQUIRE(counts[6] == 2 * n);
+  REQUIRE(seams_ql_cutoff(xyz.data(), n, box9, 3.5, 5, q4.data()) == 1);
+  REQUIRE(seams_cutoff_csr(nullptr, n, box9, 3.5, offsets.data(), nullptr, 0,
+                           &nCols) == 1);
+}
+
+TEST_CASE("diamond common-neighbour test labels ideal ice Ih hexagonal",
+          "[c_api]") {
+  std::vector<double> xyz;
+  double box9[9];
+  iceIh(4, 4, 2, xyz, box9);
+  const int n = static_cast<int>(xyz.size() / 3);
+  REQUIRE(n == 128);
+  std::vector<int> offsets(static_cast<std::size_t>(n + 1));
+  int nCols = 0;
+  REQUIRE(seams_cutoff_csr(xyz.data(), n, box9, 3.5, offsets.data(), nullptr, 0,
+                           &nCols) == 0);
+  REQUIRE(nCols == 4 * n);
+  std::vector<int> labels(static_cast<std::size_t>(n), -3);
+  REQUIRE(seams_diamond_cna(xyz.data(), n, box9, 3.5, labels.data()) == 0);
+  for (int label : labels) {
+    REQUIRE(label == 0);
+  }
+  int counts[7] = {};
+  REQUIRE(seams_primitive_rings(xyz.data(), n, box9, 3.5, 6, counts, 7) == 0);
+  REQUIRE(counts[3] == 0);
+  REQUIRE(counts[4] == 0);
+  REQUIRE(counts[5] == 0);
+  REQUIRE(counts[6] == 2 * n);
 }
