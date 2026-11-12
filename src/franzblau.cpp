@@ -162,11 +162,30 @@ struct BoundedBalls {
       }
     }
     const int nCells = (nWhich + cell - 1) / cell;
-    std::vector<int> width(static_cast<std::size_t>(nVertices), 0);
+    // One breadth-first walk per source. The previous count pass repeated
+    // that walk so the table could be sized, and on one thread per rank
+    // the second walk was pure overhead.
+    struct Bag {
+      std::vector<int> vert;
+      std::vector<int> span;
+      std::vector<std::pair<int, int>> items;
+    };
+    int nThreads = 1;
+#ifdef SEAMS_HAS_OPENMP
+    if (parallel) {
+      nThreads = std::max(1, omp_get_max_threads());
+    }
+#endif
+    std::vector<Bag> bags(static_cast<std::size_t>(nThreads));
 #ifdef SEAMS_HAS_OPENMP
 #pragma omp parallel if (parallel)
 #endif
     {
+      int tid = 0;
+#ifdef SEAMS_HAS_OPENMP
+      tid = omp_get_thread_num();
+#endif
+      auto &bag = bags[static_cast<std::size_t>(tid)];
       std::vector<int> dist(nVertices, -1);
       std::vector<int> touched;
       std::vector<int> frontier;
@@ -179,28 +198,20 @@ struct BoundedBalls {
         const int hi = std::min(nWhich, lo + cell);
         for (int k = lo; k < hi; k++) {
           const int v = which[static_cast<std::size_t>(k)];
-          for (const int w : touched) {
-            dist[w] = -1;
-          }
-          touched.clear();
-          dist[v] = 0;
-          touched.push_back(v);
-          frontier.assign(1, v);
-          for (int depth = 1; depth <= radius && !frontier.empty(); depth++) {
-            next.clear();
-            for (const int u : frontier) {
-              for (const int w : adjacency[u]) {
-                if (w >= 0 && w < nVertices && dist[w] == -1) {
-                  dist[w] = depth;
-                  touched.push_back(w);
-                  next.push_back(w);
-                }
-              }
-            }
-            frontier.swap(next);
-          }
-          width[static_cast<std::size_t>(v)] = static_cast<int>(touched.size()) - 1;
+          bag.span.push_back(static_cast<int>(bag.items.size()));
+          appendBall(v, adjacency, radius, dist, touched, frontier, next, bag.items);
+          bag.vert.push_back(v);
         }
+      }
+      bag.span.push_back(static_cast<int>(bag.items.size()));
+    }
+    std::vector<int> width(static_cast<std::size_t>(nVertices), 0);
+    int total = 0;
+    for (const auto &bag : bags) {
+      for (std::size_t k = 0; k < bag.vert.size(); k++) {
+        const int nItem = bag.span[k + 1] - bag.span[k];
+        width[static_cast<std::size_t>(bag.vert[k])] = nItem;
+        total += nItem;
       }
     }
     gRingSplit.ball_count_ms = millisSince(countStart);
@@ -210,35 +221,20 @@ struct BoundedBalls {
       scan[static_cast<std::size_t>(v)] = width[static_cast<std::size_t>(v)];
     }
     seams::exclusiveScan(scan);
-    int total = 0;
     for (int v = 0; v < nVertices; v++) {
       off[static_cast<std::size_t>(v)] = scan[static_cast<std::size_t>(v)];
-      total += width[static_cast<std::size_t>(v)];
     }
     off[static_cast<std::size_t>(nVertices)] = total;
     cols.resize(static_cast<std::size_t>(total));
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel if (parallel)
-#endif
-    {
-      std::vector<int> dist(nVertices, -1);
-      std::vector<int> touched;
-      std::vector<int> frontier;
-      std::vector<int> next;
-      std::vector<std::pair<int, int>> local;
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp for schedule(static)
-#endif
-      for (int c = 0; c < nCells; c++) {
-        const int lo = c * cell;
-        const int hi = std::min(nWhich, lo + cell);
-        for (int k = lo; k < hi; k++) {
-          const int v = which[static_cast<std::size_t>(k)];
-          local.clear();
-          appendBall(v, adjacency, radius, dist, touched, frontier, next, local);
-          std::copy(local.begin(), local.end(),
-                    cols.begin() + static_cast<std::ptrdiff_t>(off[static_cast<std::size_t>(v)]));
+    for (const auto &bag : bags) {
+      for (std::size_t k = 0; k < bag.vert.size(); k++) {
+        const int v = bag.vert[k];
+        const int nItem = bag.span[k + 1] - bag.span[k];
+        if (nItem <= 0) {
+          continue;
         }
+        std::copy(bag.items.begin() + bag.span[k], bag.items.begin() + bag.span[k] + nItem,
+                  cols.begin() + static_cast<std::ptrdiff_t>(off[static_cast<std::size_t>(v)]));
       }
     }
     gRingSplit.ball_fill_ms = millisSince(fillStart);

@@ -1,28 +1,44 @@
-strong 884736 n=1 t=1 neigh 328.117 iqr 3.878 eff 1.000 rule 
-strong 884736 n=1 t=1 chill 467.889 iqr 16.597 eff 1.000 rule 
-strong 884736 n=1 t=1 q6 583.662 iqr 5.162 eff 1.000 rule 
-strong 884736 n=1 t=1 rings 978.841 iqr 11.472 eff 1.000 rule 
-strong 884736 n=8 t=1 neigh 41.700 iqr 3.753 eff 0.984 rule cell
-strong 884736 n=8 t=1 chill 71.506 iqr 1.759 eff 0.818 rule cell
-strong 884736 n=8 t=1 q6 79.336 iqr 7.083 eff 0.920 rule cell
-strong 884736 n=8 t=1 rings 178.672 iqr 1.432 eff 0.685 rule cell
-hybrid 884736 n=4 t=2 chill 86.724 iqr 3.809 eff 0.674 rule cell
-hybrid 884736 n=4 t=2 q6 114.053 iqr 0.949 eff 0.640 rule cell
-hybrid 884736 n=2 t=4 chill 122.555 iqr 2.683 eff 0.477 rule cell
-hybrid 884736 n=2 t=4 q6 182.736 iqr 5.650 eff 0.399 rule cell
-interface 864 n=1 t=1 neigh 0.254 iqr 0.028 eff 1.000 rule 
-interface 864 n=1 t=1 chill 0.456 iqr 0.007 eff 1.000 rule 
-interface 864 n=1 t=1 q6 0.448 iqr 0.007 eff 1.000 rule 
-interface 864 n=1 t=1 rings 2.168 iqr 0.026 eff 1.000 rule 
-interface 864 n=8 t=1 neigh 0.144 iqr 0.009 eff 0.220 rule cell
-interface 864 n=8 t=1 chill 0.240 iqr 0.030 eff 0.238 rule cell
-interface 864 n=8 t=1 q6 0.220 iqr 0.012 eff 0.255 rule cell
-interface 864 n=8 t=1 rings 1.077 iqr 0.096 eff 0.252 rule cell
-nucleation 4096 n=1 t=1 neigh 1.341 iqr 0.075 eff 1.000 rule 
-nucleation 4096 n=1 t=1 chill 2.620 iqr 0.067 eff 1.000 rule 
-nucleation 4096 n=1 t=1 q6 2.337 iqr 0.060 eff 1.000 rule 
-nucleation 4096 n=1 t=1 rings 10.411 iqr 0.203 eff 1.000 rule 
-nucleation 4096 n=8 t=1 neigh 0.444 iqr 0.040 eff 0.377 rule cell
-nucleation 4096 n=8 t=1 chill 0.923 iqr 0.063 eff 0.355 rule cell
-nucleation 4096 n=8 t=1 q6 0.638 iqr 0.026 eff 0.458 rule cell
-nucleation 4096 n=8 t=1 rings 2.878 iqr 0.193 eff 0.452 rule cell
+cores 8
+session 884736 crystal, interface 864, nucleation 4096
+repeats 8, one process per layout, cell and block alternating
+type-7 median and IQR of the cell cut
+
+strong 884736 n=1 t=1 neigh 324.335 iqr 3.350
+strong 884736 n=1 t=1 chill 589.364 iqr 65.663
+strong 884736 n=1 t=1 q6 607.122 iqr 39.659
+strong 884736 n=1 t=1 rings 966.484 iqr 13.190
+strong 884736 n=8 t=1 neigh 26.492 iqr 8.460 eff 1.530 halo 0.060 imb 1.018
+strong 884736 n=8 t=1 chill 63.005 iqr 2.850 eff 1.169 halo 0.060 imb 1.003
+strong 884736 n=8 t=1 q6 82.732 iqr 14.733 eff 0.917 halo 0.060 imb 1.005
+strong 884736 n=8 t=1 rings 181.441 iqr 10.648 eff 0.666 halo 0.292 imb 1.022
+hybrid 884736 n=4 t=2 chill 76.397 iqr 3.699 eff 0.964
+hybrid 884736 n=4 t=2 q6 120.799 iqr 4.635 eff 0.628
+hybrid 884736 n=2 t=4 chill 100.535 iqr 2.771 eff 0.733
+hybrid 884736 n=2 t=4 q6 211.780 iqr 3.880 eff 0.358
+
+The one-rank CHILL+ IQR is 66 ms, so the efficiency above 1 is not a tight claim.
+Eight-rank CHILL+ is 63.0 ms. Against the previous one-rank median 467.889 that is efficiency 0.928.
+4x2 CHILL+ 76.4 ms and 2x4 CHILL+ 100.5 ms are slower than eight ranks. The IQRs do not overlap 63.0.
+The pair walk is a forward half-stencil on the open window. Four threads on the two-rank cloud still miss the L2-sized share an eight-rank process keeps.
+
+Rings at eight ranks: halo fraction 0.292, imbalance 1.022.
+The skin is floor(6/2) cutoffs, the reach lc_within_reach keeps. Imbalance is not the loss.
+The search runs one thread per rank, so a parallel merge is not in the timed path.
+One ball walk replaced the count-then-fill pair of walks. The wall stayed at the halo.
+
+interface 864 n=1 neigh 0.254 iqr 0.020
+interface 864 n=1 chill 0.474 iqr 0.027
+interface 864 n=1 q6 0.446 iqr 0.020
+interface 864 n=1 rings 2.097 iqr 0.056
+interface 864 n=8 neigh 0.524 iqr 0.254 eff 0.061 halo 0.445
+interface 864 n=8 chill 0.235 iqr 0.019 eff 0.252 halo 0.445
+interface 864 n=8 q6 0.254 iqr 0.017 eff 0.220 halo 0.445
+interface 864 n=8 rings 1.050 iqr 0.137 eff 0.250 halo 0.839
+nucleation 4096 n=1 neigh 1.645 iqr 0.178
+nucleation 4096 n=1 chill 3.017 iqr 0.230
+nucleation 4096 n=1 q6 2.503 iqr 0.073
+nucleation 4096 n=1 rings 10.630 iqr 0.708
+nucleation 4096 n=8 neigh 0.288 iqr 0.027 eff 0.715 halo 0.351
+nucleation 4096 n=8 chill 0.671 iqr 0.095 eff 0.562 halo 0.351
+nucleation 4096 n=8 q6 0.868 iqr 0.090 eff 0.361 halo 0.351
+nucleation 4096 n=8 rings 3.509 iqr 0.216 eff 0.379 halo 0.798

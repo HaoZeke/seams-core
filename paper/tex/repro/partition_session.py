@@ -116,7 +116,7 @@ def run_bench(argv, ranks, label, threads=1, reps=REPS):
     ]
     proc = subprocess.run(cmd, env=env, capture_output=True, text=True, cwd=ROOT / "input")
     with (DATA / "partition-raw.txt").open("a") as raw:
-        raw.write(f"# {label} ranks {ranks} {' '.join(argv)}\n")
+        raw.write(f"# cores {os.cpu_count()} ranks {ranks} threads {threads} {label}\n")
         raw.write(proc.stdout)
         if proc.stderr:
             raw.write(proc.stderr)
@@ -613,7 +613,7 @@ def measure_v17():
     DATA.mkdir(parents=True, exist_ok=True)
     (DATA / "partition-raw.txt").write_text("")
     rows = []
-    reps = 6
+    reps = 8
     molecules = 884736
     for ranks in (1, 8):
         for op in OPS:
@@ -664,7 +664,7 @@ def write_v17(rows):
         "\\caption{\\textbf{884736 molecules on eight cores, after the threaded neighbour list.} "
         "Pure MPI is one thread on each rank. Hybrid uses the same eight cores. "
         "Efficiency divides the one-rank, one-thread time by the wall and by the workers. "
-        "Six repeats, type-7 median and IQR.}",
+        "Eight repeats, type-7 median and IQR.}",
         "\\label{tab:partition-v17}",
         "\\begin{tabular}{llrrrrrr}",
         "\\toprule",

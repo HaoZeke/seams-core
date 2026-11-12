@@ -367,12 +367,14 @@ const std::vector<std::vector<int>> &reusedShellList(
 //! axis whose empty gap is wider than the cutoff does not wrap, and the
 //! fused cutoff list runs on that window rather than on the periodic box.
 //! Returns false when the atoms fill the box or the box is not orthorhombic.
-//! Rows are atom IDs, self first, in the same order as neighListO. A null
-//! source marks every atom as an anchor; otherwise only marked atoms
-//! receive partners.
+//! Rows are atom IDs when @a byId is set, and cloud indices otherwise.
+//! Self is first, then partners in ascending order, matching neighListO.
+//! A null source marks every atom as an anchor; otherwise only marked
+//! atoms receive partners.
 bool blockWindowRows(
     const molSys::PointCloud<molSys::Point<double>, double> &yCloud, double rcutoff,
-    const std::vector<char> *source, std::vector<std::vector<int>> &rows);
+    const std::vector<char> *source, std::vector<std::vector<int>> &rows,
+    bool byId = true);
 
 bool cellListRowsThreaded(
     const molSys::PointCloud<molSys::Point<double>, double> &yCloud,

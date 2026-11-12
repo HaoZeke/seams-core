@@ -709,9 +709,144 @@ bool nneigh::cellListRowsThreaded(
   return true;
 }
 
+namespace {
+
+struct alignas(64) PairBag {
+  std::vector<std::pair<int, int>> pairs;
+};
+
+// Pairs inside one cutoff bin of the unwrapped window. Coordinates are
+// stored in cell order so each thread walks a contiguous slab. The
+// periodic axes are compile-time flags: a runtime branch in the inner
+// loop kept the hybrid teams off the pure-MPI pace.
+template <bool PX, bool PY, bool PZ>
+void searchSlots(const double *cx, const double *cy, const double *cz, const int *slotAtom,
+                 const int *cellStart, const int *cellOf, int slot0, int slot1, int nc0, int nc1,
+                 int nc2, double cut2, double ex, double ey, double ez,
+                 std::vector<std::pair<int, int>> &mine) {
+  mine.clear();
+  for (int slot = slot0; slot < slot1; ++slot) {
+      const int i = slotAtom[slot];
+      const double ixv = cx[slot];
+      const double iyv = cy[slot];
+      const double izv = cz[slot];
+      const int home = cellOf[i];
+      const int hx = home % nc0;
+      const int hy = (home / nc0) % nc1;
+      const int hz = home / (nc0 * nc1);
+      // A non-periodic window has no image of a pair in another cell, so
+      // the forward half of the 27-cell stencil lists each pair once.
+      const int dz0 = (!PX && !PY && !PZ) ? 0 : -1;
+      for (int dz = dz0; dz <= 1; ++dz) {
+        int jz = hz + dz;
+        if constexpr (PZ) {
+          if (jz < 0) {
+            jz += nc2;
+          } else if (jz >= nc2) {
+            jz -= nc2;
+          }
+        } else if (jz < 0 || jz >= nc2) {
+          continue;
+        }
+        const int dy0 = (!PX && !PY && !PZ && dz == 0) ? 0 : -1;
+        for (int dy = dy0; dy <= 1; ++dy) {
+          int jy = hy + dy;
+          if constexpr (PY) {
+            if (jy < 0) {
+              jy += nc1;
+            } else if (jy >= nc1) {
+              jy -= nc1;
+            }
+          } else if (jy < 0 || jy >= nc1) {
+            continue;
+          }
+          const int dx0 = (!PX && !PY && !PZ && dz == 0 && dy == 0) ? 0 : -1;
+          for (int dx = dx0; dx <= 1; ++dx) {
+            int jx = hx + dx;
+            if constexpr (PX) {
+              if (jx < 0) {
+                jx += nc0;
+              } else if (jx >= nc0) {
+                jx -= nc0;
+              }
+            } else if (jx < 0 || jx >= nc0) {
+              continue;
+            }
+            const int c = (jz * nc1 + jy) * nc0 + jx;
+            const int begin = cellStart[c];
+            const int end = cellStart[c + 1];
+            for (int t = begin; t < end; ++t) {
+              const int j = slotAtom[t];
+              if (j == i) {
+                continue;
+              }
+              // Full stencil: one direction. Half stencil: the same cell
+              // still needs that cut, and a forward cell is seen once.
+              if ((PX || PY || PZ || (dx == 0 && dy == 0 && dz == 0)) && j <= i) {
+                continue;
+              }
+              double dxv = ixv - cx[t];
+              double dyv = iyv - cy[t];
+              double dzv = izv - cz[t];
+              if constexpr (PX) {
+                if (dxv > 0.5 * ex) {
+                  dxv -= ex;
+                } else if (dxv < -0.5 * ex) {
+                  dxv += ex;
+                }
+              }
+              if constexpr (PY) {
+                if (dyv > 0.5 * ey) {
+                  dyv -= ey;
+                } else if (dyv < -0.5 * ey) {
+                  dyv += ey;
+                }
+              }
+              if constexpr (PZ) {
+                if (dzv > 0.5 * ez) {
+                  dzv -= ez;
+                } else if (dzv < -0.5 * ez) {
+                  dzv += ez;
+                }
+              }
+              if (dxv * dxv + dyv * dyv + dzv * dzv < cut2) {
+                mine.emplace_back(i, j);
+              }
+            }
+          }
+        }
+      }
+    }
+}
+
+template <bool PX, bool PY, bool PZ>
+void searchWindow(const double *cx, const double *cy, const double *cz, const int *slotAtom,
+                  const int *cellStart, const int *cellOf, int n, int nc0, int nc1, int nc2,
+                  double cut2, double ex, double ey, double ez, int nThreads,
+                  std::vector<PairBag> &partial) {
+  // Contiguous slabs, one per thread already pinned by OMP_PLACES.
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel if (nThreads > 1)
+#endif
+  {
+    int tid = 0;
+    int nt = 1;
+#ifdef SEAMS_HAS_OPENMP
+    tid = omp_get_thread_num();
+    nt = omp_get_num_threads();
+#endif
+    const int slot0 = static_cast<int>((static_cast<long long>(tid) * n) / nt);
+    const int slot1 = static_cast<int>((static_cast<long long>(tid + 1) * n) / nt);
+    searchSlots<PX, PY, PZ>(cx, cy, cz, slotAtom, cellStart, cellOf, slot0, slot1, nc0, nc1, nc2,
+                            cut2, ex, ey, ez, partial[static_cast<std::size_t>(tid)].pairs);
+  }
+}
+
+} // namespace
+
 bool nneigh::blockWindowRows(
     const molSys::PointCloud<molSys::Point<double>, double> &yCloud, double rcutoff,
-    const std::vector<char> *source, std::vector<std::vector<int>> &rows) {
+    const std::vector<char> *source, std::vector<std::vector<int>> &rows, bool byId) {
   if (yCloud.box.size() != 3 || yCloud.nop <= 0 || rcutoff <= 0.0) {
     return false;
   }
@@ -724,81 +859,125 @@ bool nneigh::blockWindowRows(
                             yCloud.boxLow.size() > 2 ? yCloud.boxLow[2] : 0.0};
   const int n = yCloud.nop;
   const double windowT0 = omp_get_wtime();
-  double lo[3] = {1.0e300, 1.0e300, 1.0e300};
-  double hi[3] = {-1.0e300, -1.0e300, -1.0e300};
+#ifdef SEAMS_HAS_OPENMP
+  const int nThreads = std::max(1, omp_get_max_threads());
+#else
+  const int nThreads = 1;
+#endif
+  // One pass over the anchors. Each thread keeps its own bounds; a
+  // reduction on the shared min raced under this libgomp.
+  struct Bound {
+    double lo[3];
+    double hi[3];
+    int n = 0;
+  };
+  std::vector<Bound> bounds(static_cast<std::size_t>(nThreads));
+  for (auto &b : bounds) {
+    b.lo[0] = b.lo[1] = b.lo[2] = 1.0e300;
+    b.hi[0] = b.hi[1] = b.hi[2] = -1.0e300;
+    b.n = 0;
+  }
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel if (nThreads > 1)
+#endif
+  {
+    int tid = 0;
+#ifdef SEAMS_HAS_OPENMP
+    tid = omp_get_thread_num();
+#endif
+    Bound &b = bounds[static_cast<std::size_t>(tid)];
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp for schedule(static)
+#endif
+    for (int i = 0; i < n; i++) {
+      if (source != nullptr &&
+          (static_cast<int>(source->size()) <= i || (*source)[static_cast<std::size_t>(i)] == 0)) {
+        continue;
+      }
+      const auto &p = yCloud.pts[static_cast<std::size_t>(i)];
+      b.lo[0] = std::min(b.lo[0], p.x);
+      b.lo[1] = std::min(b.lo[1], p.y);
+      b.lo[2] = std::min(b.lo[2], p.z);
+      b.hi[0] = std::max(b.hi[0], p.x);
+      b.hi[1] = std::max(b.hi[1], p.y);
+      b.hi[2] = std::max(b.hi[2], p.z);
+      ++b.n;
+    }
+  }
+  double lo0 = 1.0e300, lo1 = 1.0e300, lo2 = 1.0e300;
+  double hi0 = -1.0e300, hi1 = -1.0e300, hi2 = -1.0e300;
   int nAnchor = 0;
-  for (int i = 0; i < n; i++) {
-    if (source != nullptr &&
-        (static_cast<int>(source->size()) <= i || (*source)[static_cast<std::size_t>(i)] == 0)) {
-      continue;
-    }
-    const auto &p = yCloud.pts[static_cast<std::size_t>(i)];
-    const double c[3] = {p.x, p.y, p.z};
-    for (int d = 0; d < 3; d++) {
-      lo[d] = std::min(lo[d], c[d]);
-      hi[d] = std::max(hi[d], c[d]);
-    }
-    ++nAnchor;
+  for (const auto &b : bounds) {
+    lo0 = std::min(lo0, b.lo[0]);
+    lo1 = std::min(lo1, b.lo[1]);
+    lo2 = std::min(lo2, b.lo[2]);
+    hi0 = std::max(hi0, b.hi[0]);
+    hi1 = std::max(hi1, b.hi[1]);
+    hi2 = std::max(hi2, b.hi[2]);
+    nAnchor += b.n;
   }
   if (nAnchor == 0) {
     return false;
   }
-  // A wrapped ghost sits at the other end of the box, so the raw bounds
-  // cover every axis even when the atoms occupy one arc. The gap below
-  // finds that arc. A window that still fills the box returns later.
-  // The owned atoms sit in one arc of the circle. The largest empty gap
-  // is the outside of that arc, including when the arc is wider than half
-  // the box. Folding onto the first atom splits such an arc in two and the
-  // window then covers the whole box.
-  {
-    // Owned atoms of one block sit in one arc. The raw min and max are that
-    // arc when it does not wrap. An arc that does wrap spans the whole box
-    // here, and the pair walk below uses the periodic image for that axis.
-    for (int d = 0; d < 3; d++) {
-      double mn = 1.0e300;
-      double mx = -1.0e300;
-      for (int i = 0; i < n; i++) {
-        if (source != nullptr &&
-            (static_cast<int>(source->size()) <= i || (*source)[static_cast<std::size_t>(i)] == 0)) {
-          continue;
-        }
-        const auto &p = yCloud.pts[static_cast<std::size_t>(i)];
-        const double c[3] = {p.x, p.y, p.z};
-        mn = std::min(mn, c[d]);
-        mx = std::max(mx, c[d]);
-      }
-      lo[d] = mn;
-      hi[d] = mx;
-    }
-  }
+  const double alo = lo0, ahi0 = hi0, alo1 = lo1, ahi1 = hi1, alo2 = lo2, ahi2 = hi2;
+  const double box0 = lenBox[0], box1 = lenBox[1], box2 = lenBox[2];
   // Owned atoms of one block do not wrap. Ghosts that do are shifted by a
   // box length so they sit against that block. The grid is the resulting
   // window, and it does not wrap.
   std::vector<double> local(static_cast<std::size_t>(n) * 3);
-  double plen[3] = {0.0, 0.0, 0.0};
-  double plow[3] = {1.0e300, 1.0e300, 1.0e300};
-  for (int i = 0; i < n; i++) {
-    const auto &p = yCloud.pts[static_cast<std::size_t>(i)];
-    const double c[3] = {p.x, p.y, p.z};
-    for (int d = 0; d < 3; d++) {
-      double best = c[d];
-      double bestDist = best < lo[d] ? lo[d] - best : (best > hi[d] ? best - hi[d] : 0.0);
-      for (int wrap = -1; wrap <= 1; wrap++) {
-        if (wrap == 0) {
-          continue;
+  double *const lptr = local.data();
+  std::vector<Bound> span(static_cast<std::size_t>(nThreads));
+  for (auto &b : span) {
+    b.lo[0] = b.lo[1] = b.lo[2] = 1.0e300;
+    b.hi[0] = b.hi[1] = b.hi[2] = -1.0e300;
+  }
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel if (nThreads > 1)
+#endif
+  {
+    int tid = 0;
+#ifdef SEAMS_HAS_OPENMP
+    tid = omp_get_thread_num();
+#endif
+    Bound &b = span[static_cast<std::size_t>(tid)];
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp for schedule(static)
+#endif
+    for (int i = 0; i < n; i++) {
+      const auto &p = yCloud.pts[static_cast<std::size_t>(i)];
+      const double c[3] = {p.x, p.y, p.z};
+      const double boxes[3] = {box0, box1, box2};
+      const double los[3] = {alo, alo1, alo2};
+      const double his[3] = {ahi0, ahi1, ahi2};
+      for (int d = 0; d < 3; d++) {
+        double best = c[d];
+        double bestDist = best < los[d] ? los[d] - best : (best > his[d] ? best - his[d] : 0.0);
+        for (int wrap = -1; wrap <= 1; wrap += 2) {
+          const double s = c[d] + wrap * boxes[d];
+          const double dist = s < los[d] ? los[d] - s : (s > his[d] ? s - his[d] : 0.0);
+          if (dist < bestDist) {
+            bestDist = dist;
+            best = s;
+          }
         }
-        const double s = c[d] + wrap * lenBox[d];
-        const double dist = s < lo[d] ? lo[d] - s : (s > hi[d] ? s - hi[d] : 0.0);
-        if (dist < bestDist) {
-          bestDist = dist;
-          best = s;
-        }
+        lptr[static_cast<std::size_t>(i) * 3 + static_cast<std::size_t>(d)] = best;
+        b.lo[d] = std::min(b.lo[d], best);
+        b.hi[d] = std::max(b.hi[d], best);
       }
-      local[static_cast<std::size_t>(i) * 3 + static_cast<std::size_t>(d)] = best;
-      plow[d] = std::min(plow[d], best);
-      plen[d] = std::max(plen[d], best);
     }
   }
+  double plow0 = 1.0e300, plow1 = 1.0e300, plow2 = 1.0e300;
+  double plen0 = -1.0e300, plen1 = -1.0e300, plen2 = -1.0e300;
+  for (const auto &b : span) {
+    plow0 = std::min(plow0, b.lo[0]);
+    plow1 = std::min(plow1, b.lo[1]);
+    plow2 = std::min(plow2, b.lo[2]);
+    plen0 = std::max(plen0, b.hi[0]);
+    plen1 = std::max(plen1, b.hi[1]);
+    plen2 = std::max(plen2, b.hi[2]);
+  }
+  const double plow[3] = {plow0, plow1, plow2};
+  const double plen[3] = {plen0, plen1, plen2};
   bool opened = false;
   double len[3];
   for (int d = 0; d < 3; d++) {
@@ -806,11 +985,20 @@ bool nneigh::blockWindowRows(
     if (lenBox[d] - len[d] > rcutoff) {
       opened = true;
     }
-    for (int i = 0; i < n; i++) {
-      double &s = local[static_cast<std::size_t>(i) * 3 + static_cast<std::size_t>(d)];
-      s -= plow[d];
-      if (!(s < len[d]) && len[d] > 0.0) {
-        s = std::nextafter(len[d], 0.0);
+  }
+  const double shift0 = plow[0], shift1 = plow[1], shift2 = plow[2];
+  const double len0 = len[0], len1 = len[1], len2 = len[2];
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) if (nThreads > 1)
+#endif
+  for (int i = 0; i < n; i++) {
+    const double shifts[3] = {shift0, shift1, shift2};
+    const double lens[3] = {len0, len1, len2};
+    for (int d = 0; d < 3; d++) {
+      double &s = lptr[static_cast<std::size_t>(i) * 3 + static_cast<std::size_t>(d)];
+      s -= shifts[d];
+      if (!(s < lens[d]) && lens[d] > 0.0) {
+        s = std::nextafter(lens[d], 0.0);
       }
     }
   }
@@ -840,8 +1028,9 @@ bool nneigh::blockWindowRows(
   return false;
 #else
   seams::adoptThreads();
-  thread_local std::vector<double> xyz;
-  xyz.resize(static_cast<std::size_t>(n) * 3);
+  // Not thread_local: the fill below is shared by the team. A thread-local
+  // buffer would be empty on every worker and the write would fault.
+  std::vector<double> xyz(static_cast<std::size_t>(n) * 3);
   std::vector<char> anchor(static_cast<std::size_t>(n), 1);
   if (source != nullptr) {
     for (int i = 0; i < n; i++) {
@@ -849,6 +1038,9 @@ bool nneigh::blockWindowRows(
           static_cast<int>(source->size()) > i && (*source)[static_cast<std::size_t>(i)] != 0;
     }
   }
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) if (nThreads > 1)
+#endif
   for (int i = 0; i < n; i++) {
     const auto &p = yCloud.pts[static_cast<std::size_t>(i)];
     const double raw[3] = {p.x, p.y, p.z};
@@ -899,118 +1091,67 @@ bool nneigh::blockWindowRows(
       cellAtom[static_cast<std::size_t>(fill[static_cast<std::size_t>(c)]++)] = i;
     }
   }
-  const double *xyzp = xyz.data();
+  // Cell order, one coordinate array per axis. The pair walk then reads
+  // neighbours of a bin sequentially instead of gathering the frame order.
+  std::vector<double> cx(static_cast<std::size_t>(n));
+  std::vector<double> cy(static_cast<std::size_t>(n));
+  std::vector<double> cz(static_cast<std::size_t>(n));
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) if (nThreads > 1)
+#endif
+  for (int slot = 0; slot < n; slot++) {
+    const int i = cellAtom[static_cast<std::size_t>(slot)];
+    const double *p = xyz.data() + static_cast<std::size_t>(i) * 3;
+    cx[static_cast<std::size_t>(slot)] = p[0];
+    cy[static_cast<std::size_t>(slot)] = p[1];
+    cz[static_cast<std::size_t>(slot)] = p[2];
+  }
   const double pairT0 = omp_get_wtime();
   if (const char *split = std::getenv("SEAMS_SPLIT")) {
     if (split[0] == '1') {
       std::fprintf(stderr, "prep ms %.3f\n", (pairT0 - windowT0) * 1.0e3);
     }
   }
-#ifdef SEAMS_HAS_OPENMP
-  const int nThreads = std::max(1, omp_get_max_threads());
-#else
-  const int nThreads = 1;
-#endif
-  std::vector<std::vector<std::pair<int, int>>> partial(static_cast<std::size_t>(nThreads));
-  for (auto &part : partial) {
-    part.reserve(static_cast<std::size_t>(n) * 4 / static_cast<std::size_t>(nThreads) + 16);
+  // One cache line per bag. Adjacent vector headers were sharing a
+  // line, and every emplace on a hybrid team invalidated the others.
+  std::vector<PairBag> partial(static_cast<std::size_t>(nThreads));
+  for (auto &bag : partial) {
+    bag.pairs.reserve(static_cast<std::size_t>(n) * 4 / static_cast<std::size_t>(nThreads) + 16);
   }
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel if (nThreads > 1)
-#endif
-  {
-#ifdef SEAMS_HAS_OPENMP
-    const int tid = omp_get_thread_num();
-#else
-    const int tid = 0;
-#endif
-    auto &mine = partial[static_cast<std::size_t>(tid)];
-    mine.clear();
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp for schedule(static)
-#endif
-    for (int i = 0; i < n; i++) {
-      const double ixv = xyzp[static_cast<std::size_t>(i) * 3];
-      const double iyv = xyzp[static_cast<std::size_t>(i) * 3 + 1];
-      const double izv = xyzp[static_cast<std::size_t>(i) * 3 + 2];
-      const int home[3] = {cellIndex(ixv, 0), cellIndex(iyv, 1), cellIndex(izv, 2)};
-      for (int dz = -1; dz <= 1; dz++) {
-        int jz = home[2] + dz;
-        if (periodic[2]) {
-          if (jz < 0) {
-            jz += nc[2];
-          } else if (jz >= nc[2]) {
-            jz -= nc[2];
-          }
-        } else if (jz < 0 || jz >= nc[2]) {
-          continue;
-        }
-        for (int dy = -1; dy <= 1; dy++) {
-          int jy = home[1] + dy;
-          if (periodic[1]) {
-            if (jy < 0) {
-              jy += nc[1];
-            } else if (jy >= nc[1]) {
-              jy -= nc[1];
-            }
-          } else if (jy < 0 || jy >= nc[1]) {
-            continue;
-          }
-          for (int dx = -1; dx <= 1; dx++) {
-            int jx = home[0] + dx;
-            if (periodic[0]) {
-              if (jx < 0) {
-                jx += nc[0];
-              } else if (jx >= nc[0]) {
-                jx -= nc[0];
-              }
-            } else if (jx < 0 || jx >= nc[0]) {
-              continue;
-            }
-            const int c = (jz * nc[1] + jy) * nc[0] + jx;
-            const int begin = cellStart[static_cast<std::size_t>(c)];
-            const int end = cellStart[static_cast<std::size_t>(c) + 1];
-            for (int t = begin; t < end; t++) {
-              const int j = cellAtom[static_cast<std::size_t>(t)];
-              if (j <= i) {
-                continue;
-              }
-              double dxv = ixv - xyzp[static_cast<std::size_t>(j) * 3];
-              double dyv = iyv - xyzp[static_cast<std::size_t>(j) * 3 + 1];
-              double dzv = izv - xyzp[static_cast<std::size_t>(j) * 3 + 2];
-              if (periodic[0]) {
-                if (dxv > 0.5 * edge[0]) {
-                  dxv -= edge[0];
-                } else if (dxv < -0.5 * edge[0]) {
-                  dxv += edge[0];
-                }
-              }
-              if (periodic[1]) {
-                if (dyv > 0.5 * edge[1]) {
-                  dyv -= edge[1];
-                } else if (dyv < -0.5 * edge[1]) {
-                  dyv += edge[1];
-                }
-              }
-              if (periodic[2]) {
-                if (dzv > 0.5 * edge[2]) {
-                  dzv -= edge[2];
-                } else if (dzv < -0.5 * edge[2]) {
-                  dzv += edge[2];
-                }
-              }
-              if (dxv * dxv + dyv * dyv + dzv * dzv < cut2) {
-                mine.emplace_back(i, j);
-              }
-            }
-          }
-        }
-      }
-    }
+  const int mask = (periodic[0] ? 1 : 0) | (periodic[1] ? 2 : 0) | (periodic[2] ? 4 : 0);
+  const auto runSearch = [&](auto &&go) {
+    go(cx.data(), cy.data(), cz.data(), cellAtom.data(), cellStart.data(), cellOf.data(), n, nc[0],
+       nc[1], nc[2], cut2, edge[0], edge[1], edge[2], nThreads, partial);
+  };
+  switch (mask) {
+  case 0:
+    runSearch(searchWindow<false, false, false>);
+    break;
+  case 1:
+    runSearch(searchWindow<true, false, false>);
+    break;
+  case 2:
+    runSearch(searchWindow<false, true, false>);
+    break;
+  case 3:
+    runSearch(searchWindow<true, true, false>);
+    break;
+  case 4:
+    runSearch(searchWindow<false, false, true>);
+    break;
+  case 5:
+    runSearch(searchWindow<true, false, true>);
+    break;
+  case 6:
+    runSearch(searchWindow<false, true, true>);
+    break;
+  default:
+    runSearch(searchWindow<true, true, true>);
+    break;
   }
   std::size_t nPairs = 0;
   for (const auto &part : partial) {
-    nPairs += part.size();
+    nPairs += part.pairs.size();
   }
   if (const char *split = std::getenv("SEAMS_SPLIT")) {
     if (split[0] == '1') {
@@ -1018,17 +1159,37 @@ bool nneigh::blockWindowRows(
                    nPairs, (omp_get_wtime() - pairT0) * 1.0e3);
     }
   }
-  const std::vector<int> indexToID = indexToIDTable(yCloud);
-  std::vector<int> degree(static_cast<std::size_t>(n), 0);
-  for (const auto &part : partial) {
-    for (const auto &hit : part) {
+  const std::vector<int> indexToID = byId ? indexToIDTable(yCloud) : std::vector<int>{};
+  std::vector<int> threadDegree(static_cast<std::size_t>(nThreads) * static_cast<std::size_t>(n), 0);
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel if (nThreads > 1)
+#endif
+  {
+    int tid = 0;
+#ifdef SEAMS_HAS_OPENMP
+    tid = omp_get_thread_num();
+#endif
+    int *deg = threadDegree.data() + static_cast<std::size_t>(tid) * static_cast<std::size_t>(n);
+    for (const auto &hit : partial[static_cast<std::size_t>(tid)].pairs) {
       if (anchor[static_cast<std::size_t>(hit.first)]) {
-        ++degree[static_cast<std::size_t>(hit.first)];
+        ++deg[hit.first];
       }
       if (anchor[static_cast<std::size_t>(hit.second)]) {
-        ++degree[static_cast<std::size_t>(hit.second)];
+        ++deg[hit.second];
       }
     }
+  }
+  std::vector<int> degree(static_cast<std::size_t>(n), 0);
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) if (nThreads > 1)
+#endif
+  for (int i = 0; i < n; i++) {
+    int sum = 0;
+    for (int t = 0; t < nThreads; t++) {
+      sum += threadDegree[static_cast<std::size_t>(t) * static_cast<std::size_t>(n) +
+                          static_cast<std::size_t>(i)];
+    }
+    degree[static_cast<std::size_t>(i)] = sum;
   }
   std::vector<int> cursor(static_cast<std::size_t>(n) + 1, 0);
   for (int i = 0; i < n; i++) {
@@ -1036,14 +1197,34 @@ bool nneigh::blockWindowRows(
         cursor[static_cast<std::size_t>(i)] + degree[static_cast<std::size_t>(i)];
   }
   std::vector<int> partner(static_cast<std::size_t>(cursor[static_cast<std::size_t>(n)]));
-  std::vector<int> atCursor = cursor;
-  for (const auto &part : partial) {
-    for (const auto &hit : part) {
+  std::vector<int> threadAt(static_cast<std::size_t>(nThreads) * static_cast<std::size_t>(n), 0);
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) if (nThreads > 1)
+#endif
+  for (int i = 0; i < n; i++) {
+    int at = cursor[static_cast<std::size_t>(i)];
+    for (int t = 0; t < nThreads; t++) {
+      threadAt[static_cast<std::size_t>(t) * static_cast<std::size_t>(n) +
+               static_cast<std::size_t>(i)] = at;
+      at += threadDegree[static_cast<std::size_t>(t) * static_cast<std::size_t>(n) +
+                         static_cast<std::size_t>(i)];
+    }
+  }
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel if (nThreads > 1)
+#endif
+  {
+    int tid = 0;
+#ifdef SEAMS_HAS_OPENMP
+    tid = omp_get_thread_num();
+#endif
+    int *at = threadAt.data() + static_cast<std::size_t>(tid) * static_cast<std::size_t>(n);
+    for (const auto &hit : partial[static_cast<std::size_t>(tid)].pairs) {
       if (anchor[static_cast<std::size_t>(hit.first)]) {
-        partner[static_cast<std::size_t>(atCursor[static_cast<std::size_t>(hit.first)]++)] = hit.second;
+        partner[static_cast<std::size_t>(at[hit.first]++)] = hit.second;
       }
       if (anchor[static_cast<std::size_t>(hit.second)]) {
-        partner[static_cast<std::size_t>(atCursor[static_cast<std::size_t>(hit.second)]++)] = hit.first;
+        partner[static_cast<std::size_t>(at[hit.second]++)] = hit.first;
       }
     }
   }
@@ -1055,6 +1236,9 @@ bool nneigh::blockWindowRows(
     }
   }
   auto idOf = [&](int i) {
+    if (!byId) {
+      return i;
+    }
     const int mapped = indexToID[static_cast<std::size_t>(i)];
     if (mapped >= 0) {
       return mapped;

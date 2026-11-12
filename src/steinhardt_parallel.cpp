@@ -1018,8 +1018,17 @@ Q6During gQ6;
 
 void duringQ6Halo(void *) {
   auto &work = seams::domain::gatheredWork();
-  const auto &live = qRows(work.cloud, gQ6.cutoff, work.share.owned);
-  gQ6.rows.assign(live.begin(), live.end());
+  bool single = true;
+  for (const char flag : work.share.owned) {
+    if (!flag) {
+      single = false;
+      break;
+    }
+  }
+  if (!nneigh::blockWindowRows(work.cloud, gQ6.cutoff, single ? nullptr : &work.share.owned,
+                               gQ6.rows)) {
+    gQ6.rows = qRows(work.cloud, gQ6.cutoff, work.share.owned);
+  }
   const NeighbourCSR graph = flatten(work.cloud, gQ6.rows);
   const int width = steinhardtQlmWidth(gQ6.orderL);
   gQ6.qlm.assign(static_cast<std::size_t>(graph.nop) * static_cast<std::size_t>(width), 0.0);
@@ -1045,7 +1054,9 @@ SteinhardtQl distributedSteinhardt(
   gQ6.cutoff = cutoff;
   gQ6.orderL = orderL;
   gQ6.ran = false;
+  seams::domain::setHaloHook(duringQ6Halo, nullptr);
   auto &work = seams::domain::gatherWork(full, cutoff, comm, seams::domain::kWorkQ6);
+  seams::domain::setHaloHook(nullptr, nullptr);
   const int width = steinhardtQlmWidth(orderL);
   const std::vector<std::vector<int>> &rows =
       gQ6.ran ? gQ6.rows : qRows(work.cloud, cutoff, work.share.owned);
