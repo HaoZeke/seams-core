@@ -663,7 +663,8 @@ def write_v17(rows):
         "\\centering",
         "\\caption{\\textbf{884736 molecules on eight cores.} "
         "Pure MPI is one thread on each rank. A repeated ring cut reuses the cutoff rows and the trimmed bond ball. "
-        "A moved frame rebuilds the rows of its own share. On eight thermal frames the distinct-frame cell efficiency is 0.794. "
+        "A moved frame rebuilds the rows of its own share. On eight thermal frames the distinct-frame ring efficiency is 0.794. "
+        "CHILL+ and q6 on the same frames are 0.905 and 0.903. "
         "Hybrid uses the same eight cores and is slower: the eight-rank window is 117645 atoms, about 2.8 MiB, next to a 2 MiB L2, "
         "while the two-rank window is 451584 atoms and 340605 cells, about 11 MiB. "
         "The ring skin stays at floor(6/2) cutoffs. "
