@@ -1,0 +1,56 @@
+#+TITLE: Atom identity on a nucleation window
+#+OPTIONS: toc:nil num:nil
+
+A cutoff list, a primitive ring and a CHILL+ label are properties of
+an atom. Following them from one frame to the next needs the atom id,
+and the cutoff list itself needs the cell. An eOn =.con= frame written
+by readcon keeps both on every frame. An XYZ frame does not: the id
+seams stores is the line order, and the cell has to be carried beside
+the coordinates.
+
+* The window
+
+The trajectory is one 4096-molecule mW liquid from the homogeneous
+quench deck, seed 20261118. The thermostat is the deck's: a 10 fs
+step, 10000 steps of NVT at 350 K (damping 200 fs), then NVT at 180 K
+with the same damping. The saved window is the 81 frames from 659 ps to 739 ps after the
+quench (1 ps apart). The deck's =nskip= leaves the step on a dump
+multiple, so that step is included. The published crossing of a
+50-molecule CHILL+ core (705 ps for this seed) sits inside the file. The
+original dump is not in the tree, so this window was regenerated with
+that deck and that LAMMPS tag (22 Jul 2025, Update 6).
+
+* What is compared
+
+The cutoff is 3.5 Å. Primitive rings are the Franzblau rings of that
+graph through seven members. The walk numbers vertices by index, so
+the atoms are ordered by coordinates before the search and each
+vertex keeps its atom id. CHILL+ is the published rule, not the
+OVITO rule. Each XYZ frame is the same coordinates in an order drawn
+from =mt19937= seeded with =20261118 + frame * 2654435769=. The join
+uses the atom id. For =.con= that id is the LAMMPS id. For XYZ it is
+the line number in that frame.
+
+Neighbour-pair persistence is the fraction of cutoff pairs at frame
+=t= that are still pairs at =t+tau=. Six-ring persistence is the
+fraction of atoms that sit in a six-ring at =t= and still sit in one
+at =t+tau=. Ice-type agreement is the fraction of atoms whose
+published CHILL+ label is unchanged. The per-frame ring counts and the
+ice-type counts do not use the id, so they match between the two
+files. Only the join changes. Nearly every molecule in this window
+already sits in a six-ring, so that fraction stays high after the
+shuffle. The neighbour pairs fall to about one in a thousand, and the
+CHILL+ label falls to the chance rate of the liquid majority.
+
+readcon-db ingests the =.con= trajectory with =sinp::ingestConCorpus=
+and reads it back by the formula =O:4096= with =sinp::readConCorpus=.
+The decoded positions, ids and cell match the file. The timing is
+eight repeats on the core count recorded in the result file.
+
+#+begin_src bash
+python3 scripts/readcon_connectivity.py quench.lammpstrj --seams-build build
+#+end_src
+
+The numbers are =bench/readcon-connectivity/results.json=. The script
+draws =bench/readcon-connectivity/persistence.png=, which is not
+committed. The dump, the =.con= file and the XYZ file stay out of git.

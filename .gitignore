@@ -368,3 +368,7 @@ repro/figshare/
 repro/results/
 repro/zenodo/payload/
 .tip_sha
+
+# Connectivity demo. The script redraws the figure; frames stay out of git.
+bench/readcon-connectivity/persistence.png
+bench/readcon-connectivity/work/
