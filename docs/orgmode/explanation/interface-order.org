@@ -377,6 +377,63 @@ report for TIP4P/ICE on the same page: the basal rate is within five
 per cent of 0.6 times the secondary prism at 245, 255 and 260 K.
 They do not print an mW basal number.
 
+* Which definition meets Table I
+
+The gap is not the 0.95 cutoff, the box length, the barostat period,
+or the number of molecules.
+
+Equation 2 is u = L / (2 τ), with L the liquid length and the 2
+standing for two interfaces. On a linear freeze that is the same
+number as the slope of the solid count,
+
+u = (dN/dt) Lz / (2 N),
+
+and the same number as half the slope of the solid thickness.
+Lengths here are angstroms and times are picoseconds, so the speed
+in Å/ns is 1000 times the speed in Å/ps. 490 Å/ns is 49 m/s.
+
+~input/interface/espinosa_protocol.py~ repeats the secondary prism
+at the size on page 211922-2: 4000 molecules, ice in the middle
+half, box 39.11 × 36.77 × 90.37 Å. The barostat is anisotropic
+Nose-Hoover at 1 bar, with the 2 ps period stated for their
+thermostat and barostat. LAMMPS has no velocity-rescaling fix of
+the Gromacs kind; Nose-Hoover is the NpT fix. The mW parameters are
+the Molinero and Moore set: ε = 6.189 kcal/mol, σ = 2.3925 Å,
+a = 1.80, λ = 23.15, γ = 1.20, cos θ0 = −1/3. The temperature is
+the Kelvin target of that fix. A 20 ps melt at 400 K with a 2 ps
+period left the liquid on the crystal sites, mean move 0.3 Å, so
+the liquid was melted for 100 ps at 500 K before the growth run.
+Four seeds at 240 K and four at 260 K. This session had 8 cores,
+one thread per run. The 240 K runs took 449 to 454 s, the 260 K
+runs took 859 to 863 s, and the invocation took 862.7 s of wall
+time. Scoring took 152 s.
+
+| definition | 240 K (Å/ns) | 260 K (Å/ns) | over printed | over printed/10 |
+|------------+--------------+--------------+--------------+-----------------|
+| L/(2τ) at 0.95 | 151.6 [143.6, 160.8] | 82.8 [80.5, 85.6] | 0.31 | 3.1 |
+| solid-count slope | 116.2 [112.3, 122.0] | 64.1 [61.0, 67.5] | 0.24 | 2.4 |
+| thickness slope / 2 | 116.5 [109.9, 123.2] | 58.5 [53.2, 61.7] | 0.23 | 2.3 |
+| Table I as printed | 490 | 266 | 1 | 10 |
+| Table I divided by 10 | 49 | 26.6 | 0.1 | 1 |
+
+The same three definitions on the earlier 8064-molecule runs, with
+a 0.2 ps Nose-Hoover period, give a count slope of 115.3 at 240 K
+and 57.1 at 260 K. Changing the molecule count and the barostat
+period does not move the speed onto either published column.
+Using the whole box instead of the liquid length, and dropping the
+factor of two, gives about 600 Å/ns at 240 K and about 325 Å/ns at
+260 K. That is the nearest misreading of equation 2, and it still
+sits about 20% above the printed table.
+
+The factor of ten in Montero de Hijes, Romano, Gorfer and Dellago,
+Figure 4, is what they were told to apply to the 2016 points. It
+does not turn Table I into this front displacement. The contour of
+the solid fraction moves about 34 Å in 145 ps on the 4000-molecule
+cell at 240 K, which is a one-front speed near 120 Å/ns whether or
+not the count of solid molecules is used. That is the speed this
+model produces with equation 2. It is 0.24 times the printed table
+and 2.4 times the table divided by ten, at both 240 K and 260 K.
+
 * Sources checked
 
 Nguyen and Molinero, J. Phys. Chem. B 2015, 119, 9369–9376.
@@ -412,6 +469,8 @@ python3 input/interface/campaign.py
 python3 scripts/growth_rates.py --bin bbdir-eessi/tests/interface_order
 python3 input/interface/npt_growth.py
 python3 scripts/npt_rates.py --bin bbdir-eessi/tests/interface_order
+python3 input/interface/espinosa_protocol.py
+python3 scripts/espinosa_rates.py --bin bbdir-eessi/tests/interface_order
 interface_order wc input/traj/nucleation_f1.lammpstrj
 python3 scripts/figures_interface_order.py \
   --bin bbdir-eessi/tests/interface_order \
