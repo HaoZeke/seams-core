@@ -437,6 +437,24 @@ ring::CageAffiliation batchSweep(const FrameContext &ctx) {
   const bool threaded = false;
 #endif
 
+  // Candidate lists do not read each other. Filling them before the
+  // serial HC sweep keeps that sweep on cached rows, and the fill
+  // scales. Each thread owns its stamp scratch.
+  if (threaded) {
+#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
+#pragma omp parallel
+    {
+      FrameContext::BasalScratch scratch;
+#pragma omp for schedule(static)
+      for (int i = 0; i < nR; ++i) {
+        ctx.basalCand[static_cast<std::size_t>(i)] =
+            ctx.collectBasalCandidates(i, scratch);
+        ctx.basalReady[static_cast<std::size_t>(i)] = 1;
+      }
+    }
+#endif
+  }
+
   // A flag only turns on. Once every ring is on, later pairs cannot change
   // the result, and on a ring-rich graph those pairs are most of the sweep.
   {
