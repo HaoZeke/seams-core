@@ -28,34 +28,59 @@ rings of size 3, 4, 5, and 6.
 
 ## Cost
 
-Release library, 2 fs timestep. The 4096-molecule block is 2000 steps,
-four repeats, intervals 100 and 500. The 32768-molecule block is 1000
-steps, four repeats, one report every 100 steps. Bare time for 4096
-molecules is 50.940 s (6.785 ns/day) on one thread and 12.206 s
-(28.313 ns/day) on eight. For 32768 molecules it is 204.945 s
-(0.843 ns/day) and 45.846 s (3.769 ns/day).
+The machine is an Intel Xeon, 8 cores, one thread per core. The
+release library is built with OpenMP. One process runs the blocks one
+after another. Each block is six repeats from one minimized state.
+The OpenMP width is the OpenMM thread count, except the cutoff list
+itself stays on one thread: waking the team for that list, then again
+for the rings, cost more than the list. CHILL+ joins the team from
+16384 atoms up. An orthorhombic box with a team already asked for uses
+the persistent CSR builder, whose cell tables stay allocated.
+
+```bash
+export OMP_NUM_THREADS=1
+export OPENMM_TIP4P_STEPS=2000
+export OPENMM_TIP4P_REPEATS=6
+export OPENMM_TIP4P_INTERVALS=100
+export OPENMM_TIP4P_LARGE_STEPS=1000
+export OPENMM_TIP4P_LARGE_REPEATS=6
+python3 scripts/openmm_tip4p_ice.py "$LIBSEAMS_LANG" "$SEAMS" run.log
+```
+
+`$LIBSEAMS_LANG` is the release `libseams_lang` and `$SEAMS` is the
+release `seams`. The timestep is 2 fs. 4096 molecules run for 2000
+steps. 32768 molecules run for 1000 steps. A report is every 100 steps.
+
+Bare time is 48.616 s (7.109 ns/day) and 12.195 s (28.339 ns/day) for
+4096 molecules, and 203.116 s (0.851 ns/day) and 48.178 s
+(3.587 ns/day) for 32768 molecules, on one thread and on eight.
 
 Clocks inside a report, in milliseconds:
 
-| molecules | threads | interval | copy | neighbours | CHILL+ | rings | sum |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 4096 | 1 | 100 | 0.40 | 1.66 | 1.42 | 7.33 | 10.81 |
-| 4096 | 1 | 500 | 1.05 | 1.64 | 1.41 | 7.07 | 11.17 |
-| 4096 | 8 | 100 | 0.41 | 4.03 | 2.65 | 2.99 | 10.08 |
-| 4096 | 8 | 500 | 0.38 | 3.24 | 1.54 | 1.55 | 6.72 |
-| 32768 | 1 | 100 | 2.74 | 11.65 | 11.98 | 63.75 | 90.12 |
-| 32768 | 8 | 100 | 2.92 | 13.50 | 9.03 | 12.68 | 38.13 |
+| molecules | threads | copy | neighbours | CHILL+ | rings | sum |
+| --- | --- | --- | --- | --- | --- | --- |
+| 4096 | 1 | 0.37 | 1.61 | 1.36 | 7.03 | 10.37 |
+| 4096 | 8 | 0.36 | 1.10 | 1.35 | 6.21 | 9.01 |
+| 32768 | 1 | 3.03 | 12.19 | 11.98 | 64.00 | 91.19 |
+| 32768 | 8 | 2.63 | 8.30 | 9.51 | 13.52 | 33.96 |
 
-The ring search is the part that scales. On 4096 oxygens it falls from
-7.33 ms on one thread to 2.99 ms on eight (2.4×) at interval 100, and
-from 7.07 ms to 1.55 ms (4.6×) at interval 500. On 32768 oxygens it
-falls from 63.75 ms to 12.68 ms (5.0×). Adding the 32768 eight-thread
-sum onto the bare run is 0.83% of the step time. The measured
-wall-clock means at eight threads are 27.665 ns/day for 4096 molecules
-at interval 100 (14.3 ms per report, 2.3% slower than bare) and
-3.704 ns/day for 32768 molecules (80.8 ms per report, 1.7% slower).
-At one thread the reporter's added time is smaller than the spread of
-the bare runs.
+On eight threads the neighbour list is no longer the slow case: 1.10 ms
+against 1.61 ms at 4096, and 8.30 ms against 12.19 ms at 32768.
+CHILL+ at 4096 is 1.35 ms against 1.36 ms. The ring search on 32768
+oxygens falls from 64.00 ms to 13.52 ms.
+
+Wall-clock means of the same six repeats, report every 100 steps:
+
+| molecules | threads | reporter ns/day | ms per report | slowdown |
+| --- | --- | --- | --- | --- |
+| 4096 | 1 | 7.091 | 6.08 | 0.25% |
+| 4096 | 8 | 28.148 | 4.14 | 0.67% |
+| 32768 | 1 | 0.867 | −379.03 | −1.90% |
+| 32768 | 8 | 3.586 | 1.57 | 0.033% |
+
+At eight threads and a report every 100 steps the reporter is 0.67%
+slower on 4096 molecules and 0.033% slower on 32768. The one-thread
+32768 gap is inside the spread of the bare runs.
 
 Set `SEAMS_LANG_LIB` to `libseams_lang` before constructing `InSitu`.
 The reporter takes that engine, an unused dump name, the step interval,

@@ -682,12 +682,18 @@ int seams_frame_chill_rings(seams_frame *frame, double cutoff, int type,
       bonds = pairs_within(frame->cloud, frame->wide_list, cutoff);
       reused = 1;
     } else if (which == "cutoff" && skin > 0.0) {
+      // Leave the OpenMP team as it is. Changing its width sleeps the
+      // workers and the ring search pays to create them again.
+      nneigh::preferSerialCutoff(true);
       auto wide = nneigh::neighListO(cutoff + skin, frame->cloud, typ);
+      nneigh::preferSerialCutoff(false);
       remember_wide(frame, wide, cutoff, skin, typ, which, box9);
       bonds = pairs_within(frame->cloud, frame->wide_list, cutoff);
     } else {
       frame->wide_ready = false;
+      nneigh::preferSerialCutoff(true);
       bonds = bond_list(frame->cloud, cutoff, typ, which, 4);
+      nneigh::preferSerialCutoff(false);
     }
     const auto t1 = clock::now();
     chill::applyChillPlus(frame->cloud, bonds, chill::chillPlusRule(""), false);
