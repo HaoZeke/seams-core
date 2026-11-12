@@ -397,7 +397,9 @@ bool cellListRowsThreaded(
 bool orthoFullCsr(
     const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
     const std::vector<int> *subset, double rcutoff, std::vector<int> &offsets,
-    std::vector<int> &cols, bool half = false);
+    std::vector<int> &cols, bool half = false,
+    std::vector<std::vector<int>> *directRows = nullptr, const int *indexToID = nullptr,
+    bool *wroteRows = nullptr);
 
 //! Same rows as neighListO, written into @a rows. A row keeps the capacity
 //! of the previous call, so a repeated frame does not allocate per atom.

@@ -1678,20 +1678,52 @@ bool nneigh::refillNeighListO(double rcutoff,
   if (!hasPeriodicBox(yCloud) || yCloud.box.size() < 3) {
     return false;
   }
-  const std::vector<int> indexToID = indexToIDTable(yCloud);
+  const int nopAtoms = yCloud.nop;
+  std::vector<int> indexToID(static_cast<std::size_t>(std::max(nopAtoms, 0)));
+  int threads = 1;
+#ifdef SEAMS_HAS_OPENMP
+  threads = omp_get_max_threads();
+#pragma omp parallel for schedule(static) if (nopAtoms >= 256 && !omp_in_parallel())
+#endif
+  for (int i = 0; i < nopAtoms; ++i) {
+    indexToID[static_cast<std::size_t>(i)] = yCloud.pts[static_cast<std::size_t>(i)].atomID;
+  }
   std::vector<int> typeIIndices;
-  typeIIndices.reserve(static_cast<std::size_t>(yCloud.nop));
-  for (int i = 0; i < yCloud.nop; i++) {
-    if (yCloud.pts[static_cast<std::size_t>(i)].type == typeI) {
-      typeIIndices.push_back(i);
+  const std::vector<int> *subset = &typeIIndices;
+  int otherType = 0;
+  if (threads > 1 && nopAtoms > 0) {
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) reduction(+ : otherType)
+#endif
+    for (int i = 0; i < nopAtoms; ++i) {
+      otherType += yCloud.pts[static_cast<std::size_t>(i)].type != typeI;
+    }
+    if (otherType == 0) {
+      subset = nullptr;
+    }
+  }
+  if (subset != nullptr) {
+    typeIIndices.reserve(static_cast<std::size_t>(nopAtoms));
+    for (int i = 0; i < nopAtoms; ++i) {
+      if (yCloud.pts[static_cast<std::size_t>(i)].type == typeI) {
+        typeIIndices.push_back(i);
+      }
     }
   }
   std::vector<int> offsets;
   std::vector<int> cols;
-  if (!orthoFullCsr(yCloud, &typeIIndices, rcutoff, offsets, cols, false)) {
+  bool wrote = false;
+  const int nop = yCloud.nop;
+  if (static_cast<int>(rows.size()) != nop) {
+    rows.assign(static_cast<std::size_t>(nop), {});
+  }
+  if (!orthoFullCsr(yCloud, subset, rcutoff, offsets, cols, false, &rows, indexToID.data(),
+                    &wrote)) {
     return false;
   }
-  const int nop = yCloud.nop;
+  if (wrote) {
+    return true;
+  }
   std::vector<int> need(static_cast<std::size_t>(nop), 1);
 #ifdef SEAMS_HAS_OPENMP
 #pragma omp parallel for schedule(static) if (nop >= 256 && !omp_in_parallel())
@@ -1747,10 +1779,17 @@ bool nneigh::refillIndexRows(const molSys::PointCloud<molSys::Point<double>, dou
   }
   std::vector<int> offsets;
   std::vector<int> cols;
-  if (!orthoFullCsr(yCloud, nullptr, cutoff, offsets, cols, false)) {
+  bool wrote = false;
+  const int nop = yCloud.nop;
+  if (static_cast<int>(rows.size()) != nop) {
+    rows.assign(static_cast<std::size_t>(nop), {});
+  }
+  if (!orthoFullCsr(yCloud, nullptr, cutoff, offsets, cols, false, &rows, nullptr, &wrote)) {
     return false;
   }
-  const int nop = yCloud.nop;
+  if (wrote) {
+    return true;
+  }
   std::vector<int> need(static_cast<std::size_t>(nop), 1);
   for (int i = 0; i < nop; i++) {
     const int a = offsets[static_cast<std::size_t>(i)];
