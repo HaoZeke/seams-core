@@ -11,16 +11,19 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <cstdint>
 
 struct Hook {
   void *lmp = nullptr;
   int calls = 0;
   int ice = 0;
   int atoms = 0;
+  int stride = 1;
   double seconds = 0.0;
+  std::vector<int64_t> steps;
 };
 
-void callback(void *ptr, int64_t, int nlocal, int *, double **x, double **) {
+void callback(void *ptr, int64_t step, int nlocal, int *, double **x, double **) {
   auto *hook = static_cast<Hook *>(ptr);
   std::vector<double> xyz(static_cast<std::size_t>(nlocal) * 3);
   for (int i = 0; i < nlocal; ++i) {
@@ -45,7 +48,12 @@ void callback(void *ptr, int64_t, int nlocal, int *, double **x, double **) {
   hook->seconds += std::chrono::duration<double>(t1 - t0).count();
   hook->calls += 1;
   hook->atoms = nlocal;
-  hook->ice = (set == SEAMS_OK && code == SEAMS_OK) ? counts[SEAMS_LABEL_CUBIC] : -1;
+  hook->steps.push_back(step);
+  if (set == SEAMS_OK && code == SEAMS_OK) {
+    hook->ice += counts[SEAMS_LABEL_CUBIC];
+  } else {
+    hook->ice = -1;
+  }
 }
 
 int main(int argc, char **argv) {
@@ -67,25 +75,43 @@ int main(int argc, char **argv) {
     return 1;
   }
   std::string line;
+  std::string run_line = "run 8";
   while (std::getline(in, line)) {
     const auto start = line.find_first_not_of(" \t");
     if (start == std::string::npos || line[start] == '#') {
       continue;
     }
-    if (line.compare(start, 3, "run") == 0) {
+    if (line.compare(start, 3, "run") == 0 &&
+        (line.size() == start + 3 || line[start + 3] == ' ' || line[start + 3] == '\t')) {
+      run_line = line.substr(start);
       continue;
+    }
+    const auto callback_at = line.find("pf/callback");
+    if (callback_at != std::string::npos) {
+      int ncall = 1;
+      int napply = 1;
+      if (std::sscanf(line.c_str() + callback_at, "pf/callback %d %d", &ncall, &napply) == 2 &&
+          ncall > 0) {
+        hook.stride = ncall;
+      }
     }
     lammps_command(hook.lmp, line.c_str());
   }
   lammps_set_fix_external_callback(hook.lmp, "ext", callback, &hook);
-  lammps_command(hook.lmp, "run 3");
+  lammps_command(hook.lmp, run_line.c_str());
   lammps_close(hook.lmp);
-  if (hook.calls < 1 || hook.ice != hook.atoms) {
-    std::fprintf(stderr, "lammps hook calls=%d ice=%d atoms=%d\n", hook.calls, hook.ice,
-                 hook.atoms);
+  bool spaced = hook.steps.size() >= 2;
+  for (std::size_t i = 1; i < hook.steps.size(); ++i) {
+    if (hook.steps[i] - hook.steps[i - 1] != hook.stride) {
+      spaced = false;
+    }
+  }
+  if (!spaced || hook.ice != hook.calls * hook.atoms) {
+    std::fprintf(stderr, "lammps hook calls=%d ice=%d atoms=%d stride=%d\n", hook.calls, hook.ice,
+                 hook.atoms, hook.stride);
     return 1;
   }
-  std::printf("lammps calls %d ice %d overhead_s %.6e\n", hook.calls, hook.ice,
-              hook.seconds / hook.calls);
+  std::printf("lammps calls %d stride %d ice %d overhead_s %.6e\n", hook.calls, hook.stride,
+              hook.ice, hook.seconds / hook.calls);
   return 0;
 }

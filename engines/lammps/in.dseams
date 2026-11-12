@@ -1,5 +1,5 @@
 # Cubic ice, metal units (Angstrom). Forces are cleared so the cell does not melt.
-# fix ext is the in-run hook: the library callback calls the C API each step.
+# fix ext is the in-run hook. pf/callback 2 2 asks LAMMPS for d-SEAMS every 2 steps.
 units metal
 atom_style atomic
 boundary p p p
@@ -9,7 +9,7 @@ pair_style lj/cut 8.0
 pair_coeff * * 0.1 2.75
 velocity all set 0.0 0.0 0.0
 fix freeze all setforce 0.0 0.0 0.0
-fix ext all external pf/callback 1 1
-thermo 1
+fix ext all external pf/callback 2 2
+thermo 2
 timestep 0.001
-run 3
+run 8

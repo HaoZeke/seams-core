@@ -46,14 +46,16 @@ if [ -n "$SEAMS_PY" ]; then
 fi
 
 # LAMMPS in-run hook and the compute object.
-env -i PATH=/usr/bin:/bin /usr/bin/g++ -c -O2 -std=c++17 \
+"$root/engines/link_host.sh" -c -O2 -std=c++17 \
   -I/usr/include/lammps -I/usr/lib/x86_64-linux-gnu/openmpi/include -I"$root/include" \
   "$root/engines/lammps/compute_dseams.cpp" -o "$mod/compute_dseams.o"
-env -i PATH=/usr/bin:/bin /usr/bin/g++ -O2 -std=c++17 \
+"$root/engines/link_host.sh" -O2 -std=c++17 \
   -I/usr/include/lammps -I"$root/include" \
   "$root/engines/lammps/run_hook.cpp" -o "$mod/run_hook" \
-  -L/usr/lib/x86_64-linux-gnu -llammps -L"$lib" -lseams -Wl,-rpath,"$lib"
-(cd "$root/engines/lammps" && env -i PATH=/usr/bin:/bin LD_LIBRARY_PATH="$lib" "$mod/run_hook" in.dseams)
+  -L/usr/lib/x86_64-linux-gnu -Wl,--allow-shlib-undefined \
+  -Wl,-rpath,/usr/lib/x86_64-linux-gnu -Wl,-rpath,"$lib" \
+  -llammps /usr/lib/x86_64-linux-gnu/libcurl.so.4 -L"$lib" -lseams
+(cd "$root/engines/lammps" && env -u LIBRARY_PATH LD_LIBRARY_PATH="$lib" "$mod/run_hook" in.dseams)
 
 # GROMACS trajectory tool. analyzeFrame is the per-frame hook.
 gmx_cflags=$(PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig pkg-config --cflags libgromacs)

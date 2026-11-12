@@ -473,6 +473,9 @@ _incdirs += include_directories([
 # Library
 subdir('src')
 
+# LAMMPS and GROMACS drivers. They link the C API.
+subdir('engines')
+
 # Tests
 if get_option('with_tests')
   subdir('tests')
