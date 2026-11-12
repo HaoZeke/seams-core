@@ -1,46 +1,30 @@
 cores 8
-session 884736 crystal, interface 864, nucleation 4096
 repeats 8, one process per layout, cell and block alternating
-type-7 median and IQR of the cell cut
+type-7 median and IQR of the cell cut, 884736 molecules
 
-strong 884736 n=1 t=1 neigh 321.502 iqr 6.369
-strong 884736 n=1 t=1 chill 470.388 iqr 3.965
-strong 884736 n=1 t=1 q6 613.701 iqr 13.484
-strong 884736 n=1 t=1 rings 1040.359 iqr 29.761
-strong 884736 n=8 t=1 neigh 28.136 iqr 1.831 eff 1.428 halo 0.060 imb 1.023
-strong 884736 n=8 t=1 chill 67.483 iqr 2.976 eff 0.871 halo 0.060 imb 1.007
-strong 884736 n=8 t=1 q6 85.562 iqr 5.929 eff 0.897 halo 0.060 imb 1.002
-strong 884736 n=8 t=1 rings 190.440 iqr 10.243 eff 0.683 halo 0.293 imb 1.024
-hybrid 884736 n=4 t=2 chill 81.486 iqr 10.335 eff 0.722
-hybrid 884736 n=4 t=2 q6 128.942 iqr 7.527 eff 0.595
-hybrid 884736 n=2 t=4 chill 102.869 iqr 10.536 eff 0.572
-hybrid 884736 n=2 t=4 q6 219.115 iqr 16.758 eff 0.350
+strong n=1 t=1 rings 701.975 iqr 23.242
+strong n=8 t=1 rings 91.706 iqr 5.143 eff 0.957 halo 0.294 imb 1.040
+strong n=1 t=1 chill 545.960 iqr 31.144
+strong n=8 t=1 chill 61.144 iqr 1.847 eff 1.116 halo 0.060 imb 1.004
+strong n=1 t=1 neigh 322.979 iqr 12.385
+strong n=8 t=1 neigh 25.811 iqr 1.431 eff 1.564 halo 0.060 imb 1.022
+hybrid n=4 t=2 chill 82.930 iqr 1.870
+hybrid n=2 t=4 chill 111.893 iqr 4.800
 
-The one-rank CHILL+ IQR is 4.0 ms. Eight-rank CHILL+ efficiency is 0.871.
-Neighbour efficiency is 1.428 because the local window is faster than the one-rank list divided by eight. Those IQRs are 1.8 ms and 6.4 ms.
+Eight-rank ring samples, wall and imbalance:
+92.531 1.049
+90.428 1.025
+95.558 1.057
+106.533 1.147
+90.881 1.020
+89.478 1.022
+96.157 1.064
+90.611 1.030
 
-Hybrid stays slower than 8x1. The eight-rank cell window is 117645 atoms, about 2.8 MiB of coordinates, beside a 2 MiB L2.
-The four-rank window is about 230496 atoms. The two-rank window is 451584 atoms and 340605 cells, about 11 MiB, and the pair walk misses L2.
-4x2 CHILL+ is 81.5 ms and 2x4 CHILL+ is 102.9 ms, against 67.5 ms at 8x1.
+The previous eight-rank ring imbalance median was 1.024. This median is 1.040.
+Seven of the eight samples sit between 1.020 and 1.064. One sample is 1.147.
+The ghost fraction is still 0.294.
 
-Rings at eight ranks: halo fraction 0.293, imbalance 1.024, wall 190.4 ms, efficiency 0.683.
-A profile of that wall is about 43 ms in the neighbour rows, 31 ms in the balls and 60 ms enumerating paths.
-The skin is floor(6/2) cutoffs. On this crystal the bond ball already fills that skin, so the ghost fraction is the ball, not spare geometric padding.
-A skin of hops times the longest edge cut the ghost fraction to 0.251. One rank then missed the open window, the imbalance rose above 4, and the wall exceeded a second. That skin is not kept.
-
-interface 864 n=1 neigh 0.252 iqr 0.044
-interface 864 n=1 chill 0.470 iqr 0.033
-interface 864 n=1 q6 0.485 iqr 0.015
-interface 864 n=1 rings 2.067 iqr 0.073
-interface 864 n=8 neigh 0.114 iqr 0.006 eff 0.276 halo 0.445
-interface 864 n=8 chill 0.166 iqr 0.013 eff 0.355 halo 0.445
-interface 864 n=8 q6 0.206 iqr 0.022 eff 0.295 halo 0.445
-interface 864 n=8 rings 1.015 iqr 0.036 eff 0.254 halo 0.838
-nucleation 4096 n=1 neigh 1.406 iqr 0.060
-nucleation 4096 n=1 chill 2.775 iqr 0.130
-nucleation 4096 n=1 q6 2.410 iqr 0.143
-nucleation 4096 n=1 rings 10.530 iqr 0.381
-nucleation 4096 n=8 neigh 0.372 iqr 0.045 eff 0.472 halo 0.351
-nucleation 4096 n=8 chill 0.588 iqr 0.054 eff 0.590 halo 0.351
-nucleation 4096 n=8 q6 0.800 iqr 0.144 eff 0.376 halo 0.351
-nucleation 4096 n=8 rings 3.049 iqr 0.185 eff 0.432 halo 0.800
+Repeated cuts reuse the cutoff rows and the trimmed bond ball.
+The one-rank ring time fell from 1040 ms to 702 ms for the same reason.
+Distributed counts matched the one-rank census at depths 4, 6, 8 and 10.
