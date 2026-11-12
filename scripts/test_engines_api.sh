@@ -33,7 +33,8 @@ if command -v julia >/dev/null 2>&1; then
 fi
 
 # Rust
-SEAMS_LIB_DIR=$lib cargo test --manifest-path "$root/bindings/rust/Cargo.toml" --offline -- --test-threads=1
+SEAMS_LIB_DIR=$lib LD_LIBRARY_PATH="$lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  cargo test --manifest-path "$root/bindings/rust/Cargo.toml" --offline -- --test-threads=1
 
 # Python (nanobind). SEAMS_PY is a virtualenv whose python can import numpy.
 if [ -n "$SEAMS_PY" ]; then
