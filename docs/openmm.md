@@ -101,3 +101,64 @@ writes them under `/var/tmp/dseams/mw215`, or under `MW215_DIR`.
 A failed download is replaced by `regenerate.py`, which needs `lmp`
 and writes the same directory. The deck is `in.equilibrate` with
 velocity seed 215.
+
+## A cubic seed in TIP4P/Ice
+
+`scripts/openmm_tip4p_seed.py` builds one nanosecond of seeded ice and
+classifies it while the trajectory is running. The oxygen sites are
+cubic ice: a 3×3×3 conventional diamond cell, nearest-neighbour
+distance 2.75 Å. With periodic boundaries that crystal is 216
+molecules, every one of them cubic, and 432 primitive rings of size 6.
+The cell is then opened along z, so the two faces are interfaces, and
+OpenMM fills the empty half with TIP4P/Ice. The production box is
+1.905256 × 1.905256 × 3.810512 nm and holds 381 molecules. The
+integrator is Langevin middle, 255 K, friction 1/ps, timestep 2 fs,
+rigid water, PME cutoff 0.9 nm. 255 K is below the melting point of
+this model. The CHILL+ rules, the 3.5 Å cutoff, and the ring search
+are the ones already in the library.
+
+```bash
+export OMP_NUM_THREADS=1
+export OPENMM_SEED_DIR=/var/tmp/dseams/openmm-tip4p-seed
+python3 scripts/openmm_tip4p_seed.py "$LIBSEAMS_LANG" "$SEAMS" seed.log
+```
+
+`$LIBSEAMS_LANG` and `$SEAMS` are the release library and the release
+CLI. The dump is `$OPENMM_SEED_DIR/oxygens.lammpstrj`. It is not part
+of the tree. The run writes one oxygen frame every 5000 steps, which
+is 10 ps, and 100 frames cover the nanosecond. Each line of the log is
+the CHILL+ census and the ring census at that step. Ice in that log is
+the cubic count plus the hexagonal count.
+
+On this machine, an Intel Xeon with 8 cores and one thread per core,
+the eight-thread nanosecond took 477.132 s, 181.082 ns/day. The ice
+count at 10 ps was 86 and at 1 ns was 83. Across the 100 frames it
+stayed between 70 and 105, mean 86.6. The crystal does not melt out,
+and it does not consume the liquid. The first saved frame had 40, 36,
+110 and 346 rings of size 3, 4, 5 and 6. The last had 20, 31, 133 and
+357.
+
+Every saved frame was read back from that dump. The file reader and
+`seams chill-plus` reproduced the live labels and the live ring
+counts on all 100 frames.
+
+The same minimized state, 50000 steps, a report every 100 steps, gives
+the reporter overhead. One pass on one thread and one pass on eight:
+
+| threads | bare ns/day | reporter ns/day | ms per report | slowdown |
+| --- | --- | --- | --- | --- |
+| 1 | 71.978 | 71.076 | 3.05 | 1.27% |
+| 8 | 181.025 | 171.181 | 5.49 | 5.75% |
+
+Clocks inside those reports, in milliseconds:
+
+| threads | copy | neighbours | CHILL+ | rings |
+| --- | --- | --- | --- | --- |
+| 1 | 0.11 | 0.23 | 0.12 | 0.67 |
+| 8 | 0.11 | 0.17 | 0.12 | 1.77 |
+
+On eight threads the ring search is the slow part of a report. OpenMM
+already has eight threads resident, and the classifier's team shares
+the same eight cores. A report every 5000 steps, as in the nanosecond
+above, sits on the bare eight-thread rate. A report every 100 steps
+costs 1.27% on one thread and 5.75% on eight.
