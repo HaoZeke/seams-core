@@ -15,7 +15,8 @@ def symbols():
     text = HEADER.read_text()
     found = re.findall(r"\bseams_[a-z0-9_]+\b", text)
     skip = {"seams_h", "seams_system", "seams_neighbours", "seams_rings", "seams_status",
-            "seams_label", "seams_ring_symmetry", "seams_chill_rule", "seams_graph"}
+            "seams_label", "seams_ring_symmetry", "seams_chill_rule", "seams_graph",
+            "seams_version"}
     return sorted({name for name in found if name not in skip and not name.endswith("_t")})
 
 
@@ -36,6 +37,15 @@ def main():
         DOCS / "engines" / "gromacs.md",
         DOCS / "engines" / "openmm.md",
         DOCS / "engines" / "plumed.md",
+        DOCS / "tutorials" / "c.md",
+        DOCS / "tutorials" / "python.md",
+        DOCS / "tutorials" / "julia.md",
+        DOCS / "tutorials" / "rust.md",
+        DOCS / "tutorials" / "fortran.md",
+        DOCS / "tutorials" / "lammps.md",
+        DOCS / "tutorials" / "gromacs.md",
+        DOCS / "tutorials" / "openmm.md",
+        DOCS / "tutorials" / "plumed.md",
     ]
     OUT.mkdir(parents=True, exist_ok=True)
     parts = ["<html><body>"]
