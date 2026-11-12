@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Head-to-head of d-SEAMS against mdapy, pyscal3, vesin, IRA and SQQ.
+"""Head-to-head of d-SEAMS against mdapy, pyscal3, vesin, IRA, SQQ,
+ClavisCage and PLUMED.
 
 The statistics are h2h_protocol: one warm-up, eight timed calls, the
 median of an even sample, and type-7 quartiles. One thread is pinned to
@@ -7,9 +8,11 @@ cpu 0. Eight threads are pinned to cpus 0-7. The allowed cpu list is
 recorded. Host names are not. Frames are built in memory.
 
 Operations are the cutoff neighbour list, local q4 and q6 on that list,
-the diamond common-neighbour labels, metal CNA, primitive rings, and
-local ice symmetry against IRA. CHILL and CHILL+ are not timed and
-their cuts are not changed.
+the diamond common-neighbour labels, metal CNA, primitive rings, local
+ice symmetry against IRA, the 5^12 cage against ClavisCage TRACE, and
+coordination against PLUMED. CHILL and CHILL+ are not timed and their
+cuts are not changed. PLUMED is loaded from PLUMED_KERNEL when that
+variable is set.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ import argparse
 import csv
 import ctypes
 import json
+import math
 import os
 import re
 import subprocess
@@ -130,6 +134,34 @@ def load_core(path):
     return lib
 
 
+def load_lang(core_path):
+    path = Path(core_path).resolve().parents[1] / "bindings" / "libseams_lang.so"
+    lib = ctypes.CDLL(str(path))
+    c_double_p = ctypes.POINTER(ctypes.c_double)
+    c_int_p = ctypes.POINTER(ctypes.c_int)
+    lib.seams_frame_from_arrays.argtypes = [
+        c_double_p, ctypes.c_int, c_double_p, c_int_p, c_int_p,
+    ]
+    lib.seams_frame_from_arrays.restype = ctypes.c_void_p
+    lib.seams_frame_free.argtypes = [ctypes.c_void_p]
+    lib.seams_frame_signature.argtypes = [
+        ctypes.c_void_p, ctypes.c_double, ctypes.c_int, ctypes.c_char_p,
+        ctypes.c_char_p, c_int_p, c_int_p,
+    ]
+    lib.seams_frame_signature.restype = ctypes.c_int
+    lib.seams_last_error.restype = ctypes.c_char_p
+    return lib
+
+
+def shell_occupancy(frame, cutoff=CUTOFF):
+    """Neighbours a uniform ball of `cutoff` would hold at this density."""
+    lattice = np.asarray(frame["lattice"], dtype=np.float64)
+    volume = abs(float(np.linalg.det(lattice)))
+    if volume <= 0.0:
+        return 0.0
+    return (frame["molecules"] / volume) * (4.1887902047863905 * cutoff ** 3)
+
+
 def pointers(frame):
     xyz = np.ascontiguousarray(frame["positions"], dtype=np.float64)
     box = np.ascontiguousarray(frame["box9"], dtype=np.float64)
@@ -221,6 +253,8 @@ class Engine:
         buf = ctypes.create_string_buffer(32)
         self.lib.seams_symmetry_backend(buf, 32)
         self.backend = buf.value.decode()
+        self.lang = None
+        self._lang_path = lib_path
 
     def neighbours(self, frame):
         xyz, box, _lattice = pointers(frame)
@@ -335,6 +369,197 @@ class Engine:
                 continue
             found.append((ident, buf.reshape(-1, 3).copy()))
         return found
+
+    def _language(self):
+        if self.lang is None:
+            self.lang = load_lang(self._lang_path)
+        return self.lang
+
+    def cages(self, frame, graph):
+        """Count 5^12 cages. 5^12 6^2 and 5^12 6^4 are read once after the timer."""
+        lang = self._language()
+        xyz, box, _lattice = pointers(frame)
+        n = frame["molecules"]
+        types = np.ones(n, dtype=np.int32)
+        ids = np.arange(1, n + 1, dtype=np.int32)
+        holder = lang.seams_frame_from_arrays(
+            xyz.ctypes.data_as(ctypes.POINTER(ctypes.c_double)), n,
+            box.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+            types.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
+            ids.ctypes.data_as(ctypes.POINTER(ctypes.c_int)))
+        if not holder:
+            raise RuntimeError("could not build a frame for the cage census")
+        nc = ctypes.c_int()
+        na = ctypes.c_int()
+        graph_b = graph.encode()
+
+        def read(spec):
+            code = lang.seams_frame_signature(
+                holder, CUTOFF, 1, graph_b, spec.encode(),
+                ctypes.byref(nc), ctypes.byref(na))
+            if code != 0:
+                err = lang.seams_last_error()
+                text = err.decode() if err else f"signature returned {code}"
+                raise RuntimeError(text)
+            return int(nc.value)
+
+        def run(_unused):
+            return read("512")
+
+        try:
+            summary, samples, count_512 = time_pair(lambda: None, run)
+            others = {spec: read(spec) for spec in ("51262", "51264")}
+        finally:
+            lang.seams_frame_free(holder)
+        return summary, samples, count_512, others
+
+
+def hydrogen_waters(frame):
+    """Oxygens plus one hydrogen 0.96 A along each of the two nearest bonds.
+
+    Coordinates are nanometres, which is the unit TRACE reads. The
+    returned fourth-neighbour distance is in angstroms.
+    """
+    import vesin
+    pos = np.asarray(frame["positions"], dtype=np.float64)
+    n = len(pos)
+    left, _right, disp = vesin.NeighborList(cutoff=CUTOFF, full_list=True).compute(
+        points=pos, box=frame["lattice"], periodic=True, quantities="ijD", copy=True)
+    buckets = [[] for _ in range(n)]
+    for atom, vector in zip(left, disp):
+        bond = np.asarray(vector, dtype=np.float64)
+        buckets[int(atom)].append((float(np.linalg.norm(bond)), bond))
+    fourth = []
+    waters = []
+    for i, point in enumerate(pos):
+        neigh = sorted(buckets[i], key=lambda item: item[0])
+        if len(neigh) >= 4:
+            fourth.append(neigh[3][0])
+        if len(neigh) >= 2:
+            hydrogens = [
+                point + bond / np.linalg.norm(bond) * 0.96 for _dist, bond in neigh[:2]
+            ]
+        elif len(neigh) == 1:
+            direction = neigh[0][1]
+            direction = direction / np.linalg.norm(direction) * 0.96
+            hydrogens = [point + direction, point - direction]
+        else:
+            hydrogens = [
+                point + np.array([0.96, 0.0, 0.0]),
+                point + np.array([0.0, 0.96, 0.0]),
+            ]
+        waters.append({
+            "oxygen": (point / 10.0).tolist(),
+            "hydrogen1": (np.asarray(hydrogens[0]) / 10.0).tolist(),
+            "hydrogen2": (np.asarray(hydrogens[1]) / 10.0).tolist(),
+        })
+    lengths = np.diag(np.asarray(frame["lattice"], dtype=np.float64))
+    median_fourth = float(np.median(fourth)) if fourth else CUTOFF
+    return json.dumps(waters), (lengths / 10.0).tolist(), median_fourth
+
+
+def cage_setup(frame):
+    """Bond graph shared with TRACE.
+
+    A crystal or a slab has a few neighbours inside 3.5 A, and that list
+    is the hydrogen-bond graph. The dense melt has about 56, so both
+    codes use the four nearest instead. TRACE at 0.35 nm does not return
+    on that shell.
+    """
+    text, box_nm, fourth_A = hydrogen_waters(frame)
+    if shell_occupancy(frame) > 12.0:
+        cutoff_nm = min(0.35, fourth_A * 1.05 / 10.0)
+        note = (
+            f"crowded shell; both codes use the four nearest neighbours. "
+            f"TRACE cutoff {cutoff_nm:.3f} nm is just past the fourth "
+            f"neighbour at {fourth_A:.3f} A. A 0.35 nm shell does not return"
+        )
+        return text, box_nm, cutoff_nm, "mutual", note
+    note = (
+        "TRACE cutoff 0.35 nm and angle 35 degrees. Hydrogens sit 0.96 A "
+        "along the two nearest oxygen-oxygen bonds"
+    )
+    return text, box_nm, 0.35, "cutoff", note
+
+
+def time_clavis(frame, text, box_nm, cutoff_nm):
+    import clavis_engine as engine
+
+    def run(_unused):
+        raw = engine.analyze_waters(text, "[]", box_nm, "trace", cutoff_nm, 35.0)
+        parsed = json.loads(raw)
+        return (
+            len(parsed["cages_512"]),
+            len(parsed["cages_51262"]),
+            len(parsed["cages_51264"]),
+        )
+
+    summary, samples, last = time_pair(lambda: None, run)
+    version = engine.version()
+    if not isinstance(version, str):
+        version = str(version)
+    return summary, samples, last, version
+
+
+def time_plumed(frame, operation):
+    """One PLUMED collective variable.
+
+    Q4 and Q6 are multiplied by sqrt(4*pi/(2l+1)). PLUMED stores the
+    norm of the averaged spherical-harmonic vector without that factor,
+    and the restored number is the local Steinhardt parameter.
+    """
+    import plumed
+    from importlib.metadata import version as pkg_version
+
+    n = frame["molecules"]
+    pos = np.ascontiguousarray(frame["positions"], dtype=np.float64)
+    box = np.ascontiguousarray(frame["lattice"], dtype=np.float64)
+    switch = "SWITCH={RATIONAL R_0=3.5 D_MAX=3.5 NN=100 MM=200}"
+    if operation == "coordination":
+        line = f"obs: COORDINATIONNUMBER SPECIES=1-{n} {switch}"
+        scale = 1.0
+    else:
+        order = int(operation[1])
+        line = f"obs: Q{order} SPECIES=1-{n} {switch}"
+        scale = math.sqrt(4.0 * math.pi / (2 * order + 1))
+    calc = plumed.Plumed()
+    calc.cmd("setMDEngine", "python")
+    calc.cmd("setNatoms", n)
+    calc.cmd("setTimestep", 1.0)
+    calc.cmd("setKbT", 1.0)
+    calc.cmd("setLogFile", "/dev/null")
+    calc.cmd("init")
+    calc.cmd("readInputLine", line)
+    rank = np.zeros(1, dtype=np.int_)
+    calc.cmd("getDataRank obs", rank)
+    shape = np.zeros(int(rank[0]), dtype=np.int_)
+    calc.cmd("getDataShape obs", shape)
+    data = np.zeros(tuple(int(v) for v in shape), dtype=np.float64)
+    calc.cmd("setMemoryForData obs", data)
+    mass = np.ones(n, dtype=np.float64)
+    charge = np.zeros(n, dtype=np.float64)
+    forces = np.zeros_like(pos)
+    virial = np.zeros((3, 3), dtype=np.float64)
+    step = {"n": 0}
+
+    def run(_unused):
+        step["n"] += 1
+        calc.cmd("setStep", step["n"])
+        calc.cmd("setBox", box)
+        calc.cmd("setPositions", pos)
+        calc.cmd("setMasses", mass)
+        calc.cmd("setCharges", charge)
+        calc.cmd("setForces", forces)
+        calc.cmd("setVirial", virial)
+        calc.cmd("calc")
+        return np.array(data, copy=True, dtype=np.float64).reshape(-1) * scale
+
+    summary, samples, last = time_pair(lambda: None, run)
+    try:
+        version = pkg_version("plumed")
+    except Exception:
+        version = "2.10"
+    return summary, samples, last, version
 
 
 def mdapy_system(frame):
@@ -750,22 +975,41 @@ def run_frame(engine, writer, handle, log, threads, cpus, frame, args, done):
                 record_failure(writer, handle, log, threads, cpus, frame,
                                "neighbours", code, str(exc))
     for operation, order in (("q4", 4), ("q6", 6)):
-        if not keep(operation) or seen(operation, "d-SEAMS"):
+        if not keep(operation):
             continue
-        summary, samples, values = engine.ql(frame, order)
-        ref_q = values
-        emit(writer, handle, log, row_of(
-            threads, cpus, frame, operation, "d-SEAMS", engine.version,
-            summary, 1.0, "reference local ql on the cutoff list", samples))
-        for code, caller in (
+        ref_q = None
+        if not seen(operation, "d-SEAMS"):
+            summary, samples, ref_q = engine.ql(frame, order)
+            emit(writer, handle, log, row_of(
+                threads, cpus, frame, operation, "d-SEAMS", engine.version,
+                summary, 1.0, "reference local ql on the cutoff list", samples))
+        others = (
             ("mdapy", lambda operation=operation: time_mdapy(frame, operation, threads)),
             ("pyscal3", lambda operation=operation: time_pyscal(frame, operation, threads)),
-        ):
+            ("PLUMED", lambda operation=operation: time_plumed(frame, operation)),
+        )
+        if ref_q is None and any(not seen(operation, code) for code, _caller in others):
+            _summary, _samples, ref_q = engine.ql(frame, order)
+        if ref_q is None:
+            continue
+        for code, caller in others:
             if seen(operation, code):
                 continue
             try:
                 summary, samples, other, version = caller()
                 agree, detail = q_agreement(ref_q, other)
+                if code == "PLUMED":
+                    detail = (
+                        "PLUMED omits sqrt(4*pi/(2l+1)); that factor is restored "
+                        "before this comparison. The neighbour weight is a steep "
+                        "rational switch cut at 3.5 A. " + detail
+                    )
+                    if agree < 1.0:
+                        detail += (
+                            " Atoms near 3.5 A are only partly counted by that switch. "
+                            "The sharp list is the local Steinhardt parameter, and it "
+                            "matches mdapy, pyscal3 and vesin."
+                        )
                 emit(writer, handle, log, row_of(
                     threads, cpus, frame, operation, code, version,
                     summary, agree, detail, samples))
@@ -777,9 +1021,12 @@ def run_frame(engine, writer, handle, log, threads, cpus, frame, args, done):
     if need_diamond and not seen("diamond", "d-SEAMS"):
         summary, samples, ref_diamond = engine.diamond(frame)
         if keep("diamond"):
+            detail = "reference diamond common-neighbour labels"
+            if shell_occupancy(frame) > 12.0:
+                detail += "; a crowded shell uses the four nearest neighbours"
             emit(writer, handle, log, row_of(
                 threads, cpus, frame, "diamond", "d-SEAMS", engine.version,
-                summary, 1.0, "reference diamond common-neighbour labels", samples))
+                summary, 1.0, detail, samples))
     if keep("diamond") and not seen("diamond", "d-SEAMS"):
         pass
     if keep("diamond") and ref_diamond is not None and not seen("diamond", "mdapy"):
@@ -869,6 +1116,78 @@ def run_frame(engine, writer, handle, log, threads, cpus, frame, args, done):
                 except Exception as exc:
                     record_failure(writer, handle, log, threads, cpus, frame,
                                    "rings", "SQQ", str(exc))
+    if keep("coordination") and (
+        not seen("coordination", "d-SEAMS") or not seen("coordination", "PLUMED")
+    ):
+        degrees = None
+        try:
+            if not seen("coordination", "d-SEAMS"):
+                summary, samples, rows = engine.neighbours(frame)
+                degrees = np.asarray([len(row) for row in rows], dtype=np.float64)
+                emit(writer, handle, log, row_of(
+                    threads, cpus, frame, "coordination", "d-SEAMS", engine.version,
+                    summary, 1.0, "sharp 3.5 A neighbour count", samples))
+            elif not seen("coordination", "PLUMED"):
+                _summary, _samples, rows = engine.neighbours(frame)
+                degrees = np.asarray([len(row) for row in rows], dtype=np.float64)
+        except Exception as exc:
+            record_failure(writer, handle, log, threads, cpus, frame,
+                           "coordination", "d-SEAMS", str(exc))
+        if degrees is not None and not seen("coordination", "PLUMED"):
+            try:
+                summary, samples, values, version = time_plumed(frame, "coordination")
+                agree, detail = q_agreement(degrees, values)
+                detail = (
+                    "PLUMED coordination with a steep rational switch cut at 3.5 A, "
+                    "against the sharp neighbour count. " + detail
+                )
+                if agree < 1.0:
+                    detail += (
+                        " Atoms near 3.5 A are only partly counted by that switch. "
+                        "The sharp neighbour count matches mdapy, pyscal3 and vesin."
+                    )
+                emit(writer, handle, log, row_of(
+                    threads, cpus, frame, "coordination", "PLUMED", version,
+                    summary, agree, detail, samples))
+            except Exception as exc:
+                record_failure(writer, handle, log, threads, cpus, frame,
+                               "coordination", "PLUMED", str(exc))
+    if keep("cages") and (
+        not seen("cages", "d-SEAMS") or not seen("cages", "ClavisCage")
+    ):
+        ours = None
+        text = box_nm = note = None
+        cutoff_nm = None
+        try:
+            text, box_nm, cutoff_nm, graph, note = cage_setup(frame)
+            if not seen("cages", "d-SEAMS"):
+                summary, samples, count_512, others = engine.cages(frame, graph)
+                ours = (count_512, others["51262"], others["51264"])
+                emit(writer, handle, log, row_of(
+                    threads, cpus, frame, "cages", "d-SEAMS", engine.version,
+                    summary, 1.0,
+                    f"5^12 timed; 51262={others['51262']} 51264={others['51264']} "
+                    f"read once on the {graph} graph. {note}",
+                    samples))
+            elif not seen("cages", "ClavisCage"):
+                _summary, _samples, count_512, others = engine.cages(frame, graph)
+                ours = (count_512, others["51262"], others["51264"])
+        except Exception as exc:
+            record_failure(writer, handle, log, threads, cpus, frame,
+                           "cages", "d-SEAMS", str(exc))
+        if ours is not None and not seen("cages", "ClavisCage"):
+            try:
+                summary, samples, theirs, version = time_clavis(
+                    frame, text, box_nm, cutoff_nm)
+                agree = float(ours == theirs)
+                emit(writer, handle, log, row_of(
+                    threads, cpus, frame, "cages", "ClavisCage", version,
+                    summary, agree,
+                    f"TRACE 512/51262/51264 {theirs}; d-SEAMS {ours}. {note}",
+                    samples))
+            except Exception as exc:
+                record_failure(writer, handle, log, threads, cpus, frame,
+                               "cages", "ClavisCage", str(exc))
     if keep("symmetry") and not seen("symmetry", "d-SEAMS"):
         summary, samples, ref_sym = engine.symmetry(frame)
         emit(writer, handle, log, row_of(
@@ -965,6 +1284,11 @@ def run_once(args):
             engine.rings(frame)
         elif operation == "symmetry":
             engine.symmetry(frame)
+        elif operation == "cages":
+            _text, _box, _cutoff, graph, _note = cage_setup(frame)
+            engine.cages(frame, graph)
+        elif operation == "coordination":
+            engine.neighbours(frame)
         else:
             raise SystemExit(f"unknown operation {operation}")
         return
@@ -979,8 +1303,88 @@ def run_once(args):
     elif code == "IRA":
         engine = Engine(lib_path)
         ira_match(frame, engine.templates(), threads)
+    elif code == "ClavisCage":
+        text, box_nm, cutoff_nm, _graph, _note = cage_setup(frame)
+        time_clavis(frame, text, box_nm, cutoff_nm)
+    elif code == "PLUMED":
+        time_plumed(frame, operation)
     else:
         raise SystemExit(f"unknown code {code}")
+
+
+def write_plot(csv_path):
+    """Bar chart of the medians. The file is generated and not committed."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    path = Path(csv_path)
+    with path.open(newline="") as handle:
+        rows = [
+            record for record in csv.DictReader(handle)
+            if record.get("median_ms")
+        ]
+    focus = []
+    for record in rows:
+        operation = record["operation"]
+        code = record["code"]
+        phase = record["phase"]
+        molecules = record["molecules"]
+        keep = False
+        if operation == "cages" and code in ("d-SEAMS", "ClavisCage"):
+            keep = True
+        elif operation == "coordination" and code in ("d-SEAMS", "PLUMED"):
+            keep = True
+        elif operation in ("q4", "q6") and code in ("d-SEAMS", "PLUMED") and (
+            phase == "Ic" and molecules == "110592"
+        ):
+            keep = True
+        elif operation == "diamond" and phase == "liquid-mw" and code in ("d-SEAMS", "mdapy"):
+            keep = True
+        if keep:
+            focus.append(record)
+    if not focus:
+        return
+    groups = []
+    seen = set()
+    for record in focus:
+        key = (
+            record["threads"], record["phase"], record["molecules"], record["operation"],
+        )
+        if key not in seen:
+            seen.add(key)
+            groups.append(key)
+    fig, ax = plt.subplots(figsize=(max(8, 0.55 * len(groups) + 2), 4.8))
+    codes = []
+    for record in focus:
+        if record["code"] not in codes:
+            codes.append(record["code"])
+    width = 0.8 / max(len(codes), 1)
+    indexed = {
+        (record["threads"], record["phase"], record["molecules"],
+         record["operation"], record["code"]): float(record["median_ms"])
+        for record in focus
+    }
+    positions = np.arange(len(groups))
+    for offset, code in enumerate(codes):
+        heights = [
+            indexed.get((*key, code), np.nan) for key in groups
+        ]
+        ax.bar(positions + (offset - (len(codes) - 1) / 2) * width, heights,
+               width=width, label=code)
+    labels = [
+        f"{threads}t {phase} {molecules}\n{operation}"
+        for threads, phase, molecules, operation in groups
+    ]
+    ax.set_xticks(positions)
+    ax.set_xticklabels(labels, fontsize=7)
+    ax.set_ylabel("median ms")
+    ax.set_yscale("log")
+    ax.legend(frameon=False)
+    ax.set_title("Head-to-head medians")
+    fig.tight_layout()
+    fig.savefig(path.with_suffix(".png"), dpi=120)
+    plt.close(fig)
 
 
 def parse_args(argv):
@@ -1019,6 +1423,7 @@ def main(argv=None):
                     target.unlink()
         for threads in (1, 8):
             launch(args, threads)
+        write_plot(args.out)
         return
     if os.environ.get("H2H_PINNED") != "1":
         launch(args, args.threads)

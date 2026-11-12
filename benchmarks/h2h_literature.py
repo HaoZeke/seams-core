@@ -93,3 +93,25 @@ class LiteratureSqq:
 
     def time_call(self, threads, molecules):
         _run(self.cmd)
+
+
+class LiteratureClavis:
+    params = [[1, 8], [128, 4096, 110592]]
+    param_names = ["threads", "molecules"]
+
+    def setup(self, threads, molecules):
+        self.cmd = _command("ClavisCage", "cages", threads, molecules)
+
+    def time_call(self, threads, molecules):
+        _run(self.cmd)
+
+
+class LiteraturePlumed:
+    params = [["q4", "q6", "coordination"], [1, 8], [128, 4096, 110592]]
+    param_names = ["operation", "threads", "molecules"]
+
+    def setup(self, operation, threads, molecules):
+        self.cmd = _command("PLUMED", operation, threads, molecules)
+
+    def time_call(self, operation, threads, molecules):
+        _run(self.cmd)
