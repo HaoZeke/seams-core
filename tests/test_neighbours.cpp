@@ -1,6 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#ifdef SEAMS_HAS_VESIN
+#include <vesin.h>
+#endif
+
 #include <bop.hpp>
 #include <generic.hpp>
 #include <mol_sys.hpp>
@@ -1347,4 +1351,254 @@ TEST_CASE("a pair exactly at the cutoff is not a neighbour", "[neighbours]") {
   REQUIRE(on[0].size() == 1);
   const auto inside = nneigh::neighListO(4.0 + 1e-6, cloud, 1);
   REQUIRE(inside[0].size() == 2);
+}
+
+namespace {
+
+molSys::PointCloud<molSys::Point<double>, double>
+cloudFrom(const std::vector<std::array<double, 3>> &pos, double box) {
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  cloud.box = {box, box, box};
+  cloud.boxLow = {0.0, 0.0, 0.0};
+  cloud.currentFrame = 1;
+  cloud.nop = static_cast<int>(pos.size());
+  for (int i = 0; i < cloud.nop; ++i) {
+    molSys::Point<double> p;
+    p.type = 1;
+    p.atomID = i;
+    p.molID = i;
+    p.x = pos[static_cast<std::size_t>(i)][0];
+    p.y = pos[static_cast<std::size_t>(i)][1];
+    p.z = pos[static_cast<std::size_t>(i)][2];
+    cloud.pts.push_back(p);
+    cloud.idIndexMap[i] = i;
+  }
+  return cloud;
+}
+
+std::vector<std::vector<int>> brutePairs(
+    const molSys::PointCloud<molSys::Point<double>, double> &cloud, double cutoff) {
+  const double rc2 = cutoff * cutoff;
+  const gen::FracBox frame = gen::makeFracBox(cloud);
+  std::vector<std::vector<int>> rows(static_cast<std::size_t>(cloud.nop));
+  for (int i = 0; i < cloud.nop; ++i) {
+    rows[static_cast<std::size_t>(i)].push_back(i);
+    for (int j = 0; j < cloud.nop; ++j) {
+      if (i == j) {
+        continue;
+      }
+      if (gen::periodicDistSq(frame, cloud, i, j) < rc2) {
+        rows[static_cast<std::size_t>(i)].push_back(j);
+      }
+    }
+    std::sort(rows[static_cast<std::size_t>(i)].begin() + 1,
+              rows[static_cast<std::size_t>(i)].end());
+  }
+  return rows;
+}
+
+std::vector<std::array<double, 3>> iceIc(int n, double a) {
+  const double b[8][3] = {
+      {0, 0, 0},         {0, 0.5, 0.5},     {0.5, 0, 0.5},     {0.5, 0.5, 0},
+      {0.25, 0.25, 0.25},{0.25, 0.75, 0.75},{0.75, 0.25, 0.75},{0.75, 0.75, 0.25}};
+  std::vector<std::array<double, 3>> pos;
+  pos.reserve(static_cast<std::size_t>(n * n * n * 8));
+  for (int ix = 0; ix < n; ++ix) {
+    for (int iy = 0; iy < n; ++iy) {
+      for (int iz = 0; iz < n; ++iz) {
+        for (int k = 0; k < 8; ++k) {
+          pos.push_back({(ix + b[k][0]) * a, (iy + b[k][1]) * a, (iz + b[k][2]) * a});
+        }
+      }
+    }
+  }
+  return pos;
+}
+
+} // namespace
+
+TEST_CASE("cutoff pairs match the minimum image at every thread count",
+          "[neighbours]") {
+  const double cutoff = 3.5;
+  const auto ice = iceIc(4, 6.35);
+  auto crystal = cloudFrom(ice, 4 * 6.35);
+  const auto expect = brutePairs(crystal, cutoff);
+  for (int i = 0; i < crystal.nop; ++i) {
+    REQUIRE(expect[static_cast<std::size_t>(i)].size() == 5);
+  }
+
+  std::vector<std::array<double, 3>> tight = {
+      {0.1, 0.1, 0.1}, {7.9, 0.2, 0.2}, {0.1, 4.0, 0.1}, {3.0, 3.0, 3.0}};
+  auto edge = cloudFrom(tight, 8.0);
+  const auto edgeExpect = brutePairs(edge, 3.9);
+
+  std::vector<std::array<double, 3>> grid;
+  const int side = 15;
+  for (int ix = 0; ix < side; ++ix) {
+    for (int iy = 0; iy < side; ++iy) {
+      for (int iz = 0; iz < side; ++iz) {
+        grid.push_back({10.0 * ix, 10.0 * iy, 10.0 * iz});
+      }
+    }
+  }
+  grid[1] = {3.5, 0.0, 0.0};
+  auto boundary = cloudFrom(grid, 10.0 * side);
+  const auto boundaryExpect = brutePairs(boundary, 3.5);
+  REQUIRE(boundaryExpect[0].size() == 1);
+
+#ifdef SEAMS_HAS_OPENMP
+  const int saved = omp_get_max_threads();
+  const int widths[] = {1, 2, 4, 8};
+#else
+  const int widths[] = {1};
+#endif
+  for (int width : widths) {
+#ifdef SEAMS_HAS_OPENMP
+    omp_set_num_threads(width);
+#endif
+    INFO("threads " << width);
+    REQUIRE(nneigh::neighListO(cutoff, crystal, 1) == expect);
+    REQUIRE(nneigh::getNewNeighbourListByIndex(edge, 3.9) == edgeExpect);
+    REQUIRE(nneigh::neighListO(3.5, boundary, 1) == boundaryExpect);
+    auto half = nneigh::halfNeighList(cutoff, crystal, 1);
+    for (int i = 0; i < crystal.nop; ++i) {
+      for (std::size_t k = 1; k < half[static_cast<std::size_t>(i)].size(); ++k) {
+        REQUIRE(half[static_cast<std::size_t>(i)][k] > i);
+      }
+    }
+  }
+#ifdef SEAMS_HAS_OPENMP
+  omp_set_num_threads(saved);
+#endif
+}
+
+#ifdef SEAMS_HAS_VESIN
+TEST_CASE("cutoff pairs match vesin on ice Ic", "[neighbours]") {
+  const auto ice = iceIc(3, 6.35);
+  auto cloud = cloudFrom(ice, 3 * 6.35);
+  const double cutoff = 3.5;
+  std::vector<std::array<double, 3>> xyz(ice.begin(), ice.end());
+  double box[3][3] = {};
+  box[0][0] = box[1][1] = box[2][2] = 3 * 6.35;
+  const bool periodic[3] = {true, true, true};
+  VesinOptions options{};
+  options.cutoff = cutoff;
+  options.full = true;
+  options.sorted = false;
+  options.algorithm = VesinCellList;
+  options.return_shifts = false;
+  options.return_distances = false;
+  options.return_vectors = false;
+  VesinNeighborList neighbors;
+  const char *error = nullptr;
+  const VesinDevice device{VesinCPU, 0};
+  REQUIRE(vesin_neighbors(reinterpret_cast<const double (*)[3]>(xyz.data()), xyz.size(),
+                          box, periodic, device, options, &neighbors, &error) == 0);
+  std::vector<std::pair<int, int>> got;
+  got.reserve(neighbors.length);
+  for (std::size_t k = 0; k < neighbors.length; ++k) {
+    got.emplace_back(static_cast<int>(neighbors.pairs[k][0]),
+                     static_cast<int>(neighbors.pairs[k][1]));
+  }
+  vesin_free(&neighbors);
+  std::sort(got.begin(), got.end());
+  got.erase(std::unique(got.begin(), got.end()), got.end());
+
+  const auto rows = nneigh::neighListO(cutoff, cloud, 1);
+  std::vector<std::pair<int, int>> ours;
+  for (int i = 0; i < cloud.nop; ++i) {
+    for (std::size_t k = 1; k < rows[static_cast<std::size_t>(i)].size(); ++k) {
+      ours.emplace_back(i, rows[static_cast<std::size_t>(i)][k]);
+    }
+  }
+  std::sort(ours.begin(), ours.end());
+  REQUIRE(ours == got);
+  REQUIRE(ours.size() == static_cast<std::size_t>(4 * cloud.nop));
+}
+#endif
+
+TEST_CASE("triclinic cutoff pairs match the minimum image", "[neighbours]") {
+  const double L = 4 * 6.35;
+  const double xy = 0.25 * L;
+  const double xz = 0.05 * L;
+  const double yz = 0.12 * L;
+  const double xmin = std::min(std::min(0.0, xy), std::min(xz, xy + xz));
+  const double xmax = std::max(std::max(0.0, xy), std::max(xz, xy + xz));
+  const double ymin = std::min(0.0, yz);
+  const double ymax = std::max(0.0, yz);
+  auto frac = iceIc(4, 1.0);
+  for (auto &s : frac) {
+    s[0] /= 4.0;
+    s[1] /= 4.0;
+    s[2] /= 4.0;
+  }
+  std::vector<std::array<double, 3>> cart;
+  cart.reserve(frac.size());
+  for (const auto &s : frac) {
+    cart.push_back({xmin + L * s[0] + xy * s[1] + xz * s[2],
+                    ymin + L * s[1] + yz * s[2], s[2] * L});
+  }
+  auto cloud = cloudFrom(cart, 1.0);
+  cloud.box = {L + xmax - xmin, L + ymax - ymin, L, xy, xz, yz};
+  cloud.boxLow = {xmin, ymin, 0.0};
+  const double cutoff = 3.5;
+  const auto expect = brutePairs(cloud, cutoff);
+#ifdef SEAMS_HAS_OPENMP
+  const int saved = omp_get_max_threads();
+  for (int width : {1, 2, 8}) {
+    omp_set_num_threads(width);
+    REQUIRE(nneigh::neighListO(cutoff, cloud, 1) == expect);
+  }
+  omp_set_num_threads(saved);
+#else
+  REQUIRE(nneigh::neighListO(cutoff, cloud, 1) == expect);
+#endif
+}
+
+TEST_CASE("half cutoff list is the lower index of the full list", "[neighbours]") {
+  auto cloud = cloudFrom(iceIc(3, 6.35), 3 * 6.35);
+  std::vector<int> fullOff, fullCols, halfOff, halfCols;
+  REQUIRE(nneigh::orthoFullCsr(cloud, nullptr, 3.5, fullOff, fullCols, false));
+  REQUIRE(nneigh::orthoFullCsr(cloud, nullptr, 3.5, halfOff, halfCols, true));
+  std::vector<std::pair<int, int>> full;
+  std::vector<std::pair<int, int>> half;
+  for (int i = 0; i < cloud.nop; ++i) {
+    for (int k = fullOff[static_cast<std::size_t>(i)];
+         k < fullOff[static_cast<std::size_t>(i) + 1]; ++k) {
+      const int j = fullCols[static_cast<std::size_t>(k)];
+      if (i < j) {
+        full.emplace_back(i, j);
+      }
+    }
+    for (int k = halfOff[static_cast<std::size_t>(i)];
+         k < halfOff[static_cast<std::size_t>(i) + 1]; ++k) {
+      half.emplace_back(i, halfCols[static_cast<std::size_t>(k)]);
+    }
+  }
+  REQUIRE(half == full);
+  REQUIRE(half.size() == static_cast<std::size_t>(2 * cloud.nop));
+}
+
+TEST_CASE("a skin rebuild matches a fresh cutoff list", "[neighbours]") {
+  auto cloud = cloudFrom(iceIc(3, 6.35), 3 * 6.35);
+  cloud.pts[0].x = 0.05;
+  cloud.pts[1].x = 3.40;
+  cloud.pts[1].y = 0.0;
+  cloud.pts[1].z = 0.0;
+  nneigh::CutoffSkin skin(3.5, 0.8);
+  REQUIRE(skin.update(cloud));
+  REQUIRE_FALSE(skin.lastReused());
+  cloud.pts[1].x = 3.55;
+  REQUIRE(skin.update(cloud));
+  REQUIRE(skin.lastReused());
+  std::vector<int> freshOff, freshCols;
+  REQUIRE(nneigh::orthoFullCsr(cloud, nullptr, 3.5, freshOff, freshCols, false));
+  REQUIRE(skin.offsets() == freshOff);
+  REQUIRE(skin.cols() == freshCols);
+  cloud.pts[1].x += 1.0;
+  REQUIRE(skin.update(cloud));
+  REQUIRE_FALSE(skin.lastReused());
+  REQUIRE(nneigh::orthoFullCsr(cloud, nullptr, 3.5, freshOff, freshCols, false));
+  REQUIRE(skin.offsets() == freshOff);
+  REQUIRE(skin.cols() == freshCols);
 }

@@ -1304,18 +1304,18 @@ nneigh::neighListO(double rcutoff,
     }
   }
 
-  // A team of several threads uses the persistent CSR. One thread keeps
-  // the linkcell kernel, which is faster serially. The CSR scratch stays
-  // allocated, so the next report does not allocate the cell tables again.
+  // Several threads use the persistent CSR, including triclinic cells.
+  // A report that wants the OpenMP team left for the ring search sets
+  // preferSerialCutoff and keeps the one-thread linkcell kernel.
 #ifdef SEAMS_HAS_OPENMP
   const bool csrTeam = !gSerialCutoff && !omp_in_parallel() && omp_get_max_threads() > 1;
 #else
   const bool csrTeam = false;
 #endif
-  if (csrTeam && yCloud.box.size() == 3) {
+  if (csrTeam && yCloud.box.size() >= 3) {
     std::vector<int> offsets;
     std::vector<int> cols;
-    if (orthoFullCsr(yCloud, &typeIIndices, rcutoff, offsets, cols)) {
+    if (orthoFullCsr(yCloud, &typeIIndices, rcutoff, offsets, cols, false)) {
       return idRowsFromCsr(yCloud, indexToID, offsets, cols);
     }
   }
@@ -1532,6 +1532,20 @@ nneigh::halfNeighList(double rcutoff,
   const std::vector<int> indexToID = indexToIDTable(yCloud);
   std::vector<std::vector<int>> nList = seedWithSelfIDs(indexToID, yCloud.nop);
 
+  if (yCloud.box.size() >= 3) {
+    std::vector<int> typeIIndices;
+    for (int i = 0; i < yCloud.nop; i++) {
+      if (yCloud.pts[i].type == typeI) {
+        typeIIndices.push_back(i);
+      }
+    }
+    std::vector<int> offsets;
+    std::vector<int> cols;
+    if (orthoFullCsr(yCloud, &typeIIndices, rcutoff, offsets, cols, true)) {
+      return halfIdRowsFromCsr(yCloud, indexToID, offsets, cols);
+    }
+  }
+
 #ifdef SEAMS_HAS_CUTOFF_LIST
   {
     std::vector<int> typeIIndices;
@@ -1600,6 +1614,14 @@ std::vector<std::vector<int>> nneigh::getNewNeighbourListByIndex(
   }
 
   std::vector<std::vector<int>> nList(yCloud.nop);
+
+  if (yCloud.box.size() >= 3) {
+    std::vector<int> offsets;
+    std::vector<int> cols;
+    if (orthoFullCsr(yCloud, nullptr, cutoff, offsets, cols, false)) {
+      return indexRowsFromCsr(yCloud.nop, offsets, cols);
+    }
+  }
 
 #ifdef SEAMS_HAS_OPENMP
   if (!omp_in_parallel() && omp_get_max_threads() > 1 &&

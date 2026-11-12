@@ -231,6 +231,15 @@ void classifyBonds(molSys::PointCloud<molSys::Point<double>, double> &yCloud,
                    const std::vector<std::vector<int>> &nList,
                    const BondClassifier &rule, bool isSlice = false);
 
+//! CHILL/CHILL+ bonds from a CSR of cloud indices.
+void classifyBondsCsr(molSys::PointCloud<molSys::Point<double>, double> &yCloud,
+                      const std::vector<int> &offsets, const std::vector<int> &cols,
+                      const BondClassifier &rule, bool isSlice = false);
+
+//! Bonds and CHILL+ labels from a cutoff CSR. Returns the cubic count.
+int chillPlusFromCsr(molSys::PointCloud<molSys::Point<double>, double> &yCloud,
+                     const std::vector<int> &offsets, const std::vector<int> &cols);
+
 //! Unnormalised real l = 3 bond-order vector of the atoms @a which selects.
 //! @a which null computes every atom. Ghost slots stay zero so a neighbour
 //! rank can write the vector it computed for that atom.
@@ -402,6 +411,15 @@ struct SteinhardtQl {
 [[nodiscard]] SteinhardtQl
 steinhardtQl(const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
              const std::vector<std::vector<int>> &nList, int orderL);
+
+//! Local @f$q_l@f$ on the cutoff list.
+//!
+//! Neighbours are orthoFullCsr, not a four-nearest rebuild, and the
+//! kernel reads that CSR directly. Lechner-Dellago @f$\bar{q}_l@f$ is
+//! filled only when @a average is true. Otherwise `qlBar` stays zero.
+[[nodiscard]] SteinhardtQl steinhardtQlCutoff(
+    const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
+    double cutoff, int orderL, int typeI, bool average);
 
 //! Whether steinhardtQl splits atoms over the ranks of an initialised
 //! MPI_COMM_WORLD (true unless set). A driver that gives each rank whole
