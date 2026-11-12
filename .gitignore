@@ -69,6 +69,7 @@ output/
 !input/traj/*.lammpstrj
 bin/
 build/
+markdown/cli-fast-plots/
 # docs/source/*.rst is generated from orgmode, but track orgmode + conf.py
 docs/build/
 docs/doctrees/
