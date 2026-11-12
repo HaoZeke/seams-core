@@ -51,10 +51,10 @@ def main() -> None:
             count = frames(dump)
             tag = dump.parent.name
             previous = seen.get(tag, 0)
+            # Stride is measured from the last copy. Advancing the mark
+            # on every extra frame never reaches STRIDE.
             if count >= previous + STRIDE or (count > 0 and previous == 0):
                 snapshot(dump.parent, DEST / tag, count)
-                seen[tag] = count
-            elif count > previous:
                 seen[tag] = count
         time.sleep(args.poll)
 
