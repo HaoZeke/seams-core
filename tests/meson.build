@@ -42,6 +42,7 @@ test_sources = {
   'c_api': 'test_c_api.cpp',
   'chill_offload': 'test_chill_offload.cpp',
   'chill_plus_rule': 'test_chill_plus_rule.cpp',
+  'interface_order': 'test_interface_order.cpp',
   'thread_scale': 'test_thread_scale.cpp',
   'gpu_residency': 'test_gpu_residency.cpp',
   'config': 'test_config.cpp',
@@ -94,6 +95,8 @@ foreach name, src : test_sources
     _timeout = 300
   elif name == 'bop' and offload_enabled
     _timeout = 600
+  elif name == 'interface_order'
+    _timeout = 600
   endif
   test(name,
     executable('test_' + name, src,
@@ -106,6 +109,13 @@ foreach name, src : test_sources
     env: _test_env,
     timeout: _timeout)
 endforeach
+
+executable('interface_order', 'interface_order_main.cpp',
+  dependencies: [yds_dep],
+  cpp_args: _args,
+  link_args: _test_link_args,
+  include_directories: _incdirs,
+  build_rpath: _test_rpath)
 
 mpfr_dep = cppc.find_library('mpfr', required: true)
 gmp_dep = cppc.find_library('gmp', required: true)
