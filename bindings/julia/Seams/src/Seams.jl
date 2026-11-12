@@ -5,7 +5,7 @@ when it is not on the loader path.
 """
 module Seams
 
-export System, version, set_num_threads, num_threads, chill_plus, q4q6, six_rings
+export System, version, set_num_threads, num_threads, set_ortho!, chill_plus, q4q6, six_rings
 
 const PUBLISHED = 0
 const OVITO = 1

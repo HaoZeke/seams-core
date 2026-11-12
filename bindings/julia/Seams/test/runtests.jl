@@ -19,9 +19,9 @@ end
 @testset "cubic ice" begin
     set_num_threads(1)
     @test num_threads() == 1
-    xyz, length = diamond(2)
+    xyz, edge = diamond(2)
     sys = System()
-    set_ortho!(sys, xyz, (length, length, length))
+    set_ortho!(sys, xyz, (edge, edge, edge))
     labels, counts = chill_plus(sys; rule=Seams.PUBLISHED)
     @test all(labels .== 0)
     @test counts[1] == length(labels)

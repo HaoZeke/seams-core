@@ -26,6 +26,12 @@ gfortran -I"$mod" "$root/bindings/fortran/test_seams.f90" "$mod/seams.o" \
   -o "$mod/test_seams" -L"$lib" -lseams -Wl,-rpath,"$lib"
 "$mod/test_seams"
 
+# Julia 1.11 ccall suite, when julia is on PATH.
+if command -v julia >/dev/null 2>&1; then
+  (cd "$root/bindings/julia/Seams" && SEAMS_LIB="$lib/libseams.so" LD_LIBRARY_PATH="$lib" \
+    julia --project=. -e 'using Pkg; Pkg.test()')
+fi
+
 # Rust
 SEAMS_LIB_DIR=$lib cargo test --manifest-path "$root/bindings/rust/Cargo.toml" --offline -- --test-threads=1
 
