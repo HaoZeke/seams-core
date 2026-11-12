@@ -555,7 +555,7 @@ double wrap(double q, double L) {
 
 } // namespace
 
-Study studyCloud(Cloud cloud, double cutoff, double binWidth) {
+Study studyCloud(Cloud cloud, double cutoff, double binWidth, bool census) {
   Study study;
   study.n = cloud.nop;
   if (cloud.nop <= 0 || cloud.box.size() < 3) {
@@ -604,6 +604,7 @@ Study studyCloud(Cloud cloud, double cutoff, double binWidth) {
     faceOviN += faceLabel(lo) ? 1 : 0;
   }
 
+  if (census) {
   const auto indexRows = nneigh::neighbourListByIndex(cloud, rows);
   const auto rings = primitive::ringNetwork(indexRows, 6);
   std::vector<char> ringHit[3] = {std::vector<char>(static_cast<std::size_t>(cloud.nop), 0),
@@ -796,6 +797,7 @@ Study studyCloud(Cloud cloud, double cutoff, double binWidth) {
   }
   if (nAgreeQ > 0) {
     study.q6Agree = qAgree / static_cast<double>(nAgreeQ);
+  }
   }
 
   const double lx = lengthOf(cloud, 0);
@@ -1002,10 +1004,10 @@ Study studyCloud(Cloud cloud, double cutoff, double binWidth) {
   return study;
 }
 
-Study studyDump(const std::string &path, int frame, double cutoff, double binWidth) {
+Study studyDump(const std::string &path, int frame, double cutoff, double binWidth, bool census) {
   Cloud cloud;
   cloud = sinp::readLammpsTrjO(path, frame, cloud, 1);
-  return studyCloud(std::move(cloud), cutoff, binWidth);
+  return studyCloud(std::move(cloud), cutoff, binWidth, census);
 }
 
 namespace {
@@ -1155,7 +1157,7 @@ Growth studyTrajectory(const std::string &path, double dumpEveryPs, double cutof
     GrowthFrame row;
     row.frame = frame;
     row.timePs = static_cast<double>(frame - 1) * dumpEveryPs;
-    row.study = studyDump(path, frame, cutoff, 1.0);
+    row.study = studyDump(path, frame, cutoff, 1.0, false);
     if (row.study.n <= 0) {
       break;
     }

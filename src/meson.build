@@ -19,6 +19,7 @@ ydslib_sources = files(
   'chill_offload.cpp',
   'chill_plus_scheme.cpp',
   'interface_order.cpp',
+  'interface_wc.cpp',
   'topo_fingerprint.cpp',
   'tum_offload.cpp',
   'mol_sys.cpp',

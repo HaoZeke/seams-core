@@ -9,6 +9,7 @@
 //-----------------------------------------------------------------------------------
 
 #include <interface_order.hpp>
+#include <seams_input.hpp>
 
 #include <iostream>
 #include <string>
@@ -21,7 +22,8 @@ int main(int argc, char **argv) {
   if (argc < 2) {
     std::cerr << "usage: interface_order study <dump> [frame]\n"
                  "       interface_order growth <dump> <ps>\n"
-                 "       interface_order confined\n";
+                 "       interface_order confined\n"
+                 "       interface_order wc <dump> [frame]\n";
     return 2;
   }
   const std::string cmd = argv[1];
@@ -35,6 +37,13 @@ int main(int argc, char **argv) {
     const auto growth = iface::studyTrajectory(argv[2], std::stod(argv[3]));
     std::cout << iface::formatGrowth(growth);
     return growth.frames.empty() ? 1 : 0;
+  }
+  if (cmd == "wc" && argc >= 3) {
+    const int frame = argc >= 4 ? std::stoi(argv[3]) : 1;
+    molSys::PointCloud<molSys::Point<double>, double> cloud;
+    cloud = sinp::readLammpsTrjO(argv[2], frame, cloud, 1);
+    std::cout << iface::formatWillardChandler(iface::willardChandler(std::move(cloud)));
+    return 0;
   }
   if (cmd == "confined") {
     std::cout << iface::formatStudy(iface::studyCloud(iface::nanotube(4, 8)), "square");

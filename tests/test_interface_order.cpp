@@ -9,11 +9,31 @@
 //-----------------------------------------------------------------------------------
 
 #include <interface_order.hpp>
+#include <seams_input.hpp>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 using Catch::Approx;
+
+TEST_CASE("a Gaussian-smoothed step has the normal-cdf width", "[iface]") {
+  REQUIRE(iface::gaussianStepWidth(2.4) == Approx(2.0 * 1.2815515655446004 * 2.4));
+  REQUIRE(iface::gaussianStepWidth(1.0) == Approx(2.5631031310892008));
+}
+
+TEST_CASE("bootstrap intervals on a paired difference", "[iface]") {
+  const std::vector<double> sameA = {1.0, 2.0, 3.0, 4.0};
+  const std::vector<double> sameB = {1.0, 2.0, 3.0, 4.0};
+  const auto none = iface::pairedDifference(sameA, sameB, 2000, 270);
+  REQUIRE(none.mean == Approx(0.0));
+  REQUIRE(none.excludesZero == false);
+  const std::vector<double> high = {10.0, 10.0, 10.0, 10.0};
+  const std::vector<double> low = {0.0, 0.0, 0.0, 0.0};
+  const auto gap = iface::pairedDifference(high, low, 500, 270);
+  REQUIRE(gap.mean == Approx(10.0));
+  REQUIRE(gap.excludesZero);
+  REQUIRE(gap.lo > 0.0);
+}
 
 TEST_CASE("a straight line has slope two", "[iface]") {
   const std::vector<double> x = {0.0, 1.0, 2.0, 3.0};
@@ -57,6 +77,15 @@ TEST_CASE("the 2015 rule and the OVITO rule disagree on the published counts",
   REQUIRE(face.solidPub.defined);
   REQUIRE(face.solidOvi.defined);
   REQUIRE(face.depthDisagree < face.depthAgree);
+
+  molSys::PointCloud<molSys::Point<double>, double> nucleusCloud;
+  nucleusCloud = sinp::readLammpsTrjO("traj/nucleation_f1.lammpstrj", 1, nucleusCloud, 1);
+  const auto surface = iface::willardChandler(std::move(nucleusCloud));
+  INFO(iface::formatWillardChandler(surface));
+  REQUIRE(surface.defined);
+  REQUIRE(surface.densityWidth > 0.0);
+  REQUIRE(surface.densityWidth < nucleus.solidPub.fronts.at(0).width);
+  REQUIRE(surface.densityWidth < nucleus.solidOvi.fronts.at(0).width);
 }
 
 TEST_CASE("prism blocks and sheet rings name confined ice that CHILL+ CNA and PTM do not",

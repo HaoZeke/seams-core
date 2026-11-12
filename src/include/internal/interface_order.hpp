@@ -17,6 +17,7 @@
 
 #include <mol_sys.hpp>
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -112,12 +113,14 @@ struct Study {
 
 //! Both rules, the ring census, and the interface or nucleus profile.
 //! Cutoff and bond thresholds stay at the published values.
+//! census false skips rings, sheets, diamond, CNA, q6 and the template.
+//! The CHILL+ labels and the thickness profile are unchanged.
 [[nodiscard]] Study studyCloud(
     molSys::PointCloud<molSys::Point<double>, double> cloud, double cutoff = 3.5,
-    double binWidth = 1.0);
+    double binWidth = 1.0, bool census = true);
 
 [[nodiscard]] Study studyDump(const std::string &path, int frame, double cutoff = 3.5,
-                              double binWidth = 1.0);
+                              double binWidth = 1.0, bool census = true);
 
 [[nodiscard]] std::string formatStudy(const Study &study, const std::string &tag);
 
@@ -152,6 +155,46 @@ nanotube(int ring, int stacks, double bond = 2.75);
 
 [[nodiscard]] molSys::PointCloud<molSys::Point<double>, double>
 honeycombSheet(int nx, int ny, int layers, double bond = 2.75);
+
+//! 10-90 width of a step smoothed by a Gaussian of standard deviation xi.
+//! The profile is the normal cdf, so the width is 2 * 1.2815515655446004 * xi.
+[[nodiscard]] double gaussianStepWidth(double xi);
+
+struct BootstrapInterval {
+  double mean = 0;
+  double lo = 0; //! 2.5 percentile, Hyndman-Fan type 7
+  double hi = 0; //! 97.5 percentile
+  bool excludesZero = false;
+};
+
+//! Percentile bootstrap of the mean. nDraw samples with replacement.
+[[nodiscard]] BootstrapInterval bootstrapMean(const std::vector<double> &samples, int nDraw,
+                                              std::uint64_t seed);
+
+//! Mean of a[i] - b[i], resampled by shared index.
+[[nodiscard]] BootstrapInterval pairedDifference(const std::vector<double> &a,
+                                                 const std::vector<double> &b, int nDraw,
+                                                 std::uint64_t seed);
+
+struct WillardChandler {
+  double xi = 2.4;
+  double meanRadius = 0;
+  double surfaceRms = 0;     //! rms of the instantaneous surface about its mean
+  double densityWidth = 0;   //! 10-90 of the coarse density normal to that surface
+  double solidWidthPub = 0;  //! 10-90 of the 2015 solid fraction on the same coordinate
+  double solidWidthOvi = 0;
+  int nRays = 0;
+  bool defined = false;
+};
+
+//! Instantaneous interface of Willard and Chandler, J. Phys. Chem. B 114,
+//! 1954 (2010). xi is their Gaussian width. The surface is the set of
+//! rays from the crystal centre of mass on which the coarse density
+//! crosses the midpoint of the core and the outer liquid.
+[[nodiscard]] WillardChandler willardChandler(
+    molSys::PointCloud<molSys::Point<double>, double> cloud, double xi = 2.4);
+
+[[nodiscard]] std::string formatWillardChandler(const WillardChandler &surface);
 
 } // namespace iface
 
