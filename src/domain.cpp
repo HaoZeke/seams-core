@@ -459,9 +459,12 @@ std::vector<std::vector<int>> ringsOf(const Cloud &local, double cutoff,
   struct RowCache {
     int nop = -1;
     double cutoff = 0;
+    int maxDepth = -1;
     unsigned stamp = 0;
     std::vector<int> id;
-    std::vector<std::vector<int>> rows;
+    std::vector<char> owned;
+    std::vector<std::vector<int>> raw;
+    std::vector<std::vector<int>> trimmed;
   };
   static RowCache cache[2];
   static unsigned clock = 1;
@@ -493,39 +496,42 @@ std::vector<std::vector<int>> ringsOf(const Cloud &local, double cutoff,
       hit = cache[0].stamp <= cache[1].stamp ? 0 : 1;
     }
     RowCache &c = cache[hit];
-    if (!nneigh::blockWindowRows(local, cutoff, nullptr, c.rows, false)) {
-      c.rows = nneigh::getNewNeighbourListByIndex(local, cutoff);
+    if (!nneigh::blockWindowRows(local, cutoff, nullptr, c.raw, false)) {
+      c.raw = nneigh::getNewNeighbourListByIndex(local, cutoff);
     }
-    const int nBuilt = static_cast<int>(c.rows.size());
+    const int nBuilt = static_cast<int>(c.raw.size());
 #ifdef SEAMS_HAS_OPENMP
 #pragma omp parallel for schedule(static) if (nBuilt >= kParallelMin && !omp_in_parallel())
 #endif
     for (int k = 0; k < nBuilt; k++) {
-      if (c.rows[static_cast<std::size_t>(k)].size() > 2) {
-        std::sort(c.rows[static_cast<std::size_t>(k)].begin() + 1,
-                  c.rows[static_cast<std::size_t>(k)].end());
+      if (c.raw[static_cast<std::size_t>(k)].size() > 2) {
+        std::sort(c.raw[static_cast<std::size_t>(k)].begin() + 1,
+                  c.raw[static_cast<std::size_t>(k)].end());
       }
     }
     c.nop = local.nop;
     c.cutoff = cutoff;
+    c.maxDepth = -1;
     c.id.resize(static_cast<std::size_t>(local.nop));
     for (int i = 0; i < local.nop; i++) {
       c.id[static_cast<std::size_t>(i)] = local.pts[static_cast<std::size_t>(i)].atomID;
     }
   }
   cache[hit].stamp = clock++;
-  const auto &rows = cache[hit].rows;
-  if (nList.size() != rows.size()) {
-    nList.resize(rows.size());
+  const bool sameTrim = cache[hit].maxDepth == maxDepth && cache[hit].owned == owned;
+  if (!sameTrim) {
+    nList.resize(cache[hit].raw.size());
+    for (std::size_t k = 0; k < cache[hit].raw.size(); k++) {
+      nList[k].assign(cache[hit].raw[k].begin(), cache[hit].raw[k].end());
+    }
+    cache[hit].owned = owned;
+    cache[hit].maxDepth = maxDepth;
   }
-  for (std::size_t k = 0; k < rows.size(); k++) {
-    nList[k].assign(rows[k].begin(), rows[k].end());
-  }
-  const int nLocal = static_cast<int>(nList.size());
+  const int nLocal = static_cast<int>(cache[hit].raw.size());
   // Halo.lean: a primitive ring of length at most k lies in the closed
   // bond ball of radius floor(k/2) about an owned vertex. Vertices past
   // that ball are not members and are not shortcuts.
-  if (!owned.empty() && nLocal > 0) {
+  if (!sameTrim && !owned.empty() && nLocal > 0) {
     const int radius = ringHops(maxDepth);
     std::vector<int> dist(static_cast<std::size_t>(nLocal), -1);
     std::vector<int> queue;
@@ -568,8 +574,16 @@ std::vector<std::vector<int>> ringsOf(const Cloud &local, double cutoff,
       }
       row.resize(w);
     }
+    cache[hit].trimmed = nList;
+  } else if (sameTrim) {
+    // The bond ball was already cut for this share and depth.
+  } else {
+    cache[hit].trimmed = nList;
   }
-  return primitive::ringNetwork(nList, maxDepth, owned);
+  const std::vector<std::vector<int>> &graph =
+      cache[hit].trimmed.empty() ? nList : cache[hit].trimmed;
+  const std::vector<char> &sources = cache[hit].owned.empty() ? owned : cache[hit].owned;
+  return primitive::ringNetwork(graph, maxDepth, sources);
 }
 
 } // namespace
