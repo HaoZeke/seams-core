@@ -369,3 +369,9 @@ repro/results/
 repro/zenodo/payload/
 .tip_sha
 /.lammps-src
+
+# Benchmark outputs
+bench/local/
+*.bench.csv
+*.bench.json
+*.bench.log
