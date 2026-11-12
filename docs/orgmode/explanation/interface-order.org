@@ -1,0 +1,312 @@
+#+TITLE: Interface and confined ice
+#+OPTIONS: toc:nil num:nil
+
+Two published CHILL+ rules, on the same coordinates, with the
+thresholds left alone.
+The neighbour test and the ~q3~ shell are what move the labels.
+The open edges do not, on these frames.
+Prism blocks and sheet rings name confined ice that CHILL+, the
+diamond test, adaptive common-neighbour analysis and a tetrahedron
+template do not.
+
+The counts below come from ~interface_order~ on commit ~2f96e7bd~
+plus the comparison in this tree.
+Ideal ice Ih (~input/traj/ice1h.lammpstrj~, 128 molecules) is
+hexagonal under both rules, with no disagreements.
+
+* The two rules
+
+Nguyen and Molinero, J. Phys. Chem. B 119 (2015) 9369, equation 1
+averages ~q3~ over the four nearest neighbours.
+A staggered bond is ~c(i,j) <= -0.8~.
+An eclipsed bond is ~-0.35 <= c(i,j) <= 0.25~.
+Table 1 gives a crystal or clathrate label only when four neighbours
+lie inside the cutoff.
+Footnote a of that table keeps the interfacial neighbour test.
+Two staggered bonds need a neighbour with more than two staggered
+bonds.
+Three staggered bonds and no eclipsed bond need a neighbour with
+more than one staggered bond.
+
+The OVITO 3.17.2 manual
+([[https://docs.ovito.org/reference/pipelines/modifiers/chill_plus.html][Chill+]])
+states the same cutoff and the same four-bond rows, and then differs
+in three places.
+A staggered bond is a correlation less than ~-0.8~.
+An eclipsed bond lies between ~-0.35~ and ~0.25~.
+Interfacial ice is "4 bonds of which 2 or 3 staggered", with
+hexagonal ice preferred when the fourth bond is eclipsed.
+The neighbour test is not stated.
+
+mdapy's Chill+ kernel (cross-checked there against OVITO's
+~ChillPlusModifier~) is the same statement in code.
+~q3~ is summed over every neighbour inside the cutoff, not over the
+four nearest.
+The inequalities are strict.
+A row is classified only when the coordination is 4.
+Two staggered bonds, or three staggered and no eclipsed bond, are
+interfacial, with no look at the neighbour.
+
+~chill+~ in this tree is the 2015 rule.
+~ovito-chill+~ is the OVITO/mdapy rule.
+Neither threshold is changed.
+The comparison turns one lever at a time: the neighbour test, then
+the ~q3~ shell, then the open edges.
+An atom is counted under the lever that first produces the OVITO
+label.
+If more than one lever moves the label, the atom is mixed.
+
+On both frames below, every atom that changes label has exactly four
+neighbours inside 3.5 Å.
+The shell gate of Table 1 is not the split.
+Widening ~q3~ changes the label of a four-coordinated molecule when
+one of its neighbours has a further neighbour inside the cutoff.
+The open edges move no atom on either frame.
+No correlation in these two frames sits on ~-0.8~, ~-0.35~ or ~0.25~.
+
+* Nucleus
+
+Frame 1 of ~input/traj/nucleation_f1.lammpstrj~ (timestep 15677000,
+4096 mW molecules).
+The two rules disagree on 397 molecules.
+
+| lever | molecules |
+|-------+-----------|
+| neighbour test | 201 |
+| ~q3~ shell | 192 |
+| open edge | 0 |
+| both levers | 4 |
+
+| label | 2015 | OVITO |
+|-------+------|-------|
+| cubic | 47 | 48 |
+| hexagonal | 62 | 54 |
+| interfacial | 240 | 478 |
+| clathrate | 20 | 21 |
+| interfacial clathrate | 138 | 135 |
+| water | 3589 | 3360 |
+
+The largest single move is water to interfacial, 254 molecules.
+Interfacial water in the other direction is 27.
+Hexagonal to interfacial is 12.
+Interfacial clathrate to water is 41.
+Water to interfacial clathrate is 37.
+The crystal core barely moves.
+The liquid's interfacial count almost doubles, from 5.86% to 11.7%
+of the box.
+The solid fraction, crystal plus interfacial, goes from 8.52% to 14.2%.
+
+All 397 molecules are in the four-neighbour shell.
+Of the molecules that do not change label, 1927 also have four
+neighbours, 1428 have five, 289 have six and 38 have seven or more.
+Seventeen have three.
+The extra neighbours sit on the agreeing population.
+They change a neighbour's ~q3~, and that is the shell lever.
+
+Ring membership does not separate the 397.
+395 of them lie on a primitive 6-ring, 381 on a 5-ring and 111 on a
+4-ring, on the 3.5 Å graph.
+The agreeing population is 3657, 3583 and 1957 on those same rings.
+No prism block and no bilayer sheet is present.
+
+The crystal radius, read outward from the shell of highest crystal
+fraction to the 0.5 crossing, is 6.44 Å under both rules.
+The 10-90 width of that crystal front is 4.97 Å under both rules.
+The solid radius is 9.37 Å (2015) and 9.35 Å (OVITO).
+The 10-90 width of the solid front is 13.0 Å under the 2015 rule and
+22.6 Å under OVITO.
+The OVITO solid fraction is still about 0.10 in the outer liquid, so
+that width is the slow decay of interfacial labels through the
+liquid, not a thicker crystal.
+Adaptive common-neighbour analysis calls all 4096 molecules other.
+The diamond test calls 3 cubic and 5 hexagonal.
+A tetrahedron template with RMSD below 0.1, the OVITO polyhedral
+template matching cutoff, passes 817 molecules, of which 119 are in
+the disagreeing set.
+Mean ~q6~ is 0.540 on the disagreeing set and 0.489 on the rest.
+Bulk ice Ih in the test set has mean ~q6~ 0.626.
+
+* Slab
+
+~input/traj/interface_f0.lammpstrj~ is 864 mW molecules in a box of
+22.99 × 21.61 × 52.51 Å.
+The long axis is the surface normal.
+The two rules disagree on 46 molecules.
+
+| lever | molecules |
+|-------+-----------|
+| neighbour test | 5 |
+| ~q3~ shell | 41 |
+| open edge | 0 |
+| both levers | 0 |
+
+| label | 2015 | OVITO |
+|-------+------|-------|
+| cubic | 1 | 1 |
+| hexagonal | 352 | 346 |
+| interfacial | 49 | 57 |
+| clathrate | 3 | 3 |
+| interfacial clathrate | 25 | 20 |
+| water | 434 | 437 |
+
+The net interfacial count rises by 8, from 5.67% to 6.60%.
+Forty-six labels move, in both directions.
+Hexagonal to interfacial is 10.
+Interfacial to water is 5 and interfacial to hexagonal is 4.
+Interfacial clathrate to water is 10.
+The solid fraction is 0.465 and 0.468.
+The crystal fraction is 0.409 and 0.402.
+
+The 2015 solid slab is 24.82 Å thick, between Gibbs surfaces at
+0.30 Å and 25.11 Å.
+The 10-90 widths are 3.04 Å and 5.29 Å.
+The OVITO solid slab is 22.98 Å thick, between 2.05 Å and 25.04 Å.
+The widths are 1.10 Å and 5.29 Å.
+One surface stays put.
+The other moves by 1.76 Å, and that is the whole of the thickness
+change.
+The crystal slab, cubic plus hexagonal only, is 21.61 Å (2015) and
+21.23 Å (OVITO).
+
+The 46 molecules sit on average 5.33 Å from the nearest 2015 solid
+surface.
+The other 818 sit 6.67 Å away.
+The shift is real and small.
+Bins on the two surfaces hold part of the 46, and the rest are
+scattered through the liquid, one or two molecules in a 1 Å bin.
+All 46 have four neighbours inside 3.5 Å.
+Forty-five lie on a 6-ring.
+There is no prism and no bilayer.
+
+Adaptive common-neighbour analysis calls every molecule other.
+The diamond test calls 143 hexagonal and none cubic.
+The tetrahedron template passes 346 molecules, 8 of them in the
+disagreeing set.
+Mean ~q6~ is 0.527 and 0.511.
+
+* Confined ice
+
+The frameworks are ideal oxygen sites at a nearest-neighbour
+distance of 2.75 Å.
+A nanotube is a stack of 8 rings in a box whose long axis is the
+tube.
+A sheet is a rectangular honeycomb, one layer or two.
+The second layer is shifted by one bond in the plane, which is the
+graphite AB stacking, and separated by 2.75 Å.
+Half the bilayer molecules then have three neighbours and half have
+four.
+~iface::nanotube~ and ~iface::honeycombSheet~ build them.
+No trajectory is stored.
+
+| framework | N | 2015 | OVITO | rings | diamond | CNA | PTM | ~q6~ |
+|-----------+---+------+-------+-------+---------+-----+-----+------|
+| square tube | 32 | water 32 | water 32 | prism 32, 8 blocks | 0 | 0 | 0 | 0.424 |
+| pentagon tube | 40 | water 40 | water 40 | prism 40, 8 blocks | 0 | 0 | 0 | 0.487 |
+| hexagon tube | 48 | water 48 | interfacial 48 | prism 48, 8 blocks | 0 | 0 | 0 | 0.509 |
+| monolayer | 48 | water 48 | water 48 | polygon 48 | 0 | 0 | 0 | 0.741 |
+| AB bilayer | 96 | cubic 48, water 48 | cubic 48, water 48 | bilayer 96 | 0 | 0 | 0 | 0.622 |
+
+The hexagon tube is the neighbour test on its own.
+Every molecule has four neighbours and an interfacial bond count.
+Footnote a fails for all 48, so the 2015 rule leaves them as water.
+OVITO labels all 48 interfacial.
+The prism blocks are the same eight basal pairs either way.
+Square and pentagon tubes are water under both rules.
+Their bond angles are not the staggered ice pattern.
+The prism blocks still name the tube.
+The monolayer has three neighbours, so both CHILL+ rules say water
+before any bond test.
+Every molecule is on a planar 6-ring.
+Its mean ~q6~ is 0.741, above the 0.626 of bulk ice Ih, so a ~q6~
+threshold taken from bulk ice does not reject the sheet.
+The AB bilayer is split by coordination.
+The four-coordinated sublattice is cubic under both CHILL+ rules.
+The diamond test, adaptive common-neighbour analysis and the
+tetrahedron template call none of the 96 a crystal.
+The bilayer rings cover all 96, and there is no prism.
+
+Adaptive common-neighbour analysis is the Stukowski test: 12
+neighbours for FCC, HCP and icosahedral, 14 for BCC, with the
+adaptive cutoff ~(1+sqrt(2))/2~ times the mean neighbour distance.
+The diamond test is the second-shell common-neighbour test used for
+cubic and hexagonal diamond.
+The template is the four unit vectors of a tetrahedron, accepted
+when the best rigid match has RMSD below 0.1.
+~q6~ is the Steinhardt invariant on the 3.5 Å shell, the quantity
+~freud.order.Steinhardt(l=6)~ returns for that neighbour list.
+
+* Growth
+
+The deck is ~input/interface/in.growth~, started from
+~interface_f0.lammpstrj~.
+~input/interface/regenerate.py~ runs it with LAMMPS and one OpenMP
+thread.
+The trajectory is not committed.
+The ensemble is NVT at the snapshot volume.
+The mW melting point is near 274 K.
+
+At 250 K the liquid gap closes inside the first 100 ps.
+The 2015 solid fraction goes from 0.465 to 1, and the OVITO solid
+fraction goes from 0.468 to 1.
+The pressure after that relaxation sits near 0.8 kbar.
+A Gibbs thickness is not defined once the box is ice, so there is
+no steady interface speed in that run.
+From 100 ps to 1 ns the two rules disagree on 0 to 7 molecules.
+At 1 ns the interfacial fractions are 0.002 (2015) and 0.010 (OVITO).
+That probe is not the deck as shipped.
+
+The deck as shipped is 270 K, a few kelvin under the mW melting point,
+for 1 ns, with a frame every 50 ps.
+The thermostat and the new velocities thin the slab in the first
+100 ps: the 2015 solid thickness goes from 24.82 Å to 17.03 Å, and
+the OVITO thickness goes from 22.98 Å to 17.03 Å.
+From 100 ps to 650 ps the ice grows.
+An ordinary least-squares fit on those twelve frames gives
+
+| quantity | 2015 | OVITO |
+|----------|------|-------|
+| solid thickness (Å/ps) | 0.0306 | 0.0284 |
+| crystal thickness (Å/ps) | 0.0279 | 0.0285 |
+| solid fraction (1/ps) | 0.00061 | 0.00061 |
+
+The rms residual of the solid thickness is 3.7 Å, so the slope is
+an estimate.
+In laboratory units the solid-slab rates are 3.1 m/s and 2.8 m/s.
+That is the rate at which the ice thickness increases.
+If the two surfaces share it, each front advances at about 1.5 m/s
+and 1.4 m/s.
+The fit over every frame that still has two Gibbs surfaces, from
+0 to 650 ps, is slower because it includes the opening transient:
+0.0226 Å/ps and 0.0222 Å/ps.
+By 700 ps the solid fraction is 0.998 under both rules and a Gibbs
+surface is no longer defined.
+While liquid remains, the rules disagree on 19 to 46 molecules.
+After the box is ice they disagree on 0 to 4.
+The choice of rule does not move the growth rate outside the
+residual.
+The ensemble is NVT at the volume of the starting frame, so this is
+not a zero-pressure rate.
+At the start of the 270 K run the pressure was 202 atm.
+
+* Reproduce
+
+#+begin_src sh
+interface_order study input/traj/nucleation_f1.lammpstrj
+interface_order study input/traj/interface_f0.lammpstrj
+interface_order confined
+python3 input/interface/regenerate.py
+interface_order growth data/interface/growth.lammpstrj 50
+python3 scripts/figures_interface_order.py \
+  --bin bbdir-eessi/tests/interface_order \
+  --growth data/interface/growth.lammpstrj --dt 50
+#+end_src
+
+The figures are the nucleus profile, the slab profile, the confined
+label grid and, when a trajectory is passed, the ice thickness.
+
+[[file:figures/nucleus-profile.svg]]
+[[file:figures/interface-profile.svg]]
+[[file:figures/confined-labels.svg]]
+[[file:figures/growth-thickness.svg]]
+Solid means cubic, hexagonal and interfacial.
+Crystal means cubic and hexagonal only.

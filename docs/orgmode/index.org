@@ -154,6 +154,7 @@ framework.
    explanation/index
    explanation/architecture
    explanation/chill-plus-vs-cages
+   explanation/interface-order
    explanation/ring-completion
    explanation/topological-network
    explanation/citation
