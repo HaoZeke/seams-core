@@ -137,6 +137,12 @@ executable('bench_cutoff_list', 'bench_cutoff_list.cpp',
   link_args: _test_link_args,
   include_directories: _incdirs,
   build_rpath: '$ORIGIN/../src')
+executable('bench_ql', 'bench_ql.cpp',
+  dependencies: [yds_dep],
+  cpp_args: _args,
+  link_args: _test_link_args,
+  include_directories: _incdirs,
+  build_rpath: _test_rpath)
 
 executable('report_symmetry_cases', 'report_symmetry_cases.cpp',
   dependencies: [yds_dep],
