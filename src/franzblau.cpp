@@ -365,14 +365,48 @@ void levelsFrom(const Graph &adjacency, int src, int maxLvl, int minVertex,
   }
 }
 
-//! Shortest-path criterion over every pair of members, by ball lookup
-bool ringIsPrimitive(const BoundedBalls &balls, const std::vector<int> &ring) {
+//! 1 when v is among the first neighbours of u, 0 when the whole row was
+//! scanned and v is absent, -1 when the row is long enough that the ball
+//! answers faster. A ring distance of 2 is a chord, and a chord is an edge:
+//! the bounded ball stores that same distance, so the edge test is the ball
+//! test for this one question.
+template <typename Graph>
+int adjacentShort(const Graph &adjacency, int u, int v) {
+  if (u < 0 || static_cast<std::size_t>(u) >= adjacency.size()) {
+    return 0;
+  }
+  int seen = 0;
+  for (const int w : adjacency[u]) {
+    if (w == v) {
+      return 1;
+    }
+    if (++seen == 48) {
+      return -1;
+    }
+  }
+  return 0;
+}
+
+//! Shortest-path criterion over every pair of members, by ball lookup.
+//! Pairs at ring distance 2 are answered from the neighbour row. Every
+//! larger separation still reads the bounded ball.
+template <typename Graph>
+bool ringIsPrimitive(const Graph &adjacency, const BoundedBalls &balls,
+                     const std::vector<int> &ring) {
   const int k = static_cast<int>(ring.size());
   for (int i = 0; i < k; i++) {
     for (int j = i + 2; j < k; j++) {
       const int sep = j - i;
       const int ringDist = std::min(sep, k - sep);
       if (ringDist <= 1) {
+        continue;
+      }
+      if (ringDist == 2) {
+        const int edge = adjacentShort(adjacency, ring[i], ring[j]);
+        if (edge == 1 ||
+            (edge < 0 && balls.dist(ring[i], ring[j]) < 2)) {
+          return false;
+        }
         continue;
       }
       if (balls.dist(ring[i], ring[j]) < ringDist) {
@@ -554,7 +588,7 @@ void enumerateFromSource(const Graph &adjacency, const BoundedBalls &balls,
           for (int i = lp - 2; i >= 0 && ok; i--) {
             ok = pushUniqueMember(ring, pb[i]);
           }
-          if (ok && ringIsPrimitive(balls, ring)) {
+          if (ok && ringIsPrimitive(adjacency, balls, ring)) {
             keep(ring);
           }
         }
@@ -579,7 +613,7 @@ void enumerateFromSource(const Graph &adjacency, const BoundedBalls &balls,
             for (int i = lp - 1; i >= 0 && ok; i--) {
               ok = pushUniqueMember(ring, pb[i]);
             }
-            if (ok && ringIsPrimitive(balls, ring)) {
+            if (ok && ringIsPrimitive(adjacency, balls, ring)) {
               keep(ring);
             }
           }
