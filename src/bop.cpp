@@ -12,6 +12,8 @@
 // If not, see <https://opensource.org/licenses/MIT>.
 //-----------------------------------------------------------------------------------
 
+#include <chrono>
+
 #include <bop.hpp>
 #include <chill_plus_scheme.hpp>
 #include <domain.hpp>
@@ -1842,7 +1844,9 @@ void chill::bondOrder(const molSys::PointCloud<molSys::Point<double>, double> &y
   for (int i = 0; i < nop; i++) {
     maxId = std::max(maxId, yCloud.pts[static_cast<std::size_t>(i)].atomID);
   }
-  const bool dense = maxId > 0 && maxId < nop * 4;
+  // Atom IDs are frame-wide. A rank's cloud is only its block, so the old
+  // nop*4 test left every eight-rank lookup on the hash map.
+  const bool dense = maxId > 0 && maxId < 4000000;
   std::vector<int> idToIndex;
   if (dense) {
     idToIndex.assign(static_cast<std::size_t>(maxId) + 1, -1);
@@ -2015,6 +2019,8 @@ void chill::correlFromOrder(molSys::PointCloud<molSys::Point<double>, double> &y
 }
 
 #ifdef SEAMS_HAS_MPI
+chill::AnalysisPhases gChillPhases;
+
 namespace {
 
 const std::vector<std::vector<int>> &shellRows(
@@ -2054,6 +2060,7 @@ void duringChillHalo(void *) {
   // Ghost coordinates were copied from the frame this rank already holds,
   // so the owned bond-order kernel can run while the index exchange is in
   // flight. Rows stay in gDuring; copying them allocated one vector per atom.
+  const auto t0 = std::chrono::steady_clock::now();
   auto &work = seams::domain::gatheredWork();
   bool single = true;
   for (const char flag : work.share.owned) {
@@ -2066,9 +2073,14 @@ void duringChillHalo(void *) {
                                gDuring.rows)) {
     gDuring.rows = shellRows(work.cloud, gDuring.cutoff, work.share.owned);
   }
+  gChillPhases.rebuildMs =
+      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
   chill::bondOrder(work.cloud, gDuring.rows, gDuring.rule, gDuring.order, &work.share.owned,
                    true);
   gDuring.ran = true;
+  gChillPhases.computeMs =
+      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() -
+      gChillPhases.rebuildMs;
 }
 
 void writeStaggered(molSys::PointCloud<molSys::Point<double>, double> &cloud, int atom,
@@ -2091,11 +2103,19 @@ void chill::distributedChillPlus(molSys::PointCloud<molSys::Point<double>, doubl
   MPI_Comm_rank(comm, &rank);
   MPI_Comm_size(comm, &nRanks);
   if (nRanks <= 1) {
+    const auto t0 = std::chrono::steady_clock::now();
     const auto rows = nneigh::neighListO(cutoff, full, 1);
+    const auto t1 = std::chrono::steady_clock::now();
     classifyBonds(full, rows, rule, false);
     getIceTypePlusNoPrint(full, rows, false, neighbourTest);
+    const auto t2 = std::chrono::steady_clock::now();
+    gChillPhases.rebuildMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    gChillPhases.computeMs = std::chrono::duration<double, std::milli>(t2 - t1).count();
+    gChillPhases.exchangeMs = 0;
+    gChillPhases.reduceMs = 0;
     return;
   }
+  gChillPhases = {};
   gDuring.cutoff = cutoff;
   gDuring.rule = rule;
   gDuring.ran = false;
@@ -2164,8 +2184,12 @@ void chill::distributedChillPlus(molSys::PointCloud<molSys::Point<double>, doubl
 #ifdef SEAMS_HAS_OPENMP
   const double corrT0 = omp_get_wtime();
 #endif
+  const auto corr0 = std::chrono::steady_clock::now();
   correlFromOrder(work.cloud, order, rule, false, &interior);
+  gChillPhases.computeMs +=
+      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - corr0).count();
   seams::domain::waitBoundaryValues();
+  gChillPhases.exchangeMs = seams::domain::takeValueCommMs();
   for (int i = 0; i < nop; i++) {
     if (work.share.owned[static_cast<std::size_t>(i)]) {
       continue;
@@ -2174,7 +2198,10 @@ void chill::distributedChillPlus(molSys::PointCloud<molSys::Point<double>, doubl
     std::copy_n(src, kRealL3, order.q.data() + static_cast<std::size_t>(i) * kRealL3);
     order.norm[static_cast<std::size_t>(i)] = src[kRealL3];
   }
+  const auto corr1 = std::chrono::steady_clock::now();
   correlFromOrder(work.cloud, order, rule, false, &boundary);
+  gChillPhases.computeMs +=
+      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - corr1).count();
   // isInterfacial reads the four nearest neighbours' staggered counts.
   // An owned neighbour already has its bonds. A ghost count is needed
   // only when a boundary atom, this frame, is in one of those two rows.
@@ -2219,6 +2246,7 @@ void chill::distributedChillPlus(molSys::PointCloud<molSys::Point<double>, doubl
     }
     seams::domain::postBoundaryValues(stag.data(), 1, comm);
     seams::domain::waitBoundaryValues();
+    gChillPhases.exchangeMs += seams::domain::takeValueCommMs();
     for (int i = 0; i < nop; i++) {
       if (work.share.owned[static_cast<std::size_t>(i)]) {
         continue;
@@ -2229,7 +2257,10 @@ void chill::distributedChillPlus(molSys::PointCloud<molSys::Point<double>, doubl
 #ifdef SEAMS_HAS_OPENMP
   const double typeT0 = omp_get_wtime();
 #endif
+  const auto type0 = std::chrono::steady_clock::now();
   getIceTypePlusNoPrint(work.cloud, rows, false, neighbourTest);
+  gChillPhases.computeMs +=
+      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - type0).count();
 #ifdef SEAMS_HAS_OPENMP
   if (const char *split = std::getenv("SEAMS_SPLIT")) {
     if (split[0] == '1') {
@@ -2249,6 +2280,7 @@ void chill::distributedChillPlus(molSys::PointCloud<molSys::Point<double>, doubl
     seams::domain::captureLocalWork(seams::domain::kWorkChill, effort.data(),
                                     static_cast<int>(effort.size()), comm);
   }
+  const auto red0 = std::chrono::steady_clock::now();
   for (std::size_t k = 0; k < work.share.local.size(); k++) {
     if (!work.share.owned[k]) {
       continue;
@@ -2256,5 +2288,9 @@ void chill::distributedChillPlus(molSys::PointCloud<molSys::Point<double>, doubl
     full.pts[static_cast<std::size_t>(work.share.local[k])].iceType =
         work.cloud.pts[k].iceType;
   }
+  gChillPhases.reduceMs =
+      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - red0).count();
 }
+
+chill::AnalysisPhases chill::lastChillPhases() { return gChillPhases; }
 #endif

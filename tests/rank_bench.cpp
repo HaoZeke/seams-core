@@ -243,8 +243,17 @@ int main(int argc, char **argv) {
       const auto &work = seams::domain::gatheredWork();
       double haloFrac = work.haloFraction;
       MPI_Allreduce(&haloFrac, &haloFrac, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+      chill::AnalysisPhases phase;
+      if (which == "chill") {
+        phase = chill::lastChillPhases();
+      } else if (which == "q6") {
+        phase = chill::lastSteinhardtPhases();
+      }
+      double part[4] = {phase.rebuildMs, phase.computeMs, phase.exchangeMs, phase.reduceMs};
+      MPI_Allreduce(MPI_IN_PLACE, part, 4, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
       if (rank == 0) {
-        std::printf("%s %s %.6f %.6f\n", which.c_str(), tag, wall, haloFrac);
+        std::printf("%s %s %.6f %.6f %.3f %.3f %.3f %.3f\n", which.c_str(), tag, wall, haloFrac,
+                    part[0], part[1], part[2], part[3]);
       }
     };
     primitive::setPhaseTiming(true);

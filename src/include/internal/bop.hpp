@@ -408,6 +408,17 @@ steinhardtQl(const molSys::PointCloud<molSys::Point<double>, double> &yCloud,
 //! frames of its own turns it off.
 void setSteinhardtAtomSplit(bool split);
 
+//! Rebuild, local kernel, halo exchange, and the write-back to the frame.
+struct AnalysisPhases {
+  double rebuildMs = 0;
+  double computeMs = 0;
+  double exchangeMs = 0;
+  double reduceMs = 0;
+};
+
+AnalysisPhases lastChillPhases();
+AnalysisPhases lastSteinhardtPhases();
+
 //! Width of one atom's interleaved q_lm: real, imaginary, m = -l..l.
 inline int steinhardtQlmWidth(int orderL) { return 2 * (2 * orderL + 1); }
 
