@@ -1,5 +1,7 @@
-% What this machine can defend. No front velocity is quoted:
-% one seed per temperature, and the 245 K slope is unresolved.
+% What this machine can defend. No front velocity is quoted.
+% One 3 ns seed at 245 K and one at 255 K. The warm slab melts.
+% The cold slab ends slightly thicker, and its half-nanosecond
+% rates are consistent with zero.
 
 \section{Salt at a Madrid-2019 freezing front}
 \label{sec:brine-science}
@@ -21,6 +23,19 @@ build of LAMMPS (29 Aug 2024, g++ 15.2.0).
 Five hundred nanoseconds at that rate is $37\,\mathrm{days}$ of
 eight-core time, for one temperature and one seed.
 The salinity series is not reported.
+
+One pure-water trajectory at $245\,\mathrm{K}$ and one at
+$255\,\mathrm{K}$ were each run for $3\,\mathrm{ns}$ on this cell,
+one seed at each temperature.
+At $245\,\mathrm{K}$ the crystal count is $1222$ at the start of
+production, $1108$ at $0.5\,\mathrm{ns}$ and $1257$ at $3.0\,\mathrm{ns}$,
+and the ice thickness goes from $34.1\,\mathrm{\AA}$ to $36.0\,\mathrm{\AA}$.
+At $255\,\mathrm{K}$ the count falls from $1214$ to $518$ and the
+thickness from $33.7\,\mathrm{\AA}$ to $14.7\,\mathrm{\AA}$.
+The half-nanosecond front velocities at $245\,\mathrm{K}$ scatter
+through zero.
+The melting point stays unresolved, so this section quotes no front
+velocity.
 
 What is reported is the analysis that would be applied to such a
 trajectory, timed on this cell, and a density check of the ion
