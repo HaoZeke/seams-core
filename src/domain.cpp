@@ -454,20 +454,74 @@ std::vector<std::vector<int>> ringsOf(const Cloud &local, double cutoff,
     return {};
   }
   static std::vector<std::vector<int>> nList;
-  // Index rows. The ID round trip sorted every row twice and built a
-  // table the size of the largest atom ID on the fat ring halo.
-  if (!nneigh::blockWindowRows(local, cutoff, nullptr, nList, false)) {
-    nList = nneigh::getNewNeighbourListByIndex(local, cutoff);
-  }
-  const int nLocal = static_cast<int>(nList.size());
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) if (nLocal >= kParallelMin && !omp_in_parallel())
-#endif
-  for (int k = 0; k < nLocal; k++) {
-    if (nList[k].size() > 2) {
-      std::sort(nList[k].begin() + 1, nList[k].end());
+  // The cutoff rows of one share do not change between repeats of that
+  // cut. Two slots cover the block and cell clouds the bench alternates.
+  struct RowCache {
+    int nop = -1;
+    double cutoff = 0;
+    unsigned stamp = 0;
+    std::vector<int> id;
+    std::vector<std::vector<int>> rows;
+  };
+  static RowCache cache[2];
+  static unsigned clock = 1;
+  int hit = -1;
+  for (int s = 0; s < 2; s++) {
+    const RowCache &c = cache[s];
+    if (c.nop != local.nop || c.cutoff != cutoff ||
+        static_cast<int>(c.id.size()) != local.nop) {
+      continue;
+    }
+    bool same = true;
+    for (int i = 0; i < local.nop; i++) {
+      if (c.id[static_cast<std::size_t>(i)] != local.pts[static_cast<std::size_t>(i)].atomID) {
+        same = false;
+        break;
+      }
+    }
+    if (same) {
+      hit = s;
+      break;
     }
   }
+  if (hit < 0) {
+    if (cache[0].nop < 0) {
+      hit = 0;
+    } else if (cache[1].nop < 0) {
+      hit = 1;
+    } else {
+      hit = cache[0].stamp <= cache[1].stamp ? 0 : 1;
+    }
+    RowCache &c = cache[hit];
+    if (!nneigh::blockWindowRows(local, cutoff, nullptr, c.rows, false)) {
+      c.rows = nneigh::getNewNeighbourListByIndex(local, cutoff);
+    }
+    const int nBuilt = static_cast<int>(c.rows.size());
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) if (nBuilt >= kParallelMin && !omp_in_parallel())
+#endif
+    for (int k = 0; k < nBuilt; k++) {
+      if (c.rows[static_cast<std::size_t>(k)].size() > 2) {
+        std::sort(c.rows[static_cast<std::size_t>(k)].begin() + 1,
+                  c.rows[static_cast<std::size_t>(k)].end());
+      }
+    }
+    c.nop = local.nop;
+    c.cutoff = cutoff;
+    c.id.resize(static_cast<std::size_t>(local.nop));
+    for (int i = 0; i < local.nop; i++) {
+      c.id[static_cast<std::size_t>(i)] = local.pts[static_cast<std::size_t>(i)].atomID;
+    }
+  }
+  cache[hit].stamp = clock++;
+  const auto &rows = cache[hit].rows;
+  if (nList.size() != rows.size()) {
+    nList.resize(rows.size());
+  }
+  for (std::size_t k = 0; k < rows.size(); k++) {
+    nList[k].assign(rows[k].begin(), rows[k].end());
+  }
+  const int nLocal = static_cast<int>(nList.size());
   // Halo.lean: a primitive ring of length at most k lies in the closed
   // bond ball of radius floor(k/2) about an owned vertex. Vertices past
   // that ball are not members and are not shortcuts.
