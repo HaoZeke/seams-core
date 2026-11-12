@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
   int bad = 0;
   for (const auto &c : {tiltedFrame(16000, 78.4, 0.0, 0.0, 0.0, 4),
                         tiltedFrame(16000, 78.4, 9.0, 5.0, -7.0, 5)}) {
-    for (const int depth : {4, 6, 8}) {
+    for (const int depth : {4, 6, 8, 10}) {
       const auto got =
           seams::domain::gatherRings(c, cutoff, depth, MPI_COMM_WORLD);
       if (got.empty() || got != sortedRowRings(c, cutoff, depth)) {
