@@ -39,3 +39,31 @@ test(
   depends: [run_hook],
   timeout: 120,
 )
+
+seams_ice = custom_target(
+  'seams_ice',
+  input: files('gromacs/seams_ice.cpp'),
+  output: 'seams_ice',
+  command: [
+    link_host, '-O2', '-std=c++17',
+    '-I/usr/include', '-DGMX_DOUBLE=0', '-fopenmp',
+    '-I' + meson.project_source_root() / 'include',
+    '-o', '@OUTPUT@', '@INPUT@',
+    '-L/usr/lib/x86_64-linux-gnu',
+    '-Wl,--allow-shlib-undefined',
+    '-Wl,-rpath,/usr/lib/x86_64-linux-gnu',
+    '-Wl,-rpath,' + seams_libdir,
+    '-lgromacs', '-lm', '-lfftw3f',
+    seams_api_lib.full_path(),
+  ],
+  depends: [seams_api_lib],
+  build_by_default: true,
+)
+
+test(
+  'gromacs_mdrun',
+  find_program('gromacs/run_mdrun.sh'),
+  args: [seams_ice.full_path(), seams_libdir],
+  depends: [seams_ice],
+  timeout: 180,
+)

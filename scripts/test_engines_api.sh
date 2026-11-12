@@ -57,13 +57,13 @@ fi
   -llammps /usr/lib/x86_64-linux-gnu/libcurl.so.4 -L"$lib" -lseams
 (cd "$root/engines/lammps" && env -u LIBRARY_PATH LD_LIBRARY_PATH="$lib" "$mod/run_hook" in.dseams)
 
-# GROMACS trajectory tool. analyzeFrame is the per-frame hook.
-gmx_cflags=$(PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig pkg-config --cflags libgromacs)
-gmx_libs=$(PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig pkg-config --libs libgromacs)
-env -i PATH=/usr/bin:/bin /usr/bin/g++ -O2 -std=c++17 "$root/engines/gromacs/seams_ice.cpp" \
-  -o "$mod/gmx-seams" $gmx_cflags -I"$root/include" \
-  -L"$lib" -Wl,-rpath,"$lib" -lseams $gmx_libs -lfftw3f
-env -i PATH=/usr/bin:/bin LD_LIBRARY_PATH="$lib" \
-  "$mod/gmx-seams" -f "$root/engines/gromacs/ice.gro" -cutoff 3.5
+# GROMACS trajectory tool, then a real mdrun trajectory.
+"$root/engines/link_host.sh" -O2 -std=c++17 \
+  -I/usr/include -DGMX_DOUBLE=0 -fopenmp -I"$root/include" \
+  "$root/engines/gromacs/seams_ice.cpp" -o "$mod/seams_ice" \
+  -L/usr/lib/x86_64-linux-gnu -Wl,--allow-shlib-undefined \
+  -Wl,-rpath,/usr/lib/x86_64-linux-gnu -Wl,-rpath,"$lib" \
+  -lgromacs -lm -lfftw3f -L"$lib" -lseams
+"$root/engines/gromacs/run_mdrun.sh" "$mod/seams_ice" "$lib"
 
 echo "engines-api ok"
