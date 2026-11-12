@@ -474,6 +474,9 @@ _incdirs += include_directories([
 # Library
 subdir('src')
 
+# Timing driver (bench/analyse.cpp). Outputs stay out of the tree.
+subdir('bench')
+
 # Tests
 if get_option('with_tests')
   subdir('tests')
