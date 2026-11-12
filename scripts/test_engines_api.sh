@@ -46,7 +46,7 @@ if [ -n "$SEAMS_PY" ]; then
     -L"$lib" -lseams -Wl,-rpath,"$lib" \
     -o "$root/bindings/python/dseams/_core$suf"
   (cd "$root/bindings/python" && PYTHONPATH="$PWD" LD_LIBRARY_PATH="$eessi_lib:$lib" \
-    "$SEAMS_PY" -m unittest tests/test_dseams.py)
+    "$SEAMS_PY" -m unittest -v tests/test_dseams.py)
   (cd "$root/engines/openmm" && PYTHONPATH="$root/bindings/python" LD_LIBRARY_PATH="$eessi_lib:$lib" \
     "$SEAMS_PY" test_reporter.py)
 fi
