@@ -42,8 +42,10 @@ static int diamond(int nrep, double *xyz, double box[9]) {
 
 int main(void) {
   expect(seams_abi() == SEAMS_ABI, "abi");
-  expect(seams_version_major() == 2, "major");
-  expect(strcmp(seams_version_string(), "2.13.0") == 0, "version string");
+  expect(seams_version_major() == SEAMS_VERSION_MAJOR, "major");
+  expect(seams_version_minor() == SEAMS_VERSION_MINOR, "minor");
+  expect(seams_version_patch() == SEAMS_VERSION_PATCH, "patch");
+  expect(strcmp(seams_version_string(), SEAMS_VERSION_STRING) == 0, "version string");
   expect(seams_set_num_threads(2) == SEAMS_OK, "set threads");
   expect(seams_get_num_threads() == 2, "get threads");
   expect(seams_set_num_threads(-1) == SEAMS_ERR_RANGE, "negative threads");

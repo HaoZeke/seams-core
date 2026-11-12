@@ -12,9 +12,7 @@
  */
 
 #define SEAMS_ABI 1
-#define SEAMS_VERSION_MAJOR 2
-#define SEAMS_VERSION_MINOR 13
-#define SEAMS_VERSION_PATCH 0
+#include "seams_version.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -34,10 +34,6 @@
 #include <omp.h>
 #endif
 
-#ifndef SEAMS_VERSION_STRING
-#define SEAMS_VERSION_STRING "2.13.0"
-#endif
-
 namespace {
 
 using Cloud = molSys::PointCloud<molSys::Point<double>, double>;

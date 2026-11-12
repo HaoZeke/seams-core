@@ -42,7 +42,7 @@ if [ -n "$SEAMS_PY" ]; then
   inc=$("$SEAMS_PY" -c 'import sysconfig; print(sysconfig.get_path("include"))')
   suf=$("$SEAMS_PY" -c 'import sysconfig; print(sysconfig.get_config_var("EXT_SUFFIX"))')
   c++ -shared -fPIC -O2 -std=c++17 -fvisibility=hidden \
-    -I"$root/include" -I"$nb/include" -I"$nb/ext/robin_map/include" -I"$inc" \
+    -I"$root/include" -I"$build/src" -I"$nb/include" -I"$nb/ext/robin_map/include" -I"$inc" \
     "$root/bindings/python/dseams/_core.cpp" "$nb/src/nb_combined.cpp" \
     -L"$lib" -lseams -Wl,-rpath,"$lib" \
     -o "$root/bindings/python/dseams/_core$suf"
@@ -54,10 +54,10 @@ fi
 
 # LAMMPS in-run hook and the compute object.
 "$root/engines/link_host.sh" -c -O2 -std=c++17 \
-  -I/usr/include/lammps -I/usr/lib/x86_64-linux-gnu/openmpi/include -I"$root/include" \
+  -I/usr/include/lammps -I/usr/lib/x86_64-linux-gnu/openmpi/include -I"$root/include" -I"$build/src" \
   "$root/engines/lammps/compute_dseams.cpp" -o "$mod/compute_dseams.o"
 "$root/engines/link_host.sh" -O2 -std=c++17 \
-  -I/usr/include/lammps -I"$root/include" \
+  -I/usr/include/lammps -I"$root/include" -I"$build/src" \
   "$root/engines/lammps/run_hook.cpp" -o "$mod/run_hook" \
   -L/usr/lib/x86_64-linux-gnu -Wl,--allow-shlib-undefined \
   -Wl,-rpath,/usr/lib/x86_64-linux-gnu -Wl,-rpath,"$lib" \
@@ -66,7 +66,7 @@ fi
 
 # GROMACS trajectory tool, then a real mdrun trajectory.
 "$root/engines/link_host.sh" -O2 -std=c++17 \
-  -I/usr/include -DGMX_DOUBLE=0 -fopenmp -I"$root/include" \
+  -I/usr/include -DGMX_DOUBLE=0 -fopenmp -I"$root/include" -I"$build/src" \
   "$root/engines/gromacs/seams_ice.cpp" -o "$mod/seams_ice" \
   -L/usr/lib/x86_64-linux-gnu -Wl,--allow-shlib-undefined \
   -Wl,-rpath,/usr/lib/x86_64-linux-gnu -Wl,-rpath,"$lib" \

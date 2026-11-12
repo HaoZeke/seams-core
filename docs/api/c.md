@@ -7,7 +7,8 @@ A cell is nine numbers: `ox, oy, oz, lx, ly, lz, xy, xz, yz`. A zero tilt is ort
 ## Version and errors
 
 `seams_abi` returns 1. `seams_version_major`, `seams_version_minor`, `seams_version_patch`
-and `seams_version_string` identify the release (2.13.0).
+and `seams_version_string` identify the release. The build writes those
+macros from the project version (2.14.0).
 
 `seams_status` is `SEAMS_OK`, `SEAMS_ERR_NULL`, `SEAMS_ERR_RANGE`, `SEAMS_ERR_BOX`,
 `SEAMS_ERR_ARG`, `SEAMS_ERR_STATE`, `SEAMS_ERR_NOMEM`, or `SEAMS_ERR_INTERNAL`.
