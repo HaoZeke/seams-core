@@ -282,43 +282,22 @@ Scoring the trajectories with ~interface_order growth~ took 13.3 s
 for those sixteen files and 20.0 s when 272 K and 273 K were added,
 one thread per scoring process, run serially.
 
-The thickness below is the ice slab, so it is the sum of the two
-fronts.
-Half of it is the mean advance of one front.
-Espinosa, Navarro, Sanz, Valeriani and Vega, J. Chem. Phys. 145,
-211922 (2016), Table I, give the secondary-prismatic growth rate of
-mW as one front, u = L / (2 τ), in Å/ns.
-Their melting point for mW is 274.6 K.
-The table does not list 270 K.
-Converted, 490 Å/ns is 49 m/s, 375 Å/ns is 37.5 m/s and 266 Å/ns is
-26.6 m/s.
+The thickness below is the ice slab on that fixed-volume cell.
+It is the sum of the two fronts.
+It is not a speed that can be set beside a direct-coexistence table.
 
-| T (K) | 2015 slab (Å/ps) | OVITO slab (Å/ps) | 2015 one front (m/s) | OVITO one front (m/s) | Espinosa Table I (m/s) |
-|-------+------------------+-------------------+----------------------+-----------------------+------------------------|
-| 240 | 0.269 [0.224, 0.312] | 0.287 [0.237, 0.334] | 13.5 | 14.4 | 49 |
-| 250 | 0.174 [0.148, 0.200] | 0.183 [0.151, 0.213] | 8.72 | 9.15 | 37.5 |
-| 260 | 0.143 [0.128, 0.159] | 0.148 [0.132, 0.164] | 7.16 | 7.39 | 26.6 |
-| 270 | 0.0292 [0.0137, 0.0569] | 0.0299 [0.0139, 0.0584] | 1.46 | 1.49 | not listed |
+| T (K) | 2015 slab (Å/ps) | OVITO slab (Å/ps) |
+|-------+------------------+-------------------|
+| 240 | 0.269 [0.224, 0.312] | 0.287 [0.237, 0.334] |
+| 250 | 0.174 [0.148, 0.200] | 0.183 [0.151, 0.213] |
+| 260 | 0.143 [0.128, 0.159] | 0.148 [0.132, 0.164] |
+| 270 | 0.0292 [0.0137, 0.0569] | 0.0299 [0.0139, 0.0584] |
 
-Shi, Fulford, Salvalaglio and Molteni, arXiv:2410.07050
-(12 January 2025), report that the mW basal and prism1 rates both
-peak at 240 K, and that those rates are two orders of magnitude
-above their TIP4P/Ice rates.
-The TIP4P/Ice rates in that preprint run from 0.2 to 0.9 Å/ns, with
-the 260 K maxima 0.621 ± 0.104 Å/ns on the basal face and
-0.840 ± 0.033 Å/ns on prism1.
-A one-front rate of 13.5 m/s is 135 Å/ns, which sits about two
-orders above that TIP4P/Ice maximum.
-It is smaller than the Espinosa secondary-prism value at the same
-temperature.
-The two calculations are not the same slab: Espinosa used a direct
-coexistence cell of about 4000 molecules and the secondary prismatic
-plane, and this campaign uses the 864-molecule frame at fixed volume.
-The ordering with temperature is the same.
-Both are fastest at 240 K and slower at 260 K.
+* Rule-sensitivity bound
 
-The paired difference, 2015 minus OVITO, excludes zero at 240, 250,
-260 and 270 K.
+The paired difference on that slab, 2015 minus OVITO, excludes zero
+at 240, 250, 260 and 270 K.
+Four further seeds at 272 K and at 273 K put the interval across zero.
 
 | T (K) | difference (Å/ps) | excludes zero |
 |-------+-------------------+---------------|
@@ -329,14 +308,99 @@ The paired difference, 2015 minus OVITO, excludes zero at 240, 250,
 | 272 | −0.00015 [−0.00058, 0.00032] | no |
 | 273 | −0.00028 [−0.00054, 0.00001] | no |
 
-272 K and 273 K are four further seeds each, on the same deck, run
-to see where the interval reaches zero.
-It does so at 272 K.
+272 K is the rule-sensitivity bound for this thickness.
+Below it the two published CHILL+ rules are distinguishable as
+growth rates.
+At 272 K they are not.
 The crystal thickness, cubic plus hexagonal and not the interfacial
-label, already has an interval that includes zero at 240, 260 and
-270 K.
-The solid-thickness difference is the one carried by the interfacial
-label, and that difference stops excluding zero at 272 K.
+label, already includes zero at 240, 260 and 270 K, so the bound is
+carried by the interfacial label.
+The 2015 thresholds are unchanged.
+
+* Direct coexistence
+
+~input/interface/npt_growth.py~ builds the comparison cell.
+The oxygen sites are the GenIce ice Ih cell.
+Its basal normal is y, where the planes come in pairs 0.92 Å apart
+separated by 2.76 Å.
+Its secondary-prism normal is z, where the planes are 2.25 Å apart.
+Each face is 8064 molecules, ice in the middle half and liquid in
+the two caps, so the periodic cell has two interfaces.
+The ensemble is anisotropic NpT at 1 bar (0.986923 atm in the real-unit
+pressure of LAMMPS).
+Four velocity seeds run at 240, 250, 260 and 270 K.
+The speed of one front is L / (2 τ), the definition in equation 2 of
+Espinosa, Navarro, Sanz, Valeriani and Vega, J. Chem. Phys. 145,
+211922 (2016), page 211922-4.
+L is the liquid length in the first production frame.
+τ is the first frame whose solid fraction is at least 0.95.
+The mean of the seeds that freeze is the same percentile bootstrap.
+
+This part of the session used 8 cores, one OpenMP thread per LAMMPS
+run.
+The eight basal runs at 240 and 250 K took 696 to 736 s each.
+The invocation that wrote the other twenty-four trajectories took
+5709.2 s of wall time.
+Scoring all thirty-two files took 336 s, one thread, run serially.
+
+| face | T (K) | 2015 (Å/ns) | OVITO (Å/ns) | seeds |
+|------+-------+-------------+--------------+-------|
+| secondary prism | 240 | 139.5 [133.0, 145.9] | 139.5 [133.0, 145.9] | 4 |
+| secondary prism | 250 | 108.3 [100.0, 115.5] | 108.3 [100.0, 115.5] | 4 |
+| secondary prism | 260 | 74.2 [72.6, 77.1] | 74.2 [72.6, 77.1] | 4 |
+| secondary prism | 270 | 18.8 [15.5, 20.4] | 18.8 [15.5, 20.4] | 3 |
+| basal | 240 | 62.5 [60.7, 64.0] | 62.9 [61.1, 64.4] | 4 |
+| basal | 250 | 53.7 [45.2, 62.1] | 53.7 [45.2, 62.1] | 4 |
+| basal | 260 | 37.7 [34.0, 40.6] | 37.8 [34.3, 40.6] | 4 |
+| basal | 270 | not frozen in 2 ns | not frozen in 2 ns | 0 |
+
+The paired difference includes zero on every row that freezes.
+On this cell the front speed is not sensitive to the choice of rule.
+The 272 K bound belongs to the fixed-volume thickness, not to this speed.
+
+Table I on page 211922-4 lists the mW secondary-prism rate, and no
+basal rate.
+The printed values are 490 Å/ns at 240 K, 375 Å/ns at 250 K and
+266 Å/ns at 260 K.
+The table has no 270 K row.
+Table II on the same page gives the mW melting point as 274.6 K.
+The secondary-prism speeds here are 0.28 times those printed numbers.
+Montero de Hijes, Romano, Gorfer and Dellago, J. Chem. Phys. 158,
+204706 (2023), say in the caption of their Figure 4 that the mW
+points taken from that table were divided by ten, because the authors
+of the 2016 paper acknowledged a units erratum.
+Dividing the printed table by ten gives 49, 37.5 and 26.6 Å/ns.
+The speeds here are 2.8 times those corrected values.
+The basal face is slower than the secondary prism at each temperature,
+which is the direction Espinosa, Navarro, Sanz, Valeriani and Vega
+report for TIP4P/ICE on the same page: the basal rate is within five
+per cent of 0.6 times the secondary prism at 245, 255 and 260 K.
+They do not print an mW basal number.
+
+* Sources checked
+
+Nguyen and Molinero, J. Phys. Chem. B 2015, 119, 9369–9376.
+The ACS page for doi 10.1021/jp510289t gives those authors, that
+volume and those pages.
+Willard and Chandler, J. Phys. Chem. B 2010, 114, 1954–1958.
+The PMC copy PMC2834420 says they used ξ = 2.4 Å.
+Espinosa, Navarro, Sanz, Valeriani and Vega, J. Chem. Phys. 145,
+211922 (2016), doi 10.1063/1.4965427.
+Table I and Table II were read from page 211922-4 of the author PDF.
+The direct-coexistence cell of 4000 molecules, about 3 × 3 × 9 nm
+with an ice slice of about 4.5 nm, and the anisotropic barostat, are
+on page 211922-2.
+Equation 2, u = L / (2 τ), is on page 211922-4.
+Shi, Fulford, Salvalaglio and Molteni, arXiv:2410.07050.
+The abstract page dated 24 August 2026 names those four authors.
+Its text gives TIP4P/Ice maxima of 0.621 ± 0.104 Å/ns on the basal
+face and 0.840 ± 0.033 Å/ns on prism1 at 260 K, and says the mW
+rates are two orders of magnitude larger.
+It does not print an mW number.
+Montero de Hijes, Romano, Gorfer and Dellago, J. Chem. Phys. 158,
+204706 (2023).
+The article HTML states the factor-of-ten correction in the caption
+of Figure 4.
 
 * Reproduce
 
@@ -346,6 +410,8 @@ interface_order study input/traj/interface_f0.lammpstrj
 interface_order confined
 python3 input/interface/campaign.py
 python3 scripts/growth_rates.py --bin bbdir-eessi/tests/interface_order
+python3 input/interface/npt_growth.py
+python3 scripts/npt_rates.py --bin bbdir-eessi/tests/interface_order
 interface_order wc input/traj/nucleation_f1.lammpstrj
 python3 scripts/figures_interface_order.py \
   --bin bbdir-eessi/tests/interface_order \
