@@ -910,7 +910,144 @@ bool orthoFullCsr(
   fillOrthoShift(len[0], len[1], len[2], shx, shy, shz);
 
   const auto tCount = Clock::now();
-  if (fast) {
+  // One half-stencil walk. Each unordered pair is tested once and written
+  // into both rows. Private degree rows keep the threads off one counts line.
+  bool paired = false;
+  struct Dir {
+    int a, b;
+  };
+  std::vector<std::vector<Dir>> bags;
+  std::vector<int> deg;
+  int team = 1;
+  if (fast && !half) {
+#ifdef SEAMS_HAS_OPENMP
+    team = std::max(1, omp_get_max_threads());
+#else
+    team = 1;
+#endif
+    bags.resize(static_cast<std::size_t>(team));
+    deg.assign(static_cast<std::size_t>(team) * static_cast<std::size_t>(nop), 0);
+    const int ncx = ncell[0], ncy = ncell[1], ncz = ncell[2];
+    const int *cellStart = sc.cellStart.data();
+    const int *ids = sc.ids.data();
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel num_threads(team)
+#endif
+    {
+      int tid = 0;
+#ifdef SEAMS_HAS_OPENMP
+      tid = omp_get_thread_num();
+#endif
+      auto &bag = bags[static_cast<std::size_t>(tid)];
+      bag.clear();
+      bag.reserve(static_cast<std::size_t>(nSubset) * 8 / static_cast<std::size_t>(team) + 16);
+      const int nCells = ncx * ncy * ncz;
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp for schedule(static)
+#endif
+      for (int home = 0; home < nCells; ++home) {
+        const int slot0 = cellStart[home];
+        const int slot1 = cellStart[home + 1];
+        if (slot0 == slot1) {
+          continue;
+        }
+        const int cz = home % ncz;
+        const int cy = (home / ncz) % ncy;
+        const int cx = home / (ncy * ncz);
+        for (int slot = slot0; slot < slot1; ++slot) {
+        const int ii = ids[slot];
+        const double xi = x[slot];
+        const double yi = y[slot];
+        const double zi = z[slot];
+        for (int dz = 0; dz <= 1; ++dz) {
+          int nz = cz + dz;
+          int iz = 0;
+          if (nz >= ncz) {
+            nz -= ncz;
+            iz = 1;
+          } else if (nz < 0) {
+            nz += ncz;
+            iz = -1;
+          }
+          const int dy0 = dz == 0 ? 0 : -1;
+          for (int dy = dy0; dy <= 1; ++dy) {
+            int ny = cy + dy;
+            int iy = 0;
+            if (ny >= ncy) {
+              ny -= ncy;
+              iy = 1;
+            } else if (ny < 0) {
+              ny += ncy;
+              iy = -1;
+            }
+            const int dx0 = (dz == 0 && dy == 0) ? 0 : -1;
+            for (int dx = dx0; dx <= 1; ++dx) {
+              int nx = cx + dx;
+              int ix = 0;
+              if (nx >= ncx) {
+                nx -= ncx;
+                ix = 1;
+              } else if (nx < 0) {
+                nx += ncx;
+                ix = -1;
+              }
+              const int ncid = (nx * ncy + ny) * ncz + nz;
+              const int jb = cellStart[ncid];
+              const int je = cellStart[ncid + 1];
+              const int sk = (ix + 1) * 9 + (iy + 1) * 3 + (iz + 1);
+              const double sx = shx[sk];
+              const double sy = shy[sk];
+              const double sz = shz[sk];
+              const bool same = dx == 0 && dy == 0 && dz == 0;
+              for (int j = jb; j < je; ++j) {
+                if (same && j <= slot) {
+                  continue;
+                }
+                const double dxv = xi - x[j] - sx;
+                const double dyv = yi - y[j] - sy;
+                const double dzv = zi - z[j] - sz;
+                if (dxv * dxv + dyv * dyv + dzv * dzv < rc2) {
+                  const int jj = ids[j];
+                  if (jj == ii) {
+                    continue;
+                  }
+                  bag.push_back({ii, jj});
+                }
+              }
+            }
+          }
+        }
+        }
+      }
+    }
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel num_threads(team)
+#endif
+    {
+      int tid = 0;
+#ifdef SEAMS_HAS_OPENMP
+      tid = omp_get_thread_num();
+#endif
+      int *mine = deg.data() + static_cast<std::size_t>(tid) * static_cast<std::size_t>(nop);
+      for (const Dir &p : bags[static_cast<std::size_t>(tid)]) {
+        mine[p.a]++;
+        mine[p.b]++;
+      }
+    }
+    std::fill(sc.counts.begin(), sc.counts.end(), 0);
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) num_threads(team) if (nop >= 256)
+#endif
+    for (int i = 0; i < nop; ++i) {
+      int sum = 0;
+      for (int t = 0; t < team; ++t) {
+        sum += deg[static_cast<std::size_t>(t) * static_cast<std::size_t>(nop) +
+                   static_cast<std::size_t>(i)];
+      }
+      sc.counts[static_cast<std::size_t>(i)] = sum;
+    }
+    paired = true;
+  } else if (fast) {
     if (half) {
       passFast<false, true>(x, y, z, sc.ids.data(), sc.cellStart.data(), ncell[0], ncell[1],
                             ncell[2], shx, shy, shz, rc2, sc.counts.data(), nullptr, nullptr);
@@ -937,7 +1074,45 @@ bool orthoFullCsr(
   phase().pairs = nnz;
 
   const auto tFill = Clock::now();
-  if (nnz > 0) {
+  if (nnz > 0 && paired) {
+    std::vector<int> cursor(static_cast<std::size_t>(team) * static_cast<std::size_t>(nop), 0);
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) num_threads(team) if (nop >= 256)
+#endif
+    for (int i = 0; i < nop; ++i) {
+      int at = offsets[static_cast<std::size_t>(i)];
+      for (int t = 0; t < team; ++t) {
+        cursor[static_cast<std::size_t>(t) * static_cast<std::size_t>(nop) +
+               static_cast<std::size_t>(i)] = at;
+        at += deg[static_cast<std::size_t>(t) * static_cast<std::size_t>(nop) +
+                  static_cast<std::size_t>(i)];
+      }
+    }
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel num_threads(team)
+#endif
+    {
+      int tid = 0;
+#ifdef SEAMS_HAS_OPENMP
+      tid = omp_get_thread_num();
+#endif
+      int *at = cursor.data() + static_cast<std::size_t>(tid) * static_cast<std::size_t>(nop);
+      for (const Dir &p : bags[static_cast<std::size_t>(tid)]) {
+        cols[static_cast<std::size_t>(at[p.a]++)] = p.b;
+        cols[static_cast<std::size_t>(at[p.b]++)] = p.a;
+      }
+    }
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) num_threads(team) if (nop >= 256)
+#endif
+    for (int i = 0; i < nop; ++i) {
+      const int a = offsets[static_cast<std::size_t>(i)];
+      const int b = offsets[static_cast<std::size_t>(i) + 1];
+      if (b - a > 1) {
+        sortRow(cols.data() + a, b - a);
+      }
+    }
+  } else if (nnz > 0) {
     if (fast) {
       if (half) {
         passFast<true, true>(x, y, z, sc.ids.data(), sc.cellStart.data(), ncell[0], ncell[1],

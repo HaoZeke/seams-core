@@ -37,6 +37,7 @@ test_sources = {
   'ion_env': 'test_ion_env.cpp',
   'guest_occupancy': 'test_guest_occupancy.cpp',
   'shell_rings': 'test_shell_rings.cpp',
+  'ring_hop': 'test_ring_hop.cpp',
   'voronoi': 'test_voronoi.cpp',
   'structure_desc': 'test_structure_desc.cpp',
   'cage_affiliation': 'test_cage_affiliation.cpp',
