@@ -132,3 +132,33 @@ pkgconfig.generate(
   requires: ['eigen3 >= 3.4.0'],
   libraries: ['-L${libdir}', '-lyodaLib'],
   extra_cflags: _public_defines)
+
+# Stable C ABI. Language bindings and engine plugins link this library
+# and include seams.h. They do not include the C++ headers.
+seams_api_lib = shared_library(
+  'seams',
+  'seams_api.cpp',
+  dependencies: yds_dep,
+  include_directories: include_directories('../include'),
+  cpp_args: _args + ['-fvisibility=hidden',
+                     '-DSEAMS_VERSION_STRING="' + meson.project_version() + '"'],
+  link_args: _lib_link_args,
+  install: true)
+
+install_headers(files('../include/seams.h'))
+
+pkgconfig.generate(
+  seams_api_lib,
+  name: 'seams',
+  filebase: 'seams',
+  description: 'd-SEAMS stable C API',
+  version: meson.project_version(),
+  extra_cflags: _public_defines)
+
+seams_api_test = executable(
+  'test_seams_api',
+  files('../tests/test_seams_api.c'),
+  link_with: seams_api_lib,
+  include_directories: include_directories('../include'))
+
+test('seams_c_api', seams_api_test, timeout: 180)
