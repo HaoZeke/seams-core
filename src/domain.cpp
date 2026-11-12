@@ -447,6 +447,9 @@ Cloud subCloud(const Cloud &cloud, const std::vector<int> &atoms) {
 }
 
 namespace {
+seams::domain::RingPhases gRingPhases;
+
+
 //! Bit mix of the coordinates. A later frame with the same atom ids still
 //! rebuilds its rows when a point has moved.
 std::uint64_t coordinateKey(const Cloud &local) {
@@ -470,7 +473,6 @@ std::vector<std::vector<int>> ringsOf(const Cloud &local, double cutoff,
   if (local.nop == 0) {
     return {};
   }
-  static std::vector<std::vector<int>> nList;
   // Rows are reused only when the points themselves are unchanged. Two
   // slots cover the block and cell clouds the bench alternates. A new
   // frame keeps the domain cut and rebuilds these rows.
@@ -507,7 +509,13 @@ std::vector<std::vector<int>> ringsOf(const Cloud &local, double cutoff,
       break;
     }
   }
+  if (hit >= 0 && cache[hit].maxDepth != -1 && cache[hit].maxDepth != maxDepth) {
+    cache[hit].nop = -1;
+    hit = -1;
+  }
+  double rebuildMs = 0;
   if (hit < 0) {
+    const auto rebuild0 = std::chrono::steady_clock::now();
     if (cache[0].nop < 0) {
       hit = 0;
     } else if (cache[1].nop < 0) {
@@ -516,17 +524,51 @@ std::vector<std::vector<int>> ringsOf(const Cloud &local, double cutoff,
       hit = cache[0].stamp <= cache[1].stamp ? 0 : 1;
     }
     RowCache &c = cache[hit];
-    if (!nneigh::blockWindowRows(local, cutoff, nullptr, c.raw, false)) {
-      c.raw = nneigh::getNewNeighbourListByIndex(local, cutoff);
+    // A partial share is the linkcell cut. Fold the window onto the owned
+    // atoms and give every atom in that window its partners. One rank
+    // owns the frame, so it keeps the full-box list.
+    int nMarked = 0;
+    for (const char bit : owned) {
+      nMarked += bit != 0;
     }
-    const int nBuilt = static_cast<int>(c.raw.size());
+    const bool partial = !owned.empty() && nMarked > 0 && nMarked < local.nop;
+    bool built = false;
+    if (partial) {
+      built = nneigh::blockWindowRows(local, cutoff, &owned, c.raw, false, true);
+    }
+    if (!built && !nneigh::blockWindowRows(local, cutoff, nullptr, c.raw, false)) {
+      c.raw = nneigh::getNewNeighbourListByIndex(local, cutoff);
+      built = false;
+    }
+    if (built) {
+      const int nBuilt = static_cast<int>(c.raw.size());
 #ifdef SEAMS_HAS_OPENMP
 #pragma omp parallel for schedule(static) if (nBuilt >= kParallelMin && !omp_in_parallel())
 #endif
-    for (int k = 0; k < nBuilt; k++) {
-      if (c.raw[static_cast<std::size_t>(k)].size() > 2) {
-        std::sort(c.raw[static_cast<std::size_t>(k)].begin() + 1,
-                  c.raw[static_cast<std::size_t>(k)].end());
+      for (int k = 0; k < nBuilt; k++) {
+        auto &row = c.raw[static_cast<std::size_t>(k)];
+        if (row.size() < 3) {
+          continue;
+        }
+        std::size_t w = 2;
+        for (std::size_t j = 2; j < row.size(); j++) {
+          if (row[j] != row[w - 1]) {
+            row[w++] = row[j];
+          }
+        }
+        row.resize(w);
+      }
+    }
+    if (!built) {
+      const int nBuilt = static_cast<int>(c.raw.size());
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) if (nBuilt >= kParallelMin && !omp_in_parallel())
+#endif
+      for (int k = 0; k < nBuilt; k++) {
+        if (c.raw[static_cast<std::size_t>(k)].size() > 2) {
+          std::sort(c.raw[static_cast<std::size_t>(k)].begin() + 1,
+                    c.raw[static_cast<std::size_t>(k)].end());
+        }
       }
     }
     c.nop = local.nop;
@@ -537,18 +579,19 @@ std::vector<std::vector<int>> ringsOf(const Cloud &local, double cutoff,
     for (int i = 0; i < local.nop; i++) {
       c.id[static_cast<std::size_t>(i)] = local.pts[static_cast<std::size_t>(i)].atomID;
     }
+    rebuildMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() -
+                                                           rebuild0)
+                     .count();
   }
   cache[hit].stamp = clock++;
   const bool sameTrim = cache[hit].maxDepth == maxDepth && cache[hit].owned == owned;
+  const auto trim0 = std::chrono::steady_clock::now();
+  auto &nList = cache[hit].raw;
   if (!sameTrim) {
-    nList.resize(cache[hit].raw.size());
-    for (std::size_t k = 0; k < cache[hit].raw.size(); k++) {
-      nList[k].assign(cache[hit].raw[k].begin(), cache[hit].raw[k].end());
-    }
     cache[hit].owned = owned;
     cache[hit].maxDepth = maxDepth;
   }
-  const int nLocal = static_cast<int>(cache[hit].raw.size());
+  const int nLocal = static_cast<int>(nList.size());
   // Halo.lean: a primitive ring of length at most k lies in the closed
   // bond ball of radius floor(k/2) about an owned vertex. Vertices past
   // that ball are not members and are not shortcuts.
@@ -595,19 +638,27 @@ std::vector<std::vector<int>> ringsOf(const Cloud &local, double cutoff,
       }
       row.resize(w);
     }
-    cache[hit].trimmed = nList;
-  } else if (sameTrim) {
-    // The bond ball was already cut for this share and depth.
-  } else {
-    cache[hit].trimmed = nList;
   }
-  const std::vector<std::vector<int>> &graph =
-      cache[hit].trimmed.empty() ? nList : cache[hit].trimmed;
+  if (!sameTrim) {
+    rebuildMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - trim0)
+                     .count();
+  }
+  const std::vector<std::vector<int>> &graph = nList;
   const std::vector<char> &sources = cache[hit].owned.empty() ? owned : cache[hit].owned;
-  return primitive::ringNetwork(graph, maxDepth, sources);
+  const auto search0 = std::chrono::steady_clock::now();
+  auto found = primitive::ringNetwork(graph, maxDepth, sources);
+  const double searchAll =
+      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - search0).count();
+  gRingPhases.primitiveMs = primitive::takePrimitiveMs();
+  gRingPhases.searchMs = std::max(0.0, searchAll - gRingPhases.primitiveMs);
+  gRingPhases.rebuildMs = rebuildMs;
+  gRingPhases.reduceMs = 0;
+  return found;
 }
 
 } // namespace
+
+RingPhases lastRingPhases() { return gRingPhases; }
 
 Share shareWithin(const Cloud &cloud, int rank, int nRanks, double gridHalo,
                   double reach) {
@@ -1797,11 +1848,14 @@ std::vector<std::vector<int>> distributedRings(const Cloud &cloud, double cutoff
     primitive::setSourceWork(nullptr);
     captureLocalWork(kWorkRings, sourceUs.data(), static_cast<int>(sourceUs.size()), comm);
   }
+  const auto reduce0 = std::chrono::steady_clock::now();
   for (auto &ring : local) {
     for (int &v : ring) {
       v = work.share.local[static_cast<std::size_t>(v)];
     }
   }
+  gRingPhases.reduceMs +=
+      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - reduce0).count();
   return local;
 }
 

@@ -370,11 +370,12 @@ const std::vector<std::vector<int>> &reusedShellList(
 //! Rows are atom IDs when @a byId is set, and cloud indices otherwise.
 //! Self is first, then partners in ascending order, matching neighListO.
 //! A null source marks every atom as an anchor; otherwise only marked
-//! atoms receive partners.
+//! atoms receive partners. With @a everyRow the source still places the
+//! window, and every atom in it receives partners.
 bool blockWindowRows(
     const molSys::PointCloud<molSys::Point<double>, double> &yCloud, double rcutoff,
     const std::vector<char> *source, std::vector<std::vector<int>> &rows,
-    bool byId = true);
+    bool byId = true, bool everyRow = false);
 
 bool cellListRowsThreaded(
     const molSys::PointCloud<molSys::Point<double>, double> &yCloud,

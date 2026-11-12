@@ -846,7 +846,8 @@ void searchWindow(const double *cx, const double *cy, const double *cz, const in
 
 bool nneigh::blockWindowRows(
     const molSys::PointCloud<molSys::Point<double>, double> &yCloud, double rcutoff,
-    const std::vector<char> *source, std::vector<std::vector<int>> &rows, bool byId) {
+    const std::vector<char> *source, std::vector<std::vector<int>> &rows, bool byId,
+    bool everyRow) {
   if (yCloud.box.size() != 3 || yCloud.nop <= 0 || rcutoff <= 0.0) {
     return false;
   }
@@ -918,6 +919,65 @@ bool nneigh::blockWindowRows(
   }
   if (nAnchor == 0) {
     return false;
+  }
+  // A domain that crosses the periodic boundary has atoms at both ends of
+  // the box. The largest empty gap is the outside of that domain. Folding
+  // the anchors onto the other side keeps the window shorter than the box.
+  auto foldSpan = [&](double &lo, double &hi, int axis) {
+    const double edge = lenBox[axis];
+    if (!(edge > 0.0) || !(hi - lo > 0.5 * edge) || nAnchor < 2) {
+      return;
+    }
+    constexpr int kBins = 64;
+    int hist[kBins] = {};
+    for (int i = 0; i < n; i++) {
+      if (source != nullptr &&
+          (static_cast<int>(source->size()) <= i || (*source)[static_cast<std::size_t>(i)] == 0)) {
+        continue;
+      }
+      const auto &p = yCloud.pts[static_cast<std::size_t>(i)];
+      const double xyz[3] = {p.x, p.y, p.z};
+      double f = xyz[axis] / edge;
+      f -= std::floor(f);
+      int b = static_cast<int>(f * kBins);
+      if (b < 0) {
+        b = 0;
+      }
+      if (b >= kBins) {
+        b = kBins - 1;
+      }
+      hist[b]++;
+    }
+    int best = 0;
+    int startBin = 0;
+    for (int i = 0; i < kBins; i++) {
+      if (hist[i] != 0) {
+        continue;
+      }
+      int run = 1;
+      while (run < kBins && hist[(i + run) % kBins] == 0) {
+        run++;
+      }
+      if (run > best) {
+        best = run;
+        startBin = i;
+      }
+    }
+    if (best <= 0 || best >= kBins) {
+      return;
+    }
+    const double width = edge / kBins;
+    const int cluster = (startBin + best) % kBins;
+    lo = cluster * width - width;
+    hi = startBin * width + width;
+    if (hi <= lo) {
+      hi += edge;
+    }
+  };
+  if (source != nullptr) {
+    foldSpan(lo0, hi0, 0);
+    foldSpan(lo1, hi1, 1);
+    foldSpan(lo2, hi2, 2);
   }
   const double alo = lo0, ahi0 = hi0, alo1 = lo1, ahi1 = hi1, alo2 = lo2, ahi2 = hi2;
   const double box0 = lenBox[0], box1 = lenBox[1], box2 = lenBox[2];
@@ -1032,7 +1092,7 @@ bool nneigh::blockWindowRows(
   // buffer would be empty on every worker and the write would fault.
   std::vector<double> xyz(static_cast<std::size_t>(n) * 3);
   std::vector<char> anchor(static_cast<std::size_t>(n), 1);
-  if (source != nullptr) {
+  if (source != nullptr && !everyRow) {
     for (int i = 0; i < n; i++) {
       anchor[static_cast<std::size_t>(i)] =
           static_cast<int>(source->size()) > i && (*source)[static_cast<std::size_t>(i)] != 0;

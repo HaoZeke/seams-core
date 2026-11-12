@@ -13,6 +13,7 @@
 //-----------------------------------------------------------------------------------
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <numeric>
@@ -27,6 +28,17 @@
 #endif
 
 namespace {
+
+std::atomic<std::uint64_t> gPrimCycles{0};
+bool gTimePrimitive = false;
+double gTscPerMs = 0;
+
+std::uint64_t readTsc() {
+  unsigned lo = 0;
+  unsigned hi = 0;
+  __asm__ volatile("rdtsc" : "=a"(lo), "=d"(hi));
+  return (static_cast<std::uint64_t>(hi) << 32) | lo;
+}
 
 struct RingSplitTimes {
   double balls_ms = 0;
@@ -365,8 +377,10 @@ void levelsFrom(const Graph &adjacency, int src, int maxLvl, int minVertex,
 
 //! Shortest-path criterion over every pair of members, by ball lookup
 bool ringIsPrimitive(const BoundedBalls &balls, const std::vector<int> &ring) {
+  const std::uint64_t t0 = gTimePrimitive ? readTsc() : 0;
   const int k = static_cast<int>(ring.size());
-  for (int i = 0; i < k; i++) {
+  bool ok = true;
+  for (int i = 0; i < k && ok; i++) {
     for (int j = i + 2; j < k; j++) {
       const int sep = j - i;
       const int ringDist = std::min(sep, k - sep);
@@ -374,11 +388,15 @@ bool ringIsPrimitive(const BoundedBalls &balls, const std::vector<int> &ring) {
         continue;
       }
       if (balls.dist(ring[i], ring[j]) < ringDist) {
-        return false;
+        ok = false;
+        break;
       }
     }
   }
-  return true;
+  if (gTimePrimitive) {
+    gPrimCycles.fetch_add(readTsc() - t0, std::memory_order_relaxed);
+  }
+  return ok;
 }
 
 //! Append v if absent; ring sizes are tiny, so a scan beats a set
@@ -645,6 +663,18 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
   if (maxDepth < 3 || nList.empty()) {
     return rings;
   }
+  const auto phaseWall0 = std::chrono::steady_clock::now();
+  const std::uint64_t phaseTsc0 = gTimePrimitive ? readTsc() : 0;
+  const auto noteRate = [&]() {
+    if (!gTimePrimitive) {
+      return;
+    }
+    const double ms = millisSince(phaseWall0);
+    const std::uint64_t cycles = readTsc() - phaseTsc0;
+    if (ms > 0.0) {
+      gTscPerMs = static_cast<double>(cycles) / ms;
+    }
+  };
 
   // Adjacency by index; the first element of each nList row is the vertex
   // itself, so it is skipped. A repeated neighbour is one edge. A self
@@ -794,6 +824,7 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
     std::vector<std::size_t>().swap(adjacency.first);
     std::vector<RingPool>().swap(perSource);
     gRingSplit.merge_ms = millisSince(mergeStart);
+    noteRate();
     return rings;
   }
 #endif
@@ -822,11 +853,25 @@ primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
   std::vector<int>().swap(adjacency.cols);
   std::vector<std::size_t>().swap(adjacency.first);
   gRingSplit.merge_ms = millisSince(mergeStart);
+  noteRate();
 
   return rings;
 }
 
 void primitive::setSourceWork(double *microseconds) { gSourceWorkPtr = microseconds; }
+
+void primitive::setPhaseTiming(bool on) {
+  gTimePrimitive = on;
+  gPrimCycles.store(0, std::memory_order_relaxed);
+}
+
+double primitive::takePrimitiveMs() {
+  const std::uint64_t cycles = gPrimCycles.exchange(0, std::memory_order_relaxed);
+  if (!(gTscPerMs > 0.0) || cycles == 0) {
+    return 0.0;
+  }
+  return static_cast<double>(cycles) / gTscPerMs;
+}
 
 primitive::RingSearchSplit primitive::lastRingSearchSplit() {
   return {gRingSplit.balls_ms, gRingSplit.enumerate_ms, gRingSplit.merge_ms,

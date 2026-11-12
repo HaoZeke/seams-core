@@ -234,6 +234,12 @@ struct RingSearchSplit {
 //! Balls, source enumeration and the gather from the last ringNetwork call.
 [[nodiscard]] RingSearchSplit lastRingSearchSplit();
 
+//! When set, ringNetwork records the primitive-test time in the split.
+void setPhaseTiming(bool on);
+
+//! Primitive-test milliseconds from the last timed ringNetwork, then zero.
+double takePrimitiveMs();
+
 //! When non-null, ringNetwork adds each source's enumeration time, in
 //! microseconds, at that source's index. The buffer must hold one entry
 //! per neighbour-list row. A null buffer skips the clock.

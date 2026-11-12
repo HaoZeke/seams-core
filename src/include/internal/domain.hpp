@@ -187,6 +187,18 @@ void waitBoundaryValues();
 double takeValueCommMs();
 #endif
 
+//! Phases of the last ringsOf on this rank. Rebuild is the neighbour
+//! rows of this rank's share. Search is the path enumeration. Primitive
+//! is the shortest-path test. Reduce is the local index map.
+struct RingPhases {
+  double rebuildMs = 0;
+  double searchMs = 0;
+  double primitiveMs = 0;
+  double reduceMs = 0;
+};
+
+RingPhases lastRingPhases();
+
 } // namespace seams::domain
 
 #endif // SEAMS_DOMAIN_HPP_

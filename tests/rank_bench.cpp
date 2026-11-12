@@ -5,6 +5,7 @@
 #include <bop.hpp>
 #include <chill_plus_scheme.hpp>
 #include <domain.hpp>
+#include <franzblau.hpp>
 #include <mol_sys.hpp>
 #include <neighbours.hpp>
 #include <seams_input.hpp>
@@ -211,16 +212,45 @@ int main(int argc, char **argv) {
         }
       }
       long long count[7] = {0, 0, 0, 0, 0, 0, 0};
+      const auto red0 = std::chrono::steady_clock::now();
       MPI_Allreduce(localCount, count, 7, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+      const double reduceMs =
+          std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - red0)
+              .count();
       int nRanks = 1;
       MPI_Comm_size(MPI_COMM_WORLD, &nRanks);
       const double mean = nRanks > 0 ? computeSum / nRanks : 0.0;
       const double imbalance = mean > 0.0 ? computeMax / mean : 1.0;
+      const auto phase = seams::domain::lastRingPhases();
+      double part[4] = {phase.rebuildMs, phase.searchMs, phase.primitiveMs,
+                        phase.reduceMs + reduceMs};
+      MPI_Allreduce(MPI_IN_PLACE, part, 4, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
       if (rank == 0) {
-        std::printf("%s %.6f %.6f %.6f %lld %lld %lld %lld\n", tag, wall, haloFrac, imbalance,
-                    count[3], count[4], count[5], count[6]);
+        std::printf("%s %.6f %.6f %.6f %lld %lld %lld %lld %.3f %.3f %.3f %.3f\n", tag, wall,
+                    haloFrac, imbalance, count[3], count[4], count[5], count[6], part[0], part[1],
+                    part[2], part[3]);
       }
     };
+    auto timeOp = [&](const std::string &which, const char *tag) {
+      seams::domain::setCutMode(2);
+      MPI_Barrier(MPI_COMM_WORLD);
+      const auto wall0 = std::chrono::steady_clock::now();
+      compute(which, cloud, cutoff);
+      MPI_Barrier(MPI_COMM_WORLD);
+      const double wall = std::chrono::duration<double, std::milli>(
+                              std::chrono::steady_clock::now() - wall0)
+                              .count();
+      const auto &work = seams::domain::gatheredWork();
+      double haloFrac = work.haloFraction;
+      MPI_Allreduce(&haloFrac, &haloFrac, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+      if (rank == 0) {
+        std::printf("%s %s %.6f %.6f\n", which.c_str(), tag, wall, haloFrac);
+      }
+    };
+    primitive::setPhaseTiming(true);
+    const bool rings = op == "rings" || op == "all";
+    const bool others = op == "all";
+    if (rings) {
     place(1);
     // The first call records per-source time and recuts. The second search
     // is that new cut, and it is not one of the timed repeats.
@@ -232,6 +262,25 @@ int main(int argc, char **argv) {
     for (int n = 0; n < reps; n++) {
       place(static_cast<std::uint32_t>(100 + n));
       once("distinct");
+    }
+    }
+    if (others) {
+      for (const char *which : {"neigh", "chill", "q6"}) {
+        place(1);
+        timeOp(which, "warm");
+        for (int n = 0; n < reps; n++) {
+          place(static_cast<std::uint32_t>(100 + n));
+          timeOp(which, "distinct");
+        }
+      }
+    }
+    if (!rings && !others) {
+      place(1);
+      timeOp(op, "warm");
+      for (int n = 0; n < reps; n++) {
+        place(static_cast<std::uint32_t>(100 + n));
+        timeOp(op, "distinct");
+      }
     }
     MPI_Finalize();
     return 0;
