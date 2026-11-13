@@ -67,6 +67,7 @@ FRONT_CUT = 0.5
 CRYSTAL = {"cubic", "hexagonal", "reCubic", "reHex"}
 
 COLUMNS = (
+    "T_K",
     "replica",
     "pairs",
     "frame",
@@ -123,8 +124,8 @@ QUANTITIES = (
 )
 
 
-def frame_name(replica: str, pairs: int, frame: str) -> str:
-    return f"T230_m{pairs}_{replica}_{frame}.xyz"
+def frame_name(replica: str, pairs: int, frame: str, temperature: int = 230) -> str:
+    return f"T{temperature}_m{pairs}_{replica}_{frame}.xyz"
 
 
 def _get(url: str, attempts: int = 4) -> bytes:
@@ -352,7 +353,8 @@ def read_manifest(manifest: Path) -> tuple[str, dict]:
 
 
 def table(frames: Path, out: Path, seams: str | None = None, manifest: Path | None = None,
-          local: tuple[str, ...] = ()) -> None:
+          local: tuple[str, ...] = (), temperatures: tuple[int, ...] = (230,),
+          replicas: tuple[str, ...] = REPLICAS, loadings: tuple[int, ...] = PAIRS) -> None:
     """With a manifest, a frame is read only when that revision lists it and its sha256 matches.
 
     Names in ``local`` are frames from brine_run that the revision does not
@@ -361,31 +363,32 @@ def table(frames: Path, out: Path, seams: str | None = None, manifest: Path | No
     revision, sums = read_manifest(manifest) if manifest else (HF_REVISION, None)
     rows = []
     missing = []
-    for replica in REPLICAS:
-        for pairs in PAIRS:
-            for frame, step in FRAMES:
-                name = frame_name(replica, pairs, frame)
-                path = frames / name
-                rel = f"data/frames/{name}"
-                source = f"hf@{revision[:8]}"
-                if sums is not None and rel not in sums:
-                    source = "local" if name in local else ""
-                if source and path.exists():
-                    if source != "local" and sums is not None and _sha256(path) != sums[rel]:
-                        raise SystemExit(f"{path} does not match {rel} at {revision}")
-                    row = analyse(path, replica, pairs, frame, seams)
-                    row.update(seed_columns(replica))
-                    row["source"] = source
-                    if row["step"] != step:
-                        raise SystemExit(f"{path.name} is step {row['step']}, expected {step}")
-                else:
-                    row = {"replica": replica, "pairs": pairs, "frame": frame, "step": step,
-                           "t_ns": f"{step * TIMESTEP_FS * 1e-6:.4f}", "status": "not_in_dataset"}
-                    missing.append(path.name)
-                rows.append(row)
+    grid = [(t, r, p) for t in temperatures for r in replicas for p in loadings]
+    for temperature, replica, pairs in grid:
+        for frame, step in FRAMES:
+            name = frame_name(replica, pairs, frame, temperature)
+            path = frames / name
+            rel = f"data/frames/{name}"
+            source = f"hf@{revision[:8]}"
+            if sums is not None and rel not in sums:
+                source = "local" if name in local else ""
+            if source and path.exists():
+                if source != "local" and sums is not None and _sha256(path) != sums[rel]:
+                    raise SystemExit(f"{path} does not match {rel} at {revision}")
+                row = analyse(path, replica, pairs, frame, seams)
+                row.update(seed_columns(replica))
+                row["source"] = source
+                row["T_K"] = temperature
+                if row["step"] != step:
+                    raise SystemExit(f"{path.name} is step {row['step']}, expected {step}")
+            else:
+                row = {"T_K": temperature, "replica": replica, "pairs": pairs, "frame": frame, "step": step,
+                       "t_ns": f"{step * TIMESTEP_FS * 1e-6:.4f}", "status": "not_in_dataset"}
+                missing.append(path.name)
+            rows.append(row)
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", newline="") as handle:
-        handle.write(f"# {HF_DATASET} at {revision}, data/frames/T230_m{{pairs}}_{{replica}}_{{frame}}.xyz\n")
+        handle.write(f"# {HF_DATASET} at {revision}, data/frames/T{{T_K}}_m{{pairs}}_{{replica}}_{{frame}}.xyz\n")
         handle.write("# source hf@rev: listed at that revision and its sha256 matches; local: brine_run, not uploaded\n")
         handle.write(f"# front: {N_BINS} z bins, solid when crystal/waters >= {FRONT_CUT}; crystal is cubic+hexagonal\n")
         handle.write("# crystal is the published CHILL+ rule (cubic+hexagonal); cage_ice and nmax are the seeded,\n")
@@ -469,6 +472,9 @@ def main() -> None:
     p.add_argument("--seams", default=None, help="seams CLI for the cage columns; omitted leaves them empty")
     p.add_argument("--manifest", type=Path, default=None, help="fetch manifest; only frames it lists are read")
     p.add_argument("--local", nargs="*", default=[], help="brine_run frame names the revision lacks")
+    p.add_argument("--temperatures", type=int, nargs="+", default=[230])
+    p.add_argument("--replicas", nargs="+", default=list(REPLICAS))
+    p.add_argument("--pairs", type=int, nargs="+", default=list(PAIRS))
     p = sub.add_parser("range")
     p.add_argument("--csv", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
@@ -478,7 +484,8 @@ def main() -> None:
     elif args.cmd == "sums":
         sums(args.dataset)
     elif args.cmd == "table":
-        table(args.frames, args.csv, args.seams, args.manifest, tuple(args.local))
+        table(args.frames, args.csv, args.seams, args.manifest, tuple(args.local),
+              tuple(args.temperatures), tuple(args.replicas), tuple(args.pairs))
     else:
         value_range(args.csv, args.out)
 

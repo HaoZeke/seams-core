@@ -41,6 +41,7 @@ RUN_FILES = [f"step-{step}.restart" for step in FRAME_STEP.values()] + ["end.res
 
 
 wildcard_constraints:
+    T="230|240|245",
     pairs="0|10|20|40",
     replica="[0-9]+",
     name="t0|t1|t2|tend",
@@ -49,11 +50,16 @@ wildcard_constraints:
 
 def _restart(wildcards):
     step = FRAME_STEP[wildcards.name]
-    return f"{RESTARTS}/T230_m{wildcards.pairs}_r{wildcards.replica}/step-{step}.restart"
+    return f"{RESTARTS}/T{wildcards.T}_m{wildcards.pairs}_r{wildcards.replica}/step-{step}.restart"
 
 
-def _run_frames(where):
-    return [f"{where}/{run}_{name}.xyz" for run in RUNS for name in FRAME_STEP]
+def _run_frames(where, temperatures=None):
+    return [
+        f"{where}/{run}_{name}.xyz"
+        for run in RUNS
+        if temperatures is None or run.split("_")[0][1:] in temperatures
+        for name in FRAME_STEP
+    ]
 
 
 rule brine_frames:
@@ -78,11 +84,12 @@ rule brine_dataset:
         "--dest {DATASET} --dataset {params.hf} --revision {HF_REVISION} --manifest {output}"
 
 
-# One loading and replica of the campaign deck: melt, quench, 5 ns at 230 K.
+# One loading and replica of the campaign deck: melt at 400 K, quench, 5 ns
+# at the run temperature T{T} of the tag.
 # Ion sites use numpy seed {replica}; the velocity seed is {replica}3.
 rule brine_run:
     input:
-        manifest=HF_MANIFEST,
+        manifest=ancient(HF_MANIFEST),
         deck="paper/data/brine-frames/deck/in.brine.lmp",
         system="paper/data/brine-frames/deck/brine_system.py",
     output:
@@ -95,12 +102,13 @@ rule brine_run:
         timeout=config["lmp_timeout"],
         pairs=lambda wildcards: wildcards.run.split("_m")[1].split("_")[0],
         replica=lambda wildcards: wildcards.run.split("_r")[1],
+        temperature=lambda wildcards: wildcards.run.split("_")[0][1:],
     log:
         f"{WORK}/{{run}}.log",
     shell:
         "{params.python} paper/data/brine-frames/regenerate.py run-one "
         "--work {WORK} --pairs {params.pairs} --replica {params.replica} --threads {threads} "
-        "--timeout {params.timeout} --restarts {RESTARTS} --lmp {params.lmp} --genice {params.genice} "
+        "--temperature {params.temperature} --timeout {params.timeout} --restarts {RESTARTS} --lmp {params.lmp} --genice {params.genice} "
         "> {log} 2>&1"
 
 
@@ -115,8 +123,8 @@ rule brine_frame:
         deck="paper/data/brine-frames/deck/in.resume.lmp",
         script="paper/data/brine-frames/regenerate.py",
     output:
-        out="paper/data/brine-frames/out/T230_m{pairs}_r{replica}_{name}.xyz",
-        published=FRAMES + "/T230_m{pairs}_r{replica}_{name}.xyz",
+        out="paper/data/brine-frames/out/T{T}_m{pairs}_r{replica}_{name}.xyz",
+        published=FRAMES + "/T{T}_m{pairs}_r{replica}_{name}.xyz",
     params:
         step=lambda wildcards: FRAME_STEP[wildcards.name],
         python=config["python"],
@@ -149,7 +157,8 @@ rule brine_sha256sums:
 # revision lacks is a row with status not_in_dataset. with_runs=true also
 # reads the brine_run frames the revision lacks, marked source local.
 WITH_RUNS = bool(config.get("with_runs", False))
-LOCAL = [Path(f).name for f in _run_frames(FRAMES)] if WITH_RUNS else []
+LOCAL = [Path(f).name for f in _run_frames(FRAMES, ["230"])] if WITH_RUNS else []
+WARM_LOCAL = [Path(f).name for f in _run_frames(FRAMES, ["240", "245"])] if WITH_RUNS else []
 
 
 rule brine_replicas:
@@ -186,3 +195,23 @@ rule brine_front_pdf:
     shell:
         "{params.python} paper/data/brine-frames/render_front.py "
         "--xyz {params.t0} {params.tend} --replicas {input.replicas} --pdf {output}"
+
+
+# Replica r0 at 240 K and 245 K, 0, 20 and 40 pairs: the same table code
+# and columns as brine_replicas, on the frames of the warm brine_run tags.
+rule brine_warm:
+    input:
+        manifest=HF_MANIFEST,
+        frames=[f"{FRAMES}/{name}" for name in WARM_LOCAL],
+        script="paper/data/brine-frames/replicas.py",
+    output:
+        "paper/data/brine-frames/warm.csv",
+    params:
+        python=config["python"],
+        seams=config["seams"],
+        local=" ".join(WARM_LOCAL),
+    shell:
+        "{params.python} paper/data/brine-frames/replicas.py table "
+        "--frames {FRAMES} --seams {params.seams} --manifest {input.manifest} "
+        "--temperatures 240 245 --replicas r0 --pairs 0 20 40 "
+        "--local {params.local} --csv {output}"

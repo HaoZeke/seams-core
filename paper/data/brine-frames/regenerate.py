@@ -84,8 +84,8 @@ def which(name: str) -> str:
     return found
 
 
-def tag_of(pairs: int, replica: int) -> str:
-    return f"T230_m{pairs}_r{replica}"
+def tag_of(pairs: int, replica: int, temperature: float = TEMPERATURE) -> str:
+    return f"T{temperature:.0f}_m{pairs}_r{replica}"
 
 
 def prepare_one(dest: Path, pairs: int, replica: int, genice: str) -> None:
@@ -120,12 +120,12 @@ def prepare(work: Path, genice: str) -> None:
         prepare_one(work / tag_of(pairs, REPLICA), pairs, REPLICA, genice)
 
 
-def brine_vars(replica: int, timeout: str) -> list[str]:
+def brine_vars(replica: int, timeout: str, temperature: float = TEMPERATURE) -> list[str]:
     """The in.brine.lmp variables of the campaign deck for one replica."""
     values = {
         "data": "brine.data",
         "groups": "groups.lmp",
-        "T": f"{TEMPERATURE:.2f}",
+        "T": f"{temperature:.2f}",
         "P": f"{PRESSURE:.1f}",
         "seed": velocity_seed(replica),
         "steps_melt": str(MELT_STEPS),
@@ -141,14 +141,24 @@ def brine_vars(replica: int, timeout: str) -> list[str]:
 
 
 def run_one(
-    work: Path, pairs: int, replica: int, genice: str, lmp: str, threads: int, timeout: str, restarts: Path
+    work: Path,
+    pairs: int,
+    replica: int,
+    genice: str,
+    lmp: str,
+    threads: int,
+    timeout: str,
+    restarts: Path,
+    temperature: float = TEMPERATURE,
 ) -> None:
     """Melt, quench and 5 ns of production for one loading, then copy the landing restarts.
 
     The deck is in.brine.lmp unchanged. Only the wall-clock cap differs
     from the campaign, so the production run is not stopped before 5 ns.
+    The melt is 400 K for every temperature; quench and production are at
+    ``temperature``.
     """
-    tag = tag_of(pairs, replica)
+    tag = tag_of(pairs, replica, temperature)
     dest = work / tag
     final = dest / f"step-{PROD_STEPS}.restart"
     if not final.is_file():
@@ -157,8 +167,8 @@ def run_one(
         env["OMP_NUM_THREADS"] = str(threads)
         env["OMP_PROC_BIND"] = "close"
         cmd = [lmp, "-sf", "omp", "-pk", f"omp {threads}", "-log", "log.lammps", "-in", str(DECK / "in.brine.lmp")]
-        cmd += brine_vars(replica, timeout)
-        print("start", tag, "threads", threads, "seed", velocity_seed(replica), flush=True)
+        cmd += brine_vars(replica, timeout, temperature)
+        print("start", tag, "threads", threads, "seed", velocity_seed(replica), "T", temperature, flush=True)
         with open(dest / "driver.log", "w") as log:
             code = subprocess.run(cmd, cwd=dest, env=env, stdout=log, stderr=subprocess.STDOUT).returncode
         if code != 0:
@@ -943,6 +953,7 @@ def main() -> None:
     )
     parser.add_argument("--pairs", type=int)
     parser.add_argument("--replica", type=int)
+    parser.add_argument("--temperature", type=float, default=TEMPERATURE, help="run-one quench and production, K")
     parser.add_argument("--timeout", default=TIMEOUT, help="LAMMPS timer cap on each run command")
     parser.add_argument("--work", type=Path)
     parser.add_argument("--restarts", type=Path)
@@ -982,7 +993,7 @@ def main() -> None:
             raise SystemExit("run-one needs --pairs, --replica and --restarts")
         genice = args.genice or which("genice2")
         lmp = args.lmp or which("lmp")
-        run_one(args.work, args.pairs, args.replica, genice, lmp, args.threads, args.timeout, args.restarts)
+        run_one(args.work, args.pairs, args.replica, genice, lmp, args.threads, args.timeout, args.restarts, args.temperature)
     if args.stage == "resume":
         lmp = args.lmp or which("lmp")
         resume(args.work, lmp, args.threads, args.layout, args.store)
