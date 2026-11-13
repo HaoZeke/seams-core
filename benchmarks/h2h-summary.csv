@@ -1,0 +1,33 @@
+competitor,operation,molecules,threads,cores,cpus,n,dseams_median_ms,dseams_min_ms,other_median_ms,other_min_ms,ratio,verdict,agreement,version,cpu_model
+pyscal3,chill_plus,,1,8,0,0,,,,,,absent,pyscal3 has no CHILL+,2.14.0/4.1.0,Intel Xeon Processor
+vesin,neighbours,4096,1,8,0,8,0.2654,0.2250,1.7494,1.7065,6.5910,WIN,pairs 8192 equal,2.14.0/0.6.2,Intel Xeon Processor
+freud,neighbours,4096,1,8,0,8,0.2879,0.2342,3.0378,2.9720,10.5501,WIN,pairs 8192 equal,2.14.0/3.6.1,Intel Xeon Processor
+mdapy,q6,4096,1,8,0,8,0.9143,0.8586,4.6917,4.5732,5.1315,WIN,q6_max_abs 4.441e-16 q6bar_max_abs 4.441e-16,2.14.0/2.0.0,Intel Xeon Processor
+pyscal3,q6,4096,1,8,0,8,0.9315,0.8575,3.5819,3.4399,3.8455,WIN,q6_max_abs 5.551e-16 q6bar_max_abs 5.551e-16,2.14.0/4.1.0,Intel Xeon Processor
+mdapy,chill_plus,4096,1,8,0,8,0.7225,0.6588,2.6983,2.6735,3.7345,WIN,labels 4096 equal q6_max_abs 4.441e-16,2.14.0/2.0.0,Intel Xeon Processor
+vesin,neighbours,110592,1,8,0,8,6.9364,6.5788,48.0359,46.7848,6.9252,WIN,pairs 221184 equal,2.14.0/0.6.2,Intel Xeon Processor
+freud,neighbours,110592,1,8,0,8,6.8667,6.6284,96.1075,93.5468,13.9961,WIN,pairs 221184 equal,2.14.0/3.6.1,Intel Xeon Processor
+mdapy,q6,110592,1,8,0,8,24.6130,23.7287,110.0183,109.5465,4.4699,WIN,q6_max_abs 1.776e-15 q6bar_max_abs 1.776e-15,2.14.0/2.0.0,Intel Xeon Processor
+pyscal3,q6,110592,1,8,0,8,25.4197,24.2647,103.8853,102.4342,4.0868,WIN,q6_max_abs 2.442e-15 q6bar_max_abs 2.442e-15,2.14.0/4.1.0,Intel Xeon Processor
+mdapy,chill_plus,110592,1,8,0,8,18.9871,18.6842,58.6496,57.5232,3.0889,WIN,labels 110592 equal q6_max_abs 1.776e-15,2.14.0/2.0.0,Intel Xeon Processor
+vesin,neighbours,884736,1,8,0,8,118.5792,72.5901,1137.6122,1133.1829,9.5937,WIN,pairs 1769472 equal,2.14.0/0.6.2,Intel Xeon Processor
+freud,neighbours,884736,1,8,0,8,123.1321,74.0381,961.0441,951.9560,7.8050,WIN,pairs 1769472 equal,2.14.0/3.6.1,Intel Xeon Processor
+mdapy,q6,884736,1,8,0,8,320.1625,314.2912,1072.3839,1022.9630,3.3495,WIN,q6_max_abs 2.331e-15 q6bar_max_abs 2.331e-15,2.14.0/2.0.0,Intel Xeon Processor
+pyscal3,q6,884736,1,8,0,8,356.8876,330.7307,992.9793,964.8478,2.7823,WIN,q6_max_abs 3.220e-15 q6bar_max_abs 3.220e-15,2.14.0/4.1.0,Intel Xeon Processor
+mdapy,chill_plus,884736,1,8,0,8,230.8623,197.5324,715.4759,626.8424,3.0991,WIN,labels 884736 equal q6_max_abs 2.331e-15,2.14.0/2.0.0,Intel Xeon Processor
+pyscal3,chill_plus,,8,8,0-7,0,,,,,,absent,pyscal3 has no CHILL+,2.14.0/4.1.0,Intel Xeon Processor
+vesin,neighbours,4096,8,8,0-7,8,0.3882,0.3444,0.9022,0.8766,2.3240,WIN,pairs 8192 equal,2.14.0/0.6.2,Intel Xeon Processor
+freud,neighbours,4096,8,8,0-7,8,0.4798,0.4246,1.0250,0.9664,2.1363,WIN,pairs 8192 equal,2.14.0/3.6.1,Intel Xeon Processor
+mdapy,q6,4096,8,8,0-7,8,0.7962,0.7800,1.0772,1.0312,1.3531,WIN,q6_max_abs 4.441e-16 q6bar_max_abs 4.441e-16,2.14.0/2.0.0,Intel Xeon Processor
+pyscal3,q6,4096,8,8,0-7,8,0.8590,0.7928,2.5396,2.1308,2.9565,WIN,q6_max_abs 5.551e-16 q6bar_max_abs 5.551e-16,2.14.0/4.1.0,Intel Xeon Processor
+mdapy,chill_plus,4096,8,8,0-7,8,0.6754,0.5146,0.8320,0.7950,1.2319,WIN,labels 4096 equal q6_max_abs 4.441e-16,2.14.0/2.0.0,Intel Xeon Processor
+vesin,neighbours,110592,8,8,0-7,8,5.6428,4.8632,23.5942,23.5247,4.1813,WIN,pairs 221184 equal,2.14.0/0.6.2,Intel Xeon Processor
+freud,neighbours,110592,8,8,0-7,8,8.2314,6.8677,45.4914,39.5957,5.5266,WIN,pairs 221184 equal,2.14.0/3.6.1,Intel Xeon Processor
+mdapy,q6,110592,8,8,0-7,8,18.8737,17.3969,20.7150,19.9215,1.0976,WIN,q6_max_abs 1.776e-15 q6bar_max_abs 1.776e-15,2.14.0/2.0.0,Intel Xeon Processor
+pyscal3,q6,110592,8,8,0-7,8,14.2158,12.9400,21.6376,21.4191,1.5221,WIN,q6_max_abs 2.442e-15 q6bar_max_abs 2.442e-15,2.14.0/4.1.0,Intel Xeon Processor
+mdapy,chill_plus,110592,8,8,0-7,8,8.6577,8.0478,11.5863,11.4104,1.3383,WIN,labels 110592 equal q6_max_abs 1.776e-15,2.14.0/2.0.0,Intel Xeon Processor
+vesin,neighbours,884736,8,8,0-7,8,45.0465,41.3412,212.6047,201.6436,4.7197,WIN,pairs 1769472 equal,2.14.0/0.6.2,Intel Xeon Processor
+freud,neighbours,884736,8,8,0-7,8,51.1719,41.9141,350.7602,338.1389,6.8545,WIN,pairs 1769472 equal,2.14.0/3.6.1,Intel Xeon Processor
+mdapy,q6,884736,8,8,0-7,8,134.0960,131.5681,165.8090,161.5122,1.2365,WIN,q6_max_abs 2.331e-15 q6bar_max_abs 2.331e-15,2.14.0/2.0.0,Intel Xeon Processor
+pyscal3,q6,884736,8,8,0-7,8,143.5579,136.3633,182.2176,178.8060,1.2693,WIN,q6_max_abs 3.220e-15 q6bar_max_abs 3.220e-15,2.14.0/4.1.0,Intel Xeon Processor
+mdapy,chill_plus,884736,8,8,0-7,8,68.5729,58.2418,108.9670,102.9925,1.5891,WIN,labels 884736 equal q6_max_abs 2.331e-15,2.14.0/2.0.0,Intel Xeon Processor
