@@ -63,6 +63,8 @@ CHILL = (
 )
 # Campaign table, 230 K, replica r0, from results/brine/summary.txt.
 # nmax is the last largest cage cluster; ionliq is the last ions-in-liquid count.
+# chillice is DSEAMS_CAGES at engine v2.9.2 on the campaign trajectory, not the
+# published CHILL+ rule that labels the frames; see comparison.txt.
 CAMPAIGN = {
     0: {"nmax": 1115, "ionliq": 0, "chillice": 880},
     20: {"nmax": 997, "ionliq": 25, "chillice": 785},

@@ -1,7 +1,20 @@
 # 230 K r0 after 5.000 ns (2,500,000 steps). Campaign columns are the
 # 5 ns r0 rows of the brine table: nmax, ions in liquid, CHILL+ ice.
 # Ours is the last row of front.csv. CHILL+ ice is cubic plus hexagonal.
-# tag t_ns nmax ion_liquid ion_ice ion_front chill_ice campaign_nmax campaign_ionliq campaign_chillice
-T230_m0_r0 5.0000 1079 0 0 0 856 1115 0 880
-T230_m20_r0 5.0000 926 29 0 11 741 997 25 785
-T230_m40_r0 5.0000 861 56 0 24 667 859 63 694
+#
+# Both chill_ice columns count the same classes: cubic, reCubic, hexagonal
+# and reHex of CHILL+ on the 3.5 A cutoff graph (DSEAMS_CAGES component
+# chillice; crystal in replicas.csv). campaign_chillice is engine v2.9.2,
+# whose CHILL+ crystal rows still admitted a shell of five or more
+# neighbours, read every stride by the PLUMED action on the campaign
+# trajectory. chill_ice is the published 2015 rule (four neighbours inside
+# 3.5 A, aa8809a6) on the frames of the rerun, which drops the PLUMED line
+# and so is a different trajectory from the same seeds. v292_chill_ice is
+# the v2.9.2 rule on the rerun frames: the rule moves the count by 1 to 3,
+# and the rest of the gap is the trajectory. nmax, read with the same cage
+# rule in both engines, differs by the same cause (1079 against 1115).
+# The paper quotes chill_ice only.
+# tag t_ns nmax ion_liquid ion_ice ion_front chill_ice v292_chill_ice campaign_nmax campaign_ionliq campaign_chillice
+T230_m0_r0 5.0000 1079 0 0 0 856 857 1115 0 880
+T230_m20_r0 5.0000 926 29 0 11 741 743 997 25 785
+T230_m40_r0 5.0000 861 56 0 24 667 670 859 63 694
