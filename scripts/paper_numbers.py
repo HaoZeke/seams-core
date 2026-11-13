@@ -137,33 +137,53 @@ def prepare_libs(lib: str) -> None:
     os.environ["LD_LIBRARY_PATH"] = os.pathsep.join(parts + prior)
 
 
-def run_h2h(info) -> list[dict]:
-    """d-SEAMS, freud and OVITO on the ice cells, one warm-up and eight calls."""
-    env = os.environ.copy()
-    env["OVITO_THREAD_COUNT"] = "8"
-    done = subprocess.run(
-        [sys.executable, str(ROOT / "scripts/h2h_session.py")],
-        cwd=ROOT, env=env, text=True, capture_output=True)
-    if done.returncode != 0:
-        tail = (done.stderr or done.stdout or "").strip().splitlines()
-        raise SystemExit("h2h session failed\n" + "\n".join(tail[-30:]))
+def run_h2h(info, lib: str) -> list[dict]:
+    """d-SEAMS and freud local q6, interleaved, on ice Ic."""
+    import ctypes
+    import numpy as np
+    import freud
+    import paper_ptm_templates as ptm
+    import paper_sitting as sit
+    lang = sit.open_lang(lib)
     rows = []
-    for line in done.stdout.splitlines():
-        if "samples_ms" not in line:
-            continue
-        parts = line.split()
-        # arm CODE op OP threads T molecules N samples_ms ...
-        code, op, threads, molecules = parts[1], parts[3], int(parts[5]), int(parts[7])
-        samples = [float(v) for v in parts[9:]]
-        if len(samples) < 8:
-            raise SystemExit(f"h2h {code} {op} has {len(samples)} samples")
+    threads = int(os.environ.get("OMP_NUM_THREADS", "1"))
+    freud.parallel.set_num_threads(threads)
+    reported = freud.parallel.get_num_threads()
+    for molecules, cells in ((4096, 8), (110592, 24)):
+        pos, lattice = ptm.ice_ic(cells)
+        pos = np.ascontiguousarray(pos)
+        side = float(lattice[0][0])
+        box = np.array([0, 0, 0, side, side, side, 0, 0, 0], dtype=np.float64)
+        handle = sit.frame_from(lang, pos, box)[0]
+        q6 = (ctypes.c_double * len(pos))()
+        fbox = freud.box.Box.cube(side)
+        pts = np.ascontiguousarray(pos - side / 2.0)
+
+        def dseams():
+            sit.fail_lang(lang, lang.seams_frame_steinhardt(
+                handle, CUTOFF, 1, 6, q6, None), "q6")
+
+        def freud_q6():
+            freud.parallel.set_num_threads(threads)
+            op = freud.order.Steinhardt(l=6)
+            op.compute((fbox, pts), neighbors={"r_max": CUTOFF, "exclude_ii": True})
+
+        try:
+            buckets = alternate({"d-SEAMS": dseams, "freud": freud_q6})
+        finally:
+            lang.seams_frame_free(handle)
         rows.append(row_of(
-            info, "h2h-summary", "ice-Ih", op, code, molecules, threads, samples,
-            "h2h_session one warm-up then eight calls",
-            version=info["version"] if code == "dseams" else code,
+            info, "h2h-summary", f"ice-Ic-{molecules}", "q6", "d-SEAMS",
+            molecules, threads, buckets["d-SEAMS"],
+            f"seams_frame_steinhardt; alternating with freud; get_num_threads={reported}",
         ))
-    if not rows:
-        raise SystemExit("h2h session wrote no sample lines")
+        rows.append(row_of(
+            info, "h2h-summary", f"ice-Ic-{molecules}", "q6", "freud",
+            molecules, threads, buckets["freud"],
+            f"freud.parallel.set_num_threads={threads} get_num_threads={reported}",
+            version=freud.__version__,
+        ))
+        print(f"h2h {molecules} threads {threads}", flush=True)
     return rows
 
 
@@ -495,6 +515,12 @@ def main() -> int:
     args = parser.parse_args()
     stamp_env()
     prepare_libs(args.lib)
+    if args.worker == "h2h":
+        info = identity()
+        for item in run_h2h(info, args.lib):
+            import json
+            print(json.dumps(item), flush=True)
+        return 0
     if args.worker == "rings":
         info = identity()
         for item in run_rings(info, args.lib):
@@ -509,7 +535,14 @@ def main() -> int:
         return 0
     info = identity()
     out = args.out
-    h2h = run_h2h(info)
+    h2h = []
+    for threads in (1, 8):
+        text = pin_and_run(threads, [
+            str(Path(__file__).resolve()), "--worker", "h2h",
+            "--threads", str(threads), "--lib", args.lib,
+        ])
+        import json
+        h2h.extend(json.loads(line) for line in text.splitlines() if line.startswith("{"))
     write_csv(out / "h2h-summary.csv", h2h)
     carry = run_carry(info)
     write_csv(out / "carry-sweep.csv", carry)

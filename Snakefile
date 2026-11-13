@@ -1030,15 +1030,10 @@ rule growth_curve:
 # later release commit reruns. Host names are not recorded.
 rule release_build:
     output:
-        "bbdir-release/seams",
-        "bbdir-release/src/libyodaLib.so",
-        "bbdir-release/bindings/libseams_lang.so",
-        "bbdir-release/tests/bench_strong",
-        "bbdir-release/tests/bench_v2",
-        "bbdir-release/tests/bench_trajectory_incremental",
+        "bbdir-release/BUILT",
     shell:
         "test -f bbdir-release/build.ninja || meson setup bbdir-release --buildtype=release; "
-        "ninja -C bbdir-release -j2"
+        "ninja -C bbdir-release -j2 && git rev-parse HEAD > bbdir-release/BUILT"
 
 
 rule paper_numbers:
@@ -1048,12 +1043,7 @@ rule paper_numbers:
         "scripts/paper_sitting.py",
         "scripts/paper_ptm_templates.py",
         "scripts/h2h_session.py",
-        "bbdir-release/seams",
-        "bbdir-release/src/libyodaLib.so",
-        "bbdir-release/bindings/libseams_lang.so",
-        "bbdir-release/tests/bench_strong",
-        "bbdir-release/tests/bench_v2",
-        "bbdir-release/tests/bench_trajectory_incremental",
+        "bbdir-release/BUILT",
         "data/hop/nucleation.lammpstrj",
     output:
         "paper-numbers",
