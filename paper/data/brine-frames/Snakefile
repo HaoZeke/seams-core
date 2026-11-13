@@ -9,8 +9,10 @@
 # restart; the outputs are
 # paper/data/brine-frames/out/T230_m{pairs}_r{replica}_{t0,t1,t2,tend}.xyz.
 # brine_sha256sums rewrites the dataset's SHA256SUMS over every file.
-# brine_replicas writes the per-replica table and the replica ranges;
-# both CSVs are in git. brine_front_pdf builds the figure.
+# brine_replicas writes the per-replica table and the replica ranges from
+# the frames hf_revision lists; both CSVs are in git. brine_front_pdf
+# builds the figure. Frames and restarts reach the dataset by upload, not
+# by git; a new revision is a new hf_revision here.
 #
 #   snakemake -s paper/data/brine-frames/Snakefile -n paper/data/brine-frames/out/T230_m0_r0_t0.xyz
 #   snakemake -s paper/data/brine-frames/Snakefile --cores 8 brine_runs
@@ -143,13 +145,17 @@ rule brine_sha256sums:
         "{params.python} paper/data/brine-frames/replicas.py sums --dataset {DATASET}"
 
 
-# One row per replica x loading x frame; a frame the dataset lacks is a
-# row with status not_in_dataset.
+# One row per replica x loading x frame of hf_revision; a frame the
+# revision lacks is a row with status not_in_dataset. with_runs=true also
+# reads the brine_run frames the revision lacks, marked source local.
+WITH_RUNS = bool(config.get("with_runs", False))
+LOCAL = [Path(f).name for f in _run_frames(FRAMES)] if WITH_RUNS else []
+
+
 rule brine_replicas:
     input:
         manifest=HF_MANIFEST,
-        sums=f"{DATASET}/SHA256SUMS",
-        frames=_run_frames(FRAMES),
+        frames=[f"{FRAMES}/{name}" for name in LOCAL],
         script="paper/data/brine-frames/replicas.py",
     output:
         table="paper/data/brine-frames/replicas.csv",
@@ -157,9 +163,11 @@ rule brine_replicas:
     params:
         python=config["python"],
         seams=config["seams"],
+        local=" ".join(LOCAL),
     shell:
         "{params.python} paper/data/brine-frames/replicas.py table "
-        "--frames {FRAMES} --seams {params.seams} --csv {output.table} && "
+        "--frames {FRAMES} --seams {params.seams} --manifest {input.manifest} "
+        "--local {params.local} --csv {output.table} && "
         "{params.python} paper/data/brine-frames/replicas.py range "
         "--csv {output.table} --out {output.span}"
 

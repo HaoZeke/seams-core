@@ -19,6 +19,8 @@ runs:
   T230_m10_r1: 2
   T230_m20_r1: 2
   T230_m40_r1: 2
+# true: brine_replicas also reads the brine_run frames hf_revision lacks.
+with_runs: false
 # LAMMPS timer cap on each run command. The campaign capped a 6 h wall at
 # 5:40:00; this cap is long enough for 5 ns at 2 threads.
 lmp_timeout: "40:00:00"

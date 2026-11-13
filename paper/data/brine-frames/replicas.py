@@ -3,13 +3,18 @@
 
 The frames are the labelled extended-XYZ files of the Hugging Face
 dataset d-SEAMS/brine-front-230K, read at one pinned revision. fetch
-downloads them by revision and checks them against the dataset's
-SHA256SUMS. Nothing is uploaded.
+mirrors every file the revision's SHA256SUMS lists, checks each against
+it, and writes a manifest of the revision. Nothing is uploaded. sums
+writes a local SHA256SUMS in the dataset's format for an upload.
 
 table writes one row per replica x loading x frame for the expected grid
 (replicas r0 and r1; 0, 10, 20 and 40 NaCl pairs; t0, t1, t2 and tend).
-A frame that the revision does not hold is a row with status
-not_in_dataset and empty numbers. range writes, for every quantity, each
+With --manifest only frames that revision lists are read, each checked
+against its sha256. A frame that the revision does not hold is a row
+with status not_in_dataset and empty numbers, unless it is named in
+--local (a brine_run frame not yet uploaded, source local). With
+--seams, the cage cluster nmax and the ion shells come from the seeded,
+completed cage labels of each frame. range writes, for every quantity, each
 replica's value and the range over the replicas that have one; the range
 is left empty when fewer than two replicas exist.
 
@@ -23,9 +28,11 @@ length when the slab wraps through z = 0, so z_front_lo < z_front_hi and
 the ice thickness is their difference.
 
     python3 paper/data/brine-frames/replicas.py fetch \
-        --dest d-SEAMS/brine-front-230K
+        --dest d-SEAMS/brine-front-230K \
+        --manifest d-SEAMS/brine-front-230K.4828e33ecf419c70643b2d466bfa4f283b4138dc.txt
     python3 paper/data/brine-frames/replicas.py table \
-        --frames d-SEAMS/brine-front-230K/data/frames \
+        --frames d-SEAMS/brine-front-230K/data/frames --seams seams \
+        --manifest d-SEAMS/brine-front-230K.4828e33ecf419c70643b2d466bfa4f283b4138dc.txt \
         --csv paper/data/brine-frames/replicas.csv
     python3 paper/data/brine-frames/replicas.py range \
         --csv paper/data/brine-frames/replicas.csv \
@@ -91,6 +98,7 @@ COLUMNS = (
     "ion_liquid",
     "velocity_seed",
     "ion_seed",
+    "source",
 )
 QUANTITIES = (
     "waters",
@@ -332,16 +340,42 @@ def seed_columns(replica: str) -> dict:
     return {"velocity_seed": int(deck.velocity_seed(number)), "ion_seed": number}
 
 
-def table(frames: Path, out: Path, seams: str | None = None) -> None:
+def read_manifest(manifest: Path) -> tuple[str, dict]:
+    """Revision and {path: sha256} of a manifest written by fetch."""
+    lines = manifest.read_text().splitlines()
+    revision = lines[0].split(" at ")[-1].strip()
+    sums = {}
+    for line in lines[1:]:
+        digest, _, rel = line.partition("  ")
+        sums[rel] = digest
+    return revision, sums
+
+
+def table(frames: Path, out: Path, seams: str | None = None, manifest: Path | None = None,
+          local: tuple[str, ...] = ()) -> None:
+    """With a manifest, a frame is read only when that revision lists it and its sha256 matches.
+
+    Names in ``local`` are frames from brine_run that the revision does not
+    hold yet; they are read as they are and marked source local.
+    """
+    revision, sums = read_manifest(manifest) if manifest else (HF_REVISION, None)
     rows = []
     missing = []
     for replica in REPLICAS:
         for pairs in PAIRS:
             for frame, step in FRAMES:
-                path = frames / frame_name(replica, pairs, frame)
-                if path.exists():
+                name = frame_name(replica, pairs, frame)
+                path = frames / name
+                rel = f"data/frames/{name}"
+                source = f"hf@{revision[:8]}"
+                if sums is not None and rel not in sums:
+                    source = "local" if name in local else ""
+                if source and path.exists():
+                    if source != "local" and sums is not None and _sha256(path) != sums[rel]:
+                        raise SystemExit(f"{path} does not match {rel} at {revision}")
                     row = analyse(path, replica, pairs, frame, seams)
                     row.update(seed_columns(replica))
+                    row["source"] = source
                     if row["step"] != step:
                         raise SystemExit(f"{path.name} is step {row['step']}, expected {step}")
                 else:
@@ -351,7 +385,8 @@ def table(frames: Path, out: Path, seams: str | None = None) -> None:
                 rows.append(row)
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", newline="") as handle:
-        handle.write(f"# {HF_DATASET} at {HF_REVISION}, data/frames/T230_m{{pairs}}_{{replica}}_{{frame}}.xyz\n")
+        handle.write(f"# {HF_DATASET} at {revision}, data/frames/T230_m{{pairs}}_{{replica}}_{{frame}}.xyz\n")
+        handle.write("# source hf@rev: listed at that revision and its sha256 matches; local: brine_run, not uploaded\n")
         handle.write(f"# front: {N_BINS} z bins, solid when crystal/waters >= {FRONT_CUT}; crystal is cubic+hexagonal\n")
         handle.write("# crystal is the published CHILL+ rule (cubic+hexagonal); cage_ice and nmax are the seeded,\n")
         handle.write("# completed cage labels; ion_* are 3.5 A shells against the cage labels; velocity_seed is\n")
@@ -406,7 +441,7 @@ def value_range(path: Path, out: Path) -> None:
         lines.append(record)
     fields = ("pairs", "frame", "quantity", *REPLICAS, "n", "min", "max", "span")
     with out.open("w", newline="") as handle:
-        handle.write(f"# {HF_DATASET} at {HF_REVISION}. Empty replica cell: frame not in the dataset.\n")
+        handle.write(path.read_text().splitlines()[0].split(",")[0] + ". Empty replica cell: frame not in the dataset.\n")
         handle.write("# min, max and span are left empty when fewer than two replicas have the frame.\n")
         writer = csv.DictWriter(handle, fieldnames=fields, restval="", lineterminator="\n")
         writer.writeheader()
@@ -432,6 +467,8 @@ def main() -> None:
     p.add_argument("--frames", type=Path, required=True)
     p.add_argument("--csv", type=Path, required=True)
     p.add_argument("--seams", default=None, help="seams CLI for the cage columns; omitted leaves them empty")
+    p.add_argument("--manifest", type=Path, default=None, help="fetch manifest; only frames it lists are read")
+    p.add_argument("--local", nargs="*", default=[], help="brine_run frame names the revision lacks")
     p = sub.add_parser("range")
     p.add_argument("--csv", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
@@ -441,7 +478,7 @@ def main() -> None:
     elif args.cmd == "sums":
         sums(args.dataset)
     elif args.cmd == "table":
-        table(args.frames, args.csv, args.seams)
+        table(args.frames, args.csv, args.seams, args.manifest, tuple(args.local))
     else:
         value_range(args.csv, args.out)
 
