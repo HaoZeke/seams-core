@@ -18,10 +18,14 @@ Median, then minimum.
 |---|---:|---|---|
 | rings | 1 | 101.912 / 100.673 | 499.459 / 486.623 |
 | bonds and rings | 1 | 126.616 / 121.957 | 573.221 / 558.723 |
-| rings | 8 | 28.482 / 25.928 | 316.943 / 282.208 |
-| bonds and rings | 8 | 42.002 / 37.065 | 297.174 / 286.205 |
+| rings | 8 | 35.998 / 32.950 | 265.057 / 258.434 |
+| bonds and rings | 8 | 51.229 / 48.853 | 280.436 / 265.480 |
 
 On one thread the neighbour list is 24.7 ms of the d-SEAMS call (126.616 minus 101.912) and bond creation is 73.8 ms of the OVITO call (573.221 minus 499.459).
+
+The eight-thread pair above is a second sitting. Both OVITO clocks are one pipeline built before the timer. Rings-only notifies `FindRingsModifier`. Bonds and rings notifies `CreateBondsModifier` and `FindRingsModifier`. The two variants alternate which one runs first, the first pass is discarded, and eight samples remain. OVITO's thread pool was 8 and the affinity was cores 0-7.
+
+An earlier eight-thread sitting reported bonds and rings at 297.174 ms and rings-only at 316.943 ms. That rings-only clock constructed a new pipeline on every sample, and the bonds clock ran only after every rings sample had finished, so the second clock saw a warm core. Interleaving removes the inversion: bonds and rings is 280.436 ms and rings-only is 265.057 ms, a gap of 15.4 ms, the same size as the d-SEAMS neighbour list (51.229 minus 35.998). The rings-only ratio is 265.057 / 35.998 = 7.36. The bonds-and-rings ratio is 280.436 / 51.229 = 5.47. A seven-times claim is the rings-only ratio. The old 297 / 42 figure was the inverted bonds clock and is not the claim.
 
 ## Where 82.3 vs 474 and 129.3 vs 612.5 come from
 

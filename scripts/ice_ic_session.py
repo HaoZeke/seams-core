@@ -184,6 +184,7 @@ def ovito_worker(traj: str) -> None:
     from ovito.data import DataCollection
     from ovito.modifiers import CreateBondsModifier, FindRingsModifier
     from ovito.pipeline import Pipeline, StaticSource
+    from PySide6.QtCore import QThreadPool
     import ovito
 
     text = Path(traj).read_text(encoding="ascii").splitlines()
@@ -203,16 +204,44 @@ def ovito_worker(traj: str) -> None:
         parts.create_property("Position", data=pos)
         return data
 
+    width = int(os.environ.get("OVITO_THREAD_COUNT", "1"))
+    pool = QThreadPool.globalInstance()
+    pool.setMaxThreadCount(width)
+    if pool.maxThreadCount() != width:
+        raise SystemExit(f"OVITO threads {pool.maxThreadCount()} not {width}")
+    affinity = sorted(os.sched_getaffinity(0))
+
     bond = fresh()
     bond.apply(CreateBondsModifier(cutoff=CUTOFF))
-    probe = Pipeline(source=StaticSource(data=bond))
-    probe.modifiers.append(FindRingsModifier(maximum_ring_size=MAX_RING))
-    table = probe.compute().tables["ring-size-histogram"]
+    # Both clocks use one pipeline built before the timer. The rings-only
+    # clock notifies FindRings. The bonds-and-rings clock notifies
+    # CreateBonds and FindRings. A new Pipeline inside the rings-only
+    # clock, or DataCollection.apply for bonds, is a different entry point.
+    ring_only = FindRingsModifier(minimum_ring_size=3, maximum_ring_size=MAX_RING)
+    rings_pipe = Pipeline(source=StaticSource(data=bond))
+    rings_pipe.modifiers.append(ring_only)
+    bond_mod = CreateBondsModifier(cutoff=CUTOFF)
+    ring_both = FindRingsModifier(minimum_ring_size=3, maximum_ring_size=MAX_RING)
+    both_pipe = Pipeline(source=StaticSource(data=fresh()))
+    both_pipe.modifiers.append(bond_mod)
+    both_pipe.modifiers.append(ring_both)
+    ring_only.notify_object_changed()
+    table = rings_pipe.compute().tables["ring-size-histogram"]
     hist = {
         str(int(size)): int(count)
         for size, count in zip(table["Ring Size"][...], table["Count"][...])
         if int(count) != 0
     }
+    bond_mod.notify_object_changed()
+    ring_both.notify_object_changed()
+    both_table = both_pipe.compute().tables["ring-size-histogram"]
+    both_hist = {
+        str(int(size)): int(count)
+        for size, count in zip(both_table["Ring Size"][...], both_table["Count"][...])
+        if int(count) != 0
+    }
+    if both_hist != hist:
+        raise SystemExit(f"rings-only census {hist} differs from bonds {both_hist}")
     sys.stdout.write(
         "ready "
         + json.dumps(
@@ -220,6 +249,8 @@ def ovito_worker(traj: str) -> None:
                 "hist": hist,
                 "version": ".".join(str(part) for part in ovito.version),
                 "molecules": n,
+                "threads": pool.maxThreadCount(),
+                "affinity": affinity,
             }
         )
         + "\n"
@@ -231,15 +262,16 @@ def ovito_worker(traj: str) -> None:
             break
         if word not in ("go", "all"):
             continue
+        if pool.maxThreadCount() != width:
+            raise SystemExit(f"OVITO threads changed to {pool.maxThreadCount()}")
         t0 = time.perf_counter()
         if word == "all":
-            data = fresh()
-            data.apply(CreateBondsModifier(cutoff=CUTOFF))
-            data.apply(FindRingsModifier(minimum_ring_size=3, maximum_ring_size=MAX_RING))
+            bond_mod.notify_object_changed()
+            ring_both.notify_object_changed()
+            both_pipe.compute()
         else:
-            pipe = Pipeline(source=StaticSource(data=bond))
-            pipe.modifiers.append(FindRingsModifier(maximum_ring_size=MAX_RING))
-            pipe.compute()
+            ring_only.notify_object_changed()
+            rings_pipe.compute()
         t1 = time.perf_counter()
         sys.stdout.write(f"ms {(t1 - t0) * 1000.0:.6f}\n")
         sys.stdout.flush()
@@ -347,6 +379,8 @@ def main() -> None:
     ap.add_argument("--csv", required=False)
     ap.add_argument("--python", default=sys.executable)
     ap.add_argument("--ovito-worker", metavar="TRAJ")
+    ap.add_argument("--molecules", type=int)
+    ap.add_argument("--threads", type=int, choices=(1, 8))
     args = ap.parse_args()
     if args.ovito_worker:
         ovito_worker(args.ovito_worker)
@@ -367,14 +401,53 @@ def main() -> None:
         traj = work / f"ice-ic-{len(points)}.lammpstrj"
         write_dump(traj, points, side)
         for threads in (1, 8):
+            if args.molecules not in (None, len(points)) or (
+                args.threads not in (None, threads)
+            ):
+                continue
             dseams, dhist = start_dseams(traj, threads)
             ovito, payload = start_ovito(args.python, traj, threads)
+            want = [0] if threads == 1 else list(range(8))
+            if payload.get("threads") != threads or payload.get("affinity") != want:
+                raise SystemExit(
+                    f"OVITO threads {payload.get('threads')} affinity "
+                    f"{payload.get('affinity')} expected {threads} {want}"
+                )
             ohist = {str(k): int(v) for k, v in payload["hist"].items()}
             if {k: v for k, v in dhist.items() if int(k) >= 4} != ohist:
                 raise SystemExit(f"census d-SEAMS {dhist} OVITO {ohist}")
             try:
-                for variant, word in (("rings", "go"), ("bonds_and_rings", "all")):
-                    left, right = paired(dseams, ovito, word)
+                # One sitting. Rings-only and bonds-and-rings alternate which
+                # one runs first, so a warm core cannot make the second clock
+                # look faster. The first pass is the warm-up.
+                bucket = {
+                    ("rings", "d"): [],
+                    ("rings", "o"): [],
+                    ("bonds_and_rings", "d"): [],
+                    ("bonds_and_rings", "o"): [],
+                }
+                for i in range(WARMUP + REPEATS):
+                    if i % 2 == 0:
+                        sequence = (
+                            ("rings", "d", "go"),
+                            ("rings", "o", "go"),
+                            ("bonds_and_rings", "d", "all"),
+                            ("bonds_and_rings", "o", "all"),
+                        )
+                    else:
+                        sequence = (
+                            ("bonds_and_rings", "o", "all"),
+                            ("bonds_and_rings", "d", "all"),
+                            ("rings", "o", "go"),
+                            ("rings", "d", "go"),
+                        )
+                    for variant, arm, word in sequence:
+                        sample = dseams.ask(word) if arm == "d" else ovito.ask(word)
+                        if i >= WARMUP:
+                            bucket[(variant, arm)].append(sample)
+                for variant in ("rings", "bonds_and_rings"):
+                    left = bucket[(variant, "d")]
+                    right = bucket[(variant, "o")]
                     for code, version, samples in (
                         ("d-SEAMS", seams_version, left),
                         ("OVITO", payload["version"], right),
@@ -395,7 +468,13 @@ def main() -> None:
                                 "samples_ms": " ".join(f"{v:.4f}" for v in samples),
                                 "census": json.dumps(payload["hist"], sort_keys=True),
                                 "cpu_model": model,
-                                "note": "",
+                                "note": (
+                                    f"ovito_threads {payload['threads']} "
+                                    f"affinity {payload['affinity']}; "
+                                    "rings and bonds alternate first"
+                                    if code == "OVITO"
+                                    else "rings and bonds alternate first"
+                                ),
                             }
                         )
                     print(
@@ -406,7 +485,7 @@ def main() -> None:
             finally:
                 dseams.close()
                 ovito.close()
-        if len(points) == 1000:
+        if len(points) == 1000 and args.molecules in (None, 1000):
             for block in cycless_block(points, side):
                 rows.append(
                     {
@@ -441,8 +520,18 @@ def main() -> None:
         "note",
     ]
     out = Path(args.csv)
+    if args.molecules is not None and out.is_file():
+        kept = []
+        with out.open(encoding="ascii", newline="") as handle:
+            for old in csv.DictReader(handle):
+                if int(old["molecules"]) == args.molecules and int(old["threads"]) == (
+                    args.threads if args.threads is not None else int(old["threads"])
+                ) and old["code"] in ("d-SEAMS", "OVITO"):
+                    continue
+                kept.append(old)
+        rows = kept + rows
     with out.open("w", encoding="ascii", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore", lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
     print(f"wrote {out.name} version {seams_version} cores {cores}", flush=True)

@@ -81,6 +81,56 @@ def run_width(bench: Path, threads: int, samples: int) -> list[dict]:
     return rows
 
 
+def four_of_five(bench: Path, threads: int, samples: int) -> dict:
+    """Every molecule whose index is not a multiple of 5."""
+    env = os.environ.copy()
+    env["LD_LIBRARY_PATH"] = str(bench.resolve().parents[1] / "src")
+    env["OMP_NUM_THREADS"] = str(threads)
+    env["OMP_PROC_BIND"] = "close"
+    env["OMP_PLACES"] = "cores"
+    env["OMP_WAIT_POLICY"] = "PASSIVE"
+    cores = "0" if threads == 1 else "0-7"
+    done = subprocess.run(
+        ["taskset", "-c", cores, str(bench), "4096", str(samples)],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+    if done.returncode != 0:
+        sys.stderr.write(done.stderr)
+        sys.stderr.write(done.stdout)
+        raise SystemExit(done.returncode or 1)
+    got = {}
+    for line in done.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 2:
+            got[parts[0]] = parts
+    carry = float(got["carry_median"][1])
+    carry_min = float(got["carry_median"][3])
+    bare = float(got["full_median"][1])
+    bare_min = float(got["full_median"][3])
+    within = carry <= bare and carry_min <= bare_min and got["identical"][1] == "yes"
+    if not within:
+        raise SystemExit(
+            f"four-of-five threads {threads} carry {carry:.4f} bare {bare:.4f}"
+        )
+    return {
+        "threads": str(threads),
+        "cpus": cores,
+        "moved_fraction": "0.8000",
+        "pattern": "four_of_five",
+        "recomputed": got["recomputed"][1],
+        "molecules": got["molecules"][1],
+        "samples": got["molecules"][3],
+        "carry_median_ms": f"{carry:.4f}",
+        "carry_min_ms": f"{carry_min:.4f}",
+        "bare_median_ms": f"{bare:.4f}",
+        "bare_min_ms": f"{bare_min:.4f}",
+        "within": "yes",
+    }
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("bench")
@@ -108,14 +158,41 @@ def main() -> None:
                 flush=True,
             )
     if args.csv:
+        commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+        ).strip()
+        for row in rows:
+            row["commit"] = commit
+            row["pattern"] = "i_mod_20"
+        # The four-of-five frame is every molecule whose index is not a
+        # multiple of 5. The modulus-20 row at 0.8 is a different set.
+        archival = {
+            "threads": "8", "cores": str(cores), "cpus": "0-7",
+            "moved_fraction": "0.8000", "pattern": "four_of_five",
+            "recomputed": "4096", "molecules": "4096", "samples": "8",
+            "carry_median_ms": "4.8771", "carry_min_ms": "4.7689",
+            "bare_median_ms": "4.6538", "bare_min_ms": "4.4966",
+            "within": "no", "version": seams, "cpu_model": model,
+            "commit": "c38ed3c592caaf48493fc78bb66644d21e2b96bb",
+        }
+        live = four_of_five(bench, 8, args.samples)
+        live["cores"] = str(cores)
+        live["version"] = seams
+        live["cpu_model"] = model
+        live["commit"] = commit
+        rows.append(live)
+        rows.append(archival)
         fields = [
-            "threads", "cores", "cpus", "moved_fraction", "recomputed",
+            "threads", "cores", "cpus", "moved_fraction", "pattern", "recomputed",
             "molecules", "samples", "carry_median_ms", "carry_min_ms",
-            "bare_median_ms", "bare_min_ms", "within", "version", "cpu_model",
+            "bare_median_ms", "bare_min_ms", "within", "version", "commit",
+            "cpu_model",
         ]
         out = Path(args.csv)
         with out.open("w", encoding="ascii", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore")
+            writer = csv.DictWriter(
+                handle, fieldnames=fields, extrasaction="ignore", lineterminator="\n"
+            )
             writer.writeheader()
             writer.writerows(rows)
         print(f"wrote {out.name} rows {len(rows)} cores {cores}", flush=True)
