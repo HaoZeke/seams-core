@@ -609,11 +609,10 @@ class HopStride:
 class CarryPathSwitch:
     """One ABAB session of the nucleation path switch.
 
-    The cutoff graph takes the one-pass branch once most rows have
-    changed. The seeded graph stays on the ball while the carry still
-    keeps a block of rings. The dump is the 148-frame nucleation
-    trajectory and is not stored in git. The timed command is the
-    Snakemake driver, limited to the opening transitions.
+    The path is the measured per-row cost, not a fixed row fraction.
+    The dump is the 148-frame nucleation trajectory and is not stored
+    in git. The timed command is the Snakemake driver, limited to the
+    opening transitions.
     """
 
     params = ["cutoff", "seeded"]

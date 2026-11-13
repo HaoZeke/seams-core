@@ -2069,6 +2069,101 @@ struct primitive::RingUpdater::Impl {
     return out;
   }
 
+  struct Cost {
+    double fullPerRow = 1;
+    double ballPerRow = 1;
+    bool ready = false;
+  };
+
+  static Cost measureCosts() {
+    const int n = 192;
+    const int nChanged = n / 4;
+    std::vector<std::vector<int>> base(static_cast<std::size_t>(n));
+    std::vector<std::vector<int>> moved(static_cast<std::size_t>(n));
+    for (int i = 0; i < n; ++i) {
+      base[static_cast<std::size_t>(i)] = {i, (i + 1) % n, (i + n - 1) % n, (i + 2) % n,
+                                           (i + n - 2) % n};
+      moved[static_cast<std::size_t>(i)] = base[static_cast<std::size_t>(i)];
+    }
+    for (int i = 0; i < nChanged; ++i) {
+      int neu = (i + 3) % n;
+      if (neu == moved[static_cast<std::size_t>(i)].back()) {
+        neu = (i + 4) % n;
+      }
+      moved[static_cast<std::size_t>(i)].back() = neu;
+    }
+    Impl probe;
+    probe.maxDepth = 6;
+    probe.maxLvl = 3;
+    probe.ballRadius = 2;
+    probe.reach = 0;
+    probe.hopOnly = true;
+    auto millis = [](std::chrono::steady_clock::time_point a,
+                     std::chrono::steady_clock::time_point b) {
+      return std::chrono::duration<double, std::milli>(b - a).count();
+    };
+    auto timeFull = [&]() {
+      const auto t0 = std::chrono::steady_clock::now();
+      probe.writeGraph(base, 0, true);
+      probe.which = 0;
+      probe.fastEnumerate(probe.graph[0]);
+      return millis(t0, std::chrono::steady_clock::now());
+    };
+    (void)timeFull();
+    const double fullMs = timeFull();
+    probe.writeGraph(base, 0, true);
+    probe.which = 0;
+    probe.fastEnumerate(probe.graph[0]);
+    probe.writeGraph(moved, 1, true);
+    std::vector<int> changed(static_cast<std::size_t>(nChanged));
+    std::iota(changed.begin(), changed.end(), 0);
+    std::vector<char> inT(static_cast<std::size_t>(n), 0);
+    for (int v : changed) {
+      inT[static_cast<std::size_t>(v)] = 1;
+    }
+    const auto t0 = std::chrono::steady_clock::now();
+    auto added = probe.ringsMeeting(probe.graph[1], changed, inT);
+    probe.splice(inT, std::move(added));
+    const double ballMs = millis(t0, std::chrono::steady_clock::now());
+    Cost out;
+    out.fullPerRow = fullMs / static_cast<double>(n);
+    out.ballPerRow = ballMs / static_cast<double>(nChanged);
+    if (!(out.fullPerRow > 0.0)) {
+      out.fullPerRow = 1.0;
+    }
+    if (!(out.ballPerRow > 0.0)) {
+      out.ballPerRow = 1.0;
+    }
+    out.ready = true;
+    return out;
+  }
+
+  static Cost &costSlot() {
+    static Cost slot;
+    return slot;
+  }
+
+  static bool &costsForced() {
+    static bool forced = false;
+    return forced;
+  }
+
+  static Cost costs() {
+    Cost &slot = costSlot();
+    if (!costsForced() && !slot.ready) {
+      slot = measureCosts();
+    }
+    return slot;
+  }
+
+  static void setCosts(double ballPerRow, double fullPerRow) {
+    costsForced() = true;
+    Cost &slot = costSlot();
+    slot.ballPerRow = ballPerRow > 0.0 ? ballPerRow : 1.0;
+    slot.fullPerRow = fullPerRow > 0.0 ? fullPerRow : 1.0;
+    slot.ready = true;
+  }
+
   void splice(const std::vector<char> &inT,
               std::vector<std::vector<int>> added) {
     std::vector<std::vector<int>> merged;
@@ -2116,8 +2211,22 @@ int primitive::RingUpdater::lastRecomputedSources() const {
 
 const char *primitive::RingUpdater::lastPath() const { return impl_->path; }
 
+bool primitive::RingUpdater::fullPassAt(int changedRows, int vertices, double ballPerRow,
+                                       double fullPerRow) {
+  if (changedRows <= 0 || vertices <= 0 || !(ballPerRow > 0.0) || !(fullPerRow > 0.0)) {
+    return false;
+  }
+  return static_cast<double>(changedRows) * ballPerRow >=
+         static_cast<double>(vertices) * fullPerRow;
+}
+
 bool primitive::RingUpdater::fullPassAt(int changedRows, int vertices) {
-  return changedRows > 0 && vertices > 0 && changedRows * 3 > vertices * 2;
+  const auto cost = Impl::costs();
+  return fullPassAt(changedRows, vertices, cost.ballPerRow, cost.fullPerRow);
+}
+
+void primitive::RingUpdater::setRowCosts(double ballPerRow, double fullPerRow) {
+  Impl::setCosts(ballPerRow, fullPerRow);
 }
 
 int primitive::RingUpdater::lastBallsRefreshed() const {
@@ -2192,38 +2301,9 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
     return st.flattened;
   }
 
-  if (RingUpdater::fullPassAt(nChangedRows, nVertices)) {
+  const auto cost = Impl::costs();
+  if (RingUpdater::fullPassAt(nChangedRows, nVertices, cost.ballPerRow, cost.fullPerRow)) {
     // Same enumeration as a rebuild. The bond diff is not part of it.
-    st.bondsPending = true;
-    st.pendingOld = st.which;
-    st.which = slot;
-    st.path = "full";
-    st.fastEnumerate(st.graph[st.which]);
-    return st.flattened;
-  }
-
-  // Under the two-thirds cut the changed sources are the ones that own the
-  // rings. When fewer than a sixteenth of the previous rings miss them, a
-  // carried search redoes the frame and loses to one pass. The bond diff is
-  // still not part of that pass.
-  const int prevRings = static_cast<int>(st.flattened.size());
-  int keptRings = 0;
-  if (prevRings > 0) {
-    for (const auto &ring : st.flattened) {
-      bool meets = false;
-      for (const int v : ring) {
-        if (v >= 0 && v < nVertices &&
-            st.rowChanged[static_cast<std::size_t>(v)] != 0) {
-          meets = true;
-          break;
-        }
-      }
-      if (!meets) {
-        ++keptRings;
-      }
-    }
-  }
-  if (prevRings > 0 && keptRings * 16 < prevRings) {
     st.bondsPending = true;
     st.pendingOld = st.which;
     st.which = slot;

@@ -537,6 +537,39 @@ rule science_carry_paths:
         "--out {output[0]} --classes {output[1]}"
 
 
+rule science_committor:
+    input:
+        "scripts/committor_basin.py",
+        "data/committor-series.tsv",
+    output:
+        "data/committor-table.csv",
+        "data/committor-summary.csv",
+    shell:
+        "${{SCIENCE_PYTHON:-python3}} scripts/committor_basin.py "
+        "--series {input[1]} --out {output[0]}"
+
+
+rule science_phase_window:
+    input:
+        "scripts/phase_window_table.py",
+        "src/include/internal/phase.hpp",
+    output:
+        "data/si-table6-density.csv",
+    shell:
+        "${{SCIENCE_PYTHON:-python3}} scripts/phase_window_table.py --out {output}"
+
+
+rule science_recall:
+    input:
+        "bbdir/tests/recall_construction",
+        "scripts/recall_construction.py",
+    output:
+        "data/recall-construction.csv",
+    shell:
+        "${{SCIENCE_PYTHON:-python3}} scripts/recall_construction.py "
+        "--bench {input[0]} --out {output}"
+
+
 rule science_interface:
     input:
         "paper/tex/figures/data/science/interface-230K/interface-layers.csv",

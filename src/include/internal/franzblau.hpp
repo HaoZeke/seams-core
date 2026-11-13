@@ -185,11 +185,12 @@ Graph clearGraph(Graph &currentGraph);
  *  frames only if it passes within (maxDepth/2 - 2)/2 bonds of a vertex
  *  whose neighbour row changed, which is on the ring itself up to maxDepth
  *  7. On a new frame the stored rings that meet that set are dropped and the
- *  rings through it are enumerated afresh. When more than two thirds of the
- *  rows change, or the rings that miss those rows are under a sixteenth of
- *  the previous frame, the update is one pass over the packed neighbour
- *  rows and does not build a bond diff. The output equals ringNetwork
- *  element by element. lastPath() names the branch.
+ *  rings through it are enumerated afresh. One pass is chosen when the
+ *  counted changed rows, times the per-row cost of the carried search,
+ *  is at least the vertex count times the per-row cost of one full pass.
+ *  Those two costs are measured on a synthetic circulant, not on the
+ *  trajectory being updated. The output equals ringNetwork element by
+ *  element. lastPath() names the branch.
  */
 class RingUpdater {
 public:
@@ -211,13 +212,17 @@ public:
 
   //! Path of the last update: "cold" (first frame), "same" (no row
   //! changed), "full" (one pass), or "ball" (only the changed rows).
-  //! One pass is more than two thirds of the rows, or a carry that would
-  //! keep under a sixteenth of the previous rings.
+  //! One pass is the cost comparison in fullPassAt.
   [[nodiscard]] const char *lastPath() const;
 
-  //! True when this many changed rows take the one-pass branch.
-  //! The cut is two thirds of the vertices.
+  //! True when changedRows * ballPerRow >= vertices * fullPerRow.
+  //! The per-row costs are measured, or passed in by the caller.
+  [[nodiscard]] static bool fullPassAt(int changedRows, int vertices,
+                                      double ballPerRow, double fullPerRow);
   [[nodiscard]] static bool fullPassAt(int changedRows, int vertices);
+
+  //! Replace the measured per-row costs. A later update uses these values.
+  static void setRowCosts(double ballPerRow, double fullPerRow);
 
   //! Vertices whose bounded balls were rebuilt on the last update
   [[nodiscard]] int lastBallsRefreshed() const;
