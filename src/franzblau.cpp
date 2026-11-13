@@ -2218,6 +2218,17 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
     return st.flattened;
   }
 
+  // One pass beats a carried search once the changed rows are more than
+  // two thirds of the vertices. On the 4096-molecule nucleation frames,
+  // eight repeats, the cutoff graph sits above that line and the carried
+  // search was slower; the seeded graph sits below it and the carried
+  // search is faster. The rings still match a full enumeration.
+  if (changed.size() * 3 > static_cast<std::size_t>(nVertices) * 2) {
+    st.which = slot;
+    st.fastEnumerate(st.graph[st.which]);
+    return st.flattened;
+  }
+
   const auto atomLimit =
       static_cast<std::size_t>(st.fullPassFraction * nVertices);
   const bool overBonds =
