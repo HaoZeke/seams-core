@@ -2223,6 +2223,10 @@ nneigh::kNearestNeighbourPair(
   if (yCloud.nop <= 0 || k <= 0) {
     return {{}, {}};
   }
+  seams::prepareCompute();
+#ifdef SEAMS_HAS_LINKCELL
+  lc_set_threads(seams::teamFor(yCloud.nop));
+#endif
   const double hint = candidateCutoff > 0.0 ? 0.75 * candidateCutoff : 3.0;
   const auto nom = nominatePacked(yCloud, k, typeI, hint);
   std::vector<std::vector<int>> mutual;
@@ -2253,6 +2257,10 @@ nneigh::kNearestNeighbourPair(
   if (yCloud.nop <= 0 || k <= 0 || types.empty()) {
     return {{}, {}};
   }
+  seams::prepareCompute();
+#ifdef SEAMS_HAS_LINKCELL
+  lc_set_threads(seams::teamFor(yCloud.nop));
+#endif
   const double hint = candidateCutoff > 0.0 ? 0.75 * candidateCutoff : 3.0;
   const auto nom = nominatePacked(yCloud, k, types.front(), hint, &types);
   std::vector<std::vector<int>> mutual;

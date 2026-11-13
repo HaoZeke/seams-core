@@ -294,6 +294,48 @@ TEST_CASE("Cartesian l=4 matches the trigonometric harmonic", "[ql][solid]") {
   }
 }
 
+TEST_CASE("one cutoff list matches two q4 and q6 calls", "[ql][solid]") {
+  auto check = [](const molSys::PointCloud<molSys::Point<double>, double> &cloud,
+                  bool average) {
+    const auto q4 = chill::steinhardtQlCutoff(cloud, 3.5, 4, 1, average);
+    const auto q6 = chill::steinhardtQlCutoff(cloud, 3.5, 6, 1, average);
+    chill::SteinhardtQl a4;
+    chill::SteinhardtQl a6;
+    REQUIRE(chill::steinhardtQ4Q6Cutoff(cloud, 3.5, 1, average, a4, a6));
+    REQUIRE(a4.ql == q4.ql);
+    REQUIRE(a6.ql == q6.ql);
+    REQUIRE(a4.qlBar == q4.qlBar);
+    REQUIRE(a6.qlBar == q6.qlBar);
+    chill::SteinhardtQl b4;
+    chill::SteinhardtQl b6;
+    REQUIRE(chill::steinhardtQ4Q6Cutoff(cloud, 3.5, 1, average, b4, b6));
+    REQUIRE(b4.ql == q4.ql);
+    REQUIRE(b6.ql == q6.ql);
+  };
+  check(iceIc(3), false);
+  check(iceIc(3), true);
+  molSys::PointCloud<molSys::Point<double>, double> liquid;
+  liquid.box = {16.0, 16.0, 16.0};
+  liquid.boxLow = {0.0, 0.0, 0.0};
+  liquid.currentFrame = 1;
+  std::mt19937 rng(91001);
+  std::uniform_real_distribution<double> u(0.0, 16.0);
+  for (int i = 0; i < 180; i++) {
+    molSys::Point<double> p;
+    p.x = u(rng);
+    p.y = u(rng);
+    p.z = u(rng);
+    p.type = 1;
+    p.atomID = i + 1;
+    p.molID = p.atomID;
+    liquid.idIndexMap[p.atomID] = liquid.nop;
+    liquid.pts.push_back(p);
+    ++liquid.nop;
+  }
+  check(liquid, true);
+  check(liquid, false);
+}
+
 TEST_CASE("fused q4 q6 and q-bar match the cutoff Steinhardt", "[ql][chill]") {
   auto check = [](molSys::PointCloud<molSys::Point<double>, double> cloud) {
     auto labeled = cloud;
