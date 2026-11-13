@@ -64,6 +64,43 @@ bool sameCycle(const int *a, std::size_t ka, const int *b, std::size_t kb) {
   return true;
 }
 
+//! Atom-to-ring rows packed in ascending ring order. The per-atom vectors
+//! of buildRingSearchIndex are the same rows; the sweep reads the packed
+//! form, so it does not build the vectors.
+void fillRingCsr(const std::vector<std::vector<int>> &rings, int numAtoms,
+                 ring::RingSearchIndex &index) {
+  index = {};
+  if (numAtoms <= 0) {
+    return;
+  }
+  std::vector<int> count(static_cast<std::size_t>(numAtoms), 0);
+  for (const auto &ring : rings) {
+    for (const int atom : ring) {
+      if (atom >= 0 && atom < numAtoms) {
+        ++count[static_cast<std::size_t>(atom)];
+      }
+    }
+  }
+  index.ringOff.assign(static_cast<std::size_t>(numAtoms) + 1, 0);
+  for (int atom = 0; atom < numAtoms; atom++) {
+    index.ringOff[static_cast<std::size_t>(atom) + 1] =
+        index.ringOff[static_cast<std::size_t>(atom)] +
+        count[static_cast<std::size_t>(atom)];
+  }
+  index.ringCol.assign(
+      static_cast<std::size_t>(index.ringOff[static_cast<std::size_t>(numAtoms)]),
+      0);
+  std::vector<int> cursor(index.ringOff.begin(), index.ringOff.end() - 1);
+  for (int iring = 0; iring < static_cast<int>(rings.size()); iring++) {
+    for (const int atom : rings[static_cast<std::size_t>(iring)]) {
+      if (atom >= 0 && atom < numAtoms) {
+        index.ringCol[static_cast<std::size_t>(
+            cursor[static_cast<std::size_t>(atom)]++)] = iring;
+      }
+    }
+  }
+}
+
 //! Shared per-frame machinery: the inverted index, sorted ring copies for
 //! overlap tests, and cached basal/adjacency lists (one sort per ring).
 struct FrameContext {
@@ -72,6 +109,9 @@ struct FrameContext {
   const std::vector<std::vector<int>> *nList = nullptr;
   ring::RingSearchIndex index;
   std::vector<std::vector<int>> sortedRings;
+  // Six sorted atoms per ring when every ring is a hexagon. One block
+  // replaces a vector per ring.
+  std::vector<int> sorted6;
   mutable   std::vector<std::vector<int>> basalCand;
   mutable std::vector<char> basalReady;
   mutable std::vector<std::vector<int>> adjRings;
@@ -103,19 +143,9 @@ struct FrameContext {
         maxAtom = std::max(maxAtom, a);
       }
     }
-    index = ring::buildRingSearchIndex(rings_, maxAtom + 1);
+    fillRingCsr(rings_, maxAtom + 1, index);
     bonds.build(nList_);
     const int nR = static_cast<int>(rings_.size());
-    sortedRings.resize(static_cast<std::size_t>(nR));
-#if defined(SEAMS_HAS_OPENMP) && !defined(SEAMS_HAS_OFFLOAD)
-#pragma omp parallel for schedule(static) if (nR >= 1024 && !omp_in_parallel())
-#endif
-    for (int i = 0; i < nR; i++) {
-      sortedRings[static_cast<std::size_t>(i)] =
-          rings_[static_cast<std::size_t>(i)];
-      std::sort(sortedRings[static_cast<std::size_t>(i)].begin(),
-                sortedRings[static_cast<std::size_t>(i)].end());
-    }
     scratchType.assign(static_cast<std::size_t>(nR),
                        ring::strucType::unclassified);
     allHex = true;
@@ -126,24 +156,51 @@ struct FrameContext {
       }
     }
     flat6.clear();
+    sorted6.clear();
+    sortedRings.clear();
     if (allHex) {
       flat6.resize(static_cast<std::size_t>(nR) * 6);
+      sorted6.resize(static_cast<std::size_t>(nR) * 6);
       for (int i = 0; i < nR; i++) {
         const auto &ring = rings_[static_cast<std::size_t>(i)];
-        std::copy(ring.begin(), ring.end(),
-                  flat6.begin() + static_cast<std::ptrdiff_t>(i) * 6);
+        const auto at = static_cast<std::ptrdiff_t>(i) * 6;
+        std::copy(ring.begin(), ring.end(), flat6.begin() + at);
+        std::copy(ring.begin(), ring.end(), sorted6.begin() + at);
+        std::sort(sorted6.begin() + at, sorted6.begin() + at + 6);
+      }
+    } else {
+      sortedRings.resize(static_cast<std::size_t>(nR));
+      for (int i = 0; i < nR; i++) {
+        sortedRings[static_cast<std::size_t>(i)] =
+            rings_[static_cast<std::size_t>(i)];
+        std::sort(sortedRings[static_cast<std::size_t>(i)].begin(),
+                  sortedRings[static_cast<std::size_t>(i)].end());
       }
     }
-    basalCand.resize(static_cast<std::size_t>(nR));
-    adjRings.resize(static_cast<std::size_t>(nR));
-    adjReady.assign(static_cast<std::size_t>(nR), 0);
-    // Left clear. basalCandidates fills a ring the first time a sweep asks.
-    basalReady.assign(static_cast<std::size_t>(nR), 0);
+    // Basal and adjacency caches stay empty until a caller asks. The sweep
+    // reads candidates from one reused buffer instead.
+    basalCand.clear();
+    basalReady.clear();
+    adjRings.clear();
+    adjReady.clear();
   }
 
   [[nodiscard]] bool shareAtoms(int i, int j) const {
-    const auto &a = sortedRings[i];
-    const auto &b = sortedRings[j];
+    if (allHex) {
+      const int *a = sorted6.data() + static_cast<std::ptrdiff_t>(i) * 6;
+      const int *b = sorted6.data() + static_cast<std::ptrdiff_t>(j) * 6;
+      int p = 0;
+      int q = 0;
+      while (p < 6 && q < 6) {
+        if (a[p] == b[q]) {
+          return true;
+        }
+        (a[p] < b[q]) ? p++ : q++;
+      }
+      return false;
+    }
+    const auto &a = sortedRings[static_cast<std::size_t>(i)];
+    const auto &b = sortedRings[static_cast<std::size_t>(j)];
     size_t p = 0, q = 0;
     while (p < a.size() && q < b.size()) {
       if (a[p] == b[q]) {
@@ -180,19 +237,19 @@ struct FrameContext {
 
   [[nodiscard]] std::vector<int> collectAdjacentRings(int r) const {
     std::vector<int> out;
-    for (const int atom : (*rings)[r]) {
-      for (const int s : ringsThroughAtom(atom)) {
-        if (s != r) {
-          out.push_back(s);
+    auto pushRow = [&](int atom) {
+      const RingRow row = ringsOf(atom);
+      for (int t = 0; t < row.n; t++) {
+        if (row.p[t] != r) {
+          out.push_back(row.p[t]);
         }
       }
+    };
+    for (const int atom : (*rings)[r]) {
+      pushRow(atom);
       if (atom >= 0 && atom < static_cast<int>(nList->size())) {
         for (size_t n = 1; n < (*nList)[atom].size(); n++) {
-          for (const int s : ringsThroughAtom((*nList)[atom][n])) {
-            if (s != r) {
-              out.push_back(s);
-            }
-          }
+          pushRow((*nList)[atom][n]);
         }
       }
     }
@@ -212,7 +269,12 @@ struct FrameContext {
 
   [[nodiscard]] const std::vector<int> &adjacentRings(int r) {
     static const std::vector<int> empty;
-    if (r < 0 || r >= static_cast<int>(adjRings.size())) {
+    const int nR = rings == nullptr ? 0 : static_cast<int>(rings->size());
+    if (static_cast<int>(adjReady.size()) != nR) {
+      adjReady.assign(static_cast<std::size_t>(nR), 0);
+      adjRings.assign(static_cast<std::size_t>(nR), {});
+    }
+    if (r < 0 || r >= nR) {
       return empty;
     }
     if (!adjReady[static_cast<std::size_t>(r)]) {
@@ -237,6 +299,7 @@ struct FrameContext {
     std::uint8_t tick1 = 0;
     std::uint8_t tick2 = 0;
     std::uint8_t tickSeen = 0;
+    std::vector<int> found;
     void prepare(int atoms, int nRings) {
       if (static_cast<int>(onRing.size()) < atoms) {
         onRing.assign(static_cast<size_t>(atoms), 0);
@@ -257,9 +320,10 @@ struct FrameContext {
     }
   };
 
-  [[nodiscard]] std::vector<int> collectBasalCandidates(int i,
-                                                        BasalScratch &scratch) const {
-    std::vector<int> out;
+  [[nodiscard]] std::vector<int> &collectBasalCandidates(int i,
+                                                         BasalScratch &scratch) const {
+    std::vector<int> &out = scratch.found;
+    out.clear();
     const std::vector<int> &basal1 = (*rings)[static_cast<size_t>(i)];
     if (basal1.size() != 6) {
       return out;
@@ -382,6 +446,11 @@ struct FrameContext {
   mutable BasalScratch lazyScratch;
 
   [[nodiscard]] const std::vector<int> &basalCandidates(int i) const {
+    const int nR = rings == nullptr ? 0 : static_cast<int>(rings->size());
+    if (static_cast<int>(basalReady.size()) != nR) {
+      basalReady.assign(static_cast<std::size_t>(nR), 0);
+      basalCand.assign(static_cast<std::size_t>(nR), {});
+    }
     if (!basalReady[static_cast<std::size_t>(i)]) {
       basalCand[static_cast<std::size_t>(i)] =
           collectBasalCandidates(i, lazyScratch);
@@ -462,7 +531,7 @@ ring::CageAffiliation batchSweep(const FrameContext &ctx) {
       std::vector<ring::strucType> types(nRings, ring::strucType::unclassified);
 #pragma omp for schedule(static)
       for (int i = 0; i < nR; ++i) {
-        const std::vector<int> candidates = ctx.collectBasalCandidates(i, scratch);
+        const std::vector<int> &candidates = ctx.collectBasalCandidates(i, scratch);
         for (const int j : candidates) {
           if (!ctx.basalPair(i, j)) {
             continue;
@@ -502,8 +571,9 @@ ring::CageAffiliation batchSweep(const FrameContext &ctx) {
     };
     std::vector<int> listHC;
     std::vector<ring::strucType> types(nRings, ring::strucType::unclassified);
+    FrameContext::BasalScratch scratch;
     for (int i = 0; i < nR && left > 0; ++i) {
-      for (const int j : ctx.basalCandidates(i)) {
+      for (const int j : ctx.collectBasalCandidates(i, scratch)) {
         if (left == 0) {
           break;
         }

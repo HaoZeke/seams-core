@@ -2237,9 +2237,12 @@ bool ring::equatorialConditions(const std::vector<std::vector<int>> &rings,
   // that the share graph enumerates the same chains, and a pair is kept only
   // when the seven rings span 14 molecules.
   if (prodEven > kTripleLoopProduct || prodOdd > kTripleLoopProduct) {
-    return equatorialLarge(rings, R, T,
-                           static_cast<int>(index.ringsContainingAtom.size()),
-                           peripheralUnion, chosen, rank, raw);
+    int nAtoms = static_cast<int>(index.ringsContainingAtom.size());
+    if (nAtoms == 0 && index.ringOff.size() > 1) {
+      nAtoms = static_cast<int>(index.ringOff.size()) - 1;
+    }
+    return equatorialLarge(rings, R, T, nAtoms, peripheralUnion, chosen, rank,
+                           raw);
   }
   struct Chain {
     std::array<int, 3> r;
