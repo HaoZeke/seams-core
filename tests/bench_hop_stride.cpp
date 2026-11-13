@@ -4,7 +4,9 @@
 ** SPDX-License-Identifier: MIT
 **
 ** Carried primitive-ring update against a full ringNetwork on a
-** production-stride dump. The graphs are the cutoff list and the seeded
+** production-stride dump. Each recorded transition is timed as a pair:
+** the carried update, then the rebuild, repeated for every replicate
+** (ABAB) in one session. The graphs are the cutoff list and the seeded
 ** pair used by `seams cages` (mutual and union k-nearest, k = 4, candidate
 ** cutoff 5 A, rings through 6). A transition stays inside the ball when
 ** the update enumerates fewer sources than the molecule count. It falls
@@ -137,26 +139,26 @@ void timeSeries(Series &series, int warmup, int reps) {
   const int nFrames = static_cast<int>(series.frames.size());
   series.carry.assign(static_cast<std::size_t>(nFrames), {});
   series.rebuild.assign(static_cast<std::size_t>(nFrames), {});
-  for (int pass = 0; pass < warmup + reps; ++pass) {
-    primitive::RingUpdater updater(kDepth);
-    for (int frame = 0; frame < nFrames; ++frame) {
-      const auto t0 = Clock::now();
-      (void)updater.update(series.frames[static_cast<std::size_t>(frame)]);
-      const double dt = ms(t0, Clock::now());
-      if (pass >= warmup) {
-        series.carry[static_cast<std::size_t>(frame)].push_back(dt);
-      }
-    }
-  }
+  // One transition at a time. Each replicate primes the updater through
+  // the preceding frames, then times the carried update and the rebuild
+  // back to back. The pair stays in that order for every replicate.
   for (int frame = 0; frame < nFrames; ++frame) {
     const auto &rows = series.frames[static_cast<std::size_t>(frame)];
-    for (int pass = 0; pass < warmup; ++pass) {
-      (void)primitive::ringNetwork(rows, kDepth);
-    }
-    for (int rep = 0; rep < reps; ++rep) {
+    for (int pass = 0; pass < warmup + reps; ++pass) {
+      primitive::RingUpdater updater(kDepth);
+      for (int prev = 0; prev < frame; ++prev) {
+        (void)updater.update(series.frames[static_cast<std::size_t>(prev)]);
+      }
       const auto t0 = Clock::now();
+      (void)updater.update(rows);
+      const double carryDt = ms(t0, Clock::now());
+      const auto t1 = Clock::now();
       (void)primitive::ringNetwork(rows, kDepth);
-      series.rebuild[static_cast<std::size_t>(frame)].push_back(ms(t0, Clock::now()));
+      const double rebuildDt = ms(t1, Clock::now());
+      if (pass >= warmup) {
+        series.carry[static_cast<std::size_t>(frame)].push_back(carryDt);
+        series.rebuild[static_cast<std::size_t>(frame)].push_back(rebuildDt);
+      }
     }
   }
 }
@@ -358,6 +360,7 @@ int runTime(const std::string &dump, const std::string &graph, int reps, int war
   }
   std::printf("# cores %d\n# omp_threads %d\n# reps %d\n# warmup %d\n# quantile type-7\n",
               cpuCount(), threadCount(), reps, warmup);
+  std::printf("# order abab\n");
   std::printf("# depth %d\n# cutoff %.1f\n# k %d\n# candidate %.1f\n", kDepth, kCutoff,
               kNeighbours, kCandidate);
   bool identical = true;

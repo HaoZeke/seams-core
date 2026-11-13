@@ -604,3 +604,37 @@ class HopStride:
 
     def time_carry(self, model, stride, graph):
         _run(self.cmd)
+
+
+class CarryPathSwitch:
+    """One ABAB session of the nucleation path switch.
+
+    The cutoff graph takes the one-pass branch once most rows have
+    changed. The seeded graph stays on the ball while the carry still
+    keeps a block of rings. The dump is the 148-frame nucleation
+    trajectory and is not stored in git. The timed command is the
+    Snakemake driver, limited to the opening transitions.
+    """
+
+    params = ["cutoff", "seeded"]
+    param_names = ["graph"]
+
+    def setup(self, graph):
+        dump = ROOT / "data" / "science-frames" / "nucleation.lammpstrj"
+        bench = ROOT / "bbdir" / "tests" / "bench_hop_stride"
+        if not bench.is_file():
+            bench = ROOT / "build" / "tests" / "bench_hop_stride"
+        if not dump.is_file() or not bench.is_file():
+            raise NotImplementedError(
+                "nucleation dump or bench_hop_stride is absent")
+        self.cmd = CORE + [
+            str(bench), "time", str(dump),
+            "--graph", graph,
+            "--reps", "1",
+            "--warmup", "0",
+            "--last", "8",
+            "--type", "1",
+        ]
+
+    def time_path_switch(self, graph):
+        _run(self.cmd)

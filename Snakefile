@@ -518,6 +518,25 @@ rule science_growth:
         "${{SCIENCE_PYTHON:-python3}} scripts/science_growth.py"
 
 
+# Paired carry and rebuild on the nucleation dump. The driver times each
+# transition as carry then rebuild, eight replicates in one session. The
+# script writes the per-transition table and the per-class intervals.
+rule science_carry_paths:
+    input:
+        "bbdir/tests/bench_hop_stride",
+        "data/science-frames/nucleation.lammpstrj",
+        "scripts/interface_carry_paths.py",
+    output:
+        "data/interface-carry-paths.csv",
+        "data/interface-carry-classes.csv",
+    shell:
+        "OMP_NUM_THREADS=${{SCIENCE_THREADS:-2}} "
+        "${{SCIENCE_PYTHON:-python3}} scripts/interface_carry_paths.py "
+        "--bench {input[0]} --dump {input[1]} "
+        "--reps 8 --warmup 1 --last 8 "
+        "--out {output[0]} --classes {output[1]}"
+
+
 rule science_interface:
     input:
         "paper/tex/figures/data/science/interface-230K/interface-layers.csv",
