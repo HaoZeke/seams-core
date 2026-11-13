@@ -314,6 +314,11 @@ def run_width(threads: int) -> list[dict]:
                 file=sys.stderr,
                 flush=True,
             )
+        from h2h_summary_extra import bind, extra_rows
+        bind(lib)
+        rows.extend(extra_rows(
+            lib, held, pos, lengths, threads, cores, model, seams, pin, abab, row_of, h,
+        ))
         lib.seams_system_destroy(held)
     return rows
 
@@ -335,7 +340,11 @@ def main() -> None:
     rows = []
     for threads, cores in ((1, "0"), (8, "0-7")):
         env = os.environ.copy()
-        env["LD_LIBRARY_PATH"] = str(ROOT / "bbdir-release" / "src")
+        env["LD_LIBRARY_PATH"] = (
+            "/usr/lib/x86_64-linux-gnu" + os.pathsep + str(ROOT / "bbdir-release" / "src")
+        )
+        env["OVITO_THREAD_COUNT"] = str(threads)
+        env["QT_QPA_PLATFORM"] = "offscreen"
         env["OMP_NUM_THREADS"] = str(threads)
         env["OMP_DYNAMIC"] = "FALSE"
         env["OMP_PROC_BIND"] = "close"
