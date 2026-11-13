@@ -185,9 +185,11 @@ Graph clearGraph(Graph &currentGraph);
  *  frames only if it passes within (maxDepth/2 - 2)/2 bonds of a vertex
  *  whose neighbour row changed, which is on the ring itself up to maxDepth
  *  7. On a new frame the stored rings that meet that set are dropped and the
- *  rings through it are enumerated afresh. The output equals ringNetwork
- *  element by element, at a cost that scales with the number of changed
- *  rows rather than with system size.
+ *  rings through it are enumerated afresh. When more than two thirds of the
+ *  rows change, or the rings that miss those rows are under a sixteenth of
+ *  the previous frame, the update is one pass over the packed neighbour
+ *  rows and does not build a bond diff. The output equals ringNetwork
+ *  element by element. lastPath() names the branch.
  */
 class RingUpdater {
 public:
@@ -207,13 +209,23 @@ public:
   //! count on a whole-frame pass, zero when nothing changed
   [[nodiscard]] int lastRecomputedSources() const;
 
+  //! Path of the last update: "cold" (first frame), "same" (no row
+  //! changed), "full" (one pass), or "ball" (only the changed rows).
+  //! One pass is more than two thirds of the rows, or a carry that would
+  //! keep under a sixteenth of the previous rings.
+  [[nodiscard]] const char *lastPath() const;
+
+  //! True when this many changed rows take the one-pass branch.
+  //! The cut is two thirds of the vertices.
+  [[nodiscard]] static bool fullPassAt(int changedRows, int vertices);
+
   //! Vertices whose bounded balls were rebuilt on the last update
   [[nodiscard]] int lastBallsRefreshed() const;
 
   //! Undirected bonds whose endpoints differ from the previous frame.
-  //! Zero on the first frame and when the bond set is unchanged. The
-  //! fraction below is this count divided by the molecule count, maintained
-  //! while the rows are compared and readable in constant time afterwards.
+  //! Zero on the first frame and when the bond set is unchanged. A one-pass
+  //! frame computes the count from the two packed frames when this is read.
+  //! The fraction below is this count divided by the molecule count.
   [[nodiscard]] int lastChangedBonds() const;
 
   //! Changed bonds per molecule on the last update.

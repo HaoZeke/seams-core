@@ -1784,10 +1784,14 @@ struct primitive::RingUpdater::Impl {
   int recomputed = 0;
   int ballsRefreshed = 0;
   int changedBonds = 0;
+  const char *path = "cold";
   double changedBondFraction = 0.0;
   bool bondsPending = false;
   int pendingOld = 0;
   bool slotSorted[2] = {false, false};
+  // One byte per vertex, written while the CSR is packed. A later carry
+  // reads it instead of walking the rows again.
+  std::vector<char> rowChanged;
   bool hot = false;
   bool hopOnly = false;
   // The default does not use a fraction. After T is built, a full pass
@@ -1797,10 +1801,15 @@ struct primitive::RingUpdater::Impl {
   // A negative value leaves the bond-count test off.
   double bondCrossover = -1.0;
 
-  void writeGraph(const std::vector<std::vector<int>> &nList, int slot,
-                  bool sortRows) {
+  // Packs the neighbour lists and, when the other slot holds a sorted graph
+  // of the same length, counts rows that differ. The compare rides in the
+  // copy so a later full pass does not walk the CSR a second time.
+  int writeGraph(const std::vector<std::vector<int>> &nList, int slot,
+                 bool sortRows) {
     auto &dst = graph[slot];
     const int nVertices = static_cast<int>(nList.size());
+    const bool compare = slot != which && slotSorted[which] && nVertices > 0 &&
+                         graph[which].size() == static_cast<std::size_t>(nVertices);
     dst.first.resize(static_cast<std::size_t>(nVertices) + 1);
     dst.first[0] = 0;
     for (int v = 0; v < nVertices; v++) {
@@ -1812,25 +1821,37 @@ struct primitive::RingUpdater::Impl {
           dst.first[static_cast<std::size_t>(v)] + n;
     }
     dst.cols.resize(dst.first[static_cast<std::size_t>(nVertices)]);
+    rowChanged.assign(static_cast<std::size_t>(nVertices), 0);
+    int nChanged = 0;
 #ifdef SEAMS_HAS_OPENMP
 #pragma omp parallel for schedule(static) num_threads(seams::teamFor(nVertices)) \
-    if (seams::teamFor(nVertices) > 1 && !omp_in_parallel())
+    reduction(+ : nChanged) if (seams::teamFor(nVertices) > 1 && !omp_in_parallel())
 #endif
     for (int v = 0; v < nVertices; v++) {
       const auto n = dst.first[static_cast<std::size_t>(v) + 1] -
                      dst.first[static_cast<std::size_t>(v)];
-      if (n == 0) {
-        continue;
-      }
       int *row = dst.cols.data() +
                  static_cast<std::ptrdiff_t>(dst.first[static_cast<std::size_t>(v)]);
-      std::copy(nList[static_cast<std::size_t>(v)].begin() + 1,
-                nList[static_cast<std::size_t>(v)].end(), row);
-      if (sortRows && n > 1) {
-        std::sort(row, row + static_cast<std::ptrdiff_t>(n));
+      if (n > 0) {
+        std::copy(nList[static_cast<std::size_t>(v)].begin() + 1,
+                  nList[static_cast<std::size_t>(v)].end(), row);
+        if (sortRows && n > 1) {
+          std::sort(row, row + static_cast<std::ptrdiff_t>(n));
+        }
+      }
+      if (!compare) {
+        continue;
+      }
+      const auto old = graph[which][v];
+      const int oldN = static_cast<int>(old.end() - old.begin());
+      if (n != oldN ||
+          (n > 0 && !std::equal(row, row + static_cast<std::ptrdiff_t>(n), old.begin()))) {
+        rowChanged[static_cast<std::size_t>(v)] = 1;
+        ++nChanged;
       }
     }
     slotSorted[slot] = sortRows;
+    return nChanged;
   }
 
   void sortSlot(int slot) {
@@ -2093,6 +2114,12 @@ int primitive::RingUpdater::lastRecomputedSources() const {
   return impl_->recomputed;
 }
 
+const char *primitive::RingUpdater::lastPath() const { return impl_->path; }
+
+bool primitive::RingUpdater::fullPassAt(int changedRows, int vertices) {
+  return changedRows > 0 && vertices > 0 && changedRows * 3 > vertices * 2;
+}
+
 int primitive::RingUpdater::lastBallsRefreshed() const {
   return impl_->ballsRefreshed;
 }
@@ -2120,7 +2147,10 @@ const std::vector<std::vector<int>> &
 primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
   Impl &st = *impl_;
   const int nVertices = static_cast<int>(nList.size());
-  st.resolveBonds();
+  // A one-pass frame defers its bond count. Asking for that count has to
+  // happen before the next update reuses the CSR slot. This call does not
+  // pay the previous frame's diff.
+  st.bondsPending = false;
   if (nVertices == 0 || st.maxDepth < 3) {
     st.hot = false;
     st.flattened.clear();
@@ -2136,7 +2166,7 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
       st.primed && st.graph[st.which].size() == static_cast<std::size_t>(nVertices);
   const int slot = sameSize ? 1 - st.which : 0;
   st.hot = false;
-  st.writeGraph(nList, slot, true);
+  const int nChangedRows = st.writeGraph(nList, slot, true);
   if (!sameSize) {
     // A missing frame or a different molecule count leaves no row to diff.
     // Comparing past the stored prefix walks off the packed table.
@@ -2145,6 +2175,59 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
     st.primed = true;
     st.changedBonds = 0;
     st.changedBondFraction = 0.0;
+    st.path = "cold";
+    st.fastEnumerate(st.graph[st.which]);
+    return st.flattened;
+  }
+
+  // The row count was taken while the CSR was packed. The changed-vertex
+  // list and the bond-by-bond diff are built only when the carried search
+  // will use them. A one-pass frame does not allocate anything else.
+  if (nChangedRows == 0) {
+    st.recomputed = 0;
+    st.ballsRefreshed = 0;
+    st.changedBonds = 0;
+    st.changedBondFraction = 0.0;
+    st.path = "same";
+    return st.flattened;
+  }
+
+  if (RingUpdater::fullPassAt(nChangedRows, nVertices)) {
+    // Same enumeration as a rebuild. The bond diff is not part of it.
+    st.bondsPending = true;
+    st.pendingOld = st.which;
+    st.which = slot;
+    st.path = "full";
+    st.fastEnumerate(st.graph[st.which]);
+    return st.flattened;
+  }
+
+  // Under the two-thirds cut the changed sources are the ones that own the
+  // rings. When fewer than a sixteenth of the previous rings miss them, a
+  // carried search redoes the frame and loses to one pass. The bond diff is
+  // still not part of that pass.
+  const int prevRings = static_cast<int>(st.flattened.size());
+  int keptRings = 0;
+  if (prevRings > 0) {
+    for (const auto &ring : st.flattened) {
+      bool meets = false;
+      for (const int v : ring) {
+        if (v >= 0 && v < nVertices &&
+            st.rowChanged[static_cast<std::size_t>(v)] != 0) {
+          meets = true;
+          break;
+        }
+      }
+      if (!meets) {
+        ++keptRings;
+      }
+    }
+  }
+  if (prevRings > 0 && keptRings * 16 < prevRings) {
+    st.bondsPending = true;
+    st.pendingOld = st.which;
+    st.which = slot;
+    st.path = "full";
     st.fastEnumerate(st.graph[st.which]);
     return st.flattened;
   }
@@ -2215,19 +2298,10 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
   if (changed.empty()) {
     st.recomputed = 0;
     st.ballsRefreshed = 0;
+    st.path = "same";
     return st.flattened;
   }
-
-  // One pass beats a carried search once the changed rows are more than
-  // two thirds of the vertices. On the 4096-molecule nucleation frames,
-  // eight repeats, the cutoff graph sits above that line and the carried
-  // search was slower; the seeded graph sits below it and the carried
-  // search is faster. The rings still match a full enumeration.
-  if (changed.size() * 3 > static_cast<std::size_t>(nVertices) * 2) {
-    st.which = slot;
-    st.fastEnumerate(st.graph[st.which]);
-    return st.flattened;
-  }
+  st.path = "ball";
 
   const auto atomLimit =
       static_cast<std::size_t>(st.fullPassFraction * nVertices);
@@ -2342,7 +2416,10 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
     return nCovered == nVertices;
   };
   if ((overAtoms || overBonds) && componentExceedsFrame()) {
+    st.bondsPending = true;
+    st.pendingOld = st.which;
     st.which = slot;
+    st.path = "full";
     st.fastEnumerate(st.graph[st.which]);
     return st.flattened;
   }
@@ -2381,7 +2458,10 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
   // enumerates those sources and carries every ring that misses them,
   // even when the changed rows together touch every molecule.
   if (static_cast<int>(T.size()) == nVertices && componentExceedsFrame()) {
+    st.bondsPending = true;
+    st.pendingOld = st.which;
     st.which = slot;
+    st.path = "full";
     st.fastEnumerate(st.graph[st.which]);
     return st.flattened;
   }

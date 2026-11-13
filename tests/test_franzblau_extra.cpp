@@ -381,6 +381,79 @@ TEST_CASE("RingUpdater matches ringNetwork element by element on every frame",
   }
 }
 
+TEST_CASE("two thirds of the changed rows is the full-pass cut", "[franzblau]") {
+  const int n = 300;
+  std::vector<std::vector<int>> base(static_cast<std::size_t>(n));
+  for (int i = 0; i < n; ++i) {
+    base[static_cast<std::size_t>(i)] = {i, (i + 1) % n, (i + n - 1) % n, (i + 2) % n,
+                                         (i + n - 2) % n};
+  }
+  auto retie = [n](std::vector<std::vector<int>> &rows, int i) {
+    int neu = (i + 3) % n;
+    if (neu == rows[static_cast<std::size_t>(i)].back()) {
+      neu = (i + 4) % n;
+    }
+    rows[static_cast<std::size_t>(i)].back() = neu;
+  };
+  // changed * 3 > n * 2. At n = 300 the cut is 200 rows: 200 stays on the
+  // ball, 201 takes the one pass.
+  const int below = (2 * n) / 3;
+  REQUIRE_FALSE(primitive::RingUpdater::fullPassAt(below, n));
+  REQUIRE(primitive::RingUpdater::fullPassAt(below + 1, n));
+
+  primitive::RingUpdater low(6);
+  low.update(base);
+  auto few = base;
+  for (int i = 0; i < below; ++i) {
+    retie(few, i);
+  }
+  const auto &lowRings = low.update(few);
+  REQUIRE(std::string(low.lastPath()) == "ball");
+  REQUIRE(low.lastRecomputedSources() < n);
+  REQUIRE(lowRings == primitive::ringNetwork(few, 6));
+
+  primitive::RingUpdater high(6);
+  high.update(base);
+  auto many = base;
+  for (int i = 0; i < below + 1; ++i) {
+    retie(many, i);
+  }
+  const auto &highRings = high.update(many);
+  REQUIRE(std::string(high.lastPath()) == "full");
+  REQUIRE(high.lastRecomputedSources() == n);
+  REQUIRE(highRings == primitive::ringNetwork(many, 6));
+}
+
+TEST_CASE("a carry that keeps under a sixteenth of the rings takes one pass",
+          "[franzblau]") {
+  const int n = 300;
+  std::vector<std::vector<int>> base(static_cast<std::size_t>(n));
+  for (int i = 0; i < n; ++i) {
+    base[static_cast<std::size_t>(i)] = {i, (i + 1) % n, (i + n - 1) % n, (i + 2) % n,
+                                         (i + n - 2) % n};
+  }
+  auto retie = [n](std::vector<std::vector<int>> &rows, int i) {
+    int neu = (i + 3) % n;
+    if (neu == rows[static_cast<std::size_t>(i)].back()) {
+      neu = (i + 4) % n;
+    }
+    rows[static_cast<std::size_t>(i)].back() = neu;
+  };
+  // 150 rows, under the two-thirds cut. The changed vertices are every other
+  // index, so a ring of the circulant meets them and the carry keeps nothing.
+  primitive::RingUpdater scattered(6);
+  scattered.update(base);
+  auto alt = base;
+  for (int i = 0; i < n; i += 2) {
+    retie(alt, i);
+  }
+  REQUIRE_FALSE(primitive::RingUpdater::fullPassAt(n / 2, n));
+  const auto &rings = scattered.update(alt);
+  REQUIRE(std::string(scattered.lastPath()) == "full");
+  REQUIRE(scattered.lastRecomputedSources() == n);
+  REQUIRE(rings == primitive::ringNetwork(alt, 6));
+}
+
 TEST_CASE("ringNetwork keeps one copy of a repeated edge", "[franzblau]") {
   const std::vector<std::vector<int>> nList = {
       {0, 1, 1, 2},

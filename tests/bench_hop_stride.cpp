@@ -109,6 +109,7 @@ struct Series {
   std::vector<int> changed;
   std::vector<int> recomputed;
   std::vector<char> same;
+  std::vector<std::string> path;
   std::vector<std::vector<double>> carry;
   std::vector<std::vector<double>> rebuild;
 };
@@ -118,6 +119,7 @@ void classify(Series &series) {
   series.changed.assign(static_cast<std::size_t>(nFrames), 0);
   series.recomputed.assign(static_cast<std::size_t>(nFrames), 0);
   series.same.assign(static_cast<std::size_t>(nFrames), 1);
+  series.path.assign(static_cast<std::size_t>(nFrames), "cold");
   primitive::RingUpdater updater(kDepth);
   for (int frame = 0; frame < nFrames; ++frame) {
     const auto &rows = series.frames[static_cast<std::size_t>(frame)];
@@ -127,6 +129,7 @@ void classify(Series &series) {
     series.changed[static_cast<std::size_t>(frame)] = updater.lastChangedBonds();
     series.recomputed[static_cast<std::size_t>(frame)] =
         updater.lastRecomputedSources();
+    series.path[static_cast<std::size_t>(frame)] = updater.lastPath();
   }
 }
 
@@ -156,11 +159,6 @@ void timeSeries(Series &series, int warmup, int reps) {
       series.rebuild[static_cast<std::size_t>(frame)].push_back(ms(t0, Clock::now()));
     }
   }
-}
-
-bool fallbackAt(const Series &series, int frame) {
-  const int nop = static_cast<int>(series.frames[static_cast<std::size_t>(frame)].size());
-  return series.recomputed[static_cast<std::size_t>(frame)] == nop && nop > 0;
 }
 
 void printSamples(const Series &series, int stride) {
@@ -201,20 +199,22 @@ void printSummary(const Series &series, int stride, bool transitionsOnly) {
     carrySum += cm;
     rebuildSum += rm;
     bonds.push_back(static_cast<double>(series.changed[static_cast<std::size_t>(frame)]));
-    const bool fellBack = fallbackAt(series, frame);
+    const std::string taken =
+        frame < static_cast<int>(series.path.size()) ? series.path[static_cast<std::size_t>(frame)]
+                                                     : std::string("cold");
+    const bool fellBack = taken == "full" || taken == "cold";
     inside += fellBack ? 0 : 1;
     fell += fellBack ? 1 : 0;
     identical += series.same[static_cast<std::size_t>(frame)] ? 1 : 0;
     ++transitions;
     std::printf(
         "frame stride %d graph %s index %d changed_bonds %d recomputed %d nop %zu "
-        "path %s carry_ms %.6f rebuild_ms %.6f identical %s\n",
+        "path %s carry_ms %.6f rebuild_ms %.6f speedup %.6f identical %s\n",
         stride, series.name.c_str(), frame + 1,
         series.changed[static_cast<std::size_t>(frame)],
         series.recomputed[static_cast<std::size_t>(frame)],
-        series.frames[static_cast<std::size_t>(frame)].size(),
-        fellBack ? "fallback" : "ball", cm, rm,
-        series.same[static_cast<std::size_t>(frame)] ? "yes" : "no");
+        series.frames[static_cast<std::size_t>(frame)].size(), taken.c_str(), cm, rm,
+        cm > 0.0 ? rm / cm : 0.0, series.same[static_cast<std::size_t>(frame)] ? "yes" : "no");
   }
   const double speedup = carrySum > 0.0 ? rebuildSum / carrySum : 0.0;
   const bool allSame = transitions > 0 && identical == transitions;
@@ -229,6 +229,30 @@ void printSummary(const Series &series, int stride, bool transitionsOnly) {
       quantile7(carryMed, 0.25), quantile7(carryMed, 0.75), quantile7(rebuildMed, 0.5),
       quantile7(rebuildMed, 0.25), quantile7(rebuildMed, 0.75), speedup,
       allSame ? "yes" : "no");
+  for (const char *kind : {"full", "ball", "same", "cold"}) {
+    double carrySum = 0.0;
+    double rebuildSum = 0.0;
+    int n = 0;
+    for (int frame = first; frame < nFrames; ++frame) {
+      if (frame >= static_cast<int>(series.path.size()) ||
+          series.path[static_cast<std::size_t>(frame)] != kind) {
+        continue;
+      }
+      const auto &c = series.carry[static_cast<std::size_t>(frame)];
+      const auto &r = series.rebuild[static_cast<std::size_t>(frame)];
+      if (c.empty() || r.empty()) {
+        continue;
+      }
+      carrySum += quantile7(c, 0.5);
+      rebuildSum += quantile7(r, 0.5);
+      ++n;
+    }
+    if (n == 0) {
+      continue;
+    }
+    std::printf("class stride %d graph %s path %s transitions %d speedup %.6f\n", stride,
+                series.name.c_str(), kind, n, carrySum > 0.0 ? rebuildSum / carrySum : 0.0);
+  }
 }
 
 Series combineSeeded(const Series &strict, const Series &permissive, const std::vector<char> &same) {
@@ -237,6 +261,7 @@ Series combineSeeded(const Series &strict, const Series &permissive, const std::
   const int nFrames = static_cast<int>(strict.frames.size());
   out.frames.resize(static_cast<std::size_t>(nFrames));
   out.changed = permissive.changed;
+  out.path.assign(static_cast<std::size_t>(nFrames), "cold");
   out.recomputed.assign(static_cast<std::size_t>(nFrames), 0);
   out.same.assign(static_cast<std::size_t>(nFrames), 1);
   out.carry.assign(static_cast<std::size_t>(nFrames), {});
@@ -247,7 +272,11 @@ Series combineSeeded(const Series &strict, const Series &permissive, const std::
     // A shared graph is one ring search, matching seams cages.
     const int strictN = strict.recomputed[static_cast<std::size_t>(frame)];
     const int permN = one ? strictN : permissive.recomputed[static_cast<std::size_t>(frame)];
-    const bool fell = strictN == nop || permN == nop;
+    const std::string strictPath = strict.path[static_cast<std::size_t>(frame)];
+    const std::string permPath = one ? strictPath : permissive.path[static_cast<std::size_t>(frame)];
+    out.path[static_cast<std::size_t>(frame)] =
+        (strictPath == "full" || permPath == "full") ? "full" : strictPath;
+    const bool fell = strictPath == "full" || permPath == "full";
     out.recomputed[static_cast<std::size_t>(frame)] = fell ? nop : std::max(strictN, permN);
     out.same[static_cast<std::size_t>(frame)] =
         strict.same[static_cast<std::size_t>(frame)] &&
