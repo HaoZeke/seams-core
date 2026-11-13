@@ -52,6 +52,25 @@ def test_run_one_cli_passes_temperature(monkeypatch, tmp_path, extra, expected):
     assert seen == {"pairs": 10, "replica": 0, "threads": 2, "temperature": expected}
 
 
+def test_concurrent_runs_leave_thread_placement_to_the_kernel(monkeypatch, tmp_path):
+    seen = {}
+
+    def fake_run(cmd, cwd, env, stdout, stderr):
+        seen.update(cmd=cmd, env=env)
+        for _name, step in regenerate.FRAME_STEPS:
+            (Path(cwd) / f"step-{step}.restart").write_text("restart\n")
+        (Path(cwd) / "end.restart").write_text("restart\n")
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(regenerate, "prepare_one", lambda dest, *a: Path(dest).mkdir(parents=True))
+    monkeypatch.setattr(regenerate.subprocess, "run", fake_run)
+    monkeypatch.setattr(regenerate, "performance", lambda log: "")
+    regenerate.run_one(tmp_path / "runs", 10, 0, "genice2", "lmp", 2, "1:00:00", tmp_path / "r", 240.0)
+    assert seen["env"]["OMP_NUM_THREADS"] == "2" and seen["env"]["OMP_PROC_BIND"] == "false"
+    assert "taskset" not in seen["cmd"]
+    assert (tmp_path / "r" / "T240_m10_r0" / "end.restart").is_file()
+
+
 def write_frame(path: Path, step: int, pairs: int) -> None:
     """A 20-water slab, crystal below z = 25 A, liquid above, and the ions in the liquid."""
     atoms = [("O", 1.0, 1.0, 1.0 + 2.5 * i, "hexagonal" if i < 10 else "water") for i in range(20)]

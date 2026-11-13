@@ -165,7 +165,9 @@ def run_one(
         prepare_one(dest, pairs, replica, genice)
         env = os.environ.copy()
         env["OMP_NUM_THREADS"] = str(threads)
-        env["OMP_PROC_BIND"] = "close"
+        # Snakemake runs several of these at once without core sets; bound
+        # threads would all land on cores 0 and 1.
+        env["OMP_PROC_BIND"] = "false"
         cmd = [lmp, "-sf", "omp", "-pk", f"omp {threads}", "-log", "log.lammps", "-in", str(DECK / "in.brine.lmp")]
         cmd += brine_vars(replica, timeout, temperature)
         print("start", tag, "threads", threads, "seed", velocity_seed(replica), "T", temperature, flush=True)
