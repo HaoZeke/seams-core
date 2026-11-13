@@ -152,60 +152,71 @@ def read_replicas(path):
     return [row for row in rows if row["frame"] == "tend"]
 
 
-def panel_b(fig, rect_left, rect_right, legend_y, rows):
+GREY = (0.35, 0.35, 0.35)
+# (y label, [(column, colour, legend label)]) for the four axes of panel (b).
+PANEL_B = (
+    ("CHILL+ molecules", (("hexagonal", HEXAGONAL, "hexagonal"), ("cubic", CUBIC, "cubic"))),
+    ("ice thickness (Å)", (("ice_thickness_A", GREY, None),)),
+    (r"cage $n_{\max}$", (("nmax", GREY, None),)),
+    ("liquid ions", (("ion_liquid", GREY, None),)),
+)
+
+
+def panel_b(fig, rects, legend_y, rows):
     import matplotlib.pyplot as plt
 
-    left = fig.add_axes(rect_left)
-    right = fig.add_axes(rect_right)
     have = {int(r["pairs"]) for r in rows if r["status"] == "ok"}
     replicas = sorted({r["replica"] for r in rows if r["status"] == "ok"})
     absent = sorted({r["replica"] for r in rows} - set(replicas))
-    offsets = {name: (i - (len(replicas) - 1) / 2.0) * 1.4 for i, name in enumerate(replicas)}
+    offsets = {name: (i - (len(replicas) - 1) / 2.0) * 1.6 for i, name in enumerate(replicas)}
+    handles = []
 
     def series(ax, column, colour, label):
         for pairs in PAIRS:
             values = [
                 (r["replica"], float(r[column]))
                 for r in rows
-                if int(r["pairs"]) == pairs and r["status"] == "ok" and r[column] != ""
+                if int(r["pairs"]) == pairs and r["status"] == "ok" and r.get(column, "") != ""
             ]
             if len(values) >= 2:
                 lo = min(v for _n, v in values)
                 hi = max(v for _n, v in values)
-                ax.plot([pairs, pairs], [lo, hi], color=colour, lw=2.4, alpha=0.45, solid_capstyle="butt")
+                ax.plot([pairs, pairs], [lo, hi], color=colour, lw=2.6, alpha=0.45, solid_capstyle="butt")
             for name, value in values:
                 ax.plot(
-                    pairs + offsets[name], value, MARKERS.get(name, "D"), ms=4.5,
+                    pairs + offsets[name], value, MARKERS.get(name, "D"), ms=4.2,
                     mfc=colour, mec="black", mew=0.5, ls="none",
                 )
         if label:
             handles.append(plt.Line2D([], [], marker="s", ms=5, mfc=colour, mec="black", mew=0.5, ls="none",
                                       label=label))
 
-    handles = []
-    series(left, "hexagonal", HEXAGONAL, "hexagonal")
-    series(left, "cubic", CUBIC, "cubic")
-    series(right, "ice_thickness_A", (0.35, 0.35, 0.35), None)
-    left.set_ylabel("molecules")
-    right.set_ylabel("ice thickness (Å)")
-    for ax in (left, right):
+    for index, (rect, (ylabel, columns)) in enumerate(zip(rects, PANEL_B)):
+        ax = fig.add_axes(rect)
+        for column, colour, label in columns:
+            series(ax, column, colour, label)
+        ax.set_ylabel(ylabel, labelpad=2)
         ax.set_xticks(PAIRS)
         ax.set_xlim(-5, 45)
-        ax.set_xlabel("NaCl pairs")
+        if index >= 2:
+            ax.set_xlabel("NaCl pairs")
+        else:
+            ax.tick_params(labelbottom=False)
         ax.tick_params(length=2.5, pad=1.5)
         for pairs in PAIRS:
             if pairs not in have:
                 ax.axvspan(pairs - 3, pairs + 3, color=(0.92, 0.92, 0.92), lw=0)
                 ax.text(pairs, 0.5, "not in dataset", transform=ax.get_xaxis_transform(),
                         rotation=90, ha="center", va="center", fontsize=FONT_PT - 1.5, color="0.35")
-    _lo, hi = left.get_ylim()
-    left.set_ylim(-0.06 * hi, hi * 1.08)
-    lo, hi = right.get_ylim()
-    right.set_ylim(lo - 0.08 * (hi - lo), hi + 0.08 * (hi - lo))
+        lo, hi = ax.get_ylim()
+        if index in (0, 3):
+            ax.set_ylim(-0.06 * max(hi, 1.0), max(hi, 1.0) * 1.08)
+        else:
+            ax.set_ylim(lo - 0.08 * (hi - lo), hi + 0.08 * (hi - lo))
     for name in replicas:
         handles.append(plt.Line2D([], [], marker=MARKERS.get(name, "D"), ms=4.5, mfc="white", mec="black",
                                   mew=0.6, ls="none", label=name))
-    handles.append(plt.Line2D([], [], color="0.4", lw=2.4, alpha=0.45, label="range"))
+    handles.append(plt.Line2D([], [], color="0.4", lw=2.6, alpha=0.45, label="range"))
     fig.legend(handles=handles, loc="lower center", ncol=len(handles), frameon=False, handletextpad=0.25,
                columnspacing=0.9, bbox_to_anchor=(0.5, legend_y))
     for name in absent:
@@ -239,9 +250,10 @@ def figure(pdf, panels, rows):
     title_h = 0.20
     legend_h = 0.46
     b_legend_h = 0.30
-    b_h = 1.45
+    b_h = 1.10
+    b_gap = 0.10
     b_pad = 0.36
-    height = title_h + render_h + legend_h + b_legend_h + b_h + b_pad
+    height = title_h + render_h + legend_h + b_legend_h + 2 * b_h + b_gap + b_pad
     fig = plt.figure(figsize=(WIDTH_IN, height))
 
     def frac(x, y, w, h):
@@ -259,17 +271,17 @@ def figure(pdf, panels, rows):
         handles=handles, loc="upper center", ncol=4, frameon=False, handlelength=1.1, handleheight=1.1,
         columnspacing=0.8, handletextpad=0.35, bbox_to_anchor=(0.5, (y_render - 0.02) / height),
     )
-    y_b = b_pad
-    left_margin, mid_gap, right_margin = 0.46, 0.50, 0.04
+    left_margin, mid_gap, right_margin = 0.52, 0.54, 0.04
     panel_w = (WIDTH_IN - left_margin - mid_gap - right_margin) / 2.0
-    panel_b(
-        fig,
-        frac(left_margin, y_b, panel_w, b_h),
-        frac(left_margin + panel_w + mid_gap, y_b, panel_w, b_h),
-        (y_b + b_h + 0.02) / height,
-        rows,
-    )
-    fig.text(0.0, (y_b + b_h + b_legend_h) / height, "(b)", ha="left", va="top", fontweight="bold",
+    top = b_pad + b_h + b_gap
+    rects = [
+        frac(left_margin, top, panel_w, b_h),
+        frac(left_margin + panel_w + mid_gap, top, panel_w, b_h),
+        frac(left_margin, b_pad, panel_w, b_h),
+        frac(left_margin + panel_w + mid_gap, b_pad, panel_w, b_h),
+    ]
+    panel_b(fig, rects, (top + b_h + 0.02) / height, rows)
+    fig.text(0.0, (top + b_h + b_legend_h) / height, "(b)", ha="left", va="top", fontweight="bold",
              fontsize=FONT_PT + 1)
     fig.savefig(pdf, dpi=PPI)
     plt.close(fig)
