@@ -197,7 +197,7 @@ rule brine_front_pdf:
         "--xyz {params.t0} {params.tend} --replicas {input.replicas} --pdf {output}"
 
 
-# Replica r0 at 240 K and 245 K, 0, 20 and 40 pairs: the same table code
+# Replica r0 at 240 K and 245 K, 0, 10, 20 and 40 pairs: the same table code
 # and columns as brine_replicas, on the frames of the warm brine_run tags.
 rule brine_warm:
     input:
@@ -213,5 +213,5 @@ rule brine_warm:
     shell:
         "{params.python} paper/data/brine-frames/replicas.py table "
         "--frames {FRAMES} --seams {params.seams} --manifest {input.manifest} "
-        "--temperatures 240 245 --replicas r0 --pairs 0 20 40 "
+        "--temperatures 240 245 --replicas r0 --pairs 0 10 20 40 "
         "--local {params.local} --csv {output}"

@@ -13,8 +13,8 @@ seams: seams
 lib: libyodaLib.so
 # Runs that the dataset revision lacks, and the OpenMP threads of each.
 # T240 and T245 are replica r0 at the campaign's warm temperatures.
-# Snakemake --cores 8 runs the four 2-thread loadings together; the two
-# 4-thread runs fill the cores the last 2-thread runs leave.
+# Snakemake --cores 8 runs four 2-thread runs at a time; the eight warm
+# runs are two such rounds.
 runs:
   T230_m10_r0: 8
   T230_m0_r1: 2
@@ -22,11 +22,13 @@ runs:
   T230_m20_r1: 2
   T230_m40_r1: 2
   T240_m0_r0: 2
+  T240_m10_r0: 2
   T240_m20_r0: 2
   T240_m40_r0: 2
   T245_m0_r0: 2
-  T245_m20_r0: 4
-  T245_m40_r0: 4
+  T245_m10_r0: 2
+  T245_m20_r0: 2
+  T245_m40_r0: 2
 # true: brine_replicas also reads the brine_run frames hf_revision lacks.
 with_runs: false
 # LAMMPS timer cap on each run command. The campaign capped a 6 h wall at
