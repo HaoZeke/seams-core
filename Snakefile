@@ -565,9 +565,10 @@ rule science_recall:
         "scripts/recall_construction.py",
     output:
         "data/recall-construction.csv",
+        "data/recall-sites.csv",
     shell:
         "${{SCIENCE_PYTHON:-python3}} scripts/recall_construction.py "
-        "--bench {input[0]} --out {output}"
+        "--bench {input[0]} --out {output[0]} --sites {output[1]}"
 
 
 rule science_interface:
