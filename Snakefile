@@ -1056,6 +1056,7 @@ rule paper_numbers:
         "bbdir-release/tests/bench_trajectory_incremental",
         "data/hop/nucleation.lammpstrj",
     output:
+        "paper-numbers",
         "benchmarks/paper-numbers/h2h-summary.csv",
         "benchmarks/paper-numbers/carry-sweep.csv",
         "benchmarks/paper-numbers/h2h-ice-ic-rings.csv",
@@ -1069,7 +1070,8 @@ rule paper_numbers:
         "export LJOS_SEAT=dseams-paper QT_QPA_PLATFORM=offscreen; "
         "python3 scripts/paper_numbers.py --out benchmarks/paper-numbers "
         "--lib bbdir-release/bindings/libseams_lang.so "
-        "--core bbdir-release/src/libyodaLib.so"
+        "--core bbdir-release/src/libyodaLib.so && "
+        "printf 'source_commit %s\\n' \"$(git rev-parse HEAD)\" > paper-numbers"
 
 
 rule binding_overhead:
