@@ -119,6 +119,11 @@ struct Graph {
 std::vector<std::vector<int>> ringNetwork(const std::vector<std::vector<int>> &nList,
                                            int maxDepth);
 
+//! Primitive rings whose size is at least @a minDepth and at most
+//! @a maxDepth. ringNetwork(nList, maxDepth) is minDepth 3.
+std::vector<std::vector<int>> ringNetwork(const std::vector<std::vector<int>> &nList,
+                                           int maxDepth, int minDepth);
+
 //! Rings on a CSR of cloud indices (no self entry, one edge each).
 std::vector<std::vector<int>> ringNetwork(const std::vector<int> &offsets,
                                            const std::vector<int> &cols, int maxDepth);

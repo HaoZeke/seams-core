@@ -751,7 +751,7 @@ template <typename Graph, typename Out>
 void enumerateFromSource(const Graph &adjacency, const DistOracle &oracle,
                          int src, int maxDepth, int maxLvl, RingScratch &scr,
                          Out &out, const std::vector<char> *through = nullptr,
-                         bool legacyPairs = false) {
+                         bool legacyPairs = false, int minSize = 3) {
   const int nVertices = static_cast<int>(adjacency.size());
   if (static_cast<int>(scr.lvl.size()) != nVertices) {
     scr.lvl.assign(nVertices, -1);
@@ -797,7 +797,7 @@ void enumerateFromSource(const Graph &adjacency, const DistOracle &oracle,
     const int *pathsP = scr.pathBuf.data() + scr.pathFirst[p];
     const int nP = scr.pathCount[p];
     // Even rings: two vertex-disjoint shortest paths to an antipodal vertex
-    if (2 * lp >= 3 && 2 * lp <= maxDepth) {
+    if (2 * lp >= minSize && 2 * lp <= maxDepth) {
       for (int a = 0; a < nP; a++) {
         for (int b = a + 1; b < nP; b++) {
           const int *pa = pathsP + a * lp;
@@ -818,7 +818,7 @@ void enumerateFromSource(const Graph &adjacency, const DistOracle &oracle,
       }
     }
     // Odd rings: an antipodal edge between two vertices at the same level
-    if (2 * lp + 1 <= maxDepth) {
+    if (2 * lp + 1 >= minSize && 2 * lp + 1 <= maxDepth) {
       for (const int q : adjacency[p]) {
         if (q <= p || q >= nVertices || scr.lvl[q] != lp) {
           continue;
@@ -889,11 +889,20 @@ void enumerateFromSource(const Graph &adjacency, const DistOracle &oracle,
  */
 static std::vector<std::vector<int>>
 searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
-            const std::vector<char> &sources, bool legacy);
+            const std::vector<char> &sources, bool legacy, int minSize = 3);
 
 std::vector<std::vector<int>>
 primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth) {
   return searchRings(nList, maxDepth, std::vector<char>(), false);
+}
+
+std::vector<std::vector<int>>
+primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
+                       int minDepth) {
+  if (minDepth < 3) {
+    minDepth = 3;
+  }
+  return searchRings(nList, maxDepth, std::vector<char>(), false, minDepth);
 }
 
 std::vector<std::vector<int>>
@@ -930,7 +939,7 @@ primitive::ringNetworkBalls(const std::vector<std::vector<int>> &nList, int maxD
  */
 static std::vector<std::vector<int>>
 searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
-            const std::vector<char> &sources, bool legacy) {
+            const std::vector<char> &sources, bool legacy, int minSize) {
   std::vector<std::vector<int>> rings;
   if (maxDepth < 3 || nList.empty()) {
     return rings;
@@ -1096,7 +1105,7 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
       for (int k = 0; k < nFrom; k++) {
         enumerateFromSource(adjacency, oracle, from[k], maxDepth, maxLvl,
                             scratch, perSource[static_cast<std::size_t>(k)],
-                            nullptr, legacy);
+                            nullptr, legacy, minSize);
       }
     }
     gRingSplit.enumerate_ms = millisSince(enumStart);
@@ -1135,7 +1144,7 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
   RingScratch scratch;
   for (const int src : from) {
     enumerateFromSource(adjacency, oracle, src, maxDepth, maxLvl, scratch,
-                        rings, nullptr, legacy);
+                        rings, nullptr, legacy, minSize);
   }
   gRingSplit.enumerate_ms = millisSince(enumStart);
   const auto mergeStart = std::chrono::steady_clock::now();

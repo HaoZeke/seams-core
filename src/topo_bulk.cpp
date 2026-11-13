@@ -276,12 +276,9 @@ struct IntBuf {
 };
 
 // Every ring that contains all three atoms, except skipA and skipB.
-template <class Out>
-void ringsThrough(const ring::RingSearchIndex &index, int a, int b, int c,
-                  int skipA, int skipB, Out &out) {
-  const auto &A = atomRow(index, a);
-  const auto &B = atomRow(index, b);
-  const auto &C = atomRow(index, c);
+template <class Row, class Out>
+void ringsThroughRows(const Row &A, const Row &B, const Row &C, int skipA,
+                      int skipB, Out &out) {
   size_t i = 0;
   size_t j = 0;
   size_t k = 0;
@@ -309,6 +306,13 @@ void ringsThrough(const ring::RingSearchIndex &index, int a, int b, int c,
       ++k;
     }
   }
+}
+
+template <class Out>
+void ringsThrough(const ring::RingSearchIndex &index, int a, int b, int c,
+                  int skipA, int skipB, Out &out) {
+  ringsThroughRows(atomRow(index, a), atomRow(index, b), atomRow(index, c),
+                   skipA, skipB, out);
 }
 
 // A partner ring on an adjacent triplet already shares the atoms of that
@@ -2077,11 +2081,13 @@ bool ring::equatorialConditions(const std::vector<std::vector<int>> &rings,
   if (R.size() != 6) {
     return false;
   }
-  for (const int atom : R) {
-    const auto row = atomRow(index, atom);
+  // The six triplet walks reload these rows. Keep the pointers.
+  RingRow rowOf[6];
+  for (int k = 0; k < 6; k++) {
+    rowOf[k] = atomRow(index, R[static_cast<size_t>(k)]);
     int others = 0;
-    for (const int r : row) {
-      others += static_cast<int>(r != iring);
+    for (int t = 0; t < rowOf[k].n; t++) {
+      others += static_cast<int>(rowOf[k].p[t] != iring);
     }
     if (others < 3) {
       return false;
@@ -2089,7 +2095,8 @@ bool ring::equatorialConditions(const std::vector<std::vector<int>> &rings,
   }
   std::array<IntBuf, 6> T;
   for (int k = 0; k < 6; k++) {
-    ringsThrough(index, R[k], R[(k + 1) % 6], R[(k + 2) % 6], iring, -1, T[k]);
+    ringsThroughRows(rowOf[k], rowOf[(k + 1) % 6], rowOf[(k + 2) % 6], iring, -1,
+                     T[k]);
     if (T[k].empty()) {
       return false;
     }
@@ -2152,19 +2159,46 @@ bool ring::equatorialConditions(const std::vector<std::vector<int>> &rings,
     if (!hex) {
       return false;
     }
-    int atoms[42];
-    int nAtomsHere = 0;
-    auto take = [&](const std::vector<int> &cycle) {
-      for (const int a : cycle) {
-        atoms[nAtomsHere++] = a;
+    // Seven hexagons, 42 slots. A generation stamp counts the distinct
+    // atoms without sorting. The stamp lives for the thread and is cleared
+    // only when the counter wraps.
+    const int nStamp =
+        index.ringOff.empty() ? 0 : static_cast<int>(index.ringOff.size()) - 1;
+    struct Stamp {
+      std::vector<std::uint32_t> seen;
+      std::uint32_t tick = 0;
+    };
+    thread_local Stamp stamp;
+    if (static_cast<int>(stamp.seen.size()) < nStamp) {
+      stamp.seen.assign(static_cast<size_t>(nStamp), 0);
+    }
+    if (stamp.tick == std::numeric_limits<std::uint32_t>::max()) {
+      std::fill(stamp.seen.begin(), stamp.seen.end(), 0);
+      stamp.tick = 1;
+    } else {
+      ++stamp.tick;
+    }
+    const std::uint32_t mark = stamp.tick;
+    int nUnique = 0;
+    auto countAtom = [&](int a) {
+      if (a < 0 || a >= nStamp) {
+        ++nUnique;
+        return;
+      }
+      std::uint32_t &slot = stamp.seen[static_cast<size_t>(a)];
+      if (slot != mark) {
+        slot = mark;
+        ++nUnique;
       }
     };
-    take(R);
-    for (int k = 0; k < 6; k++) {
-      take(rings[static_cast<size_t>(r[k])]);
+    for (const int a : R) {
+      countAtom(a);
     }
-    std::sort(atoms, atoms + nAtomsHere);
-    const auto nUnique = static_cast<int>(std::unique(atoms, atoms + nAtomsHere) - atoms);
+    for (int k = 0; k < 6; k++) {
+      for (const int a : rings[static_cast<size_t>(r[k])]) {
+        countAtom(a);
+      }
+    }
     bool folded = nUnique != 14;
     for (int k = 0; k < 6 && !folded; k++) {
       folded = share6(rings[static_cast<size_t>(r[k])], R) != 3;
