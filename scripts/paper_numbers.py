@@ -377,24 +377,30 @@ def run_large(info, core: str) -> list[dict]:
             "884736 ideal ice Ic; one process; alternating with the other labels",
             version=version,
         ))
-    ira = ira_samples(pos, lattice, threads)
-    if ira is not None:
-        samples, version, processes, detail = ira
-        rows.append(row_of(
-            info, "sitting-large", "ice", "ira", "IRA", n, threads, samples, detail,
-            processes=processes, version=version,
-        ))
     print(f"large threads {threads} rows {len(rows)}", flush=True)
     return rows
 
 
+def _ira_chunk(shells, templates, types):
+    import ira_mod
+    import numpy as np
+    ira = ira_mod.IRA()
+    shells = np.asarray(shells)
+    for shell in shells:
+        if not np.isfinite(shell[0, 0]):
+            continue
+        for templ in templates:
+            ira.match(17, types, templ, 17, types, shell, 1.5)
+
+
 def ira_samples(pos, lattice, threads: int):
-    """One process over every oxygen. No row is written if IRA is absent."""
+    """Match every oxygen. The process count is `threads`, and the column says so."""
     import numpy as np
     try:
-        import ira_mod
+        import ira_mod  # noqa: F401
     except ImportError:
         return None
+    import multiprocessing as mp
     import vesin
     version = str(getattr(ira_mod, "version", "ira"))
     points = np.ascontiguousarray(pos, dtype=np.float64)
@@ -421,24 +427,22 @@ def ira_samples(pos, lattice, threads: int):
     templates = [shells[i] for i in range(min(3, n)) if np.isfinite(shells[i, 0, 0])]
     if not templates:
         return None
-    ira = ira_mod.IRA()
+    processes = max(int(threads), 1)
+    edges = np.linspace(0, n, processes + 1, dtype=int)
+    chunks = [(shells[int(a):int(b)], templates, types) for a, b in zip(edges[:-1], edges[1:])]
 
     def one():
-        for shell in shells:
-            if not np.isfinite(shell[0, 0]):
-                continue
-            best = 1e9
-            for templ in templates:
-                _r, _t, _p, dist_h = ira.match(17, types, templ, 17, types, shell, 1.5)
-                best = min(best, float(dist_h))
-            if best > 1e8:
-                raise RuntimeError("IRA match failed")
+        if processes == 1:
+            _ira_chunk(*chunks[0])
+            return
+        with mp.get_context("fork").Pool(processes) as pool:
+            pool.starmap(_ira_chunk, chunks)
 
     one()
     samples = [timed(one) for _ in range(REPEATS)]
     return (
-        samples, version, 1,
-        f"one process; shells built once; OMP_NUM_THREADS={threads}; no process pool",
+        samples, version, processes,
+        f"shells built once; processes={processes}; the column is that process count",
     )
 
 
@@ -515,6 +519,30 @@ def main() -> int:
     args = parser.parse_args()
     stamp_env()
     prepare_libs(args.lib)
+    if args.worker == "ira" and os.environ.get("PAPER_IRA_PIXIE") != "1":
+        try:
+            import ira_mod  # noqa: F401
+        except ImportError:
+            os.environ["PAPER_IRA_PIXIE"] = "1"
+            os.execvp("pixi", [
+                "pixi", "exec", "--spec", "ira", sys.executable,
+                str(Path(__file__).resolve()), "--worker", "ira",
+                "--threads", str(args.threads), "--core", args.core,
+            ])
+    if args.worker == "ira":
+        info = identity()
+        import json
+        import paper_ptm_templates as ptm
+        pos, lattice = ptm.ice_ic(48)
+        got = ira_samples(pos, lattice, args.threads)
+        if got is None:
+            raise SystemExit("IRA is not importable")
+        samples, version, processes, detail = got
+        print(json.dumps(row_of(
+            info, "sitting-large", "ice", "ira", "IRA", 884736, args.threads,
+            samples, detail, processes=processes, version=version,
+        )), flush=True)
+        return 0
     if args.worker == "h2h":
         info = identity()
         for item in run_h2h(info, args.lib):
@@ -580,6 +608,13 @@ def main() -> int:
         text = pin_and_run(threads, [
             str(Path(__file__).resolve()), "--worker", "large",
             "--threads", str(threads), "--lib", args.lib, "--core", args.core,
+        ])
+        import json
+        large.extend(json.loads(line) for line in text.splitlines() if line.startswith("{"))
+    for threads in (1, 8):
+        text = pin_and_run(threads, [
+            str(Path(__file__).resolve()), "--worker", "ira",
+            "--threads", str(threads), "--core", args.core,
         ])
         import json
         large.extend(json.loads(line) for line in text.splitlines() if line.startswith("{"))
