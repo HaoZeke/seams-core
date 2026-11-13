@@ -82,34 +82,93 @@ def which(name: str) -> str:
     return found
 
 
+def tag_of(pairs: int, replica: int) -> str:
+    return f"T230_m{pairs}_r{replica}"
+
+
+def prepare_one(dest: Path, pairs: int, replica: int, genice: str) -> None:
+    """GenIce block and ion draw for one loading. The ion draw uses numpy seed = replica."""
+    dest.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            sys.executable,
+            str(DECK / "brine_system.py"),
+            "--genice",
+            genice,
+            "--rep",
+            "4",
+            "4",
+            "6",
+            "--pairs",
+            str(pairs),
+            "--seed",
+            str(replica),
+            "--data",
+            str(dest / "brine.data"),
+            "--groups",
+            str(dest / "groups.lmp"),
+        ],
+        check=True,
+    )
+
+
 def prepare(work: Path, genice: str) -> None:
     work.mkdir(parents=True, exist_ok=True)
-    script = DECK / "brine_system.py"
     for pairs in PAIRS:
-        tag = f"T230_m{pairs}_r0"
-        dest = work / tag
-        dest.mkdir(parents=True, exist_ok=True)
-        subprocess.run(
-            [
-                sys.executable,
-                str(script),
-                "--genice",
-                genice,
-                "--rep",
-                "4",
-                "4",
-                "6",
-                "--pairs",
-                str(pairs),
-                "--seed",
-                str(REPLICA),
-                "--data",
-                str(dest / "brine.data"),
-                "--groups",
-                str(dest / "groups.lmp"),
-            ],
-            check=True,
-        )
+        prepare_one(work / tag_of(pairs, REPLICA), pairs, REPLICA, genice)
+
+
+def brine_vars(replica: int, timeout: str) -> list[str]:
+    """The in.brine.lmp variables of the campaign deck for one replica."""
+    values = {
+        "data": "brine.data",
+        "groups": "groups.lmp",
+        "T": f"{TEMPERATURE:.2f}",
+        "P": f"{PRESSURE:.1f}",
+        "seed": velocity_seed(replica),
+        "steps_melt": str(MELT_STEPS),
+        "steps": str(PROD_STEPS),
+        "dumpevery": str(DUMP_EVERY),
+        "dump": "traj.lammpstrj",
+        "timeout": timeout,
+    }
+    out = []
+    for name, value in values.items():
+        out.extend(["-var", name, value])
+    return out
+
+
+def run_one(
+    work: Path, pairs: int, replica: int, genice: str, lmp: str, threads: int, timeout: str, restarts: Path
+) -> None:
+    """Melt, quench and 5 ns of production for one loading, then copy the landing restarts.
+
+    The deck is in.brine.lmp unchanged. Only the wall-clock cap differs
+    from the campaign, so the production run is not stopped before 5 ns.
+    """
+    tag = tag_of(pairs, replica)
+    dest = work / tag
+    final = dest / f"step-{PROD_STEPS}.restart"
+    if not final.is_file():
+        prepare_one(dest, pairs, replica, genice)
+        env = os.environ.copy()
+        env["OMP_NUM_THREADS"] = str(threads)
+        env["OMP_PROC_BIND"] = "close"
+        cmd = [lmp, "-sf", "omp", "-pk", f"omp {threads}", "-log", "log.lammps", "-in", str(DECK / "in.brine.lmp")]
+        cmd += brine_vars(replica, timeout)
+        print("start", tag, "threads", threads, "seed", velocity_seed(replica), flush=True)
+        with open(dest / "driver.log", "w") as log:
+            code = subprocess.run(cmd, cwd=dest, env=env, stdout=log, stderr=subprocess.STDOUT).returncode
+        if code != 0:
+            raise SystemExit(f"{tag}: LAMMPS exited {code}; see {dest / 'driver.log'}")
+        if not final.is_file():
+            raise SystemExit(f"{tag}: no {final.name}; the run stopped at step {final_step(dest / 'log.lammps')}")
+    target = restarts / tag
+    target.mkdir(parents=True, exist_ok=True)
+    for _name, step in FRAME_STEPS:
+        shutil.copyfile(dest / f"step-{step}.restart", target / f"step-{step}.restart")
+    shutil.copyfile(dest / "end.restart", target / "end.restart")
+    print(f"{tag}: {performance(dest / 'log.lammps')}", flush=True)
 
 
 def run_cmd(engine: str, threads: int, cores: str, lmp: str, mpirun: str) -> list[str]:
@@ -877,7 +936,12 @@ def series(work: Path, seams: str, lib_path: str, out: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("stage", choices=("prepare", "run", "resume", "frame", "frames", "series", "all"))
+    parser.add_argument(
+        "stage", choices=("prepare", "run", "run-one", "resume", "frame", "frames", "series", "all")
+    )
+    parser.add_argument("--pairs", type=int)
+    parser.add_argument("--replica", type=int)
+    parser.add_argument("--timeout", default=TIMEOUT, help="LAMMPS timer cap on each run command")
     parser.add_argument("--work", type=Path)
     parser.add_argument("--restarts", type=Path)
     parser.add_argument("--restart", type=Path)
@@ -895,7 +959,7 @@ def main() -> None:
     parser.add_argument("--layout", choices=("concurrent", "serial"), default="concurrent")
     parser.add_argument("--store", type=Path, default=None)
     args = parser.parse_args()
-    needs_work = args.stage in ("prepare", "run", "resume", "series", "all")
+    needs_work = args.stage in ("prepare", "run", "run-one", "resume", "series", "all")
     if needs_work and args.work is None:
         raise SystemExit("pass --work")
     if args.stage in ("prepare", "all"):
@@ -911,6 +975,12 @@ def main() -> None:
         print("codes", codes, flush=True)
         if any(codes):
             raise SystemExit(f"LAMMPS failed: {codes}")
+    if args.stage == "run-one":
+        if args.pairs is None or args.replica is None or args.restarts is None:
+            raise SystemExit("run-one needs --pairs, --replica and --restarts")
+        genice = args.genice or which("genice2")
+        lmp = args.lmp or which("lmp")
+        run_one(args.work, args.pairs, args.replica, genice, lmp, args.threads, args.timeout, args.restarts)
     if args.stage == "resume":
         lmp = args.lmp or which("lmp")
         resume(args.work, lmp, args.threads, args.layout, args.store)

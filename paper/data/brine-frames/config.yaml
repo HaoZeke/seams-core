@@ -1,16 +1,26 @@
-# Hugging Face dataset d-SEAMS/brine-frames.
-# Clone it at this path, or pass dataset=/path/to/d-SEAMS/brine-frames.
-# Restarts are read from data/restarts/. Labelled frames are written to
-# data/frames/ and to paper/data/brine-frames/out/. Neither directory is
-# stored in git.
-dataset: d-SEAMS/brine-frames
+# Local copy of the Hugging Face dataset d-SEAMS/brine-front-230K.
+# brine_dataset mirrors hf_revision here; brine_run adds its restarts and
+# brine_frame its labelled frames in the same layout. Pass
+# dataset=/path/to/copy to use another one. /d-SEAMS/ is gitignored.
+dataset: d-SEAMS/brine-front-230K
+hf_dataset: d-SEAMS/brine-front-230K
+hf_revision: 4828e33ecf419c70643b2d466bfa4f283b4138dc
 python: python3
 render_python: python3
 lmp: lmp
+genice: genice2
 seams: seams
 lib: libyodaLib.so
-# Labelled frames of d-SEAMS/brine-front-230K, downloaded at one revision.
-# hf_local is gitignored (/d-SEAMS/).
-hf_dataset: d-SEAMS/brine-front-230K
-hf_revision: 4828e33ecf419c70643b2d466bfa4f283b4138dc
-hf_local: d-SEAMS/brine-front-230K
+# Runs that the dataset revision lacks, and the OpenMP threads of each.
+# Snakemake --cores 8 runs the four 2-thread loadings together.
+runs:
+  T230_m10_r0: 8
+  T230_m0_r1: 2
+  T230_m10_r1: 2
+  T230_m20_r1: 2
+  T230_m40_r1: 2
+# LAMMPS timer cap on each run command. The campaign capped a 6 h wall at
+# 5:40:00; this cap is long enough for 5 ns at 2 threads.
+lmp_timeout: "40:00:00"
+# Scratch for brine_run, gitignored with out/.
+work: paper/data/brine-frames/out/runs

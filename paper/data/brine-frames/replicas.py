@@ -40,11 +40,14 @@ import hashlib
 import json
 import math
 import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import regenerate as deck  # noqa: E402
 
 HF_DATASET = "d-SEAMS/brine-front-230K"
 HF_REVISION = "4828e33ecf419c70643b2d466bfa4f283b4138dc"
@@ -81,6 +84,13 @@ COLUMNS = (
     "z_front_lo_A",
     "z_front_hi_A",
     "ice_thickness_A",
+    "cage_ice",
+    "nmax",
+    "ion_ice",
+    "ion_front",
+    "ion_liquid",
+    "velocity_seed",
+    "ion_seed",
 )
 QUANTITIES = (
     "waters",
@@ -97,6 +107,11 @@ QUANTITIES = (
     "z_front_lo_A",
     "z_front_hi_A",
     "ice_thickness_A",
+    "cage_ice",
+    "nmax",
+    "ion_ice",
+    "ion_front",
+    "ion_liquid",
 )
 
 
@@ -118,33 +133,51 @@ def _get(url: str, attempts: int = 4) -> bytes:
     raise AssertionError("unreachable")
 
 
-def fetch(dest: Path, dataset: str, revision: str) -> None:
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def fetch(dest: Path, dataset: str, revision: str, manifest: Path) -> None:
+    """Mirror every file that SHA256SUMS lists at the revision, checked against it.
+
+    SHA256SUMS itself is not written; rule brine_sha256sums writes the
+    local one once the new runs are in the same tree.
+    """
     base = f"https://huggingface.co/datasets/{dataset}/resolve/{revision}"
-    tree = json.loads(_get(f"https://huggingface.co/api/datasets/{dataset}/tree/{revision}/data/frames"))
-    names = sorted(Path(entry["path"]).name for entry in tree if entry["type"] == "file")
     sums = {}
     for line in _get(f"{base}/SHA256SUMS").decode().splitlines():
         digest, _, path = line.strip().partition("  ")
         if path:
             sums[path.lstrip("./")] = digest
-    frames = dest / "data" / "frames"
-    frames.mkdir(parents=True, exist_ok=True)
-    for name in names:
-        rel = f"data/frames/{name}"
-        if rel not in sums:
-            raise SystemExit(f"{rel} is not in SHA256SUMS at {revision}")
-        path = frames / name
-        if not path.exists() or hashlib.sha256(path.read_bytes()).hexdigest() != sums[rel]:
+    for rel in sorted(sums):
+        path = dest / rel
+        if not path.exists() or _sha256(path) != sums[rel]:
             blob = _get(f"{base}/{rel}")
             if hashlib.sha256(blob).hexdigest() != sums[rel]:
                 raise SystemExit(f"{rel} does not match SHA256SUMS at {revision}")
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(blob)
         print(f"{rel} ok", flush=True)
-    manifest = dest / f"frames-{revision}.txt"
-    manifest.write_text(
-        f"# {dataset} at {revision}\n" + "".join(f"{sums[f'data/frames/{n}']}  data/frames/{n}\n" for n in names)
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(f"# {dataset} at {revision}\n" + "".join(f"{sums[r]}  {r}\n" for r in sorted(sums)))
+    print(f"{len(sums)} files at {revision}")
+
+
+def sums(dataset: Path) -> None:
+    """Write SHA256SUMS in the dataset's format: every file but itself and .gitattributes."""
+    skip = {"SHA256SUMS", ".gitattributes"}
+    files = sorted(
+        p.relative_to(dataset).as_posix()
+        for p in dataset.rglob("*")
+        if p.is_file() and p.relative_to(dataset).as_posix() not in skip
     )
-    print(f"{len(names)} frames at {revision}")
+    lines = [f"{_sha256(dataset / rel)}  {rel}\n" for rel in files]
+    (dataset / "SHA256SUMS").write_text("".join(lines))
+    print(f"wrote {dataset / 'SHA256SUMS'}: {len(lines)} files")
 
 
 def parse_xyz(path: Path):
@@ -214,7 +247,43 @@ def locate_fronts(z_water, ice, z0: float, lz: float, n_bins: int = N_BINS, cut:
     return z_lo, z_hi, z_hi - z_lo
 
 
-def analyse(path: Path, replica: str, pairs: int, frame: str) -> dict:
+def cage_columns(path: Path, seams: str) -> dict:
+    """Campaign observables on one frame: the largest seeded and completed cage
+    cluster (K=4, candidate 5.5 A) and the ions with an all-ice, mixed or
+    liquid 3.5 A shell, as regenerate.series computes them."""
+    lines = path.read_text().splitlines()
+    header = lines[1]
+    step = int(header.split("step=")[1].split()[0])
+    origin = [float(v) for v in header.split('origin="')[1].split('"')[0].split()]
+    lattice = [float(v) for v in header.split('Lattice="')[1].split('"')[0].split()]
+    length = [lattice[0], lattice[4], lattice[8]]
+    species = {"O": 1, "H": 2, "Na": 3, "Cl": 4}
+    atoms = []
+    for index, line in enumerate(lines[2 : 2 + int(lines[0])], start=1):
+        name, x, y, z, _label = line.split()
+        atoms.append((index, species[name], float(x), float(y), float(z)))
+    with tempfile.TemporaryDirectory() as tmp:
+        one = Path(tmp) / "frame.lammpstrj"
+        deck.write_one_frame_dump(one, step, origin, length, atoms)
+        flags, _text = deck.cage_flags(seams, one, Path(tmp) / "cage.lammpstrj")
+    oxy, ice, ions = [], [], []
+    for aid, typ, x, y, z in atoms:
+        if typ == 1:
+            oxy.append((x, y, z))
+            ice.append(flags.get(aid, 0) != 0)
+        elif typ in (3, 4):
+            ions.append((x, y, z))
+    n_ice, n_front, n_liq = deck.ions_in_liquid(oxy, ice, ions, length)
+    return {
+        "cage_ice": sum(ice),
+        "nmax": deck.largest_cluster(oxy, length, ice, k=4),
+        "ion_ice": n_ice,
+        "ion_front": n_front,
+        "ion_liquid": n_liq,
+    }
+
+
+def analyse(path: Path, replica: str, pairs: int, frame: str, seams: str | None = None) -> dict:
     step, origin, length, rows = parse_xyz(path)
     labels = [label for name, _z, label in rows if name == "O"]
     z_water = [z for name, z, _label in rows if name == "O"]
@@ -253,10 +322,17 @@ def analyse(path: Path, replica: str, pairs: int, frame: str) -> dict:
         row["z_front_lo_A"] = f"{fronts[0]:.3f}"
         row["z_front_hi_A"] = f"{fronts[1]:.3f}"
         row["ice_thickness_A"] = f"{fronts[2]:.3f}"
+    if seams:
+        row.update(cage_columns(path, seams))
     return row
 
 
-def table(frames: Path, out: Path) -> None:
+def seed_columns(replica: str) -> dict:
+    number = int(replica[1:])
+    return {"velocity_seed": int(deck.velocity_seed(number)), "ion_seed": number}
+
+
+def table(frames: Path, out: Path, seams: str | None = None) -> None:
     rows = []
     missing = []
     for replica in REPLICAS:
@@ -264,7 +340,8 @@ def table(frames: Path, out: Path) -> None:
             for frame, step in FRAMES:
                 path = frames / frame_name(replica, pairs, frame)
                 if path.exists():
-                    row = analyse(path, replica, pairs, frame)
+                    row = analyse(path, replica, pairs, frame, seams)
+                    row.update(seed_columns(replica))
                     if row["step"] != step:
                         raise SystemExit(f"{path.name} is step {row['step']}, expected {step}")
                 else:
@@ -276,6 +353,9 @@ def table(frames: Path, out: Path) -> None:
     with out.open("w", newline="") as handle:
         handle.write(f"# {HF_DATASET} at {HF_REVISION}, data/frames/T230_m{{pairs}}_{{replica}}_{{frame}}.xyz\n")
         handle.write(f"# front: {N_BINS} z bins, solid when crystal/waters >= {FRONT_CUT}; crystal is cubic+hexagonal\n")
+        handle.write("# crystal is the published CHILL+ rule (cubic+hexagonal); cage_ice and nmax are the seeded,\n")
+        handle.write("# completed cage labels; ion_* are 3.5 A shells against the cage labels; velocity_seed is\n")
+        handle.write("# the in.brine.lmp seed, ion_seed the numpy seed of the ion draw\n")
         writer = csv.DictWriter(handle, fieldnames=COLUMNS, restval="", lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
@@ -309,6 +389,21 @@ def value_range(path: Path, out: Path) -> None:
                     record["max"] = _fmt(max(values.values()))
                     record["span"] = _fmt(max(values.values()) - min(values.values()))
                 lines.append(record)
+        # Table 17 slope: (nmax(5 ns) - nmax(0)) / 5000 ps, per replica.
+        values = {}
+        for replica in REPLICAS:
+            start = index.get((replica, pairs, "t0"))
+            end = index.get((replica, pairs, "tend"))
+            if start and end and start["status"] == end["status"] == "ok" and start.get("nmax") and end.get("nmax"):
+                values[replica] = (float(end["nmax"]) - float(start["nmax"])) / 5000.0
+        record = {"pairs": pairs, "frame": "t0-tend", "quantity": "nmax_slope_per_ps", "n": len(values)}
+        for replica in REPLICAS:
+            record[replica] = f"{values[replica]:.4f}" if replica in values else ""
+        if len(values) >= 2:
+            record["min"] = f"{min(values.values()):.4f}"
+            record["max"] = f"{max(values.values()):.4f}"
+            record["span"] = f"{max(values.values()) - min(values.values()):.4f}"
+        lines.append(record)
     fields = ("pairs", "frame", "quantity", *REPLICAS, "n", "min", "max", "span")
     with out.open("w", newline="") as handle:
         handle.write(f"# {HF_DATASET} at {HF_REVISION}. Empty replica cell: frame not in the dataset.\n")
@@ -330,17 +425,23 @@ def main() -> None:
     p.add_argument("--dest", type=Path, required=True)
     p.add_argument("--dataset", default=HF_DATASET)
     p.add_argument("--revision", default=HF_REVISION)
+    p.add_argument("--manifest", type=Path, required=True)
+    p = sub.add_parser("sums")
+    p.add_argument("--dataset", type=Path, required=True)
     p = sub.add_parser("table")
     p.add_argument("--frames", type=Path, required=True)
     p.add_argument("--csv", type=Path, required=True)
+    p.add_argument("--seams", default=None, help="seams CLI for the cage columns; omitted leaves them empty")
     p = sub.add_parser("range")
     p.add_argument("--csv", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     if args.cmd == "fetch":
-        fetch(args.dest, args.dataset, args.revision)
+        fetch(args.dest, args.dataset, args.revision, args.manifest)
+    elif args.cmd == "sums":
+        sums(args.dataset)
     elif args.cmd == "table":
-        table(args.frames, args.csv)
+        table(args.frames, args.csv, args.seams)
     else:
         value_range(args.csv, args.out)
 
