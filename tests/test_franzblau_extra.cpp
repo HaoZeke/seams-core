@@ -392,7 +392,7 @@ TEST_CASE("ringNetwork keeps one copy of a repeated edge", "[franzblau]") {
       {1, 0, 0, 2},
       {2, 0, 1},
   };
-  const auto rings = primitive::ringNetwork(nList, 6, {});
+  const auto rings = primitive::ringNetwork(nList, 6, std::vector<char>{});
   REQUIRE(rings.size() == 1);
   REQUIRE(rings[0].size() == 3);
 }

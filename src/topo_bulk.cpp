@@ -373,12 +373,9 @@ struct IntBuf {
 };
 
 // Every ring that contains all three atoms, except skipA and skipB.
-template <class Out>
-void ringsThrough(const ring::RingSearchIndex &index, int a, int b, int c,
-                  int skipA, int skipB, Out &out) {
-  const auto &A = atomRow(index, a);
-  const auto &B = atomRow(index, b);
-  const auto &C = atomRow(index, c);
+template <class Row, class Out>
+void ringsThroughRows(const Row &A, const Row &B, const Row &C, int skipA,
+                      int skipB, Out &out) {
   size_t i = 0;
   size_t j = 0;
   size_t k = 0;
@@ -406,6 +403,13 @@ void ringsThrough(const ring::RingSearchIndex &index, int a, int b, int c,
       ++k;
     }
   }
+}
+
+template <class Out>
+void ringsThrough(const ring::RingSearchIndex &index, int a, int b, int c,
+                  int skipA, int skipB, Out &out) {
+  ringsThroughRows(atomRow(index, a), atomRow(index, b), atomRow(index, c),
+                   skipA, skipB, out);
 }
 
 // A partner ring on an adjacent triplet already shares the atoms of that
@@ -2242,11 +2246,13 @@ bool ring::equatorialConditions(const std::vector<std::vector<int>> &rings,
   if (R.size() != 6) {
     return false;
   }
-  for (const int atom : R) {
-    const auto row = atomRow(index, atom);
+  // The six triplet walks reload these rows. Keep the pointers.
+  RingRow rowOf[6];
+  for (int k = 0; k < 6; k++) {
+    rowOf[k] = atomRow(index, R[static_cast<size_t>(k)]);
     int others = 0;
-    for (const int r : row) {
-      others += static_cast<int>(r != iring);
+    for (int t = 0; t < rowOf[k].n; t++) {
+      others += static_cast<int>(rowOf[k].p[t] != iring);
     }
     if (others < 3) {
       return false;
@@ -2254,8 +2260,9 @@ bool ring::equatorialConditions(const std::vector<std::vector<int>> &rings,
   }
   std::array<IntBuf, 6> T;
   for (int k = 0; k < 6; k++) {
-    ringsThrough(index, R[static_cast<std::size_t>(k)], R[static_cast<std::size_t>((k + 1) % 6)], R[static_cast<std::size_t>((k + 2) % 6)], iring, -1, T[static_cast<std::size_t>(k)]);
-    if (T[static_cast<std::size_t>(k)].empty()) {
+    ringsThroughRows(rowOf[k], rowOf[(k + 1) % 6], rowOf[(k + 2) % 6], iring, -1,
+                     T[k]);
+    if (T[k].empty()) {
       return false;
     }
   }
@@ -2317,50 +2324,45 @@ bool ring::equatorialConditions(const std::vector<std::vector<int>> &rings,
     if (!hex) {
       return false;
     }
-    int atoms[42];
-    int nAtomsHere = 0;
-    auto take = [&](const std::vector<int> &cycle) {
-      for (const int a : cycle) {
-        atoms[nAtomsHere++] = a;
+    // Seven hexagons, 42 slots. A generation stamp counts the distinct
+    // atoms without sorting. The stamp lives for the thread and is cleared
+    // only when the counter wraps.
+    const int nStamp =
+        index.ringOff.empty() ? 0 : static_cast<int>(index.ringOff.size()) - 1;
+    struct Stamp {
+      std::vector<std::uint32_t> seen;
+      std::uint32_t tick = 0;
+    };
+    thread_local Stamp stamp;
+    if (static_cast<int>(stamp.seen.size()) < nStamp) {
+      stamp.seen.assign(static_cast<size_t>(nStamp), 0);
+    }
+    if (stamp.tick == std::numeric_limits<std::uint32_t>::max()) {
+      std::fill(stamp.seen.begin(), stamp.seen.end(), 0);
+      stamp.tick = 1;
+    } else {
+      ++stamp.tick;
+    }
+    const std::uint32_t mark = stamp.tick;
+    int nUnique = 0;
+    auto countAtom = [&](int a) {
+      if (a < 0 || a >= nStamp) {
+        ++nUnique;
+        return;
+      }
+      std::uint32_t &slot = stamp.seen[static_cast<size_t>(a)];
+      if (slot != mark) {
+        slot = mark;
+        ++nUnique;
       }
     };
-    take(R);
+    for (const int a : R) {
+      countAtom(a);
+    }
     for (int k = 0; k < 6; k++) {
-      take(rings[static_cast<size_t>(r[k])]);
-    }
-    // Only the number of distinct molecules matters. A stamp over the frame
-    // counts them without sorting the forty-two ids. A wide or negative id
-    // falls back to the same count sort+unique would return.
-    const int nAtoms = static_cast<int>(index.ringsContainingAtom.size());
-    int nUnique = 0;
-    bool counted = nAtoms > 0;
-    if (counted) {
-      thread_local std::vector<int> stampStore;
-      thread_local int era = 0;
-      std::vector<int> *stamp = &stampStore;
-      asm volatile("" : "+r"(stamp));
-      if (static_cast<int>(stamp->size()) < nAtoms) {
-        stamp->assign(static_cast<std::size_t>(nAtoms), 0);
+      for (const int a : rings[static_cast<size_t>(r[k])]) {
+        countAtom(a);
       }
-      if (++era == 0) {
-        std::fill(stamp->begin(), stamp->end(), 0);
-        era = 1;
-      }
-      int *seen = stamp->data();
-      for (int i = 0; i < nAtomsHere; i++) {
-        const int atom = atoms[i];
-        if (atom < 0 || atom >= nAtoms) {
-          counted = false;
-          break;
-        }
-        if (seen[atom] != era) {
-          seen[atom] = era;
-          nUnique++;
-        }
-      }
-    }
-    if (!counted) {
-      nUnique = countDistinct(atoms, nAtomsHere);
     }
     bool folded = nUnique != 14;
     for (int k = 0; k < 6 && !folded; k++) {

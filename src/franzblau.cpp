@@ -13,12 +13,8 @@
 //-----------------------------------------------------------------------------------
 
 #include <algorithm>
-#include <atomic>
 #include <chrono>
 #include <cstdint>
-#include <iterator>
-#include <cstdio>
-#include <cstdlib>
 #include <numeric>
 #include <vector>
 
@@ -32,52 +28,6 @@
 
 namespace {
 
-std::atomic<std::uint64_t> gPrimCycles{0};
-bool gTimePrimitive = false;
-double gTscPerMs = 0;
-
-// Ring enumeration wants about 80 sources per thread, and a team is
-// not started until those sources fill every worker. A few hundred
-// changed vertices are still a serial update: the fork costs more
-// than the search. This is not teamFor, which keeps the requested
-// width whatever the frame size.
-int sourceTeam(int sources) {
-#ifdef SEAMS_HAS_OPENMP
-  if (omp_in_parallel()) {
-    return 1;
-  }
-  const int team = std::max(1, omp_get_max_threads());
-  if (sources < team * 80) {
-    return 1;
-  }
-  const int fit = sources / 80;
-  return fit < team ? fit : team;
-#else
-  (void)sources;
-  return 1;
-#endif
-}
-
-// Profiling ticks: TSC cycles on x86, steady-clock nanoseconds elsewhere.
-#if defined(_MSC_VER) && !defined(__clang__) && (defined(_M_X64) || defined(_M_IX86))
-#include <intrin.h>
-#endif
-std::uint64_t readTsc() {
-#if defined(_MSC_VER) && !defined(__clang__) && (defined(_M_X64) || defined(_M_IX86))
-  return __rdtsc();
-#elif defined(__x86_64__) || defined(__i386__)
-  unsigned lo = 0;
-  unsigned hi = 0;
-  __asm__ volatile("rdtsc" : "=a"(lo), "=d"(hi));
-  return (static_cast<std::uint64_t>(hi) << 32) | lo;
-#else
-  return static_cast<std::uint64_t>(
-      std::chrono::duration_cast<std::chrono::nanoseconds>(
-          std::chrono::steady_clock::now().time_since_epoch())
-          .count());
-#endif
-}
-
 struct RingSplitTimes {
   double balls_ms = 0;
   double enumerate_ms = 0;
@@ -89,29 +39,6 @@ struct RingSplitTimes {
 
 RingSplitTimes gRingSplit;
 int gUsedBalls = 0;
-double *gSourceWorkPtr = nullptr;
-struct alignas(64) PhaseSlot {
-  double levels = 0;
-  double paths = 0;
-  double pairs = 0;
-  double sort = 0;
-};
-PhaseSlot gPhase[64];
-bool gProfile = false;
-double gProfLevels = 0;
-double gProfPaths = 0;
-double gProfPairs = 0;
-double gProfTestMs = 0;
-double gProfOdd = 0;
-bool gSkipOdd = false;
-long long gProfPathPairs = 0;
-long long gProfTestN = 0;
-long long gProfOddPairs = 0;
-long long gProfSumP = 0;
-int gProfMaxP = 0;
-long long gProfLp3 = 0;
-long long gProfLp4 = 0;
-long long gOpen2 = 0;
 
 double millisSince(std::chrono::steady_clock::time_point start) {
   return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
@@ -165,18 +92,18 @@ struct BoundedBalls {
                   std::vector<std::pair<int, int>> &out) const {
     const int nVertices = static_cast<int>(adjacency.size());
     for (const int w : touched) {
-      dist[static_cast<std::size_t>(w)] = -1;
+      dist[w] = -1;
     }
     touched.clear();
-    dist[static_cast<std::size_t>(v)] = 0;
+    dist[v] = 0;
     touched.push_back(v);
     frontier.assign(1, v);
     for (int depth = 1; depth <= radius && !frontier.empty(); depth++) {
       next.clear();
       for (const int u : frontier) {
-        for (const int w : adjacency[static_cast<std::size_t>(u)]) {
-          if (w >= 0 && w < nVertices && dist[static_cast<std::size_t>(w)] == -1) {
-            dist[static_cast<std::size_t>(w)] = depth;
+        for (const int w : adjacency[u]) {
+          if (w >= 0 && w < nVertices && dist[w] == -1) {
+            dist[w] = depth;
             touched.push_back(w);
             next.push_back(w);
           }
@@ -187,7 +114,7 @@ struct BoundedBalls {
     const auto begin = out.size();
     for (const int w : touched) {
       if (w != v) {
-        out.emplace_back(w, dist[static_cast<std::size_t>(w)]);
+        out.emplace_back(w, dist[w]);
       }
     }
     std::sort(out.begin() + static_cast<std::ptrdiff_t>(begin), out.end());
@@ -229,7 +156,7 @@ struct BoundedBalls {
     int cell = 1;
     for (int v = 0; v < nVertices; v++) {
       int degree = 0;
-      for (const int neighbour : adjacency[static_cast<std::size_t>(v)]) {
+      for (const int neighbour : adjacency[v]) {
         (void)neighbour;
         ++degree;
       }
@@ -238,31 +165,12 @@ struct BoundedBalls {
       }
     }
     const int nCells = (nWhich + cell - 1) / cell;
-    // One breadth-first walk per source. The previous count pass repeated
-    // that walk so the table could be sized, and on one thread per rank
-    // the second walk was pure overhead.
-    struct Bag {
-      std::vector<int> vert;
-      std::vector<int> span;
-      std::vector<std::pair<int, int>> items;
-    };
-    int nThreads = 1;
+    std::vector<int> width(static_cast<std::size_t>(nVertices), 0);
 #ifdef SEAMS_HAS_OPENMP
-    if (parallel) {
-      nThreads = seams::teamFor(nWhich);
-    }
-#endif
-    std::vector<Bag> bags(static_cast<std::size_t>(nThreads));
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel if (parallel && nThreads > 1) num_threads(nThreads)
+#pragma omp parallel if (parallel)
 #endif
     {
-      int tid = 0;
-#ifdef SEAMS_HAS_OPENMP
-      tid = omp_get_thread_num();
-#endif
-      auto &bag = bags[static_cast<std::size_t>(tid)];
-      std::vector<int> dist(static_cast<std::size_t>(nVertices), -1);
+      std::vector<int> dist(nVertices, -1);
       std::vector<int> touched;
       std::vector<int> frontier;
       std::vector<int> next;
@@ -274,20 +182,28 @@ struct BoundedBalls {
         const int hi = std::min(nWhich, lo + cell);
         for (int k = lo; k < hi; k++) {
           const int v = which[static_cast<std::size_t>(k)];
-          bag.span.push_back(static_cast<int>(bag.items.size()));
-          appendBall(v, adjacency, radius, dist, touched, frontier, next, bag.items);
-          bag.vert.push_back(v);
+          for (const int w : touched) {
+            dist[w] = -1;
+          }
+          touched.clear();
+          dist[v] = 0;
+          touched.push_back(v);
+          frontier.assign(1, v);
+          for (int depth = 1; depth <= radius && !frontier.empty(); depth++) {
+            next.clear();
+            for (const int u : frontier) {
+              for (const int w : adjacency[u]) {
+                if (w >= 0 && w < nVertices && dist[w] == -1) {
+                  dist[w] = depth;
+                  touched.push_back(w);
+                  next.push_back(w);
+                }
+              }
+            }
+            frontier.swap(next);
+          }
+          width[static_cast<std::size_t>(v)] = static_cast<int>(touched.size()) - 1;
         }
-      }
-      bag.span.push_back(static_cast<int>(bag.items.size()));
-    }
-    std::vector<int> width(static_cast<std::size_t>(nVertices), 0);
-    int total = 0;
-    for (const auto &bag : bags) {
-      for (std::size_t k = 0; k < bag.vert.size(); k++) {
-        const int nItem = bag.span[k + 1] - bag.span[k];
-        width[static_cast<std::size_t>(bag.vert[k])] = nItem;
-        total += nItem;
       }
     }
     gRingSplit.ball_count_ms = millisSince(countStart);
@@ -297,20 +213,35 @@ struct BoundedBalls {
       scan[static_cast<std::size_t>(v)] = width[static_cast<std::size_t>(v)];
     }
     seams::exclusiveScan(scan);
+    int total = 0;
     for (int v = 0; v < nVertices; v++) {
       off[static_cast<std::size_t>(v)] = scan[static_cast<std::size_t>(v)];
+      total += width[static_cast<std::size_t>(v)];
     }
     off[static_cast<std::size_t>(nVertices)] = total;
     cols.resize(static_cast<std::size_t>(total));
-    for (const auto &bag : bags) {
-      for (std::size_t k = 0; k < bag.vert.size(); k++) {
-        const int v = bag.vert[k];
-        const int nItem = bag.span[k + 1] - bag.span[k];
-        if (nItem <= 0) {
-          continue;
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel if (parallel)
+#endif
+    {
+      std::vector<int> dist(nVertices, -1);
+      std::vector<int> touched;
+      std::vector<int> frontier;
+      std::vector<int> next;
+      std::vector<std::pair<int, int>> local;
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp for schedule(static)
+#endif
+      for (int c = 0; c < nCells; c++) {
+        const int lo = c * cell;
+        const int hi = std::min(nWhich, lo + cell);
+        for (int k = lo; k < hi; k++) {
+          const int v = which[static_cast<std::size_t>(k)];
+          local.clear();
+          appendBall(v, adjacency, radius, dist, touched, frontier, next, local);
+          std::copy(local.begin(), local.end(),
+                    cols.begin() + static_cast<std::ptrdiff_t>(off[static_cast<std::size_t>(v)]));
         }
-        std::copy(bag.items.begin() + bag.span[k], bag.items.begin() + bag.span[k] + nItem,
-                  cols.begin() + static_cast<std::ptrdiff_t>(off[static_cast<std::size_t>(v)]));
       }
     }
     gRingSplit.ball_fill_ms = millisSince(fillStart);
@@ -330,11 +261,11 @@ struct BoundedBalls {
       return nVertices;
     }
     std::vector<char> isChanged(static_cast<std::size_t>(nVertices), 0);
-    std::vector<int> dist(static_cast<std::size_t>(nVertices), -1);
+    std::vector<int> dist(nVertices, -1);
     std::vector<int> frontier, next, affected;
     for (const int v : changed) {
-      if (v >= 0 && v < nVertices && dist[static_cast<std::size_t>(v)] == -1) {
-        dist[static_cast<std::size_t>(v)] = 0;
+      if (v >= 0 && v < nVertices && dist[v] == -1) {
+        dist[v] = 0;
         frontier.push_back(v);
         affected.push_back(v);
         isChanged[static_cast<std::size_t>(v)] = 1;
@@ -344,17 +275,17 @@ struct BoundedBalls {
       next.clear();
       for (const int u : frontier) {
         if (isChanged[static_cast<std::size_t>(u)]) {
-          for (const int w : oldAdj[static_cast<std::size_t>(u)]) {
-            if (w >= 0 && w < nVertices && dist[static_cast<std::size_t>(w)] == -1) {
-              dist[static_cast<std::size_t>(w)] = depth;
+          for (const int w : oldAdj[u]) {
+            if (w >= 0 && w < nVertices && dist[w] == -1) {
+              dist[w] = depth;
               affected.push_back(w);
               next.push_back(w);
             }
           }
         }
-        for (const int w : newAdj[static_cast<std::size_t>(u)]) {
-          if (w >= 0 && w < nVertices && dist[static_cast<std::size_t>(w)] == -1) {
-            dist[static_cast<std::size_t>(w)] = depth;
+        for (const int w : newAdj[u]) {
+          if (w >= 0 && w < nVertices && dist[w] == -1) {
+            dist[w] = depth;
             affected.push_back(w);
             next.push_back(w);
           }
@@ -362,7 +293,7 @@ struct BoundedBalls {
       }
       frontier.swap(next);
     }
-    std::vector<int> scratchDist(static_cast<std::size_t>(nVertices), -1);
+    std::vector<int> scratchDist(nVertices, -1);
     std::vector<int> touched, fr, nxt;
     std::vector<std::pair<int, int>> repl;
     std::vector<int> replAt(static_cast<std::size_t>(nVertices), -1);
@@ -395,29 +326,6 @@ struct BoundedBalls {
     return static_cast<int>(affected.size());
   }
 
-  //! True when some vertex lies in both radius-2 balls, so dist(u, v) <= 4.
-  bool within4(int u, int v) const {
-    if (off.empty() || u < 0 || v < 0 || u + 1 >= static_cast<int>(off.size()) ||
-        v + 1 >= static_cast<int>(off.size())) {
-      return false;
-    }
-    auto a = cols.begin() + off[static_cast<std::size_t>(u)];
-    auto ae = cols.begin() + off[static_cast<std::size_t>(u) + 1];
-    auto b = cols.begin() + off[static_cast<std::size_t>(v)];
-    auto be = cols.begin() + off[static_cast<std::size_t>(v) + 1];
-    while (a != ae && b != be) {
-      if (a->first == b->first) {
-        return true;
-      }
-      if (a->first < b->first) {
-        ++a;
-      } else {
-        ++b;
-      }
-    }
-    return false;
-  }
-
   //! Graph distance from v to w when within the radius, else a large sentinel
   int dist(int v, int w) const {
     if (off.empty() || v < 0 || v + 1 >= static_cast<int>(off.size())) {
@@ -439,22 +347,22 @@ void levelsFrom(const Graph &adjacency, int src, int maxLvl, int minVertex,
                 std::vector<int> &lvl, std::vector<int> &touched,
                 std::vector<int> &frontier, std::vector<int> &next) {
   for (const int w : touched) {
-    lvl[static_cast<std::size_t>(w)] = -1;
+    lvl[w] = -1;
   }
   touched.clear();
-  lvl[static_cast<std::size_t>(src)] = 0;
+  lvl[src] = 0;
   touched.push_back(src);
   frontier.assign(1, src);
   for (int depth = 1; depth <= maxLvl && !frontier.empty(); depth++) {
     next.clear();
     for (const int u : frontier) {
-      for (const int w : adjacency[static_cast<std::size_t>(u)]) {
-        // A shortcut may pass through a vertex that is not on the ring,
-        // including one whose index is below the source. The walk has to
-        // see it. A ring that actually contains such a vertex is dropped
-        // later, because its lowest member is not this source.
-        if (w >= minVertex && w < static_cast<int>(lvl.size()) && lvl[static_cast<std::size_t>(w)] == -1) {
-          lvl[static_cast<std::size_t>(w)] = depth;
+      for (const int w : adjacency[u]) {
+        // Distances are on the whole graph. A shortcut may pass through a
+        // vertex below the source without that vertex sitting on the ring.
+        // minVertex 0 keeps those shortcuts visible. A positive minVertex
+        // is only for a caller that has already restricted the component.
+        if (w >= minVertex && w < static_cast<int>(lvl.size()) && lvl[w] == -1) {
+          lvl[w] = depth;
           touched.push_back(w);
           next.push_back(w);
         }
@@ -539,32 +447,12 @@ struct BitBalls {
         wanted[static_cast<std::size_t>(v)] = 1;
       }
     }
-    // One breadth-first walk records every pair. A second walk was the
-    // cost that lost to the sorted table at eight threads and depth 8.
-    struct Rec {
-      int v;
-      int w;
-      uint8_t d;
-    };
 #ifdef SEAMS_HAS_OPENMP
     const bool parallel = nVertices >= 2048 && !omp_in_parallel() &&
                           omp_get_max_threads() > 1;
-    const int nthreads = parallel ? omp_get_max_threads() : 1;
-#else
-    const bool parallel = false;
-    const int nthreads = 1;
-#endif
-    std::vector<std::vector<Rec>> bags(static_cast<std::size_t>(nthreads));
-#ifdef SEAMS_HAS_OPENMP
 #pragma omp parallel if (parallel)
 #endif
     {
-#ifdef SEAMS_HAS_OPENMP
-      const int tid = parallel ? omp_get_thread_num() : 0;
-#else
-      const int tid = 0;
-#endif
-      auto &bag = bags[static_cast<std::size_t>(tid)];
       std::vector<int> dist(static_cast<std::size_t>(nVertices), -1);
       std::vector<int> touched, frontier, next;
 #ifdef SEAMS_HAS_OPENMP
@@ -594,7 +482,7 @@ struct BitBalls {
           }
           frontier.swap(next);
         }
-        const auto n = static_cast<uint32_t>(touched.size() > 0 ? touched.size() - 1 : 0);
+        const auto n = static_cast<uint32_t>(touched.size() - 1);
         uint32_t size = 0;
         if (n != 0) {
           size = 64;
@@ -603,11 +491,6 @@ struct BitBalls {
           }
         }
         slots[static_cast<std::size_t>(v)] = size;
-        for (const int w : touched) {
-          if (w != v) {
-            bag.push_back(Rec{v, w, static_cast<uint8_t>(dist[static_cast<std::size_t>(w)])});
-          }
-        }
       }
     }
     off[0] = 0;
@@ -620,30 +503,66 @@ struct BitBalls {
     keys.assign(total, -1);
     dists.assign(total, 0);
     occ.assign((static_cast<std::size_t>(total) + 63u) / 64u, 0ull);
-    // Static slices own disjoint vertices, and each table length is a
-    // multiple of 64, so occupancy words do not overlap.
+    // Each table length is a multiple of 64 and the tables are packed, so
+    // occupancy words do not overlap and the inserts run side by side.
 #ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) if (parallel)
+#pragma omp parallel if (parallel)
 #endif
-    for (int t = 0; t < nthreads; t++) {
-      for (const Rec &rec : bags[static_cast<std::size_t>(t)]) {
-        const uint32_t begin = off[static_cast<std::size_t>(rec.v)];
-        const uint32_t m = mask[static_cast<std::size_t>(rec.v)];
-        uint64_t *bloomv = bloom.data() + static_cast<std::size_t>(rec.v) * 4u;
-        const uint32_t h1 = static_cast<uint32_t>(rec.w) * 0x9E3779B1u;
-        const uint32_t h2 = static_cast<uint32_t>(rec.w) * 0x85EBCA77u;
-        bloomv[(h1 >> 6) & 3u] |= 1ull << (h1 & 63u);
-        bloomv[(h2 >> 6) & 3u] |= 1ull << (h2 & 63u);
-        uint32_t slot = h1 & m;
-        for (;;) {
-          const uint32_t at = begin + slot;
-          if (keys[at] < 0) {
-            keys[at] = rec.w;
-            dists[at] = rec.d;
-            occ[at >> 6] |= 1ull << (at & 63u);
-            break;
+    {
+      std::vector<int> dist(static_cast<std::size_t>(nVertices), -1);
+      std::vector<int> touched, frontier, next;
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp for schedule(static)
+#endif
+      for (int v = 0; v < nVertices; v++) {
+        if (!wanted[static_cast<std::size_t>(v)]) {
+          continue;
+        }
+        const uint32_t begin = off[static_cast<std::size_t>(v)];
+        const uint32_t m = mask[static_cast<std::size_t>(v)];
+        if (off[static_cast<std::size_t>(v) + 1] == begin) {
+          continue;
+        }
+        for (const int w : touched) {
+          dist[static_cast<std::size_t>(w)] = -1;
+        }
+        touched.clear();
+        dist[static_cast<std::size_t>(v)] = 0;
+        touched.push_back(v);
+        frontier.assign(1, v);
+        for (int depth = 1; depth <= rad && !frontier.empty(); depth++) {
+          next.clear();
+          for (const int u : frontier) {
+            for (const int w : adjacency[u]) {
+              if (w >= 0 && w < nVertices && dist[static_cast<std::size_t>(w)] == -1) {
+                dist[static_cast<std::size_t>(w)] = depth;
+                touched.push_back(w);
+                next.push_back(w);
+              }
+            }
           }
-          slot = (slot + 1u) & m;
+          frontier.swap(next);
+        }
+        uint64_t *bloomv = bloom.data() + static_cast<std::size_t>(v) * 4u;
+        for (const int w : touched) {
+          if (w == v) {
+            continue;
+          }
+          const uint32_t h1 = static_cast<uint32_t>(w) * 0x9E3779B1u;
+          const uint32_t h2 = static_cast<uint32_t>(w) * 0x85EBCA77u;
+          bloomv[(h1 >> 6) & 3u] |= 1ull << (h1 & 63u);
+          bloomv[(h2 >> 6) & 3u] |= 1ull << (h2 & 63u);
+          uint32_t slot = h1 & m;
+          for (;;) {
+            const uint32_t at = begin + slot;
+            if (keys[at] < 0) {
+              keys[at] = w;
+              dists[at] = static_cast<uint8_t>(dist[static_cast<std::size_t>(w)]);
+              occ[at >> 6] |= 1ull << (at & 63u);
+              break;
+            }
+            slot = (slot + 1u) & m;
+          }
         }
       }
     }
@@ -665,62 +584,29 @@ struct DistOracle {
   const BoundedBalls *balls = nullptr;
   const BitBalls *bits = nullptr;
   bool hop2 = false;
-  // Radius-2 pair table. dist <= 2 is a lookup, dist == 3 is a neighbour
-  // of one end sitting at distance 2 from the other, and dist <= 4 is a
-  // vertex in both balls.
-  bool meet4 = false;
 
   bool shorter(int u, int v, int ringDist) const {
     if (ringDist <= 1) {
       return false;
     }
     if (hop2 && ringDist <= 3) {
-      // A ring distance of 2 is a chord, and a chord is an edge. A row
-      // longer than 48 neighbours is cheaper to answer from the ball, when
-      // there is one; the hop-only search builds none.
       const auto row = (*adj)[static_cast<std::size_t>(u)];
-      int seen = 0;
-      bool capped = false;
       for (const int w : row) {
         if (w == v) {
           return true;
         }
-        if (++seen == 48 && (balls != nullptr || bits != nullptr)) {
-          capped = true;
-          break;
-        }
       }
-      if (!capped) {
-        if (ringDist <= 2) {
-          return false;
-        }
-        for (const int w : row) {
-          for (const int x : (*adj)[static_cast<std::size_t>(w)]) {
-            if (x == v) {
-              return true;
-            }
-          }
-        }
+      if (ringDist <= 2) {
         return false;
       }
-    }
-    if (meet4 && balls != nullptr) {
-      const int known = balls->dist(u, v);
-      if (known < ringDist) {
-        return true;
-      }
-      if (ringDist <= 3) {
-        return false;
-      }
-      if (ringDist == 4) {
-        for (const int w : (*adj)[static_cast<std::size_t>(v)]) {
-          if (w != u && balls->dist(u, w) == 2) {
+      for (const int w : row) {
+        for (const int x : (*adj)[static_cast<std::size_t>(w)]) {
+          if (x == v) {
             return true;
           }
         }
-        return false;
       }
-      return balls->within4(u, v);
+      return false;
     }
     if (bits != nullptr) {
       return bits->lookup(u, v) < ringDist;
@@ -731,10 +617,8 @@ struct DistOracle {
 
 bool ringIsPrimitive(const DistOracle &oracle, const std::vector<int> &ring,
                      int skipA, int skipB) {
-  const std::uint64_t t0 = gTimePrimitive ? readTsc() : 0;
   const int k = static_cast<int>(ring.size());
-  bool ok = true;
-  for (int i = 0; i < k && ok; i++) {
+  for (int i = 0; i < k; i++) {
     if (i == skipA || i == skipB) {
       continue;
     }
@@ -747,16 +631,23 @@ bool ringIsPrimitive(const DistOracle &oracle, const std::vector<int> &ring,
       if (ringDist <= 1) {
         continue;
       }
-      if (oracle.shorter(ring[static_cast<std::size_t>(i)], ring[static_cast<std::size_t>(j)], ringDist)) {
-        ok = false;
-        break;
+      if (oracle.shorter(ring[i], ring[j], ringDist)) {
+        return false;
       }
     }
   }
-  if (gTimePrimitive) {
-    gPrimCycles.fetch_add(readTsc() - t0, std::memory_order_relaxed);
+  return true;
+}
+
+//! Append v if absent; ring sizes are tiny, so a scan beats a set
+inline bool pushUniqueMember(std::vector<int> &ring, int v) {
+  for (const int x : ring) {
+    if (x == v) {
+      return false;
+    }
   }
-  return ok;
+  ring.push_back(v);
+  return true;
 }
 
 
@@ -771,8 +662,6 @@ struct alignas(64) RingScratch {
   std::vector<int> touched, frontier, next;
   std::vector<int> pathFirst, pathCount, pathBuf;
   std::vector<int> ring;
-  std::vector<int> slot;
-  std::vector<int> id2;
 };
 
 //! Shortest paths from src to every touched vertex, built in breadth-first
@@ -780,37 +669,29 @@ struct alignas(64) RingScratch {
 //! adjacency order, which lists the paths in the order a depth-first walk
 //! back along decreasing levels would.
 template <typename Graph>
-void shortestPathsFrom(const Graph &adjacency, int src, RingScratch &scr, int minParent,
-                       int maxStore) {
+void shortestPathsFrom(const Graph &adjacency, int src, RingScratch &scr) {
   const int nVertices = static_cast<int>(adjacency.size());
   if (static_cast<int>(scr.pathFirst.size()) != nVertices) {
-    scr.pathFirst.assign(static_cast<std::size_t>(nVertices), 0);
-    scr.pathCount.assign(static_cast<std::size_t>(nVertices), 0);
+    scr.pathFirst.assign(nVertices, 0);
+    scr.pathCount.assign(nVertices, 0);
   }
   scr.pathBuf.clear();
-  scr.pathFirst[static_cast<std::size_t>(src)] = 0;
-  scr.pathCount[static_cast<std::size_t>(src)] = 1;
+    scr.pathFirst[src] = 0;
+  scr.pathCount[src] = 1;
   for (const int v : scr.touched) {
-    const int lv = scr.lvl[static_cast<std::size_t>(v)];
+    const int lv = scr.lvl[v];
     if (lv < 1) {
-      continue;
-    }
-    if (maxStore > 0 && lv > maxStore) {
-      scr.pathCount[static_cast<std::size_t>(v)] = 0;
       continue;
     }
     const int first = static_cast<int>(scr.pathBuf.size());
     int count = 0;
-    for (const int w : adjacency[static_cast<std::size_t>(v)]) {
-      // Levels below the source are cleared before this walk, so a parent
-      // there has level -1 and is not extended. minParent is the same gate
-      // for a caller that still passes a floor.
-      if (w < minParent || w >= nVertices || scr.lvl[static_cast<std::size_t>(w)] != lv - 1) {
+    for (const int w : adjacency[v]) {
+      if (w < 0 || w >= nVertices || scr.lvl[w] != lv - 1) {
         continue;
       }
       const int plen = lv - 1;
-      for (int k = 0; k < scr.pathCount[static_cast<std::size_t>(w)]; k++) {
-        const int from = scr.pathFirst[static_cast<std::size_t>(w)] + k * plen;
+      for (int k = 0; k < scr.pathCount[w]; k++) {
+        const int from = scr.pathFirst[w] + k * plen;
         const int dest = static_cast<int>(scr.pathBuf.size());
         scr.pathBuf.resize(scr.pathBuf.size() + static_cast<std::size_t>(lv));
         if (plen > 0) {
@@ -821,8 +702,8 @@ void shortestPathsFrom(const Graph &adjacency, int src, RingScratch &scr, int mi
         count++;
       }
     }
-    scr.pathFirst[static_cast<std::size_t>(v)] = first;
-    scr.pathCount[static_cast<std::size_t>(v)] = count;
+    scr.pathFirst[v] = first;
+    scr.pathCount[v] = count;
   }
 }
 
@@ -866,125 +747,32 @@ struct alignas(64) RingPool {
   iterator end() { return storage.begin() + static_cast<std::ptrdiff_t>(n); }
 };
 
-//! A full-graph search can walk through a vertex below src. That vertex is
-//! not a member of a ring this source is allowed to emit.
-bool ringOwnedBySource(const std::vector<int> &ring, int src,
-                       const std::vector<char> *through) {
-  if (through != nullptr) {
-    return true;
-  }
-  for (const int v : ring) {
-    if (v < src) {
-      return false;
-    }
-  }
-  return true;
-}
-
 template <typename Graph, typename Out>
 void enumerateFromSource(const Graph &adjacency, const DistOracle &oracle,
                          int src, int maxDepth, int maxLvl, RingScratch &scr,
                          Out &out, const std::vector<char> *through = nullptr,
-                         bool legacyPairs = false) {
+                         bool legacyPairs = false, int minSize = 3) {
   const int nVertices = static_cast<int>(adjacency.size());
   if (static_cast<int>(scr.lvl.size()) != nVertices) {
-    scr.lvl.assign(static_cast<std::size_t>(nVertices), -1);
+    scr.lvl.assign(nVertices, -1);
     scr.touched.clear();
   }
   // Distances use every vertex. A shortcut through an index below the
   // source does not put that vertex on the ring, and hiding it made the
-  // antipode look farther than the graph distance. After the distances are
-  // known, vertices below the source lose their level, so no path is
-  // extended through them. Rings are still emitted only from their lowest
-  // member. The updater keeps those levels.
-  const bool profiling = gProfile;
-  std::chrono::steady_clock::time_point tLevels, tPaths, tPairs;
-  if (profiling) {
-    tLevels = std::chrono::steady_clock::now();
-  }
+  // antipode look farther than the graph distance. Rings are still emitted
+  // only from their lowest member: after the distances are known, vertices
+  // below the source lose their level so no path is extended through them.
+  // The updater passes a through-mask and keeps those levels.
   levelsFrom(adjacency, src, maxLvl, 0, scr.lvl, scr.touched, scr.frontier,
              scr.next);
   if (through == nullptr) {
     for (const int v : scr.touched) {
       if (v < src) {
-        scr.lvl[static_cast<std::size_t>(v)] = -1;
-      }
-    }
-  } else {
-    // A lower flagged vertex owns any ring that contains it. Dropping
-    // its level keeps this source on the same walk as a full search
-    // from the lowest flagged member. An unflagged vertex below src
-    // stays, because a shortcut through it still decides primitivity.
-    for (const int v : scr.touched) {
-      if (v < src && (*through)[static_cast<std::size_t>(v)]) {
-        scr.lvl[static_cast<std::size_t>(v)] = -1;
+        scr.lvl[v] = -1;
       }
     }
   }
-#ifdef SEAMS_HAS_OPENMP
-  const int phaseSlot = profiling ? std::min(omp_get_thread_num(), 63) : 0;
-#else
-  const int phaseSlot = 0;
-#endif
-  if (profiling) {
-    gPhase[phaseSlot].levels += millisSince(tLevels);
-    tPaths = std::chrono::steady_clock::now();
-  }
-  const int store = legacyPairs ? 0 : maxLvl;
-  shortestPathsFrom(adjacency, src, scr, 0, store);
-  if (profiling) {
-    gPhase[phaseSlot].paths += millisSince(tPaths);
-    tPairs = std::chrono::steady_clock::now();
-  }
-  if (static_cast<int>(scr.slot.size()) != nVertices) {
-    scr.slot.assign(static_cast<std::size_t>(nVertices), -1);
-  }
-  const bool maskDisjoint = scr.touched.size() <= 192;
-  if (static_cast<int>(scr.id2.size()) != nVertices) {
-    scr.id2.assign(static_cast<std::size_t>(nVertices), -1);
-  }
-  int at2[32];
-  unsigned close2[32] = {};
-  int n2 = 0;
-  for (const int v : scr.touched) {
-    if (scr.lvl[static_cast<std::size_t>(v)] == 2 && n2 < 32) {
-      scr.id2[static_cast<std::size_t>(v)] = n2;
-      at2[n2++] = v;
-    }
-  }
-  auto within2 = [&](int x, int y) {
-    if (x == y) {
-      return true;
-    }
-    for (const int w : adjacency[static_cast<std::size_t>(x)]) {
-      if (w == y) {
-        return true;
-      }
-    }
-    for (const int w : adjacency[static_cast<std::size_t>(x)]) {
-      for (const int z : adjacency[static_cast<std::size_t>(w)]) {
-        if (z == y) {
-          return true;
-        }
-      }
-    }
-    return false;
-  };
-  for (int i = 0; i < n2; i++) {
-    for (int j = i + 1; j < n2; j++) {
-      if (within2(at2[i], at2[j])) {
-        close2[i] |= 1u << j;
-        close2[j] |= 1u << i;
-      } else if (gProfile) {
-        gOpen2++;
-      }
-    }
-  }
-  if (maskDisjoint) {
-    for (int i = 0; i < static_cast<int>(scr.touched.size()); i++) {
-      scr.slot[static_cast<std::size_t>(scr.touched[static_cast<std::size_t>(i)])] = i;
-    }
-  }
+  shortestPathsFrom(adjacency, src, scr);
   const std::size_t first = out.size();
   auto keep = [&](std::vector<int> &r) {
     if (through != nullptr) {
@@ -1002,164 +790,53 @@ void enumerateFromSource(const Graph &adjacency, const DistOracle &oracle,
   };
   std::vector<int> &ring = scr.ring;
   for (const int p : scr.touched) {
-    const int lp = scr.lvl[static_cast<std::size_t>(p)];
+    const int lp = scr.lvl[p];
     if (lp < 1 || lp > maxLvl) {
       continue;
     }
-    const int *pathsP = scr.pathBuf.data() + scr.pathFirst[static_cast<std::size_t>(p)];
-    const int nP = scr.pathCount[static_cast<std::size_t>(p)];
+    const int *pathsP = scr.pathBuf.data() + scr.pathFirst[p];
+    const int nP = scr.pathCount[p];
     // Even rings: two vertex-disjoint shortest paths to an antipodal vertex
-    if (2 * lp >= 3 && 2 * lp <= maxDepth) {
-      if (gProfile) {
-        gProfSumP += nP;
-        if (nP > gProfMaxP) {
-          gProfMaxP = nP;
-        }
-      }
-      if (lp >= 4 && n2 > 0) {
-        int seenKey[32];
-        int nKeys = 0;
-        bool open = false;
-        for (int a = 0; a < nP && !open; a++) {
-          const int key = scr.id2[static_cast<std::size_t>((pathsP + a * lp)[1])];
-          // An unindexed distance-2 vertex can still close a primitive ring.
-          if (key < 0) {
-            open = true;
-            break;
-          }
-          for (int s = 0; s < nKeys; s++) {
-            const int other = seenKey[s];
-            if ((close2[key] & (1u << other)) == 0) {
-              open = true;
-              break;
-            }
-          }
-          if (!open && nKeys < 32) {
-            seenKey[nKeys++] = key;
-          }
-        }
-        if (!open) {
-          goto odd_part;
-        }
-      }
-      uint64_t m0[64], m1[64], m2[64];
-      int key2[64];
-      const bool useMask = maskDisjoint && nP <= 64;
-      if (useMask) {
-        for (int a = 0; a < nP; a++) {
-          const int *pa = pathsP + a * lp;
-          uint64_t a0 = 0, a1 = 0, a2 = 0;
-          for (int i = 0; i < lp - 1; i++) {
-            const int s = scr.slot[static_cast<std::size_t>(pa[i])];
-            const uint64_t bit = 1ull << (s & 63);
-            if (s < 64) {
-              a0 |= bit;
-            } else if (s < 128) {
-              a1 |= bit;
-            } else {
-              a2 |= bit;
-            }
-          }
-          m0[a] = a0;
-          m1[a] = a1;
-          m2[a] = a2;
-          key2[a] = lp >= 2 ? scr.id2[static_cast<std::size_t>(pa[1])] : -1;
-        }
-      }
+    if (2 * lp >= minSize && 2 * lp <= maxDepth) {
       for (int a = 0; a < nP; a++) {
         for (int b = a + 1; b < nP; b++) {
-          if (gProfile) {
-            gProfPathPairs++;
-            if (lp >= 4) {
-              gProfLp4++;
-            } else {
-              gProfLp3++;
-            }
-          }
-          bool disjoint = true;
-          if (useMask) {
-            disjoint = ((m0[a] & m0[b]) | (m1[a] & m1[b]) | (m2[a] & m2[b])) == 0;
-            if (disjoint && lp >= 4) {
-              const int ix = key2[a];
-              const int iy = key2[b];
-              if (ix >= 0 && iy >= 0 && (close2[ix] & (1u << iy)) != 0) {
-                continue;
-              }
-            }
-          }
           const int *pa = pathsP + a * lp;
           const int *pb = pathsP + b * lp;
-          if (!useMask) {
-            disjoint = pa[0] != pb[0];
-            for (int i = 0; disjoint && i < lp; i++) {
-              const int v = pa[i];
-              for (int j = 0; j < lp - 1; j++) {
-                if (pb[j] == v) {
-                  disjoint = false;
-                  break;
-                }
-              }
-            }
-          }
-          if (!disjoint) {
-            continue;
-          }
           ring.assign(1, src);
-          for (int i = 0; i < lp; i++) {
-            ring.push_back(pa[i]);
+          bool ok = true;
+          for (int i = 0; i < lp && ok; i++) {
+            ok = pushUniqueMember(ring, pa[i]);
           }
-          for (int i = lp - 2; i >= 0; i--) {
-            ring.push_back(pb[i]);
+          for (int i = lp - 2; i >= 0 && ok; i--) {
+            ok = pushUniqueMember(ring, pb[i]);
           }
-          if (ringOwnedBySource(ring, src, through)) {
-            if (gProfile) {
-              gProfTestN++;
-            }
-            if (ringIsPrimitive(oracle, ring, legacyPairs ? -1 : 0,
-                                legacyPairs ? -1 : lp)) {
-              keep(ring);
-            }
+          if (ok && ringIsPrimitive(oracle, ring, legacyPairs ? -1 : 0,
+                                    legacyPairs ? -1 : lp)) {
+            keep(ring);
           }
         }
       }
     }
-  odd_part:
     // Odd rings: an antipodal edge between two vertices at the same level
-    if (!gSkipOdd && 2 * lp + 1 <= maxDepth) {
-      for (const int q : adjacency[static_cast<std::size_t>(p)]) {
-        if (q <= p || q >= nVertices || scr.lvl[static_cast<std::size_t>(q)] != lp) {
+    if (2 * lp + 1 >= minSize && 2 * lp + 1 <= maxDepth) {
+      for (const int q : adjacency[p]) {
+        if (q <= p || q >= nVertices || scr.lvl[q] != lp) {
           continue;
         }
-        const int *pathsQ = scr.pathBuf.data() + scr.pathFirst[static_cast<std::size_t>(q)];
+        const int *pathsQ = scr.pathBuf.data() + scr.pathFirst[q];
         for (int a = 0; a < nP; a++) {
-          for (int b = 0; b < scr.pathCount[static_cast<std::size_t>(q)]; b++) {
-            if (gProfile) {
-              gProfOddPairs++;
-            }
+          for (int b = 0; b < scr.pathCount[q]; b++) {
             const int *pa = pathsP + a * lp;
             const int *pb = pathsQ + b * lp;
-            bool disjoint = true;
-            for (int i = 0; disjoint && i < lp; i++) {
-              const int v = pa[i];
-              for (int j = 0; j < lp; j++) {
-                if (pb[j] == v) {
-                  disjoint = false;
-                  break;
-                }
-              }
-            }
-            if (!disjoint) {
-              continue;
-            }
             ring.assign(1, src);
-            for (int i = 0; i < lp; i++) {
-              ring.push_back(pa[i]);
+            bool ok = true;
+            for (int i = 0; i < lp && ok; i++) {
+              ok = pushUniqueMember(ring, pa[i]);
             }
-            for (int i = lp - 1; i >= 0; i--) {
-              ring.push_back(pb[i]);
+            for (int i = lp - 1; i >= 0 && ok; i--) {
+              ok = pushUniqueMember(ring, pb[i]);
             }
-            if (ringOwnedBySource(ring, src, through) &&
-                ringIsPrimitive(oracle, ring, legacyPairs ? -1 : 0, -1)) {
+            if (ok && ringIsPrimitive(oracle, ring, legacyPairs ? -1 : 0, -1)) {
               keep(ring);
             }
           }
@@ -1167,19 +844,8 @@ void enumerateFromSource(const Graph &adjacency, const DistOracle &oracle,
       }
     }
   }
-  if (profiling) {
-    gPhase[phaseSlot].pairs += millisSince(tPairs);
-  }
-  for (int i = 0; i < n2; i++) {
-    scr.id2[static_cast<std::size_t>(at2[i])] = -1;
-  }
   if (through == nullptr) {
-    const auto tSort = profiling ? std::chrono::steady_clock::now()
-                                 : std::chrono::steady_clock::time_point{};
     std::sort(out.begin() + static_cast<std::ptrdiff_t>(first), out.end());
-    if (profiling) {
-      gPhase[phaseSlot].sort += millisSince(tSort);
-    }
   }
 }
 
@@ -1221,52 +887,78 @@ void enumerateFromSource(const Graph &adjacency, const DistOracle &oracle,
  * @return A vector of vectors of the rings; each ring contains the atom
  *  indices of the ring members.
  */
-//! Ring sizes instead of rings: searchPacked fills counts[s] for s < len
-//! and returns no rings.
-struct SizeCounts {
-  int *counts = nullptr;
-  int len = 0;
-};
-
 static std::vector<std::vector<int>>
-searchPacked(PackedRows adjacency, int maxDepth, const std::vector<char> &sources,
-             bool legacy, SizeCounts sizes = {});
+searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
+            const std::vector<char> &sources, bool legacy, int minSize = 3);
 
-//! Ring sizes held by the per-source pools, summed over the team.
-static void countSizes(RingPool *pools, int nPools, int use, SizeCounts sizes) {
-  for (int i = 0; i < sizes.len; i++) {
-    sizes.counts[i] = 0;
-  }
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel num_threads(use) if (use > 1 && !omp_in_parallel())
-#endif
-  {
-    std::vector<long long> local(static_cast<std::size_t>(sizes.len), 0);
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp for schedule(static) nowait
-#endif
-    for (int k = 0; k < nPools; k++) {
-      for (const auto &ring : pools[k]) {
-        const std::size_t size = ring.size();
-        if (size < local.size()) {
-          local[size] += 1;
-        }
-      }
-    }
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp critical(seams_ring_sizes)
-#endif
-    for (int i = 0; i < sizes.len; i++) {
-      sizes.counts[i] += static_cast<int>(local[static_cast<std::size_t>(i)]);
-    }
-  }
+std::vector<std::vector<int>>
+primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth) {
+  return searchRings(nList, maxDepth, std::vector<char>(), false);
 }
 
-[[gnu::noinline]] PackedRows vectorNeighbourRows(
-    const std::vector<std::vector<int>> &nList, int nVertices, int use) {
+std::vector<std::vector<int>>
+primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
+                       int minDepth) {
+  if (minDepth < 3) {
+    minDepth = 3;
+  }
+  return searchRings(nList, maxDepth, std::vector<char>(), false, minDepth);
+}
+
+std::vector<std::vector<int>>
+primitive::ringNetwork(const std::vector<int> &offsets, const std::vector<int> &cols,
+                       int maxDepth, const std::vector<char> &sources) {
+  const int n = offsets.empty() ? 0 : static_cast<int>(offsets.size()) - 1;
+  std::vector<std::vector<int>> rows(static_cast<std::size_t>(std::max(n, 0)));
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) if (n >= 256)
+#endif
+  for (int i = 0; i < n; ++i) {
+    const int a = offsets[static_cast<std::size_t>(i)];
+    const int b = offsets[static_cast<std::size_t>(i) + 1];
+    auto &row = rows[static_cast<std::size_t>(i)];
+    row.resize(static_cast<std::size_t>(1 + b - a));
+    row[0] = i;
+    for (int k = a; k < b; ++k) {
+      row[static_cast<std::size_t>(1 + k - a)] = cols[static_cast<std::size_t>(k)];
+    }
+  }
+  return searchRings(rows, maxDepth, sources, false);
+}
+
+std::vector<std::vector<int>>
+primitive::ringNetworkBalls(const std::vector<std::vector<int>> &nList, int maxDepth) {
+  return searchRings(nList, maxDepth, std::vector<char>(), true);
+}
+
+/**
+ * @details The rings of the whole search whose lowest-indexed member is
+ *  flagged in @a sources, in the same order; an empty mask flags every
+ *  vertex. Balls are filled only within maxDepth/2 hops of a flagged
+ *  vertex, where the members of its rings lie.
+ */
+static std::vector<std::vector<int>>
+searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
+            const std::vector<char> &sources, bool legacy, int minSize) {
+  std::vector<std::vector<int>> rings;
+  if (maxDepth < 3 || nList.empty()) {
+    return rings;
+  }
+  const int nVertices = static_cast<int>(nList.size());
+  // The fork, the per-source pools, and pausing the team are slower than
+  // the search itself on a small graph. Larger graphs keep the team.
+  const bool serial = nVertices < 2048;
+  if (!serial) {
+    seams::adoptThreads();
+  }
+
+  // Adjacency by index; the first element of each nList row is the vertex
+  // itself, so it is skipped. A repeated neighbour is one edge. A self
+  // entry and an index outside the cloud are not edges.
+  const auto adjStart = std::chrono::steady_clock::now();
   std::vector<std::vector<int>> uniq(static_cast<std::size_t>(nVertices));
 #ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) num_threads(use) if (use > 1 && !omp_in_parallel())
+#pragma omp parallel for schedule(static) if (!serial && !omp_in_parallel())
 #endif
   for (int i = 0; i < nVertices; i++) {
     if (nList[static_cast<std::size_t>(i)].size() <= 1) {
@@ -1283,345 +975,26 @@ static void countSizes(RingPool *pools, int nPools, int use, SizeCounts sizes) {
         row.push_back(j);
       }
     }
-    if (row.size() > 1) {
-      std::sort(row.begin(), row.end());
-    }
   }
   PackedRows adjacency;
-  adjacency.first.assign(static_cast<std::size_t>(nVertices) + 1, 0);
+  adjacency.first.assign(nVertices + 1, 0);
   for (int i = 0; i < nVertices; i++) {
-    adjacency.first[static_cast<std::size_t>(i) + 1] =
-        adjacency.first[static_cast<std::size_t>(i)] +
-        static_cast<std::size_t>(uniq[static_cast<std::size_t>(i)].size());
+    adjacency.first[i + 1] =
+        adjacency.first[i] +
+        static_cast<int>(uniq[static_cast<std::size_t>(i)].size());
   }
-  adjacency.cols.resize(adjacency.first[static_cast<std::size_t>(nVertices)]);
+  adjacency.cols.resize(adjacency.first[nVertices]);
 #ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) num_threads(use) if (use > 1 && !omp_in_parallel())
+#pragma omp parallel for schedule(static) if (!serial && !omp_in_parallel())
 #endif
   for (int i = 0; i < nVertices; i++) {
     const auto &row = uniq[static_cast<std::size_t>(i)];
     if (!row.empty()) {
       std::copy(row.begin(), row.end(),
                 adjacency.cols.begin() +
-                    static_cast<std::ptrdiff_t>(adjacency.first[static_cast<std::size_t>(i)]));
+                    static_cast<std::ptrdiff_t>(adjacency.first[i]));
     }
   }
-  return adjacency;
-}
-
-[[gnu::noinline]] PackedRows teamNeighbourRows(
-    const std::vector<std::vector<int>> &nList, int nVertices, int use) {
-  PackedRows adjacency;
-  adjacency.first.assign(static_cast<std::size_t>(nVertices) + 1, 0);
-  // Partners land in one array, sorted per row. A vector per atom made
-  // this copy wait on the allocator, and the wait was longer after the
-  // cell list than after linkcell. The stack buffer covers a cutoff
-  // shell; a longer row falls back to the heap for that atom only.
-  auto uniqueInto = [&](int i, int *dst, int cap, int *nOut) -> bool {
-    const auto &src = nList[static_cast<std::size_t>(i)];
-    int n = 0;
-    for (std::size_t k = 1; k < src.size(); ++k) {
-      const int j = src[k];
-      if (j < 0 || j >= nVertices || j == i) {
-        continue;
-      }
-      bool seen = false;
-      for (int t = 0; t < n; ++t) {
-        if (dst[t] == j) {
-          seen = true;
-          break;
-        }
-      }
-      if (seen) {
-        continue;
-      }
-      if (n == cap) {
-        return false;
-      }
-      dst[n++] = j;
-    }
-    if (n > 1) {
-      std::sort(dst, dst + n);
-    }
-    *nOut = n;
-    return true;
-  };
-  std::vector<int> degree(static_cast<std::size_t>(nVertices), 0);
-  // One thread appends sorted rows into one buffer. A second walk and a
-  // vector per atom both cost more than this pass on a single core.
-  if (use <= 1) {
-    std::vector<int> scratch;
-    scratch.reserve(static_cast<std::size_t>(std::max(nVertices, 0)) * 4);
-    for (int i = 0; i < nVertices; ++i) {
-      if (nList[static_cast<std::size_t>(i)].size() <= 1) {
-        continue;
-      }
-      int tmp[256];
-      int n = 0;
-      if (!uniqueInto(i, tmp, 256, &n)) {
-        std::vector<int> extra;
-        extra.reserve(nList[static_cast<std::size_t>(i)].size());
-        for (std::size_t k = 1; k < nList[static_cast<std::size_t>(i)].size(); ++k) {
-          const int j = nList[static_cast<std::size_t>(i)][k];
-          if (j < 0 || j >= nVertices || j == i) {
-            continue;
-          }
-          if (std::find(extra.begin(), extra.end(), j) == extra.end()) {
-            extra.push_back(j);
-          }
-        }
-        if (extra.size() > 1) {
-          std::sort(extra.begin(), extra.end());
-        }
-        scratch.insert(scratch.end(), extra.begin(), extra.end());
-        n = static_cast<int>(extra.size());
-      } else if (n > 0) {
-        scratch.insert(scratch.end(), tmp, tmp + n);
-      }
-      degree[static_cast<std::size_t>(i)] = n;
-    }
-    for (int i = 0; i < nVertices; ++i) {
-      adjacency.first[static_cast<std::size_t>(i) + 1] =
-          adjacency.first[static_cast<std::size_t>(i)] + static_cast<std::size_t>(degree[static_cast<std::size_t>(i)]);
-    }
-    adjacency.cols = std::move(scratch);
-    return adjacency;
-  }
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) num_threads(use) if (!omp_in_parallel())
-#endif
-  for (int i = 0; i < nVertices; i++) {
-    if (nList[static_cast<std::size_t>(i)].size() <= 1) {
-      continue;
-    }
-    int tmp[256];
-    int n = 0;
-    if (!uniqueInto(i, tmp, 256, &n)) {
-      std::vector<int> extra;
-      extra.reserve(nList[static_cast<std::size_t>(i)].size());
-      for (std::size_t k = 1; k < nList[static_cast<std::size_t>(i)].size(); ++k) {
-        const int j = nList[static_cast<std::size_t>(i)][k];
-        if (j < 0 || j >= nVertices || j == i) {
-          continue;
-        }
-        if (std::find(extra.begin(), extra.end(), j) == extra.end()) {
-          extra.push_back(j);
-        }
-      }
-      n = static_cast<int>(extra.size());
-    }
-    degree[static_cast<std::size_t>(i)] = n;
-  }
-  for (int i = 0; i < nVertices; i++) {
-    adjacency.first[static_cast<std::size_t>(i + 1)] = adjacency.first[static_cast<std::size_t>(i)] + static_cast<std::size_t>(degree[static_cast<std::size_t>(i)]);
-  }
-  adjacency.cols.resize(adjacency.first[static_cast<std::size_t>(nVertices)]);
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) num_threads(use) if (!omp_in_parallel())
-#endif
-  for (int i = 0; i < nVertices; i++) {
-    const int n = degree[static_cast<std::size_t>(i)];
-    if (n <= 0) {
-      continue;
-    }
-    int *dst = adjacency.cols.data() + adjacency.first[static_cast<std::size_t>(i)];
-    if (n <= 256) {
-      int got = 0;
-      uniqueInto(i, dst, 256, &got);
-    } else {
-      std::vector<int> extra;
-      extra.reserve(static_cast<std::size_t>(n));
-      for (std::size_t k = 1; k < nList[static_cast<std::size_t>(i)].size(); ++k) {
-        const int j = nList[static_cast<std::size_t>(i)][k];
-        if (j < 0 || j >= nVertices || j == i) {
-          continue;
-        }
-        if (std::find(extra.begin(), extra.end(), j) == extra.end()) {
-          extra.push_back(j);
-        }
-      }
-      std::sort(extra.begin(), extra.end());
-      std::copy(extra.begin(), extra.end(), dst);
-    }
-  }
-  return adjacency;
-}
-
-
-static std::vector<std::vector<int>>
-searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
-            const std::vector<char> &sources, bool legacy,
-            primitive::RingRows rows = primitive::RingRows::Auto) {
-  const auto adjStart = std::chrono::steady_clock::now();
-  const int nVertices = static_cast<int>(nList.size());
-  int use = 1;
-#ifdef SEAMS_HAS_OPENMP
-  if (!omp_in_parallel()) {
-    use = std::max(1, omp_get_max_threads());
-  }
-#endif
-  if (use > 1) {
-    const int fit = nVertices / 80;
-    if (fit < use) {
-      use = std::max(fit, 1);
-    }
-  }
-  const bool serial = use <= 1;
-  // One thread packs sorted rows in a single pass. Several threads use
-  // the same packed rows. The per-atom vectors stay available so a test
-  // can check that both builders return the same rings.
-  const bool perAtom = rows == primitive::RingRows::Vectors;
-  PackedRows adjacency =
-      perAtom ? vectorNeighbourRows(nList, nVertices, use)
-              : teamNeighbourRows(nList, nVertices,
-                                  (serial && rows != primitive::RingRows::Packed) ? 1 : use);
-  gRingSplit.adj_ms = millisSince(adjStart);
-  return searchPacked(std::move(adjacency), maxDepth, sources, legacy);
-}
-
-std::vector<std::vector<int>>
-primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth) {
-  return searchRings(nList, maxDepth, std::vector<char>(), false);
-}
-
-std::vector<std::vector<int>>
-primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
-                       primitive::RingRows rows) {
-  return searchRings(nList, maxDepth, std::vector<char>(), false, rows);
-}
-
-std::vector<std::vector<int>>
-primitive::ringNetworkBalls(const std::vector<std::vector<int>> &nList, int maxDepth) {
-  return searchRings(nList, maxDepth, std::vector<char>(), true);
-}
-
-//! Packed rows of a CSR graph, each row sorted.
-static PackedRows csrRows(const std::vector<int> &offsets, const std::vector<int> &cols) {
-  PackedRows adjacency;
-  const int nRows = static_cast<int>(offsets.size()) - 1;
-  adjacency.first.resize(offsets.size());
-  adjacency.cols.resize(cols.size());
-  std::size_t *first = adjacency.first.data();
-  int *dst = adjacency.cols.data();
-  const int *src = cols.data();
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) if (nRows >= 2048 && !omp_in_parallel())
-#endif
-  for (int i = 0; i < nRows; ++i) {
-    const int a = offsets[static_cast<std::size_t>(i)];
-    const int b = offsets[static_cast<std::size_t>(i) + 1];
-    first[i] = static_cast<std::size_t>(a);
-    std::copy(src + a, src + b, dst + a);
-    std::sort(dst + a, dst + b);
-  }
-  first[nRows] = static_cast<std::size_t>(offsets[static_cast<std::size_t>(nRows)]);
-  return adjacency;
-}
-
-std::vector<std::vector<int>>
-primitive::ringNetwork(const std::vector<int> &offsets, const std::vector<int> &cols,
-                       int maxDepth, const std::vector<char> &sources) {
-  seams::adoptThreads();
-  if (offsets.size() < 2) {
-    return {};
-  }
-  PackedRows adjacency = csrRows(offsets, cols);
-  gRingSplit.adj_ms = 0;
-  return searchPacked(std::move(adjacency), maxDepth, sources, false);
-}
-
-void primitive::ringSizeCounts(const std::vector<int> &offsets, const std::vector<int> &cols,
-                               int maxDepth, int *counts, int countsLen) {
-  for (int i = 0; i < countsLen; i++) {
-    counts[i] = 0;
-  }
-  seams::adoptThreads();
-  if (offsets.size() < 2 || countsLen <= 0) {
-    return;
-  }
-  PackedRows adjacency = csrRows(offsets, cols);
-  gRingSplit.adj_ms = 0;
-  (void)searchPacked(std::move(adjacency), maxDepth, std::vector<char>(), false,
-                     SizeCounts{counts, countsLen});
-}
-
-/**
- * @details The rings of the whole search whose lowest-indexed member is
- *  flagged in @a sources, in the same order; an empty mask flags every
- *  vertex. Balls are filled only within maxDepth/2 hops of a flagged
- *  vertex, where the members of its rings lie.
- */
-static std::vector<std::vector<int>>
-searchPacked(PackedRows adjacency, int maxDepth, const std::vector<char> &sources,
-             bool legacy, SizeCounts sizes) {
-  seams::adoptThreads();
-  gProfile = false;
-  if (const char *prof = std::getenv("SEAMS_RING_PROFILE")) {
-    gProfile = prof[0] == '1';
-  }
-  for (auto &slot : gPhase) {
-    slot = {};
-  }
-  gProfLevels = gProfPaths = gProfPairs = gProfTestMs = gProfOdd = 0;
-  gProfPathPairs = gProfTestN = gProfOddPairs = gProfSumP = gProfLp3 = gProfLp4 = gOpen2 = 0;
-  gProfMaxP = 0;
-  std::vector<std::vector<int>> rings;
-  const int nVertices = static_cast<int>(adjacency.size());
-  if (maxDepth < 3 || nVertices == 0) {
-    return rings;
-  }
-
-  // A thread wants about 80 vertices before the fork pays. Past that the
-  // enumeration is most of a signature call. Asking for more threads than
-  // the graph can feed makes the wide cell slower than a narrower one.
-  int team = 1;
-#ifdef SEAMS_HAS_OPENMP
-  if (!omp_in_parallel()) {
-    team = std::max(1, omp_get_max_threads());
-  }
-#endif
-  int use = team;
-  if (use > 1) {
-    const int fit = nVertices / 80;
-    if (fit < use) {
-      use = std::max(fit, 1);
-    }
-  }
-  const bool serial = use <= 1;
-  const auto phaseWall0 = std::chrono::steady_clock::now();
-  const std::uint64_t phaseTsc0 = gTimePrimitive ? readTsc() : 0;
-  const auto noteRate = [&]() {
-    if (!gTimePrimitive) {
-      return;
-    }
-    const double ms = millisSince(phaseWall0);
-    const std::uint64_t cycles = readTsc() - phaseTsc0;
-    if (ms > 0.0) {
-      gTscPerMs = static_cast<double>(cycles) / ms;
-    }
-  };
-  const auto emitProfile = [&]() {
-    if (const char *prof = std::getenv("SEAMS_RING_PROFILE")) {
-      if (prof[0] != '1') {
-        return;
-      }
-      double levels = 0, paths = 0, pairs = 0, sort = 0;
-      for (const auto &slot : gPhase) {
-        levels += slot.levels;
-        paths += slot.paths;
-        pairs += slot.pairs;
-        sort += slot.sort;
-      }
-      std::fprintf(stderr,
-                   "profile balls_ms %.3f enum_ms %.3f merge_ms %.3f "
-                   "levels_ms %.3f paths_ms %.3f pairs_ms %.3f sort_ms %.3f "
-                   "path_pairs %lld tests %lld odd_pairs %lld sum_p %lld max_p %d "
-                   "lp3 %lld lp4 %lld open2 %lld\n",
-                   gRingSplit.balls_ms, gRingSplit.enumerate_ms, gRingSplit.merge_ms, levels,
-                   paths, pairs, sort, gProfPathPairs, gProfTestN, gProfOddPairs, gProfSumP,
-                   gProfMaxP, gProfLp3, gProfLp4, gOpen2);
-    }
-  };
 
   const int maxLvl = maxDepth / 2;
   const int radius = std::max(maxLvl - 1, 1);
@@ -1630,81 +1003,47 @@ searchPacked(PackedRows adjacency, int maxDepth, const std::vector<char> &source
   // bound is 2 (maxDepth <= 7), adjacency answers every query the
   // primitivity test asks, and the ball table is dead work.
   const bool hopOnly = !legacy && maxLvl <= 3;
-  // Radius 3 (rings of size 8 and 9) was slower as a bitset than as the
-  // sorted pair table, on one thread and on eight, at 110592 molecules of
-  // ice Ic. Radius 4 (rings of size 10) is faster as the bitset. Pairs at
-  // ring distance at most 3 still read the adjacency rows in both cases.
-  // Radius 4 was the expensive ball. A radius-2 pair table answers every
-  // shortcut of a ring of size 10: distance 3 is a neighbour at distance
-  // 2, and distance 4 is a vertex in both balls.
-  const bool meet = !legacy && maxLvl == 5;
+  // Rings of size 8, 9 and 10 need distances up to 3 or 4. The occupancy
+  // bitset of that ball replaces the sorted pair table. Larger rings keep
+  // the table.
+  const bool bitBall = !legacy && maxLvl > 3 && maxLvl <= 5;
   std::vector<int> from;
   for (int v = 0; v < nVertices; v++) {
-    if (sources.empty() || (v < static_cast<int>(sources.size()) && sources[static_cast<std::size_t>(v)])) {
+    if (sources.empty() || (v < static_cast<int>(sources.size()) && sources[v])) {
       from.push_back(v);
     }
   }
   BoundedBalls balls;
   BitBalls bits;
-  gSkipOdd = false;
-  if (!legacy) {
-    std::vector<char> color(static_cast<std::size_t>(nVertices), -1);
-    std::vector<int> queue;
-    bool bipartite = true;
-    for (int s = 0; bipartite && s < nVertices; s++) {
-      if (color[static_cast<std::size_t>(s)] >= 0) {
-        continue;
-      }
-      color[static_cast<std::size_t>(s)] = 0;
-      queue.assign(1, s);
-      for (std::size_t q = 0; bipartite && q < queue.size(); q++) {
-        const int u = queue[q];
-        const char cu = color[static_cast<std::size_t>(u)];
-        for (const int w : adjacency[static_cast<std::size_t>(u)]) {
-          if (w < 0 || w >= nVertices) {
-            continue;
-          }
-          char &cw = color[static_cast<std::size_t>(w)];
-          if (cw < 0) {
-            cw = static_cast<char>(1 - cu);
-            queue.push_back(w);
-          } else if (cw == cu) {
-            bipartite = false;
-            break;
-          }
-        }
-      }
-    }
-    gSkipOdd = bipartite;
-  }
+  gRingSplit.adj_ms = millisSince(adjStart);
   const auto ballStart = std::chrono::steady_clock::now();
   if (hopOnly) {
     gUsedBalls = 0;
     gRingSplit.ball_count_ms = 0;
     gRingSplit.ball_fill_ms = 0;
     gRingSplit.balls_ms = 0;
-  } else if (meet) {
-    gUsedBalls = 3;
+  } else if (bitBall) {
+    gUsedBalls = 2;
     std::vector<int> reach = from;
     if (static_cast<int>(from.size()) != nVertices) {
-      std::vector<int> lvl(static_cast<std::size_t>(nVertices), -1);
+      std::vector<int> lvl(nVertices, -1);
       for (const int v : from) {
-        lvl[static_cast<std::size_t>(v)] = 0;
+        lvl[v] = 0;
       }
       for (std::size_t k = 0; k < reach.size(); k++) {
         const int u = reach[k];
-        if (lvl[static_cast<std::size_t>(u)] == maxLvl) {
+        if (lvl[u] == maxLvl) {
           continue;
         }
-        for (const int w : adjacency[static_cast<std::size_t>(u)]) {
-          if (w >= 0 && w < nVertices && lvl[static_cast<std::size_t>(w)] == -1) {
-            lvl[static_cast<std::size_t>(w)] = lvl[static_cast<std::size_t>(u)] + 1;
+        for (const int w : adjacency[u]) {
+          if (w >= 0 && w < nVertices && lvl[w] == -1) {
+            lvl[w] = lvl[u] + 1;
             reach.push_back(w);
           }
         }
       }
     }
-    balls.fillList(adjacency, 2, reach);
+    bits.fill(adjacency, radius, reach);
     gRingSplit.ball_count_ms = 0;
     gRingSplit.ball_fill_ms = millisSince(ballStart);
     gRingSplit.balls_ms = gRingSplit.ball_fill_ms;
@@ -1713,19 +1052,19 @@ searchPacked(PackedRows adjacency, int maxDepth, const std::vector<char> &source
     if (static_cast<int>(from.size()) == nVertices) {
       balls.fillList(adjacency, radius, from);
     } else {
-      std::vector<int> lvl(static_cast<std::size_t>(nVertices), -1);
+      std::vector<int> lvl(nVertices, -1);
       std::vector<int> reached = from;
       for (const int v : from) {
-        lvl[static_cast<std::size_t>(v)] = 0;
+        lvl[v] = 0;
       }
       for (std::size_t k = 0; k < reached.size(); k++) {
         const int u = reached[k];
-        if (lvl[static_cast<std::size_t>(u)] == maxLvl) {
+        if (lvl[u] == maxLvl) {
           continue;
         }
-        for (const int w : adjacency[static_cast<std::size_t>(u)]) {
-          if (w >= 0 && w < nVertices && lvl[static_cast<std::size_t>(w)] == -1) {
-            lvl[static_cast<std::size_t>(w)] = lvl[static_cast<std::size_t>(u)] + 1;
+        for (const int w : adjacency[u]) {
+          if (w >= 0 && w < nVertices && lvl[w] == -1) {
+            lvl[w] = lvl[u] + 1;
             reached.push_back(w);
           }
         }
@@ -1736,10 +1075,9 @@ searchPacked(PackedRows adjacency, int maxDepth, const std::vector<char> &source
   }
   DistOracle oracle;
   oracle.adj = &adjacency;
-  oracle.balls = (hopOnly || meet) ? (meet ? &balls : nullptr) : &balls;
-  oracle.bits = nullptr;
-  oracle.hop2 = !legacy && maxLvl <= 5;
-  oracle.meet4 = meet;
+  oracle.balls = (hopOnly || bitBall) ? nullptr : &balls;
+  oracle.bits = bitBall ? &bits : nullptr;
+  oracle.hop2 = hopOnly || bitBall;
   const int nFrom = static_cast<int>(from.size());
 
 #ifdef SEAMS_HAS_OPENMP
@@ -1748,7 +1086,8 @@ searchPacked(PackedRows adjacency, int maxDepth, const std::vector<char> &source
   // that list of lists costs more than the search. The directing step
   // clears levels only inside the ball this source touched, so the
   // search stays linear in the number of vertices.
-  const bool parallelSources = !serial && !omp_in_parallel() && use > 1;
+  const bool parallelSources =
+      !serial && !omp_in_parallel() && omp_get_max_threads() > 1;
   if (parallelSources) {
     // Sources are independent given the shared read-only balls; per-source
     // collection keeps the output identical to the serial ascending-source
@@ -1758,110 +1097,62 @@ searchPacked(PackedRows adjacency, int maxDepth, const std::vector<char> &source
     // size updates. A static share of the sources is even on a crystal
     // and keeps each thread on its own lines.
     const auto enumStart = std::chrono::steady_clock::now();
-    // One pool per source, kept for the next frame of the same size.
-    // Releasing it put a malloc on the search that did not scale.
-    // The calling thread owns the pools. Workers write disjoint slots
-    // through this pointer; a thread_local inside the team would be a
-    // different vector on every worker.
-    thread_local std::vector<RingPool> perSource;
-    if (static_cast<int>(perSource.size()) < nFrom) {
-      perSource.resize(static_cast<std::size_t>(nFrom));
-    }
-    for (int k = 0; k < nFrom; k++) {
-      perSource[static_cast<std::size_t>(k)].reset();
-    }
-    auto *pools = &perSource;
-#pragma omp parallel num_threads(use)
+    std::vector<RingPool> perSource(static_cast<std::size_t>(nFrom));
+#pragma omp parallel
     {
-      // Kept by each worker for the next search, so the level and path
-      // tables are not faulted in again on every call.
-      thread_local RingScratch scratch;
+      RingScratch scratch;
 #pragma omp for schedule(guided)
       for (int k = 0; k < nFrom; k++) {
-        if (gSourceWorkPtr == nullptr) {
-          enumerateFromSource(adjacency, oracle, from[static_cast<std::size_t>(k)], maxDepth, maxLvl,
-                              scratch, (*pools)[static_cast<std::size_t>(k)],
-                              nullptr, legacy);
-        } else {
-          const auto srcStart = std::chrono::steady_clock::now();
-          enumerateFromSource(adjacency, oracle, from[static_cast<std::size_t>(k)], maxDepth, maxLvl,
-                              scratch, (*pools)[static_cast<std::size_t>(k)],
-                              nullptr, legacy);
-          const int src = from[static_cast<std::size_t>(k)];
-          if (src >= 0 && src < nVertices) {
-            gSourceWorkPtr[src] +=
-                std::chrono::duration<double, std::micro>(
-                    std::chrono::steady_clock::now() - srcStart)
-                    .count();
-          }
-        }
+        enumerateFromSource(adjacency, oracle, from[k], maxDepth, maxLvl,
+                            scratch, perSource[static_cast<std::size_t>(k)],
+                            nullptr, legacy, minSize);
       }
     }
     gRingSplit.enumerate_ms = millisSince(enumStart);
     const auto mergeStart = std::chrono::steady_clock::now();
-    if (sizes.counts != nullptr) {
-      countSizes(pools->data(), nFrom, use, sizes);
-    } else {
+    // Every ring, source list and ball is a heap block of its own; moving
+    // and freeing them on one thread is a sizeable share of a threaded search
+    std::vector<std::size_t> offset(static_cast<std::size_t>(nFrom) + 1, 0);
+    for (int k = 0; k < nFrom; k++) {
+      offset[static_cast<std::size_t>(k + 1)] =
+          offset[static_cast<std::size_t>(k)] +
+          perSource[static_cast<std::size_t>(k)].size();
+    }
+    rings.resize(offset[static_cast<std::size_t>(nFrom)]);
+#pragma omp parallel
+    {
+#pragma omp for schedule(static) nowait
       for (int k = 0; k < nFrom; k++) {
-        for (const auto &ring : (*pools)[static_cast<std::size_t>(k)]) {
-          rings.push_back(ring);
-        }
+        auto &pool = perSource[static_cast<std::size_t>(k)];
+        std::move(pool.begin(), pool.end(),
+                  rings.begin() +
+                      static_cast<std::ptrdiff_t>(offset[static_cast<std::size_t>(k)]));
+        pool.release();
       }
     }
     balls.clear();
+    std::vector<std::vector<int>>().swap(uniq);
     std::vector<int>().swap(adjacency.cols);
     std::vector<std::size_t>().swap(adjacency.first);
+    std::vector<RingPool>().swap(perSource);
     gRingSplit.merge_ms = millisSince(mergeStart);
-    noteRate();
-    emitProfile();
     return rings;
   }
 #endif
 
   const auto enumStart = std::chrono::steady_clock::now();
-  thread_local RingScratch scratch;
-  if (sizes.counts != nullptr) {
-    // One pool, emptied per source, so the ring buffers are reused.
-    thread_local RingPool pool;
-    for (int i = 0; i < sizes.len; i++) {
-      sizes.counts[i] = 0;
-    }
-    for (const int src : from) {
-      pool.reset();
-      enumerateFromSource(adjacency, oracle, src, maxDepth, maxLvl, scratch, pool,
-                          nullptr, legacy);
-      for (const auto &ring : pool) {
-        const std::size_t size = ring.size();
-        if (size < static_cast<std::size_t>(sizes.len)) {
-          sizes.counts[size] += 1;
-        }
-      }
-    }
-  } else if (gSourceWorkPtr == nullptr) {
-    for (const int src : from) {
-      enumerateFromSource(adjacency, oracle, src, maxDepth, maxLvl, scratch,
-                          rings, nullptr, legacy);
-    }
-  } else {
-    for (const int src : from) {
-      const auto srcStart = std::chrono::steady_clock::now();
-      enumerateFromSource(adjacency, oracle, src, maxDepth, maxLvl, scratch,
-                          rings, nullptr, legacy);
-      if (src >= 0 && src < nVertices) {
-        gSourceWorkPtr[src] += std::chrono::duration<double, std::micro>(
-                                   std::chrono::steady_clock::now() - srcStart)
-                                   .count();
-      }
-    }
+  RingScratch scratch;
+  for (const int src : from) {
+    enumerateFromSource(adjacency, oracle, src, maxDepth, maxLvl, scratch,
+                        rings, nullptr, legacy, minSize);
   }
   gRingSplit.enumerate_ms = millisSince(enumStart);
   const auto mergeStart = std::chrono::steady_clock::now();
   balls.clear();
+  std::vector<std::vector<int>>().swap(uniq);
   std::vector<int>().swap(adjacency.cols);
   std::vector<std::size_t>().swap(adjacency.first);
   gRingSplit.merge_ms = millisSince(mergeStart);
-  noteRate();
-  emitProfile();
 
   return rings;
 }
@@ -1870,21 +1161,6 @@ std::vector<std::vector<int>>
 primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
                        const std::vector<char> &sources) {
   return searchRings(nList, maxDepth, sources, false);
-}
-
-void primitive::setSourceWork(double *microseconds) { gSourceWorkPtr = microseconds; }
-
-void primitive::setPhaseTiming(bool on) {
-  gTimePrimitive = on;
-  gPrimCycles.store(0, std::memory_order_relaxed);
-}
-
-double primitive::takePrimitiveMs() {
-  const std::uint64_t cycles = gPrimCycles.exchange(0, std::memory_order_relaxed);
-  if (!(gTscPerMs > 0.0) || cycles == 0) {
-    return 0.0;
-  }
-  return static_cast<double>(cycles) / gTscPerMs;
 }
 
 primitive::RingSearchSplit primitive::lastRingSearchSplit() {
@@ -1970,7 +1246,7 @@ int primitive::findRings(Graph &fullGraph, int v, std::vector<int> &visited,
   // For the first call:
   if (root == -1) {
     root = v;                          // Init the root as the current node
-    fullGraph.pts[static_cast<std::size_t>(v)].inGraph = false; // Remove the root from the graph
+    fullGraph.pts[v].inGraph = false; // Remove the root from the graph
   }                                    // first call
   //
   // Checks
@@ -1992,31 +1268,31 @@ int primitive::findRings(Graph &fullGraph, int v, std::vector<int> &visited,
   // -------------
   // Start the search
   depth += 1; // Go to the next layer
-  nnumNeighbours = static_cast<int>(fullGraph.pts[static_cast<std::size_t>(v)].neighListIndex.size());
+  nnumNeighbours = fullGraph.pts[v].neighListIndex.size();
   // Loop through the neighbours of iNode
   for (int j = 0; j < nnumNeighbours; j++) {
-    n = fullGraph.pts[static_cast<std::size_t>(v)].neighListIndex[static_cast<std::size_t>(j)]; // Neighbour index
+    n = fullGraph.pts[v].neighListIndex[j]; // Neighbour index
     // Has a ring been found?!
     if (depth > 2 && n == root) {
       // Add the visited vector to the rings vector of vector
       fullGraph.rings.push_back(visited);
     } // A ring has been found!
     // Otherwise search all the neighbours which have not been searched already
-    else if (fullGraph.pts[static_cast<std::size_t>(n)].inGraph) {
-      fullGraph.pts[static_cast<std::size_t>(n)].inGraph = false; // Set to false now
+    else if (fullGraph.pts[n].inGraph) {
+      fullGraph.pts[n].inGraph = false; // Set to false now
       // Recursive call
       primitive::findRings(fullGraph, n, visited, maxDepth, depth, root);
-      fullGraph.pts[static_cast<std::size_t>(n)].inGraph = true; // Put n back in the graph
+      fullGraph.pts[n].inGraph = true; // Put n back in the graph
     } // Search the other unsearched neighbours
   }   // end of search through all neighbours
   // -------------
   // When the depth is 2, remove just the root from the neighbours of iNode
   if (depth == 2) {
     // Search for root in the neighbour list of v
-    for (int j = 0; j < fullGraph.pts[static_cast<std::size_t>(v)].neighListIndex.size(); j++) {
-      if (root == fullGraph.pts[static_cast<std::size_t>(v)].neighListIndex[static_cast<std::size_t>(j)]) {
-        fullGraph.pts[static_cast<std::size_t>(v)].neighListIndex.erase(
-            fullGraph.pts[static_cast<std::size_t>(v)].neighListIndex.begin() + j);
+    for (int j = 0; j < fullGraph.pts[v].neighListIndex.size(); j++) {
+      if (root == fullGraph.pts[v].neighListIndex[j]) {
+        fullGraph.pts[v].neighListIndex.erase(
+            fullGraph.pts[v].neighListIndex.begin() + j);
       } // end of erase
     }   // end of search
   }     // remove root not edges
@@ -2053,9 +1329,10 @@ primitive::Graph primitive::populateGraphFromNListID(
     // -----
     // Update the neighbours of iatom (only the indices!)
     iNeigh.clear(); // init
-    nnumNeighbours = static_cast<int>(neighHbondList[static_cast<std::size_t>(iatom)].size() - 1);
+    nnumNeighbours = neighHbondList[iatom].size() -
+                     1; // The first element is atomID of iatom
     for (int j = 1; j <= nnumNeighbours; j++) {
-      jatomID = neighHbondList[static_cast<std::size_t>(iatom)][static_cast<std::size_t>(j)]; // Atom ID
+      jatomID = neighHbondList[iatom][j]; // Atom ID
       // Get the atom index for the vector nearest neighbour list
       auto it = yCloud.idIndexMap.find(jatomID);
       if (it != yCloud.idIndexMap.end()) {
@@ -2104,12 +1381,12 @@ primitive::populateGraphFromIndices(const std::vector<std::vector<int>> &nList) 
   // ------------------------------
   // Loop through every point in nList
   for (int i = 0; i < nList.size(); i++) {
-    iatom = nList[static_cast<std::size_t>(i)][0]; // Atom index of i
+    iatom = nList[i][0]; // Atom index of i
     // neighListIndex is simply the i^th row of nList
     //
     // Update iVertex
     iVertex.atomIndex = iatom;
-    iVertex.neighListIndex = nList[static_cast<std::size_t>(i)];
+    iVertex.neighListIndex = nList[i];
     // Add to the Graph object
     fullGraph.pts.push_back(iVertex);
   } // end of loop through iatom
@@ -2138,7 +1415,7 @@ primitive::restoreEdgesFromIndices(Graph &fullGraph,
   for (int i = 0; i < nList.size(); i++) {
     // neighListIndex is simply the i^th row of nList
     // Update the neighListIndex list in the graph object
-    fullGraph.pts[static_cast<std::size_t>(i)].neighListIndex = nList[static_cast<std::size_t>(i)];
+    fullGraph.pts[i].neighListIndex = nList[i];
   } // end of loop through iatom
 }
 
@@ -2154,8 +1431,8 @@ primitive::restoreEdgesFromIndices(Graph &fullGraph,
  */
 void primitive::removeNonSPrings(primitive::Graph &fullGraph) {
   //
-  const int nVertices = static_cast<int>(fullGraph.pts.size()); // Number of vertices in the graph
-  const int nRings = static_cast<int>(fullGraph.rings.size());  // Number of rings
+  const int nVertices = fullGraph.pts.size(); // Number of vertices in the graph
+  const int nRings = fullGraph.rings.size();  // Number of rings
   std::vector<bool> ringsToRemove; // Vector containing the logical values for
                                    // removal of the current ring index
   std::vector<std::vector<int>>
@@ -2165,7 +1442,7 @@ void primitive::removeNonSPrings(primitive::Graph &fullGraph) {
   // -------------------
   // Make sure all the vertices are in the graph before removing non-SP rings
   for (int iVer = 0; iVer < nVertices; iVer++) {
-    fullGraph.pts[static_cast<std::size_t>(iVer)].inGraph = true;
+    fullGraph.pts[iVer].inGraph = true;
   } // end of loop through every vertex
   // -------------------
   // The criterion compares, for each pair of non-adjacent ring members, the
@@ -2179,58 +1456,58 @@ void primitive::removeNonSPrings(primitive::Graph &fullGraph) {
   // ring. The sweep reaches only the handful of vertices within the bound, so
   // its scratch is cleared by walking what it touched rather than the whole
   // graph.
-  ringsToRemove.assign(static_cast<std::size_t>(nRings), false);
+  ringsToRemove.assign(nRings, false);
 
   struct Query {
     int target;   // The other ring member
     int ringHops; // Separation around the ring, in edges
     int ring;     // Which ring asked
   };
-  std::vector<std::vector<Query>> queries(static_cast<std::size_t>(nVertices));
+  std::vector<std::vector<Query>> queries(nVertices);
 
   int maxHops = 0;
   for (int iRing = 0; iRing < nRings; iRing++) {
-    const std::vector<int> &currentRing = fullGraph.rings[static_cast<std::size_t>(iRing)];
-    const int ringSize = static_cast<int>(currentRing.size());
+    const std::vector<int> &currentRing = fullGraph.rings[iRing];
+    const int ringSize = currentRing.size();
     maxHops = std::max(maxHops, ringSize / 2);
     for (int jVer = 0; jVer < ringSize; jVer++) {
       // connect with all other, skip j-j (distance=0) and j-(j+1) (nearest
       // neighbors)
       for (int kVer = jVer + 2; kVer < ringSize; kVer++) {
-        const int currentV = currentRing[static_cast<std::size_t>(jVer)];
-        const int currentN = currentRing[static_cast<std::size_t>(kVer)];
+        const int currentV = currentRing[jVer];
+        const int currentN = currentRing[kVer];
         if (currentV < 0 || currentV >= nVertices || currentN < 0 ||
             currentN >= nVertices) {
           continue;
         }
         const int d_jk = std::abs(jVer - kVer);
-        queries[static_cast<std::size_t>(currentV)].push_back(
+        queries[currentV].push_back(
             {currentN, std::min(d_jk, std::abs(d_jk - ringSize)), iRing});
       } // end of loop through k^th vertex
     }   // end of loop through j^th vertex
   }     // end of loop through rings
 
   // Answer each vertex's questions with one bounded sweep
-  std::vector<int> distance(static_cast<std::size_t>(nVertices), -1);
+  std::vector<int> distance(nVertices, -1);
   std::vector<int> touched;
   std::vector<int> frontier;
   std::vector<int> next;
 
   for (int v = 0; v < nVertices; v++) {
-    if (queries[static_cast<std::size_t>(v)].empty()) {
+    if (queries[v].empty()) {
       continue;
     }
 
     touched.clear();
     frontier.assign(1, v);
-    distance[static_cast<std::size_t>(v)] = 0;
+    distance[v] = 0;
     touched.push_back(v);
     for (int depth = 1; depth <= maxHops && !frontier.empty(); depth++) {
       next.clear();
       for (const int u : frontier) {
-        for (const int w : fullGraph.pts[static_cast<std::size_t>(u)].neighListIndex) {
-          if (w >= 0 && w < nVertices && distance[static_cast<std::size_t>(w)] == -1) {
-            distance[static_cast<std::size_t>(w)] = depth;
+        for (const int w : fullGraph.pts[u].neighListIndex) {
+          if (w >= 0 && w < nVertices && distance[w] == -1) {
+            distance[w] = depth;
             touched.push_back(w);
             next.push_back(w);
           }
@@ -2239,24 +1516,24 @@ void primitive::removeNonSPrings(primitive::Graph &fullGraph) {
       frontier.swap(next);
     }
 
-    for (const Query &q : queries[static_cast<std::size_t>(v)]) {
+    for (const Query &q : queries[v]) {
       // Separation through the graph, in edges; -1 when beyond the bound
-      const int graphHops = distance[static_cast<std::size_t>(q.target)];
+      const int graphHops = distance[q.target];
       if (graphHops >= 0 && graphHops < q.ringHops) {
-        ringsToRemove[static_cast<std::size_t>(q.ring)] = true;
+        ringsToRemove[q.ring] = true;
       } // Decide whether to keep or remove the ring
     }
 
     // Clear only what this sweep reached
     for (const int w : touched) {
-      distance[static_cast<std::size_t>(w)] = -1;
+      distance[w] = -1;
     }
   } // end of loop through vertices
   // -------------------
   // Remove all the rings whose indices are given in the ringsToRemove vector
   for (int i = 0; i < ringsToRemove.size(); i++) {
-    if (!ringsToRemove[static_cast<std::size_t>(i)]) {
-      primitiveRings.push_back(fullGraph.rings[static_cast<std::size_t>(i)]);
+    if (!ringsToRemove[i]) {
+      primitiveRings.push_back(fullGraph.rings[i]);
     } // updates new copy
   }   // end of loop through ringsToRemove
   // -------------------
@@ -2296,7 +1573,7 @@ int primitive::shortestPath(Graph &fullGraph, int v, int goal,
         v); // Add the current vertex to the path (visited points)
     //
     if (v == goal) {
-      len_path = static_cast<int>(path.size()); // Path of the length of visited points
+      len_path = path.size(); // Path of the length of visited points
       // If the current path is shorter OR this is the first path found
       if (depth < len_path || len_path == 0) {
         path = visited;
@@ -2305,16 +1582,16 @@ int primitive::shortestPath(Graph &fullGraph, int v, int goal,
     }   // Goal reached
     // Recursive calls to function
     else {
-      nnumNeighbours = static_cast<int>(fullGraph.pts[static_cast<std::size_t>(v)].neighListIndex.size());
+      nnumNeighbours = fullGraph.pts[v].neighListIndex.size();
       // Search all the neighbours
       for (int j = 0; j < nnumNeighbours; j++) {
-        n = fullGraph.pts[static_cast<std::size_t>(v)].neighListIndex[static_cast<std::size_t>(j)]; // Index of nearest neighbour
+        n = fullGraph.pts[v].neighListIndex[j]; // Index of nearest neighbour
         // If n has not already been searched:
-        if (fullGraph.pts[static_cast<std::size_t>(n)].inGraph == true) {
-          fullGraph.pts[static_cast<std::size_t>(n)].inGraph = false; // Set to false
+        if (fullGraph.pts[n].inGraph == true) {
+          fullGraph.pts[n].inGraph = false; // Set to false
           primitive::shortestPath(fullGraph, n, goal, path, visited, maxDepth,
                                   depth);   // Recursive call
-          fullGraph.pts[static_cast<std::size_t>(n)].inGraph = true; // Put back in the graph
+          fullGraph.pts[n].inGraph = true; // Put back in the graph
         } // If n is in the graph, call recursively
       }   // End of loop over all neighbours
     }     // Goal not reached
@@ -2371,10 +1648,6 @@ struct primitive::RingUpdater::Impl {
   int which = 0;
   bool primed = false;
   std::vector<std::vector<int>> flattened;
-  // Ring buffers dropped by a carried update. Kept so the update does
-  // not free a million blocks before it returns; the next frame reuses
-  // them. The updater releases them when it is destroyed.
-  std::vector<std::vector<int>> spare;
   bool ballsStale = true;
   BoundedBalls balls;
   std::vector<RingPool> bySource;
@@ -2411,8 +1684,7 @@ struct primitive::RingUpdater::Impl {
     }
     dst.cols.resize(dst.first[static_cast<std::size_t>(nVertices)]);
 #ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) num_threads(seams::teamFor(nVertices)) \
-    if (seams::teamFor(nVertices) > 1 && !omp_in_parallel())
+#pragma omp parallel for schedule(static) if (nVertices >= 1024 && !omp_in_parallel())
 #endif
     for (int v = 0; v < nVertices; v++) {
       const auto n = dst.first[static_cast<std::size_t>(v) + 1] -
@@ -2489,44 +1761,10 @@ struct primitive::RingUpdater::Impl {
         nVertices > 0 ? static_cast<double>(changedBonds) / nVertices : 0.0;
   }
 
-  // Odd rings are skipped only while the graph stays bipartite. The flag
-  // is global, and a full search of a crystal leaves it set, so each
-  // update reads it from the graph it is about to walk.
-  template <typename Graph> static bool skipsOddRings(const Graph &adjacency) {
-    const int nVertices = static_cast<int>(adjacency.size());
-    std::vector<char> color(static_cast<std::size_t>(std::max(nVertices, 0)), -1);
-    std::vector<int> queue;
-    for (int s = 0; s < nVertices; s++) {
-      if (color[static_cast<std::size_t>(s)] >= 0) {
-        continue;
-      }
-      color[static_cast<std::size_t>(s)] = 0;
-      queue.assign(1, s);
-      for (std::size_t q = 0; q < queue.size(); q++) {
-        const int u = queue[q];
-        const char cu = color[static_cast<std::size_t>(u)];
-        for (const int w : adjacency[static_cast<std::size_t>(u)]) {
-          if (w < 0 || w >= nVertices) {
-            continue;
-          }
-          char &cw = color[static_cast<std::size_t>(w)];
-          if (cw < 0) {
-            cw = static_cast<char>(1 - cu);
-            queue.push_back(w);
-          } else if (cw == cu) {
-            return false;
-          }
-        }
-      }
-    }
-    return true;
-  }
-
   // Whole-frame enumeration into persistent per-source pools, then a copy
   // into the flattened buffer that keeps each ring's allocation.
   template <typename Graph> void fastEnumerate(const Graph &adj) {
     const int nVertices = static_cast<int>(adj.size());
-    gSkipOdd = skipsOddRings(adj);
     if (hopOnly) {
       ballsRefreshed = 0;
       ballsStale = false;
@@ -2545,7 +1783,7 @@ struct primitive::RingUpdater::Impl {
     int nThreads = 1;
 #ifdef SEAMS_HAS_OPENMP
     if (!omp_in_parallel()) {
-      nThreads = sourceTeam(nVertices);
+      nThreads = omp_get_max_threads();
     }
 #endif
     if (static_cast<int>(scratches.size()) < nThreads) {
@@ -2553,7 +1791,7 @@ struct primitive::RingUpdater::Impl {
     }
 #ifdef SEAMS_HAS_OPENMP
     if (nThreads > 1) {
-#pragma omp parallel num_threads(nThreads)
+#pragma omp parallel
       {
         RingScratch &scratch = scratches[static_cast<std::size_t>(omp_get_thread_num())];
         // Guided chunks: a nucleus and a partial shell put much heavier
@@ -2612,229 +1850,63 @@ struct primitive::RingUpdater::Impl {
   ringsMeeting(const Graph &adj, const std::vector<int> &T,
                const std::vector<char> &inT) {
     const int n = static_cast<int>(T.size());
-    const int nVertices = static_cast<int>(adj.size());
-    gSkipOdd = skipsOddRings(adj);
-    if (static_cast<int>(bySource.size()) != nVertices) {
-      bySource.assign(static_cast<std::size_t>(nVertices), {});
-    }
-    int nThreads = 1;
+    std::vector<std::vector<std::vector<int>>> fresh(T.size());
 #ifdef SEAMS_HAS_OPENMP
-    if (!omp_in_parallel()) {
-      // The work is the sources in T, not the whole crystal.
-      nThreads = sourceTeam(n);
-    }
-#endif
-    if (static_cast<int>(scratches.size()) < nThreads) {
-      scratches.resize(static_cast<std::size_t>(nThreads));
-    }
-#ifdef SEAMS_HAS_OPENMP
-    if (nThreads > 1) {
-#pragma omp parallel num_threads(nThreads)
-      {
-        RingScratch &scratch =
-            scratches[static_cast<std::size_t>(omp_get_thread_num())];
-        DistOracle oracle;
-        oracle.adj = &adj;
-        oracle.balls = hopOnly ? nullptr : &balls;
-        oracle.hop2 = hopOnly;
-#pragma omp for schedule(guided)
-        for (int k = 0; k < n; k++) {
-          const int src = T[static_cast<std::size_t>(k)];
-          RingPool &pool = bySource[static_cast<std::size_t>(src)];
-          pool.reset();
-          enumerateFromSource(adj, oracle, src, maxDepth, maxLvl, scratch, pool,
-                              &inT);
-        }
-      }
-    } else
+#pragma omp parallel if (!omp_in_parallel())
 #endif
     {
-      if (scratches.empty()) {
-        scratches.emplace_back();
-      }
+      RingScratch scratch;
       DistOracle oracle;
       oracle.adj = &adj;
       oracle.balls = hopOnly ? nullptr : &balls;
       oracle.hop2 = hopOnly;
-      for (int k = 0; k < n; k++) {
-        const int src = T[static_cast<std::size_t>(k)];
-        RingPool &pool = bySource[static_cast<std::size_t>(src)];
-        pool.reset();
-        enumerateFromSource(adj, oracle, src, maxDepth, maxLvl, scratches[0], pool,
-                            &inT);
-      }
-    }
-    if (nThreads <= 1) {
-      // The index sort and the parallel merge allocate and move every
-      // ring buffer. On one thread the direct copy and sort is faster,
-      // and it is the path that the carried update used before.
-      std::size_t total = 0;
-      for (int k = 0; k < n; k++) {
-        total += bySource[static_cast<std::size_t>(T[static_cast<std::size_t>(k)])].n;
-      }
-      std::vector<std::vector<int>> out;
-      out.reserve(total);
-      for (int k = 0; k < n; k++) {
-        RingPool &pool = bySource[static_cast<std::size_t>(T[static_cast<std::size_t>(k)])];
-        for (std::size_t i = 0; i < pool.n; i++) {
-          out.push_back(pool.storage[i]);
-        }
-        pool.reset();
-      }
-      std::sort(out.begin(), out.end());
-      return out;
-    }
-    std::vector<std::size_t> ringAt(static_cast<std::size_t>(n) + 1, 0);
-    for (int k = 0; k < n; k++) {
-      ringAt[static_cast<std::size_t>(k) + 1] =
-          ringAt[static_cast<std::size_t>(k)] +
-          bySource[static_cast<std::size_t>(T[static_cast<std::size_t>(k)])].n;
-    }
-    std::vector<std::vector<int>> out(ringAt[static_cast<std::size_t>(n)]);
 #ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static)
+#pragma omp for schedule(guided)
 #endif
-    for (int k = 0; k < n; k++) {
-      RingPool &pool = bySource[static_cast<std::size_t>(T[static_cast<std::size_t>(k)])];
-      std::size_t at = ringAt[static_cast<std::size_t>(k)];
-      for (std::size_t i = 0; i < pool.n; i++) {
-        out[at++] = pool.storage[i];
+      for (int k = 0; k < n; k++) {
+        enumerateFromSource(adj, oracle, T[static_cast<std::size_t>(k)],
+                            maxDepth, maxLvl, scratch,
+                            fresh[static_cast<std::size_t>(k)], &inT);
       }
-      pool.reset();
     }
-    // Sort indices. Moving the ring buffers at every merge level of a
-    // vector sort is most of this step, and the order is the same when
-    // every ring is unique.
-    std::vector<int> order(out.size());
-    std::iota(order.begin(), order.end(), 0);
-    const auto byRing = [&out](int a, int b) {
-      return out[static_cast<std::size_t>(a)] < out[static_cast<std::size_t>(b)];
-    };
-    seams::parallelStableSort(order, byRing);
-    std::vector<std::vector<int>> sorted(out.size());
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static)
-#endif
-    for (int i = 0; i < static_cast<int>(order.size()); ++i) {
-      sorted[static_cast<std::size_t>(i)] =
-          std::move(out[static_cast<std::size_t>(order[static_cast<std::size_t>(i)])]);
+    std::size_t total = 0;
+    for (const auto &f : fresh) {
+      total += f.size();
     }
-    out.swap(sorted);
+    std::vector<std::vector<int>> out;
+    out.reserve(total);
+    for (auto &f : fresh) {
+      for (auto &r : f) {
+        out.push_back(std::move(r));
+      }
+    }
+    std::sort(out.begin(), out.end());
     return out;
   }
 
   void splice(const std::vector<char> &inT,
               std::vector<std::vector<int>> added) {
-    int nThreads = 1;
-#ifdef SEAMS_HAS_OPENMP
-    if (!omp_in_parallel()) {
-      nThreads = seams::teamFor(static_cast<int>(flattened.size()));
-    }
-#endif
-    if (nThreads <= 1) {
-      std::vector<std::vector<int>> merged;
-      merged.reserve(flattened.size() + added.size());
-      auto a = added.begin();
-      for (auto &r : flattened) {
-        bool meets = false;
-        for (const int v : r) {
-          if (inT[static_cast<std::size_t>(v)]) {
-            meets = true;
-            break;
-          }
-        }
-        if (meets) {
-          continue;
-        }
-        while (a != added.end() && *a < r) {
-          merged.push_back(std::move(*a++));
-        }
-        merged.push_back(std::move(r));
-      }
-      while (a != added.end()) {
-        merged.push_back(std::move(*a++));
-      }
-      flattened.swap(merged);
-      return;
-    }
-    const int nRing = static_cast<int>(flattened.size());
-    std::vector<char> drop(static_cast<std::size_t>(nRing), 0);
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) num_threads(nThreads)
-#endif
-    for (int i = 0; i < nRing; ++i) {
-      for (const int v : flattened[static_cast<std::size_t>(i)]) {
+    std::vector<std::vector<int>> merged;
+    merged.reserve(flattened.size() + added.size());
+    auto a = added.begin();
+    for (auto &r : flattened) {
+      bool meets = false;
+      for (const int v : r) {
         if (inT[static_cast<std::size_t>(v)]) {
-          drop[static_cast<std::size_t>(i)] = 1;
+          meets = true;
           break;
         }
       }
-    }
-    int kept = 0;
-    for (int i = 0; i < nRing; ++i) {
-      if (drop[static_cast<std::size_t>(i)] == 0) {
-        ++kept;
-      }
-    }
-    std::vector<int> keepIdx;
-    keepIdx.reserve(static_cast<std::size_t>(kept));
-    for (int i = 0; i < nRing; ++i) {
-      if (drop[static_cast<std::size_t>(i)] == 0) {
-        keepIdx.push_back(i);
-      }
-    }
-    const int nPart = std::max(nThreads, 1);
-    std::vector<int> aSplit(static_cast<std::size_t>(nPart) + 1, 0);
-    aSplit[static_cast<std::size_t>(nPart)] = static_cast<int>(added.size());
-    for (int tid = 1; tid < nPart; ++tid) {
-      const int k0 = tid * kept / nPart;
-      if (k0 >= kept) {
-        aSplit[static_cast<std::size_t>(tid)] = static_cast<int>(added.size());
+      if (meets) {
         continue;
       }
-      const auto &ring = flattened[static_cast<std::size_t>(keepIdx[static_cast<std::size_t>(k0)])];
-      const auto at = std::lower_bound(added.begin(), added.end(), ring);
-      aSplit[static_cast<std::size_t>(tid)] = static_cast<int>(at - added.begin());
+      while (a != added.end() && *a < r) {
+        merged.push_back(std::move(*a++));
+      }
+      merged.push_back(std::move(r));
     }
-    std::vector<std::vector<std::vector<int>>> parts(static_cast<std::size_t>(nPart));
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel num_threads(nPart) if (nPart > 1)
-#endif
-    {
-      int tid = 0;
-#ifdef SEAMS_HAS_OPENMP
-      tid = omp_get_thread_num();
-#endif
-      const int k0 = tid * kept / nPart;
-      const int k1 = (tid + 1) * kept / nPart;
-      const auto a0 = added.begin() + aSplit[static_cast<std::size_t>(tid)];
-      const auto a1 = added.begin() + aSplit[static_cast<std::size_t>(tid + 1)];
-      auto &mine = parts[static_cast<std::size_t>(tid)];
-      mine.reserve(static_cast<std::size_t>(k1 - k0) +
-                   static_cast<std::size_t>(a1 - a0));
-      int k = k0;
-      auto a = a0;
-      while (k < k1 && a != a1) {
-        auto &ring = flattened[static_cast<std::size_t>(keepIdx[static_cast<std::size_t>(k)])];
-        if (*a < ring) {
-          mine.push_back(std::move(*a++));
-        } else {
-          mine.push_back(std::move(ring));
-          ++k;
-        }
-      }
-      while (k < k1) {
-        mine.push_back(std::move(flattened[static_cast<std::size_t>(keepIdx[static_cast<std::size_t>(k++)])]));
-      }
-      while (a != a1) {
-        mine.push_back(std::move(*a++));
-      }
-    }
-    std::vector<std::vector<int>> merged;
-    merged.reserve(static_cast<std::size_t>(kept) + added.size());
-    for (auto &part : parts) {
-      merged.insert(merged.end(), std::make_move_iterator(part.begin()),
-                    std::make_move_iterator(part.end()));
+    while (a != added.end()) {
+      merged.push_back(std::move(*a++));
     }
     flattened.swap(merged);
   }
@@ -2944,15 +2016,15 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
   int nThreads = 1;
 #ifdef SEAMS_HAS_OPENMP
   if (!omp_in_parallel()) {
-    nThreads = seams::teamFor(nVertices);
+    nThreads = omp_get_max_threads();
   }
-  if (nThreads > 1) {
+  if (nVertices >= 1024 && nThreads > 1) {
     struct alignas(64) Acc {
       std::vector<int> vs;
       int directed = 0;
     };
     std::vector<Acc> acc(static_cast<std::size_t>(nThreads));
-#pragma omp parallel num_threads(nThreads)
+#pragma omp parallel
     {
       Acc &me = acc[static_cast<std::size_t>(omp_get_thread_num())];
 #pragma omp for schedule(static)
@@ -2989,117 +2061,11 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
   const bool overAtoms =
       st.useVertexFraction && st.fullPassFraction < 1.0 &&
       (st.fullPassFraction <= 0.0 || changed.size() > atomLimit);
-  // Connected components of the changed vertices, on edges of either
-  // frame. The radius is the eccentricity inside the component. A
-  // component exceeds the hop ball when that radius is greater than
-  // ballRadius. Only then, and only when the ball of those components
-  // in the full graph is every vertex, does the frame take one pass.
-  // Every other component is carried with the sources in T.
-  auto componentExceedsFrame = [&]() {
-    std::vector<char> changedMark(static_cast<std::size_t>(nVertices), 0);
-    for (const int v : changed) {
-      if (v >= 0 && v < nVertices) {
-        changedMark[static_cast<std::size_t>(v)] = 1;
-      }
-    }
-    std::vector<char> seen(static_cast<std::size_t>(nVertices), 0);
-    std::vector<int> exceeding;
-    std::vector<int> queue;
-    std::vector<int> dist(static_cast<std::size_t>(nVertices), -1);
-    for (const int seed : changed) {
-      if (seed < 0 || seed >= nVertices || seen[static_cast<std::size_t>(seed)]) {
-        continue;
-      }
-      queue.clear();
-      queue.push_back(seed);
-      seen[static_cast<std::size_t>(seed)] = 1;
-      std::vector<int> members;
-      for (std::size_t head = 0; head < queue.size(); ++head) {
-        const int u = queue[head];
-        members.push_back(u);
-        auto walk = [&](const PackedRows &g) {
-          for (const int w : g[static_cast<std::size_t>(u)]) {
-            if (w < 0 || w >= nVertices || !changedMark[static_cast<std::size_t>(w)] ||
-                seen[static_cast<std::size_t>(w)]) {
-              continue;
-            }
-            seen[static_cast<std::size_t>(w)] = 1;
-            queue.push_back(w);
-          }
-        };
-        walk(prev);
-        walk(next);
-      }
-      for (const int v : members) {
-        dist[static_cast<std::size_t>(v)] = -1;
-      }
-      dist[static_cast<std::size_t>(seed)] = 0;
-      int radius = 0;
-      std::vector<int> layer{seed};
-      for (std::size_t head = 0; head < layer.size(); ++head) {
-        const int u = layer[head];
-        const int du = dist[static_cast<std::size_t>(u)];
-        if (du > radius) {
-          radius = du;
-        }
-        auto step = [&](const PackedRows &g) {
-          for (const int w : g[static_cast<std::size_t>(u)]) {
-            if (w < 0 || w >= nVertices || !changedMark[static_cast<std::size_t>(w)] ||
-                dist[static_cast<std::size_t>(w)] != -1) {
-              continue;
-            }
-            dist[static_cast<std::size_t>(w)] = du + 1;
-            layer.push_back(w);
-          }
-        };
-        step(prev);
-        step(next);
-      }
-      if (radius > st.ballRadius) {
-        exceeding.insert(exceeding.end(), members.begin(), members.end());
-      }
-    }
-    if (exceeding.empty()) {
-      return false;
-    }
-    std::vector<char> covered(static_cast<std::size_t>(nVertices), 0);
-    int nCovered = 0;
-    std::vector<int> ball = exceeding;
-    for (const int v : exceeding) {
-      if (!covered[static_cast<std::size_t>(v)]) {
-        covered[static_cast<std::size_t>(v)] = 1;
-        ++nCovered;
-      }
-      dist[static_cast<std::size_t>(v)] = 0;
-    }
-    for (std::size_t head = 0; head < ball.size(); ++head) {
-      const int u = ball[head];
-      const int du = dist[static_cast<std::size_t>(u)];
-      if (du >= st.ballRadius) {
-        continue;
-      }
-      auto grow = [&](const PackedRows &g) {
-        for (const int w : g[static_cast<std::size_t>(u)]) {
-          if (w < 0 || w >= nVertices || covered[static_cast<std::size_t>(w)]) {
-            continue;
-          }
-          covered[static_cast<std::size_t>(w)] = 1;
-          dist[static_cast<std::size_t>(w)] = du + 1;
-          ball.push_back(w);
-          ++nCovered;
-        }
-      };
-      grow(prev);
-      grow(next);
-    }
-    return nCovered == nVertices;
-  };
-  // The atom-fraction and bond-crossover rules used to replace this
-  // frame with a search from every vertex. A ring that does not meet T
-  // is unchanged, so those rules now only record that the change is
-  // large. The search below still starts at T.
-  (void)overAtoms;
-  (void)overBonds;
+  if (overAtoms || overBonds) {
+    st.which = slot;
+    st.fastEnumerate(st.graph[st.which]);
+    return st.flattened;
+  }
 
   // T: within reach of a changed vertex in the union of both frames' graphs.
   std::vector<char> inT(static_cast<std::size_t>(nVertices), 0);
@@ -3130,11 +2096,9 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
     frontier.swap(wave);
   }
 
-  // A full pass is the regions whose changes exceed the hop ball and
-  // whose ball is the whole vertex set. A frame of smaller regions
-  // enumerates those sources and carries every ring that misses them,
-  // even when the changed rows together touch every molecule.
-  if (static_cast<int>(T.size()) == nVertices && componentExceedsFrame()) {
+  // Each source in T is enumerated once. A full pass enumerates n sources.
+  // Those counts meet when T is the whole vertex set, and only then.
+  if (static_cast<int>(T.size()) == nVertices) {
     st.which = slot;
     st.fastEnumerate(st.graph[st.which]);
     return st.flattened;
@@ -3150,9 +2114,34 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
     st.ballsRefreshed =
         st.balls.refreshNear(prev, next, changed, st.ballRadius);
   }
-  auto added = st.ringsMeeting(next, T, inT);
-  st.splice(inT, std::move(added));
+  st.splice(inT, st.ringsMeeting(next, T, inT));
   st.which = slot;
   st.recomputed = static_cast<int>(T.size());
   return st.flattened;
 }
+
+std::vector<std::vector<int>>
+primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth,
+                       primitive::RingRows) {
+  return primitive::ringNetwork(nList, maxDepth);
+}
+
+void primitive::ringSizeCounts(const std::vector<int> &offsets, const std::vector<int> &cols,
+                               int maxDepth, int *counts, int countsLen) {
+  for (int i = 0; i < countsLen; ++i) {
+    counts[i] = 0;
+  }
+  if (offsets.size() < 2 || countsLen <= 0) {
+    return;
+  }
+  const auto rings = ringNetwork(offsets, cols, maxDepth);
+  for (const auto &ring : rings) {
+    if (static_cast<int>(ring.size()) < countsLen) {
+      counts[ring.size()] += 1;
+    }
+  }
+}
+
+void primitive::setSourceWork(double *) {}
+void primitive::setPhaseTiming(bool) {}
+double primitive::takePrimitiveMs() { return 0.0; }
