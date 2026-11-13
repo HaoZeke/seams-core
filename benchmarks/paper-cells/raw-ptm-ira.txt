@@ -1,0 +1,94 @@
+source_commit 65d8b4305fdb32cdbae617f3c3899cc26e5f2d2b
+cpu_model Intel Xeon Processor
+cpu_family 6
+cpu_model_id 207
+cpu_stepping 2
+cpu_flags avx2 avx512
+cpu_cache L1d 384 KiB (8 instances); L1i 256 KiB (8 instances); L2 16 MiB (8 instances); L3 320 MiB (1 instance)
+cpu_cores 8
+affinity 0-7
+lscpu
+Architecture: x86_64
+CPU(s): 8
+On-line CPU(s) list: 0-7
+Vendor ID: GenuineIntel
+Model name: Intel(R) Xeon(R) Processor
+CPU family: 6
+Model: 207
+Thread(s) per core: 1
+Core(s) per socket: 8
+Socket(s): 1
+BogoMIPS: 4800.00
+L1d cache: 384 KiB (8 instances)
+L1i cache: 256 KiB (8 instances)
+L2 cache: 16 MiB (8 instances)
+L3 cache: 320 MiB (1 instance)
+sitting one
+warmup 1
+n 8
+molecules 884736
+ice Ic 48^3 conventional cells
+liquid TIP4P/ice 4096 molecules replicated 6^3
+widths 1 8
+one sitting; each width is one process
+host name is not recorded
+ptm_rmsd 0.1
+ira_hausdorff_A 0.2
+ira_kmax_factor 1.5
+gates are not adjusted
+ice classifier d-SEAMS threads 1 n 8 median_ms 196.039687 affinity 0 seams_symmetry_classify other=0 Ih=0 Ic=884736 Isd=0
+ice ptm-default OVITO threads 1 n 8 median_ms 12084.801805 affinity 0 rows=884736 OVITO_THREAD_COUNT=1 rmsd=0.1 templates=FCC+HCP+BCC
+ice ptm-ice OVITO threads 1 n 8 median_ms 21535.115607 affinity 0 rows=884736 OVITO_THREAD_COUNT=1 rmsd=0.1 templates=cubic+hexagonal-diamond
+ice ira IRA threads 1 n 8 median_ms 175528.695439 affinity 0 ira_mod.IRA.match shells=884736/884736 hausdorff_A=0.2 kmax_factor=1.5 congruent_A=1e-08 median_hausdorff=0.0000 other=0 Ih=0 Ic=884736 Isd=0; shells built once, match timed, processes=1
+ice classifier d-SEAMS threads 8 n 8 median_ms 46.178742 affinity 0-7 seams_symmetry_classify other=0 Ih=0 Ic=884736 Isd=0
+ice ptm-default OVITO threads 8 n 8 median_ms 1658.462117 affinity 0-7 rows=884736 OVITO_THREAD_COUNT=8 rmsd=0.1 templates=FCC+HCP+BCC
+ice ptm-ice OVITO threads 8 n 8 median_ms 2909.250929 affinity 0-7 rows=884736 OVITO_THREAD_COUNT=8 rmsd=0.1 templates=cubic+hexagonal-diamond
+ice ira IRA threads 8 n 8 median_ms 24992.220853 affinity 0-7 ira_mod.IRA.match shells=884736/884736 hausdorff_A=0.2 kmax_factor=1.5 congruent_A=1e-08 median_hausdorff=0.0000 other=0 Ih=0 Ic=884736 Isd=0; shells built once, match timed, processes=8
+liquid classifier d-SEAMS threads 1 n 8 median_ms 232.254861 affinity 0 seams_symmetry_classify other=884736 Ih=0 Ic=0 Isd=0
+liquid ptm-default OVITO threads 1 n 8 median_ms 16256.574791 affinity 0 rows=884736 OVITO_THREAD_COUNT=1 rmsd=0.1 templates=FCC+HCP+BCC
+liquid ptm-ice OVITO threads 1 n 8 median_ms 24765.339083 affinity 0 rows=884736 OVITO_THREAD_COUNT=1 rmsd=0.1 templates=cubic+hexagonal-diamond
+liquid ira IRA threads 1 n 8 median_ms 796270.032037 affinity 0 ira_mod.IRA.match shells=739800/884736 hausdorff_A=0.2 kmax_factor=1.5 congruent_A=1e-08 median_hausdorff=2.5101 other=884736 Ih=0 Ic=0 Isd=0; shells built once, match timed, processes=1
+liquid classifier d-SEAMS threads 8 n 8 median_ms 61.155570 affinity 0-7 seams_symmetry_classify other=884736 Ih=0 Ic=0 Isd=0
+liquid ptm-default OVITO threads 8 n 8 median_ms 2210.795481 affinity 0-7 rows=884736 OVITO_THREAD_COUNT=8 rmsd=0.1 templates=FCC+HCP+BCC
+liquid ptm-ice OVITO threads 8 n 8 median_ms 3533.020082 affinity 0-7 rows=884736 OVITO_THREAD_COUNT=8 rmsd=0.1 templates=cubic+hexagonal-diamond
+liquid ira IRA threads 8 n 8 median_ms 105281.657950 affinity 0-7 ira_mod.IRA.match shells=739800/884736 hausdorff_A=0.2 kmax_factor=1.5 congruent_A=1e-08 median_hausdorff=2.5101 other=884736 Ih=0 Ic=0 Isd=0; shells built once, match timed, processes=8
+audit ice d-SEAMS ice=884736 bond_window_violations=0 isolated_violations=0
+identity ice threads 1 ice_Ic=884736/884736 ptm_cubic_diamond=884736/884736 ptm_default_Other=884736/884736 ira_Ic=884736/884736
+rules: d-SEAMS names a centre from the four nearest neighbours inside 3.5 A whose lengths sit in [2.30, 3.35] A. Unequal bonds need tetrahedral order at least 0.85. The second shell is the twelve atoms reached through those bonds. An equal ideal shell is named by the staggered and eclipsed fingerprint. Any other shell is named only when the scale-free residual is within 0.15 and a bonded neighbour is already crystal; an ice label with no crystal neighbour is removed. ice Isd is that third template.
+OVITO PTM matches the template neighbour star and keeps the lowest RMSD at or below 0.1. The default search enables FCC, HCP and BCC. Cubic and hexagonal diamond stay disabled, so a diamond neighbourhood is Other in that search. An RMSD of zero on an Other atom is the unset value when no template was accepted, not a perfect match. The ice search enables only those two diamond templates. Diamond is an extension of Larsen, Schmidt and Schiotz 2016. There is no stacking-disordered template.
+IRA matches the centre plus the 16 nearest periodic neighbours, when the 16th lies inside 5 A, to the three 17-atom ice templates. The label is the lowest Hausdorff distance. Above 0.2 A the atom is other. kmax_factor is 1.5. A search stops below 1e-08 A because that template is congruent and no other score can be lower. That stop is not the classification gate. The Hausdorff distance is not the scale-free residual, and the 16 nearest atoms are not the bonded second shell.
+crosstab ice threads 1 d-SEAMS Ic PTM-ice cubic-diamond 884736
+crosstab ice threads 1 d-SEAMS Ic PTM-default Other 884736
+crosstab ice threads 1 d-SEAMS Ic IRA Ic 884736
+crosstab ice threads 1 IRA Ic PTM-ice cubic-diamond 884736
+score ice threads 1 d-SEAMS Ic PTM-ice cubic-diamond paired n=884736 median_rmsd=0.0000 median_hausdorff=0.0000
+score ice threads 1 PTM-default Other n=884736 median_rmsd=0.0000
+reading ice threads 1: every atom is ice Ic, cubic diamond, and the IRA ice Ic template. agree_paired=884736/884736 agree_ira=884736/884736. The default PTM search names every atom Other because cubic diamond is disabled. That is the template set.
+identity ice threads 8 ice_Ic=884736/884736 ptm_cubic_diamond=884736/884736 ptm_default_Other=884736/884736 ira_Ic=884736/884736
+crosstab ice threads 8 d-SEAMS Ic PTM-ice cubic-diamond 884736
+crosstab ice threads 8 d-SEAMS Ic PTM-default Other 884736
+crosstab ice threads 8 d-SEAMS Ic IRA Ic 884736
+crosstab ice threads 8 IRA Ic PTM-ice cubic-diamond 884736
+score ice threads 8 d-SEAMS Ic PTM-ice cubic-diamond paired n=884736 median_rmsd=0.0000 median_hausdorff=0.0000
+score ice threads 8 PTM-default Other n=884736 median_rmsd=0.0000
+reading ice threads 8: every atom is ice Ic, cubic diamond, and the IRA ice Ic template. agree_paired=884736/884736 agree_ira=884736/884736. The default PTM search names every atom Other because cubic diamond is disabled. That is the template set.
+audit liquid d-SEAMS ice=0 bond_window_violations=0 isolated_violations=0
+identity liquid threads 1 crystal_dseams=0 crystal_ptm=0 crystal_ira=0
+rules: d-SEAMS names a centre from the four nearest neighbours inside 3.5 A whose lengths sit in [2.30, 3.35] A. Unequal bonds need tetrahedral order at least 0.85. The second shell is the twelve atoms reached through those bonds. An equal ideal shell is named by the staggered and eclipsed fingerprint. Any other shell is named only when the scale-free residual is within 0.15 and a bonded neighbour is already crystal; an ice label with no crystal neighbour is removed. ice Isd is that third template.
+OVITO PTM matches the template neighbour star and keeps the lowest RMSD at or below 0.1. The default search enables FCC, HCP and BCC. Cubic and hexagonal diamond stay disabled, so a diamond neighbourhood is Other in that search. An RMSD of zero on an Other atom is the unset value when no template was accepted, not a perfect match. The ice search enables only those two diamond templates. Diamond is an extension of Larsen, Schmidt and Schiotz 2016. There is no stacking-disordered template.
+IRA matches the centre plus the 16 nearest periodic neighbours, when the 16th lies inside 5 A, to the three 17-atom ice templates. The label is the lowest Hausdorff distance. Above 0.2 A the atom is other. kmax_factor is 1.5. A search stops below 1e-08 A because that template is congruent and no other score can be lower. That stop is not the classification gate. The Hausdorff distance is not the scale-free residual, and the 16 nearest atoms are not the bonded second shell.
+crosstab liquid threads 1 d-SEAMS other PTM-ice Other 884736
+crosstab liquid threads 1 d-SEAMS other PTM-default Other 884736
+crosstab liquid threads 1 d-SEAMS other IRA other 884736
+crosstab liquid threads 1 IRA other PTM-ice Other 884736
+score liquid threads 1 d-SEAMS other PTM-ice Other paired n=884736 median_rmsd=0.0000 median_hausdorff=2.5101
+score liquid threads 1 PTM-default Other n=884736 median_rmsd=0.0000
+reading liquid threads 1: every atom is other. agree_paired=884736/884736 agree_ira=884736/884736. shells=739800/884736 median_hausdorff=2.5101. No centre passes the bond gates, no diamond template is at or below RMSD 0.1, and no shell is at or below Hausdorff 0.2 A. The three rules agree because this liquid fails each test on its own terms.
+identity liquid threads 8 crystal_dseams=0 crystal_ptm=0 crystal_ira=0
+crosstab liquid threads 8 d-SEAMS other PTM-ice Other 884736
+crosstab liquid threads 8 d-SEAMS other PTM-default Other 884736
+crosstab liquid threads 8 d-SEAMS other IRA other 884736
+crosstab liquid threads 8 IRA other PTM-ice Other 884736
+score liquid threads 8 d-SEAMS other PTM-ice Other paired n=884736 median_rmsd=0.0000 median_hausdorff=2.5101
+score liquid threads 8 PTM-default Other n=884736 median_rmsd=0.0000
+reading liquid threads 8: every atom is other. agree_paired=884736/884736 agree_ira=884736/884736. shells=739800/884736 median_hausdorff=2.5101. No centre passes the bond gates, no diamond template is at or below RMSD 0.1, and no shell is at or below Hausdorff 0.2 A. The three rules agree because this liquid fails each test on its own terms.

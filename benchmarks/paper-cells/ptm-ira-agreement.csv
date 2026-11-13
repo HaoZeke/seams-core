@@ -1,0 +1,17 @@
+phase,threads,left,left_label,right,right_label,atoms,molecules,fraction
+ice,1,d-SEAMS,Ic,PTM-ice,cubic-diamond,884736,884736,1.00000000
+ice,1,d-SEAMS,Ic,PTM-default,Other,884736,884736,1.00000000
+ice,1,d-SEAMS,Ic,IRA,Ic,884736,884736,1.00000000
+ice,1,IRA,Ic,PTM-ice,cubic-diamond,884736,884736,1.00000000
+ice,8,d-SEAMS,Ic,PTM-ice,cubic-diamond,884736,884736,1.00000000
+ice,8,d-SEAMS,Ic,PTM-default,Other,884736,884736,1.00000000
+ice,8,d-SEAMS,Ic,IRA,Ic,884736,884736,1.00000000
+ice,8,IRA,Ic,PTM-ice,cubic-diamond,884736,884736,1.00000000
+liquid,1,d-SEAMS,other,PTM-ice,Other,884736,884736,1.00000000
+liquid,1,d-SEAMS,other,PTM-default,Other,884736,884736,1.00000000
+liquid,1,d-SEAMS,other,IRA,other,884736,884736,1.00000000
+liquid,1,IRA,other,PTM-ice,Other,884736,884736,1.00000000
+liquid,8,d-SEAMS,other,PTM-ice,Other,884736,884736,1.00000000
+liquid,8,d-SEAMS,other,PTM-default,Other,884736,884736,1.00000000
+liquid,8,d-SEAMS,other,IRA,other,884736,884736,1.00000000
+liquid,8,IRA,other,PTM-ice,Other,884736,884736,1.00000000
