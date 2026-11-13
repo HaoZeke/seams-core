@@ -46,6 +46,7 @@ import csv
 import hashlib
 import json
 import math
+import subprocess
 import sys
 import tempfile
 import time
@@ -352,9 +353,25 @@ def read_manifest(manifest: Path) -> tuple[str, dict]:
     return revision, sums
 
 
+def checkout_tree(where: Path = HERE) -> str:
+    """Git tree of the checkout that measures; a re-stamp changes commit hashes but not trees.
+
+    Tracked CSV files may differ from the tree: Snakemake removes a rule's
+    outputs before it runs, and the tables are those outputs.
+    """
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(where), *args], check=True, capture_output=True,
+                              text=True).stdout.strip()
+
+    if git("status", "--porcelain", "--untracked-files=no", "--", ":/", ":(top,exclude,glob)**/*.csv"):
+        raise SystemExit(f"{where} has uncommitted changes; commit them so source_tree names the measuring code")
+    return git("rev-parse", "HEAD^{tree}")
+
+
 def table(frames: Path, out: Path, seams: str | None = None, manifest: Path | None = None,
           local: tuple[str, ...] = (), temperatures: tuple[int, ...] = (230,),
-          replicas: tuple[str, ...] = REPLICAS, loadings: tuple[int, ...] = PAIRS) -> None:
+          replicas: tuple[str, ...] = REPLICAS, loadings: tuple[int, ...] = PAIRS,
+          tree: str | None = None) -> None:
     """With a manifest, a frame is read only when that revision lists it and its sha256 matches.
 
     Names in ``local`` are frames from brine_run that the revision does not
@@ -389,6 +406,8 @@ def table(frames: Path, out: Path, seams: str | None = None, manifest: Path | No
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", newline="") as handle:
         handle.write(f"# {HF_DATASET} at {revision}, data/frames/T{{T_K}}_m{{pairs}}_{{replica}}_{{frame}}.xyz\n")
+        if tree:
+            handle.write(f"# source_tree {tree}: git tree of the seams-core checkout that wrote this table\n")
         handle.write("# source hf@rev: listed at that revision and its sha256 matches; local: brine_run, not uploaded\n")
         handle.write(f"# front: {N_BINS} z bins, solid when crystal/waters >= {FRONT_CUT}; crystal is cubic+hexagonal\n")
         handle.write("# crystal is the published CHILL+ rule (cubic+hexagonal); cage_ice and nmax are the seeded,\n")
@@ -443,8 +462,10 @@ def value_range(path: Path, out: Path) -> None:
             record["span"] = f"{max(values.values()) - min(values.values()):.4f}"
         lines.append(record)
     fields = ("pairs", "frame", "quantity", *REPLICAS, "n", "min", "max", "span")
+    head = [line for line in path.read_text().splitlines() if line.startswith("#")]
     with out.open("w", newline="") as handle:
-        handle.write(path.read_text().splitlines()[0].split(",")[0] + ". Empty replica cell: frame not in the dataset.\n")
+        handle.write(head[0].split(",")[0] + ". Empty replica cell: frame not in the dataset.\n")
+        handle.writelines(line + "\n" for line in head if line.startswith("# source_tree "))
         handle.write("# min, max and span are left empty when fewer than two replicas have the frame.\n")
         writer = csv.DictWriter(handle, fieldnames=fields, restval="", lineterminator="\n")
         writer.writeheader()
@@ -485,7 +506,7 @@ def main() -> None:
         sums(args.dataset)
     elif args.cmd == "table":
         table(args.frames, args.csv, args.seams, args.manifest, tuple(args.local),
-              tuple(args.temperatures), tuple(args.replicas), tuple(args.pairs))
+              tuple(args.temperatures), tuple(args.replicas), tuple(args.pairs), checkout_tree())
     else:
         value_range(args.csv, args.out)
 

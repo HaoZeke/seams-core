@@ -119,6 +119,46 @@ def test_table_writes_temperature_and_source(tmp_path):
     assert by[("245", "0", "t0")]["status"] == "not_in_dataset"
 
 
+def git_checkout(where: Path) -> dict:
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+           "GIT_COMMITTER_EMAIL": "t@t"}
+    where.mkdir(parents=True, exist_ok=True)
+    (where / "code.py").write_text("x = 1\n")
+    for args in (["init", "-q"], ["add", "-A"], ["-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "x"]):
+        subprocess.run(["git", "-C", str(where), *args], check=True, env=env)
+    return env
+
+
+def test_table_and_range_cite_the_measuring_tree(tmp_path):
+    checkout = tmp_path / "checkout"
+    env = git_checkout(checkout)
+    tree = subprocess.run(["git", "-C", str(checkout), "rev-parse", "HEAD^{tree}"], capture_output=True,
+                          text=True, check=True).stdout.strip()
+    assert replicas.checkout_tree(checkout) == tree
+    frames = tmp_path / "frames"
+    frames.mkdir()
+    name = replicas.frame_name("r0", 0, "t0")
+    write_frame(frames / name, 0, 0)
+    manifest = manifest_for(frames, tmp_path / "manifest.txt", [name])
+    out = tmp_path / "replicas.csv"
+    replicas.table(frames, out, None, manifest, (), (230,), ("r0", "r1"), (0,), tree)
+    line = f"# source_tree {tree}: git tree of the seams-core checkout that wrote this table"
+    assert out.read_text().splitlines()[1] == line
+    span = tmp_path / "range.csv"
+    replicas.value_range(out, span)
+    assert span.read_text().splitlines()[1] == line
+    (checkout / "data.csv").write_text("a\n")
+    subprocess.run(["git", "-C", str(checkout), "add", "data.csv"], check=True)
+    subprocess.run(["git", "-C", str(checkout), "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "d"],
+                   check=True, env=env)
+    tree = replicas.checkout_tree(checkout)
+    (checkout / "data.csv").unlink()
+    assert replicas.checkout_tree(checkout) == tree
+    (checkout / "code.py").write_text("x = 2\n")
+    with pytest.raises(SystemExit, match="uncommitted changes"):
+        replicas.checkout_tree(checkout)
+
+
 def test_table_refuses_a_frame_that_does_not_match_the_revision(tmp_path):
     frames = tmp_path / "frames"
     frames.mkdir()
