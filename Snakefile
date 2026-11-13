@@ -1026,6 +1026,52 @@ rule growth_curve:
         "python3 scripts/q6bar_timing.py --bin bbdir/tests/interface_order"
 
 
+# One release build, then every paper timing. The same target is what a
+# later release commit reruns. Host names are not recorded.
+rule release_build:
+    output:
+        "bbdir-release/seams",
+        "bbdir-release/src/libyodaLib.so",
+        "bbdir-release/bindings/libseams_lang.so",
+        "bbdir-release/tests/bench_strong",
+        "bbdir-release/tests/bench_v2",
+        "bbdir-release/tests/bench_trajectory_incremental",
+    shell:
+        "test -f bbdir-release/build.ninja || meson setup bbdir-release --buildtype=release; "
+        "ninja -C bbdir-release -j2"
+
+
+rule paper_numbers:
+    input:
+        "scripts/paper_numbers.py",
+        "scripts/paper_stats.py",
+        "scripts/paper_sitting.py",
+        "scripts/paper_ptm_templates.py",
+        "scripts/h2h_session.py",
+        "bbdir-release/seams",
+        "bbdir-release/src/libyodaLib.so",
+        "bbdir-release/bindings/libseams_lang.so",
+        "bbdir-release/tests/bench_strong",
+        "bbdir-release/tests/bench_v2",
+        "bbdir-release/tests/bench_trajectory_incremental",
+        "data/hop/nucleation.lammpstrj",
+    output:
+        "benchmarks/paper-numbers/h2h-summary.csv",
+        "benchmarks/paper-numbers/carry-sweep.csv",
+        "benchmarks/paper-numbers/h2h-ice-ic-rings.csv",
+        "benchmarks/paper-numbers/ice-ic-session.txt",
+        "benchmarks/paper-numbers/symmetry-rows.csv",
+        "benchmarks/paper-numbers/sitting-large.csv",
+        "benchmarks/paper-numbers/fig-scaling.csv",
+        "benchmarks/paper-numbers/fig-strong.csv",
+        "benchmarks/paper-numbers/manifest.txt",
+    shell:
+        "export LJOS_SEAT=dseams-paper QT_QPA_PLATFORM=offscreen; "
+        "python3 scripts/paper_numbers.py --out benchmarks/paper-numbers "
+        "--lib bbdir-release/bindings/libseams_lang.so "
+        "--core bbdir-release/src/libyodaLib.so"
+
+
 rule binding_overhead:
     input:
         "scripts/bench_binding_overhead.py",
