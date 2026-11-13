@@ -1,10 +1,11 @@
+commit ef38adb99d5f8236b9d6dcae0d701421fcafed99
 cores 8
 samples 8
 sH orthorhombic supercell molecules 544 edges 24.842423 43.028338 20.131291
 sqq accepts the orthorhombic supercell
 seams nop 544 graph cutoff signature 5:12 cages 48 atoms 544 nop 544 graph cutoff signature 5:12,6:8 cages 16 atoms 480 nop 544 graph cutoff signature 4:3,5:6,6:3 cages 32 atoms 448
 sqq cages {'435663': 32, '512': 48, '51268': 16}
-sqq sH-ortho threads 1 molecules 544 median 1201.7105 min 1195.9479 samples 8
-seams sH-ortho threads 1 molecules 544 median 11.4944 min 10.3763 samples 8
-sqq sH-ortho threads 8 molecules 544 median 1209.4472 min 1200.9266 samples 8
-seams sH-ortho threads 8 molecules 544 median 12.4744 min 11.5288 samples 8
+sqq sH-ortho threads 1 molecules 544 median 1190.1266 min 1188.3227 samples 8 commit ef38adb99d5f8236b9d6dcae0d701421fcafed99
+seams sH-ortho threads 1 molecules 544 median 16.1119 min 15.0774 samples 8 commit ef38adb99d5f8236b9d6dcae0d701421fcafed99
+sqq sH-ortho threads 8 molecules 544 median 1191.8037 min 1188.7265 samples 8 commit ef38adb99d5f8236b9d6dcae0d701421fcafed99
+seams sH-ortho threads 8 molecules 544 median 11.8599 min 10.0320 samples 8 commit ef38adb99d5f8236b9d6dcae0d701421fcafed99

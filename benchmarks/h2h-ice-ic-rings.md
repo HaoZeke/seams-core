@@ -10,31 +10,41 @@ Two variants, the same work on both sides.
 
 The census is 2 hexagons per molecule (2000, 21296, 221184).
 
-## 110592 molecules, milliseconds
+## One sitting
 
-Median, then minimum.
+Every row below is from one process. Both OVITO clocks use one pipeline built before the timer. Rings-only notifies `FindRingsModifier`. Bonds and rings notifies `CreateBondsModifier` and `FindRingsModifier`. The two variants alternate which one runs first, the first pass is discarded, and eight samples remain. One thread is core 0. Eight threads are cores 0-7, and the OVITO pool reported that count.
 
-| Variant | Threads | d-SEAMS | OVITO |
-|---|---:|---|---|
-| rings | 1 | 101.912 / 100.673 | 499.459 / 486.623 |
-| bonds and rings | 1 | 126.616 / 121.957 | 573.221 / 558.723 |
-| rings | 8 | 35.998 / 32.950 | 265.057 / 258.434 |
-| bonds and rings | 8 | 51.229 / 48.853 | 280.436 / 265.480 |
+Median, then minimum, milliseconds.
 
-On one thread the neighbour list is 24.7 ms of the d-SEAMS call (126.616 minus 101.912) and bond creation is 73.8 ms of the OVITO call (573.221 minus 499.459).
+| Molecules | Variant | Threads | d-SEAMS | OVITO |
+|---:|---|---:|---|---|
+| 1000 | rings | 1 | 1.151 / 1.141 | 3.849 / 3.825 |
+| 1000 | bonds and rings | 1 | 1.857 / 1.802 | 4.346 / 4.308 |
+| 1000 | rings | 8 | 0.729 / 0.494 | 4.096 / 3.969 |
+| 1000 | bonds and rings | 8 | 1.192 / 0.923 | 4.598 / 4.489 |
+| 10648 | rings | 1 | 9.864 / 9.697 | 37.804 / 37.669 |
+| 10648 | bonds and rings | 1 | 13.141 / 12.394 | 41.872 / 41.514 |
+| 10648 | rings | 8 | 4.044 / 3.872 | 26.907 / 26.166 |
+| 10648 | bonds and rings | 8 | 6.018 / 5.321 | 33.498 / 29.608 |
+| 110592 | rings | 1 | 99.170 / 98.658 | 466.652 / 457.794 |
+| 110592 | bonds and rings | 1 | 127.116 / 125.899 | 500.230 / 487.436 |
+| 110592 | rings | 8 | 36.371 / 32.442 | 287.152 / 252.499 |
+| 110592 | bonds and rings | 8 | 50.806 / 48.501 | 277.778 / 256.658 |
 
-The eight-thread pair above is a second sitting. Both OVITO clocks are one pipeline built before the timer. Rings-only notifies `FindRingsModifier`. Bonds and rings notifies `CreateBondsModifier` and `FindRingsModifier`. The two variants alternate which one runs first, the first pass is discarded, and eight samples remain. OVITO's thread pool was 8 and the affinity was cores 0-7.
+At one thread on 110592 molecules the neighbour list is 27.9 ms of the d-SEAMS call and bond creation is 33.6 ms of the OVITO call. Bonds and rings is slower than rings-only at one thread, and at eight threads on 1000 and 10648 molecules.
 
-An earlier eight-thread sitting reported bonds and rings at 297.174 ms and rings-only at 316.943 ms. That rings-only clock constructed a new pipeline on every sample, and the bonds clock ran only after every rings sample had finished, so the second clock saw a warm core. Interleaving removes the inversion: bonds and rings is 280.436 ms and rings-only is 265.057 ms, a gap of 15.4 ms, the same size as the d-SEAMS neighbour list (51.229 minus 35.998). The rings-only ratio is 265.057 / 35.998 = 7.36. The bonds-and-rings ratio is 280.436 / 51.229 = 5.47. A seven-times claim is the rings-only ratio. The old 297 / 42 figure was the inverted bonds clock and is not the claim.
+At eight threads on 110592 molecules the OVITO medians go the other way by 9.4 ms. The rings-only samples run from 252.5 to 311.8 ms and the bonds-and-rings samples run from 256.7 to 295.6 ms, so the ranges overlap and the bond build is not resolved. An earlier eight-thread sitting built a new pipeline inside the rings-only clock and ran that clock to completion before bonds, and reported 316.943 ms against 297.174 ms. That gap was the pipeline construction and the warm core. It is not a property of FindRings.
+
+The eight-thread rings-only ratio on this sitting is 287.152 / 36.371 = 7.90. The bonds-and-rings ratio is 277.778 / 50.806 = 5.47. A seven-times claim is the rings-only ratio. The bonds-and-rings median is not a lower bound on the ring search.
 
 ## Where 82.3 vs 474 and 129.3 vs 612.5 come from
 
 `markdown/rings-one-thread.md` prints 82.343 ms against 474.104 ms for 110592 molecules at one thread. The samples stored beside that table, `markdown/rings-one-thread.json`, are 68.773 ms against 415.508 ms. That driver's timing line says the cutoff graph was built before both timers, and the OVITO worker builds bonds once and then times `FindRingsModifier`. The table cell and the stored samples are not the same run. Neither number is a version string. The logs that print d-SEAMS 2.13.0 time `seams_frame_rings`, which builds the cutoff graph inside the call.
 
-The later paper-review row, 129.317 ms against 612.537 ms, is a different operation. `scripts/h2h_paper_review.py` calls `seams_rings_find`, which builds the cutoff graph inside the timer, and it appends `CreateBondsModifier` and `FindRingsModifier` to one pipeline and notifies both on every sample. The refresh of that log in this sitting is 128.638 ms against 628.092 ms. The d-SEAMS side matches the bonds-and-rings row above (126.616 ms). The OVITO side is slower than the fresh-collection bonds-and-rings row (573.221 ms) because that pipeline recomputes both modifiers after the cache is dropped.
+The later paper-review row, 129.317 ms against 612.537 ms, is a different operation. `scripts/h2h_paper_review.py` calls `seams_rings_find`, which builds the cutoff graph inside the timer, and it appends `CreateBondsModifier` and `FindRingsModifier` to one pipeline and notifies both on every sample. This file's one-thread bonds-and-rings row is 127.116 ms against 500.230 ms. The d-SEAMS side matches that review. The OVITO side of the review is slower because that pipeline recomputes both modifiers after the cache is dropped.
 
-So 82.3 against 474 is not the bonds-and-rings comparison, and 129.3 against 612.5 is. The gap is the neighbour list on the d-SEAMS side and `CreateBondsModifier` plus the pipeline restart on the OVITO side. This file is the pair of boundaries on 2.14.0.
+So 82.3 against 474 is not the bonds-and-rings comparison, and 129.3 against 612.5 is. This file is the pair of boundaries on 2.14.0.
 
 ## cycless
 
-`cycles_iter` takes a graph and a maximum size. It has no thread argument, so the walk is serial and is pinned to core 0. There is no eight-thread cycless row. On the 1000-molecule cell the serial medians are 3109.4 ms with the graph already built and 3194.1 ms when the neighbour list is inside the timer. Both counts are 2000 hexagons. The same rule is in `scripts/h2h_rings.py`: the eight-thread cycless lines in the older log were this serial walk while the process was allowed cores 0-7.
+`cycles_iter` takes a graph and a maximum size. It has no thread argument, so the walk is serial and is pinned to core 0. There is no eight-thread cycless row. On the 1000-molecule cell in this sitting the serial medians are 3065.5 ms with the graph already built and 3121.0 ms when the neighbour list is inside the timer. Both counts are 2000 hexagons. The same rule is in `scripts/h2h_rings.py`: the eight-thread cycless lines in the older log were this serial walk while the process was allowed cores 0-7.

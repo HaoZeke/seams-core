@@ -950,6 +950,26 @@ H2HPtm.time_check.repeat = 1
 H2HPtm.time_check.number = 1
 
 
+class H2HIra:
+    """Eight-molecule IRA label. asv repeats the check eight times."""
+
+    def setup(self):
+        try:
+            import ira_mod  # noqa: F401
+        except ImportError as exc:
+            raise NotImplementedError("ira_mod is not installed") from exc
+
+    def time_check(self):
+        import ira_mod
+        version = ira_mod.IRA().get_version()
+        if version[0] != "2.2.0":
+            raise RuntimeError(f"ira {version}")
+
+
+H2HIra.time_check.repeat = 1
+H2HIra.time_check.number = 8
+
+
 class H2HCages:
     """cmdCages against SQQ. The Snakemake rule writes the log."""
 

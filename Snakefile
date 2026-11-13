@@ -821,6 +821,7 @@ rule h2h_summary:
     output:
         "benchmarks/h2h-summary.csv",
     shell:
+        "export LJOS_SEAT=\"${{LJOS_SEAT:-dseams-paper}}\"; "
         "PY=\"${{H2H_PYTHON:-python3}}\"; "
         "\"$PY\" scripts/h2h_summary.py --csv {output}"
 
@@ -934,14 +935,34 @@ rule h2h_carry_crossover:
         "python3 scripts/h2h_carry_log.py > {output}"
 
 
+rule h2h_ira_scale:
+    output:
+        "benchmarks/h2h-ira-scale.csv",
+    shell:
+        "LD_LIBRARY_PATH=bbdir-release/src "
+        "taskset -c 2 "
+        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_ira_scale.py"
+
+
+rule h2h_freud_threads:
+    output:
+        "benchmarks/h2h-freud-threads.txt",
+    shell:
+        "NEIGH_PYTHON=\"${{H2H_PYTHON:-python3}}\" "
+        "NEIGH_BENCH=bbdir-release/tests/bench_cutoff_list "
+        "\"${{H2H_PYTHON:-python3}}\" scripts/bench_neighbours_threads.py "
+        "--reps 8 --molecules 110592 --out {output}"
+
+
 rule h2h_sqq_sh_ortho:
     output:
         "benchmarks/h2h-sqq-sh-ortho.txt",
     shell:
         "taskset -c 0-7 env "
+        "H2H_SERIAL_CORE=\"${{H2H_SERIAL_CORE:-0}}\" "
         "LD_LIBRARY_PATH=bbdir-release/src "
         "OMP_PROC_BIND=close OMP_PLACES=cores OMP_WAIT_POLICY=PASSIVE "
-        "python3 scripts/h2h_sqq_sh_ortho.py > {output}"
+        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_sh_ortho.py > {output}"
 
 
 rule h2h_followup:

@@ -27,7 +27,8 @@ CELLS = (8, 24, 48)  # 4096, 110592, 884736 molecules
 FIELDS = [
     "competitor", "operation", "molecules", "threads", "cores", "cpus", "n",
     "dseams_median_ms", "dseams_min_ms", "other_median_ms", "other_min_ms",
-    "ratio", "verdict", "agreement", "version", "cpu_model",
+    "ratio", "verdict", "agreement", "budget_s", "largest_finished",
+    "version", "cpu_model",
 ]
 
 
@@ -93,6 +94,8 @@ def row_of(competitor, operation, molecules, threads, cores, left, right, agreem
         "ratio": f"{ratio:.4f}" if ratio != "" else "",
         "verdict": verdict(left, right),
         "agreement": agreement,
+        "budget_s": "",
+        "largest_finished": "",
         "version": version,
         "cpu_model": model,
     }
@@ -328,9 +331,12 @@ def main() -> None:
     ap.add_argument("--csv", required=True)
     ap.add_argument("--worker", type=int, choices=(1, 8))
     args = ap.parse_args()
+    if not args.worker:
+        from build_ptm_ice import build
+        build()
     if args.worker:
         rows = run_width(args.worker)
-        writer = csv.DictWriter(sys.stdout, fieldnames=FIELDS)
+        writer = csv.DictWriter(sys.stdout, fieldnames=FIELDS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
         if any(row["verdict"] == "LOSE" for row in rows):
@@ -351,15 +357,15 @@ def main() -> None:
         env["OMP_PLACES"] = "cores"
         env["OMP_WAIT_POLICY"] = "PASSIVE"
         env["QT_QPA_PLATFORM"] = "offscreen"
+        env["PYTHONUNBUFFERED"] = "1"
         done = subprocess.run(
-            ["taskset", "-c", cores, sys.executable, str(Path(__file__).resolve()),
+            ["taskset", "-c", cores, sys.executable, "-u", str(Path(__file__).resolve()),
              "--csv", args.csv, "--worker", str(threads)],
             cwd=ROOT,
             env=env,
             text=True,
-            capture_output=True,
+            stdout=subprocess.PIPE,
         )
-        sys.stderr.write(done.stderr)
         if done.returncode not in (0, 1):
             sys.stderr.write(done.stdout[-2000:])
             raise SystemExit(done.returncode or 1)
@@ -376,7 +382,7 @@ def main() -> None:
 
 def _write(path: Path, rows: list[dict]) -> None:
     with path.open("w", encoding="ascii", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=FIELDS)
+        writer = csv.DictWriter(handle, fieldnames=FIELDS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 

@@ -233,9 +233,8 @@ def main():
     def sqq():
         return sqq_cages(pos, lengths, width)
 
-    # The python cage walk is minutes per 46-molecule cell. Four samples
-    # at one thread; the eight-thread repeat is a single sample.
-    n_sqq = 4 if width == 1 else 1
+    # Eight timed calls after the warm-up, at one thread and at eight.
+    n_sqq = 8
     samples = time_calls(sqq, n=n_sqq)
     med, iqr, amin = stats(samples)
     print(

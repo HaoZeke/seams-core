@@ -111,6 +111,10 @@ def seams_counts(path: Path, width: int) -> str:
 def main() -> None:
     pos, lengths = ortho_images()
     write_dump(OUT, pos, lengths)
+    tip = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
+    print(f"commit {tip}", flush=True)
     print(f"cores {os.cpu_count()}", flush=True)
     print(f"samples {N}", flush=True)
     print(
@@ -129,7 +133,8 @@ def main() -> None:
     ours = sqq_counts(pos, lengths, 1)
     print(f"sqq cages {ours}", flush=True)
     for width in (1, 8):
-        os.sched_setaffinity(0, set(range(width)))
+        serial = int(os.environ.get("H2H_SERIAL_CORE", "0"))
+        os.sched_setaffinity(0, {serial} if width == 1 else set(range(8)))
 
         def sqq_once(width=width):
             return sqq_counts(pos, lengths, width)
@@ -141,19 +146,23 @@ def main() -> None:
         seams_once()
         sqq_samples = []
         seams_samples = []
-        for _ in range(N):
-            t0 = time.perf_counter_ns()
-            sqq_once()
-            sqq_samples.append((time.perf_counter_ns() - t0) / 1e6)
-            t0 = time.perf_counter_ns()
-            seams_once()
-            seams_samples.append((time.perf_counter_ns() - t0) / 1e6)
+        for i in range(N):
+            order = (("sqq", sqq_once), ("seams", seams_once))
+            if i % 2:
+                order = (order[1], order[0])
+            got = {}
+            for name, fn in order:
+                t0 = time.perf_counter_ns()
+                fn()
+                got[name] = (time.perf_counter_ns() - t0) / 1e6
+            sqq_samples.append(got["sqq"])
+            seams_samples.append(got["seams"])
         for label, samples in (("sqq", sqq_samples), ("seams", seams_samples)):
             ordered = sorted(samples)
             med = 0.5 * (ordered[N // 2 - 1] + ordered[N // 2])
             print(
                 f"{label} sH-ortho threads {width} molecules {len(pos)} "
-                f"median {med:.4f} min {ordered[0]:.4f} samples {N}",
+                f"median {med:.4f} min {ordered[0]:.4f} samples {N} commit {tip}",
                 flush=True,
             )
 
