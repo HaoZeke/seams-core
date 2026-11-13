@@ -4,7 +4,8 @@
 **   bench_rings_h2h [--repl] TRAJ frame atomType cutoff maxRing [reps warmup]
 **
 ** One-shot prints one sample_ms line per timed call. --repl builds the
-** graph, prints a ready line, then answers each "go" with one sample.
+** graph, prints a ready line, then answers "go" with one ring search
+** and "all" with the neighbour list plus that search.
 */
 
 #include <franzblau.hpp>
@@ -133,11 +134,17 @@ int main(int argc, char **argv) {
       if (line[0] == 'q') {
         break;
       }
-      if (line[0] != 'g') {
+      if (line[0] != 'g' && line[0] != 'a') {
         continue;
       }
       const auto t0 = Clock::now();
-      rings = primitive::ringNetwork(idx, maxRing);
+      if (line[0] == 'a') {
+        const auto built = nneigh::neighListO(cutoff, cloud, typeI);
+        const auto indexed = nneigh::neighbourListByIndex(cloud, built);
+        rings = primitive::ringNetwork(indexed, maxRing);
+      } else {
+        rings = primitive::ringNetwork(idx, maxRing);
+      }
       const auto t1 = Clock::now();
       if (rings.size() != expect) {
         std::fprintf(stderr, "ring count changed\n");

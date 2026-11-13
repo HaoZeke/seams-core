@@ -4,7 +4,9 @@
 Franzblau shortest-path rings up to size 6. Ice Ih at 4096, 32768 and
 110592 molecules, the mixed interface, stacking and melted frames, and
 one sII cell. Counts are compared once. Times are eight samples at one
-thread and at eight threads, in one process.
+thread and at eight threads, in one process. cycless is the exception:
+cycles_iter has no thread argument, so that walk is recorded once, at
+one thread, pinned to core 0.
 """
 
 from __future__ import annotations
@@ -216,6 +218,9 @@ def run_session():
         # Times. The neighbour graph for cycless is built outside the timer,
         # matching a search over a finished bond list. OVITO, rings-statistics
         # and d-SEAMS each build that list inside the call.
+        # cycles_iter takes a graph and a maximum size. It has no thread
+        # argument, so the walk is serial and is pinned to core 0. An
+        # eight-thread column would be that same walk.
         held = frame_system(lib, pos, lengths)
 
         def time_width(width: int):
@@ -253,14 +258,26 @@ def run_session():
                     f"ringsstat {r_med:.4f} ovito {o_med:.4f}",
                     flush=True,
                 )
-            if n <= 512:
-                def cyc():
-                    sum(1 for _ in cycles_iter(graph, MAX_SIZE))
-
-                emit_time(name, "cycless", width, samples_of(cyc))
-
         for width in (1, 8):
             time_width(width)
+        if n <= 512:
+            # cycles_iter is serial. Pin the walk to core 0 and record
+            # threads 1. The function takes a graph and a maximum size
+            # and no thread count, so an eight-thread column is the same walk.
+            def cyc():
+                sum(1 for _ in cycles_iter(graph, MAX_SIZE))
+
+            print(
+                "note cycless threads 1: cycles_iter has no thread argument "
+                "and the walk is serial, pinned to core 0",
+                flush=True,
+            )
+            held = os.sched_getaffinity(0)
+            os.sched_setaffinity(0, {0})
+            try:
+                emit_time(name, "cycless", 1, samples_of(cyc))
+            finally:
+                os.sched_setaffinity(0, held)
         lib.seams_system_destroy(held)
         if n > 512:
             print(

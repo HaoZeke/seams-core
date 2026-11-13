@@ -40,12 +40,14 @@ cycless is short by 7 pentagons and 4 hexagons on the interface, and by 5 pentag
 | ice 110592 | 1 | 113.82 | 1398.53 | 669.81 | -- |
 | ice 110592 | 8 | 48.02 | 361.45 | 651.43 | -- |
 | interface | 1 | 1.81 | 13.52 | 3.30 | 7600.31 |
-| interface | 8 | 0.68 | 3.71 | 3.15 | 7677.03 |
+| interface | 8 | 0.68 | 3.71 | 3.15 | -- |
 | stacking | 1 | 0.81 | 6.89 | 2.55 | 1310.43 |
-| stacking | 8 | 0.54 | 2.20 | 2.41 | 1313.86 |
+| stacking | 8 | 0.54 | 2.20 | 2.41 | -- |
 | melted | 1 | 1.28 | 9.54 | 3.03 | 2384.49 |
-| melted | 8 | 0.51 | 2.74 | 2.84 | 2421.18 |
+| melted | 8 | 0.51 | 2.74 | 2.84 | -- |
 | sII | 1 | 0.27 | 2.20 | 1.03 | 131.08 |
-| sII | 8 | 0.25 | 1.46 | 0.77 | 130.66 |
+| sII | 8 | 0.25 | 1.46 | 0.77 | -- |
+
+`cycles_iter` takes a graph and a maximum size. It has no thread argument, so the walk is serial and is pinned to core 0. The cycless column is that one-thread measurement. An earlier log also printed the same walk under `threads 8` (interface 7677.03 ms, stacking 1313.86 ms, melted 2421.18 ms, sII 130.66 ms). Those lines are the serial walk while the process was allowed cores 0-7. They are not an eight-thread setting, and the driver no longer writes them.
 
 cycless is timed through 512 molecules. A 512-molecule interface already spends about 7.6 s in `cycles_iter`, and the same search is not repeated on the larger ice. d-SEAMS is the fastest census on every frame and at both thread counts.

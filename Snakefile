@@ -445,6 +445,21 @@ rule hop_stride_crossover:
         "--reps 8 --warmup 1 > {output}"
 
 
+rule ice_ic_rings:
+    input:
+        "bbdir-release/tests/bench_rings_h2h",
+        "scripts/ice_ic_session.py",
+        "scripts/gen_ice_ic.py",
+    output:
+        "benchmarks/h2h-ice-ic-rings.csv",
+    shell:
+        "PY=\"${{H2H_PYTHON:-python3}}\"; "
+        "taskset -c 0-7 env "
+        "QT_QPA_PLATFORM=offscreen "
+        "OMP_PROC_BIND=close OMP_PLACES=cores OMP_WAIT_POLICY=PASSIVE "
+        "\"$PY\" scripts/ice_ic_session.py --python \"$PY\" --csv {output}"
+
+
 rule rings_one_thread:
     input:
         "bbdir-release/tests/bench_rings_h2h",
@@ -888,6 +903,25 @@ rule h2h_ptm:
         "OMP_WAIT_POLICY=PASSIVE QT_QPA_PLATFORM=offscreen "
         "python3 scripts/h2h_ptm.py 8 >> {output}.1 && "
         "mv {output}.1 {output}"
+
+
+rule h2h_carry_crossover:
+    output:
+        "benchmarks/h2h-carry-crossover.txt",
+    shell:
+        "taskset -c 0-7 env OMP_PROC_BIND=close OMP_PLACES=cores "
+        "OMP_WAIT_POLICY=PASSIVE "
+        "python3 scripts/h2h_carry_log.py > {output}"
+
+
+rule h2h_sqq_sh_ortho:
+    output:
+        "benchmarks/h2h-sqq-sh-ortho.txt",
+    shell:
+        "taskset -c 0-7 env "
+        "LD_LIBRARY_PATH=bbdir-release/src "
+        "OMP_PROC_BIND=close OMP_PLACES=cores OMP_WAIT_POLICY=PASSIVE "
+        "python3 scripts/h2h_sqq_sh_ortho.py > {output}"
 
 
 rule h2h_followup:

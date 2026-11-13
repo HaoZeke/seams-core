@@ -1,0 +1,91 @@
+cores 1
+samples 8
+crossover one_thread 0.55 eight_threads 0.33
+partial search before the switch, spread changes, T is recomputed vertices
+threads 1 pct 10 T 1913/4096 full 22.2319 carry 19.9176 WIN
+threads 1 pct 12 T 2255/4096 full 23.1104 carry 22.6038 WIN
+threads 1 pct 15 T 2742/4096 full 23.9005 carry 24.9861 LOSE
+threads 8 pct 6 T 1180/4096 full 5.1829 carry 4.7795 WIN
+threads 8 pct 8 T 1555/4096 full 5.4540 carry 5.7803 LOSE
+threads 8 pct 2 T 438/4096 full 4.3755 carry 7.7954 LOSE
+after the switch
+width 1 spec churn
+molecules 4096 samples 8
+changed_bonds 3072 per_molecule 0.7500
+recomputed 4096 of 4096
+old_full_pass_rule yes
+identical yes
+full_median 20.1094 full_min 19.9683
+carry_median 20.2823 carry_min 20.2281 LOSE
+width 1 spec local
+molecules 4096 samples 8
+changed_bonds 577 per_molecule 0.1409
+recomputed 850 of 4096
+old_full_pass_rule yes
+identical yes
+full_median 18.1030 full_min 17.8669
+carry_median 8.2832 carry_min 8.1283 WIN
+width 1 spec spread 2
+molecules 4096 samples 8
+changed_bonds 379 per_molecule 0.0925
+recomputed 438 of 4096
+old_full_pass_rule no
+identical yes
+full_median 18.0881 full_min 17.6623
+carry_median 5.6692 carry_min 5.6047 WIN
+width 1 spec spread 6
+molecules 4096 samples 8
+changed_bonds 1065 per_molecule 0.2600
+recomputed 1180 of 4096
+old_full_pass_rule yes
+identical yes
+full_median 20.7610 full_min 20.6232
+carry_median 13.0735 carry_min 12.9085 WIN
+width 1 spec spread 15
+molecules 4096 samples 8
+changed_bonds 2605 per_molecule 0.6360
+recomputed 4096 of 4096
+old_full_pass_rule yes
+identical yes
+full_median 23.1816 full_min 22.9332
+carry_median 23.3482 carry_min 23.1049 LOSE
+width 8 spec churn
+molecules 4096 samples 8
+changed_bonds 3072 per_molecule 0.7500
+recomputed 4096 of 4096
+old_full_pass_rule yes
+identical yes
+full_median 4.6538 full_min 4.4966
+carry_median 4.8771 carry_min 4.7689 LOSE
+width 8 spec local
+molecules 4096 samples 8
+changed_bonds 577 per_molecule 0.1409
+recomputed 850 of 4096
+old_full_pass_rule yes
+identical yes
+full_median 5.0632 full_min 4.9381
+carry_median 3.0013 carry_min 2.9215 WIN
+width 8 spec spread 2
+molecules 4096 samples 8
+changed_bonds 379 per_molecule 0.0925
+recomputed 4096 of 4096
+old_full_pass_rule yes
+identical yes
+full_median 4.5679 full_min 4.2240
+carry_median 4.4676 carry_min 4.3467 LOSE
+width 8 spec spread 6
+molecules 4096 samples 8
+changed_bonds 1065 per_molecule 0.2600
+recomputed 1180 of 4096
+old_full_pass_rule yes
+identical yes
+full_median 4.8378 full_min 4.6812
+carry_median 4.3669 carry_min 4.1399 WIN
+width 8 spec spread 15
+molecules 4096 samples 8
+changed_bonds 2176 per_molecule 0.5312
+recomputed 4096 of 4096
+old_full_pass_rule yes
+identical yes
+full_median 5.4102 full_min 5.0617
+carry_median 5.5777 carry_min 5.2296 LOSE

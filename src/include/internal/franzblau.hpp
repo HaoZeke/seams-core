@@ -235,10 +235,9 @@ public:
   //! Changed bonds per molecule on the last update.
   [[nodiscard]] double lastChangedBondFraction() const;
 
-  //! Kept for callers that used to force a whole-frame pass. The update
-  //! enumerates the sources in T and no others, so a whole-frame pass
-  //! happens only when T is every vertex. The stored fraction does not
-  //! replace that search. The result equals a rebuild at every fraction.
+  //! Kept for callers. The update enumerates T unless that set is large
+  //! enough that ringNetwork is the faster search. The measured shares
+  //! are 0.55 of the vertices on one thread and 0.33 with a team.
   void setFullPassFraction(double fraction);
 
   //! Kept for callers that used to force a whole-frame pass from the

@@ -1219,7 +1219,7 @@ void enumerateFromSource(const Graph &adjacency, const DistOracle &oracle,
  *  indices of the ring members.
  */
 static std::vector<std::vector<int>>
-searchPacked(PackedRows adjacency, int maxDepth, const std::vector<char> &sources,
+searchPacked(const PackedRows &adjacency, int maxDepth, const std::vector<char> &sources,
              bool legacy);
 
 [[gnu::noinline]] PackedRows vectorNeighbourRows(
@@ -1469,7 +1469,8 @@ static PackedRows packRows(const std::vector<std::vector<int>> &nList) {
 static std::vector<std::vector<int>>
 searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
             const std::vector<char> &sources, bool legacy,
-            primitive::RingRows rows = primitive::RingRows::Auto) {
+            primitive::RingRows rows = primitive::RingRows::Auto,
+            PackedRows *keep = nullptr) {
   const auto adjStart = std::chrono::steady_clock::now();
   const int nVertices = static_cast<int>(nList.size());
   int use = 1;
@@ -1494,7 +1495,20 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
               : teamNeighbourRows(nList, nVertices,
                                   (serial && rows != primitive::RingRows::Packed) ? 1 : use);
   gRingSplit.adj_ms = millisSince(adjStart);
-  return searchPacked(std::move(adjacency), maxDepth, sources, legacy);
+  auto found = searchPacked(adjacency, maxDepth, sources, legacy);
+  if (keep != nullptr) {
+    // Copy into the caller's buffer. A move would free the buffer the
+    // previous frame left there, and that free was slower than the copy.
+    if (keep->cols.capacity() < adjacency.cols.size()) {
+      keep->cols.reserve(adjacency.cols.size());
+    }
+    if (keep->first.capacity() < adjacency.first.size()) {
+      keep->first.reserve(adjacency.first.size());
+    }
+    keep->cols.assign(adjacency.cols.begin(), adjacency.cols.end());
+    keep->first.assign(adjacency.first.begin(), adjacency.first.end());
+  }
+  return found;
 }
 
 std::vector<std::vector<int>>
@@ -1545,7 +1559,7 @@ primitive::ringNetwork(const std::vector<int> &offsets, const std::vector<int> &
  *  vertex, where the members of its rings lie.
  */
 static std::vector<std::vector<int>>
-searchPacked(PackedRows adjacency, int maxDepth, const std::vector<char> &sources,
+searchPacked(const PackedRows &adjacency, int maxDepth, const std::vector<char> &sources,
              bool legacy) {
   seams::adoptThreads();
   gProfile = false;
@@ -1796,8 +1810,6 @@ searchPacked(PackedRows adjacency, int maxDepth, const std::vector<char> &source
       }
     }
     balls.clear();
-    std::vector<int>().swap(adjacency.cols);
-    std::vector<std::size_t>().swap(adjacency.first);
     gRingSplit.merge_ms = millisSince(mergeStart);
     noteRate();
     emitProfile();
@@ -1827,8 +1839,6 @@ searchPacked(PackedRows adjacency, int maxDepth, const std::vector<char> &source
   gRingSplit.enumerate_ms = millisSince(enumStart);
   const auto mergeStart = std::chrono::steady_clock::now();
   balls.clear();
-  std::vector<int>().swap(adjacency.cols);
-  std::vector<std::size_t>().swap(adjacency.first);
   gRingSplit.merge_ms = millisSince(mergeStart);
   noteRate();
   emitProfile();
@@ -2681,7 +2691,7 @@ struct primitive::RingUpdater::Impl {
     const auto byRing = [&out](int a, int b) {
       return out[static_cast<std::size_t>(a)] < out[static_cast<std::size_t>(b)];
     };
-    seams::parallelStableSort(order, byRing);
+    std::sort(order.begin(), order.end(), byRing);
     std::vector<std::vector<int>> sorted(out.size());
 #ifdef SEAMS_HAS_OPENMP
 #pragma omp parallel for schedule(static)
@@ -2871,6 +2881,75 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
       st.primed && st.graph[st.which].size() == static_cast<std::size_t>(nVertices);
   const int slot = sameSize ? 1 - st.which : 0;
   st.hot = false;
+  if (sameSize && st.changedBondFraction > ([&]() {
+#ifdef SEAMS_HAS_OPENMP
+        if (!omp_in_parallel() && sourceTeam(nVertices) > 1) {
+          return 0.33;
+        }
+#endif
+        return 0.55;
+      })()) {
+    st.flattened = ringNetwork(nList, st.maxDepth);
+    st.recomputed = nVertices;
+    st.changedBonds = static_cast<int>(st.changedBondFraction * nVertices);
+    return st.flattened;
+  }
+  if (sameSize) {
+    // A short sample of the rows. The full pass below is ringNetwork's
+    // packed search, so it is only taken when that search is the cheaper
+    // one. The shares are the measured crossovers on 4096 molecules.
+    const int stride = std::max(1, nVertices / 32);
+    int seen = 0;
+    int hits = 0;
+    const auto &prev = st.graph[st.which];
+    std::vector<int> got;
+    got.reserve(16);
+    for (int v = 0; v < nVertices; v += stride) {
+      ++seen;
+      const auto &row = nList[static_cast<std::size_t>(v)];
+      const auto packed = prev[static_cast<std::size_t>(v)];
+      const int nPacked = static_cast<int>(packed.end() - packed.begin());
+      got.clear();
+      if (!row.empty()) {
+        got.assign(row.begin() + 1, row.end());
+        if (got.size() > 1) {
+          std::sort(got.begin(), got.end());
+        }
+      }
+      if (static_cast<int>(got.size()) != nPacked ||
+          !std::equal(got.begin(), got.end(), packed.begin())) {
+        ++hits;
+      }
+    }
+    const double est = seen > 0 ? static_cast<double>(hits) / seen : 0.0;
+    int fullTeam = 1;
+    int partTeam = 1;
+#ifdef SEAMS_HAS_OPENMP
+    if (!omp_in_parallel()) {
+      fullTeam = sourceTeam(nVertices);
+      partTeam = sourceTeam(static_cast<int>(est * nVertices));
+    }
+#endif
+    // One thread wins the partial search through 0.55 of the vertices
+    // (2255/4096 won, 2742/4096 lost). Eight threads lose it past 0.33
+    // (1180/4096 won, 1555/4096 lost). A partial team of one thread
+    // against a real team also loses (438/4096 at eight threads).
+    const double cross = fullTeam <= 1 ? 0.55 : 0.33;
+    if (est > cross || partTeam < fullTeam) {
+      // Same call the whole-frame benchmark times. Keeping a packed copy
+      // of the rows made this slower than that call, so the next frame
+      // starts from the search again.
+      st.flattened = ringNetwork(nList, st.maxDepth);
+      st.primed = true;
+      st.which = slot;
+      st.recomputed = nVertices;
+      st.ballsRefreshed = 0;
+      st.ballsStale = true;
+      st.changedBonds = static_cast<int>(est * nVertices);
+      st.changedBondFraction = est;
+      return st.flattened;
+    }
+  }
   st.writeGraph(nList, slot, true);
   if (!sameSize) {
     // A missing frame or a different molecule count leaves no row to diff.
@@ -2880,7 +2959,8 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
     st.primed = true;
     st.changedBonds = 0;
     st.changedBondFraction = 0.0;
-    st.fastEnumerate(st.graph[st.which]);
+    st.flattened = ringNetwork(nList, st.maxDepth);
+    st.recomputed = nVertices;
     return st.flattened;
   }
 
@@ -3101,13 +3181,29 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
     frontier.swap(wave);
   }
 
-  // A full pass is the regions whose changes exceed the hop ball and
-  // whose ball is the whole vertex set. A frame of smaller regions
-  // enumerates those sources and carries every ring that misses them,
-  // even when the changed rows together touch every molecule.
-  if (static_cast<int>(T.size()) == nVertices && componentExceedsFrame()) {
+  // Same measured shares as the sample above. The exact vertex count
+  // replaces the sample when the sample stayed under the crossover.
+  int fullTeam = 1;
+  int partTeam = 1;
+#ifdef SEAMS_HAS_OPENMP
+  if (!omp_in_parallel()) {
+    fullTeam = sourceTeam(nVertices);
+    partTeam = sourceTeam(static_cast<int>(T.size()));
+  }
+#endif
+  const double changedShare =
+      nVertices > 0 ? static_cast<double>(T.size()) / nVertices : 0.0;
+  const double cross = fullTeam <= 1 ? 0.55 : 0.33;
+  const bool costFull = partTeam < fullTeam || changedShare > cross;
+  if (costFull ||
+      (static_cast<int>(T.size()) == nVertices && componentExceedsFrame())) {
+    // The tuned whole-frame search. The rows are already packed, so this
+    // is ringNetwork without packing them a second time.
     st.which = slot;
-    st.fastEnumerate(st.graph[st.which]);
+    st.flattened = searchPacked(st.graph[st.which], st.maxDepth, {}, false);
+    st.recomputed = nVertices;
+    st.ballsRefreshed = st.hopOnly ? 0 : nVertices;
+    st.ballsStale = false;
     return st.flattened;
   }
 

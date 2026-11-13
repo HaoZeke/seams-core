@@ -4,23 +4,23 @@ recorded rings OVITO faster at 136, 4096, 110592: 865 ms vs 511 ms
 recorded symmetry d-SEAMS 40.6 ms vs identify-diamond 36.1 ms
 recorded library cages 282 ms vs command 213 ms
 frame cages molecules 69632
-robust op sII69632 cages threads 1 molecules 69632 library_median 267.1949 library_min 260.9820 command_median 339.8672 command_min 330.7572 affinity 1 WIN cages 4096
-robust op sII69632 cages threads 8 molecules 69632 library_median 90.2774 library_min 86.8601 command_median 170.6214 command_min 168.4684 affinity 8 WIN cages 4096
+robust op sII69632 cages threads 1 molecules 69632 library_median 252.6892 library_min 249.5304 command_median 323.7633 command_min 316.7289 affinity 1 WIN cages 4096
+robust op sII69632 cages threads 8 molecules 69632 library_median 83.7976 library_min 79.3819 command_median 165.0487 command_min 155.4923 affinity 8 WIN cages 4096
 ovito 3.17.2
-robust op sII136 rings threads 1 molecules 136 dseams_median 0.3117 dseams_min 0.3007 ovito_median 0.7958 ovito_min 0.7495 affinity 1 WIN
-robust op ice4096 rings threads 1 molecules 4096 dseams_median 4.5111 dseams_min 4.4168 ovito_median 16.6996 ovito_min 15.8174 affinity 1 WIN
+robust op sII136 rings threads 1 molecules 136 dseams_median 0.3145 dseams_min 0.2722 ovito_median 0.7873 ovito_min 0.7271 affinity 1 WIN
+robust op ice4096 rings threads 1 molecules 4096 dseams_median 4.5613 dseams_min 4.4157 ovito_median 16.9840 ovito_min 16.0961 affinity 1 WIN
 check ice4096 symmetry molecules 4096 agree 4096 of 4096 hex/hex=4096
-robust op ice4096 symmetry threads 1 molecules 4096 dseams_median 0.7703 dseams_min 0.7396 diamond_median 5.0161 diamond_min 4.7900 affinity 1 WIN
-robust op ice110592 rings threads 1 molecules 110592 dseams_median 129.3174 dseams_min 127.3258 ovito_median 612.5372 ovito_min 593.6394 affinity 1 WIN
+robust op ice4096 symmetry threads 1 molecules 4096 dseams_median 0.7592 dseams_min 0.7432 diamond_median 4.9741 diamond_min 4.8723 affinity 1 WIN
+robust op ice110592 rings threads 1 molecules 110592 dseams_median 128.6384 dseams_min 126.1567 ovito_median 628.0916 ovito_min 584.8785 affinity 1 WIN
 check ice110592 symmetry molecules 110592 agree 110592 of 110592 hex/hex=110592
-robust op ice110592 symmetry threads 1 molecules 110592 dseams_median 24.7037 dseams_min 23.1459 diamond_median 144.6198 diamond_min 143.4221 affinity 1 WIN
-robust op sII136 rings threads 8 molecules 136 dseams_median 0.3071 dseams_min 0.2900 ovito_median 0.9018 ovito_min 0.8157 affinity 8 WIN
-robust op ice4096 rings threads 8 molecules 4096 dseams_median 2.4660 dseams_min 2.2643 ovito_median 17.3098 ovito_min 16.4014 affinity 8 WIN
+robust op ice110592 symmetry threads 1 molecules 110592 dseams_median 22.6479 dseams_min 22.0897 diamond_median 143.5580 diamond_min 140.6126 affinity 1 WIN
+robust op sII136 rings threads 8 molecules 136 dseams_median 0.3232 dseams_min 0.3011 ovito_median 0.9432 ovito_min 0.8137 affinity 8 WIN
+robust op ice4096 rings threads 8 molecules 4096 dseams_median 2.6005 dseams_min 2.2693 ovito_median 17.3833 ovito_min 16.4007 affinity 8 WIN
 check ice4096 symmetry molecules 4096 agree 4096 of 4096 hex/hex=4096
-robust op ice4096 symmetry threads 8 molecules 4096 dseams_median 0.9864 dseams_min 0.6911 diamond_median 5.0960 diamond_min 4.8840 affinity 8 WIN
-robust op ice110592 rings threads 8 molecules 110592 dseams_median 47.6434 dseams_min 43.8954 ovito_median 638.4205 ovito_min 604.5090 affinity 8 WIN
+robust op ice4096 symmetry threads 8 molecules 4096 dseams_median 1.0849 dseams_min 0.6543 diamond_median 5.1157 diamond_min 4.9346 affinity 8 WIN
+robust op ice110592 rings threads 8 molecules 110592 dseams_median 45.4611 dseams_min 43.7794 ovito_median 606.4035 ovito_min 574.1589 affinity 8 WIN
 check ice110592 symmetry molecules 110592 agree 110592 of 110592 hex/hex=110592
-robust op ice110592 symmetry threads 8 molecules 110592 dseams_median 11.4723 dseams_min 9.7169 diamond_median 152.9105 diamond_min 147.8397 affinity 8 WIN
+robust op ice110592 symmetry threads 8 molecules 110592 dseams_median 10.4022 dseams_min 7.8436 diamond_median 145.3556 diamond_min 143.2839 affinity 8 WIN
 chill_plus thresholds published staggered<=-0.35 eclipsed -0.8..0.25
 chill_plus ovito mode uses the open edges and every neighbour inside 3.5 A
 check Ih512 chill_ovito_vs_modifier mismatches 0 of 512

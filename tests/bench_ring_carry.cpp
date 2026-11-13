@@ -75,6 +75,9 @@ int main(int argc, char **argv) {
   const int nAtoms = argc > 1 ? std::atoi(argv[1]) : 4096;
   const int samples = argc > 2 ? std::atoi(argv[2]) : 8;
   const bool local = argc > 3 && std::string(argv[3]) == "local";
+  const bool spread = argc > 3 && std::string(argv[3]) == "spread";
+  const int spreadPct = spread && argc > 4 ? std::atoi(argv[4]) : -1;
+  const int movedArg = argc > 3 && !local && !spread ? std::atoi(argv[3]) : -1;
   auto cloud = makeCloud(nAtoms, 88172645463325252ULL);
   auto first = indexList(cloud);
   primitive::RingUpdater warm(6);
@@ -85,9 +88,12 @@ int main(int argc, char **argv) {
   // local: a few molecules move, which is the carried-ring case.
   // The default moves four of every five, the rate at which the old
   // full-pass rule fired on the nucleation trajectory.
-  const int moved = local ? std::min(nAtoms, 1200) : nAtoms;
-  for (int i = 0; i < moved; i++) {
-    if (!local && i % 5 == 0) {
+  const int moved = local ? std::min(nAtoms, 1200)
+                          : movedArg > 0 ? std::min(nAtoms, movedArg) : nAtoms;
+  for (int i = 0; i < nAtoms; i++) {
+    const bool touch = spread ? (i % 100) < spreadPct
+                              : i < moved && (movedArg >= 0 || local || i % 5 != 0);
+    if (!touch) {
       continue;
     }
     cloud.pts[static_cast<std::size_t>(i)].x += 1.6;
@@ -114,14 +120,17 @@ int main(int argc, char **argv) {
   // to the first frame and forward again, and times the forward step
   // against a full search of that same frame.
   updater.update(first);
+  std::vector<std::vector<int>> heldFull = primitive::ringNetwork(idx, 6);
   for (int i = 0; i < samples; i++) {
+    // Assignment releases the previous ring buffers, which the carried
+    // update also does when it replaces its stored list.
     const auto tFull = std::chrono::steady_clock::now();
-    auto full = primitive::ringNetwork(idx, 6);
+    heldFull = primitive::ringNetwork(idx, 6);
     fullMs.push_back(msSince(tFull));
     const auto tCarry = std::chrono::steady_clock::now();
-    auto carried = updater.update(idx);
+    const auto &carried = updater.update(idx);
     carryMs.push_back(msSince(tCarry));
-    if (full != carried) {
+    if (heldFull != carried) {
       std::cout << "identical no\n";
       return 1;
     }
