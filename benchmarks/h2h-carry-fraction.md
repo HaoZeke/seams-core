@@ -1,0 +1,9 @@
+# Carried rings against a bare search
+
+`seams_version_string` is 2.14.0. Eight cores, Intel Xeon Processor. Eight samples. The cell has 4096 molecules. A moved fraction `k/20` shifts every atom with `i % 20 < k` by (1.6, 0.4, 0) angstrom. Serial calls use core 0. Eight-thread calls use cores 0-7. A row is within the bare search when both the carried median and the carried minimum are at most the bare `ringNetwork` median and minimum. Every row is within. The raw file is `benchmarks/h2h-carry-fraction.csv`. `scripts/h2h_carry_fraction.py` and `tests/test_ring_carry_fraction.py` regenerate the check.
+
+The count of changed rows stops once it passes 0.55 of the vertices on one thread, or 0.33 with a team. The rest of the diff is skipped and the whole-frame search writes into the ring buffers the updater already holds, so the timer does not free the previous frame. A serial partial of more than a tenth of the vertices also takes that search, because it loses to the team's whole-frame call. A few moved rows stay on the partial search.
+
+Fraction 0 changes no row, so the update returns the stored rings (0.101 ms and 0.142 ms). Fraction 1 shifts every atom by the same vector, the neighbour rows are unchanged, and the update is again the stored rings (0.100 ms and 0.448 ms).
+
+At eight threads the carried median stays under the bare search at every step. The old 4-of-5 frame, which was 4.877 ms against 4.654 ms, is 4.275 ms against 5.589 ms on this build. At one thread the widest gap under the share is fraction 0.15, 21.350 ms against 22.243 ms, and above the share the reused search stays under the bare call (fraction 0.70 is 22.399 ms against 23.118 ms).

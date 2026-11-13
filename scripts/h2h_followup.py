@@ -10,10 +10,11 @@ fresh bench_stages process, the neighbour list built before the timer.
 The frames are genice_sH (136), mW cubic (4096) and that cell replicated
 3x3x3 (110592). This script times that boundary again.
 
-The 40.6 ms vs 36.1 ms symmetry pair is not a labelled median in the
-tree. The nearest identify-diamond record is benchmarks/logs/symmetry-v20-session.txt
-on ideal ice of 110592 molecules: the d-SEAMS kernel is 21.743 ms and
-identify-diamond is 36.564 ms. The same three frames are timed here.
+The symmetry comparison is identify-diamond on the cubic frames, from
+this script. An unsourced symmetry headline was dropped. The nearest
+labelled record is benchmarks/logs/symmetry-v20-session.txt on ideal
+ice of 110592 molecules: the d-SEAMS kernel is 21.743 ms and
+identify-diamond is 36.564 ms.
 """
 
 from __future__ import annotations
@@ -127,9 +128,8 @@ def main() -> None:
         flush=True,
     )
     print(
-        "recorded symmetry pair 40.6 vs 36.1 is not a labelled median; "
-        "nearest is symmetry-v20 ideal-110592 kernel 21.743 "
-        "identify-diamond 36.564",
+        "symmetry headline omitted; nearest labelled record is "
+        "symmetry-v20 ideal-110592 kernel 21.743 identify-diamond 36.564",
         flush=True,
     )
 

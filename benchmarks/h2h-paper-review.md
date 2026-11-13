@@ -13,15 +13,15 @@ Median, then minimum. The ring and symmetry rows are this host against OVITO. Th
 | Rings, 136 molecules | 865 vs 511 | 0.315 / 0.272 vs 0.787 / 0.727 | 0.323 / 0.301 vs 0.943 / 0.814 |
 | Rings, 4096 molecules | 865 vs 511 | 4.561 / 4.416 vs 16.984 / 16.096 | 2.601 / 2.269 vs 17.383 / 16.401 |
 | Rings, 110592 molecules | 865 vs 511 | 128.638 / 126.157 vs 628.092 / 584.879 | 45.461 / 43.779 vs 606.404 / 574.159 |
-| Symmetry, 4096, identify-diamond | 40.6 vs 36.1 | 0.759 / 0.743 vs 4.974 / 4.872 | 1.085 / 0.654 vs 5.116 / 4.935 |
-| Symmetry, 110592, identify-diamond | 40.6 vs 36.1 | 22.648 / 22.090 vs 143.558 / 140.613 | 10.402 / 7.844 vs 145.356 / 143.284 |
+| Symmetry, 4096, identify-diamond | omitted | 0.759 / 0.743 vs 4.974 / 4.872 | 1.085 / 0.654 vs 5.116 / 4.935 |
+| Symmetry, 110592, identify-diamond | omitted | 22.648 / 22.090 vs 143.558 / 140.613 | 10.402 / 7.844 vs 145.356 / 143.284 |
 | Cages, sII 69632, signature 51264 | library 282 vs command 213 | 252.689 / 249.530 vs 323.763 / 316.729 | 83.798 / 79.382 vs 165.049 / 155.492 |
 
 Every row on this host is a win. Ideal ice is hexagonal on every atom for both symmetry codes (4096 of 4096, 110592 of 110592). The cage census is 4096 cages at both thread counts.
 
 ## Rings and symmetry
 
-The ring path and the symmetry classifier are unchanged. These ring rows time `seams_rings_find`, which builds the cutoff graph, against a pipeline that reruns `CreateBondsModifier` and `FindRingsModifier`. The rings-only boundary, with both graphs built first, is `benchmarks/h2h-ice-ic-rings.csv`. On this host the census and `seams_system_symmetry` (shell RMSD ceiling 0.15, the caller passes 0) are faster than OVITO FindRings and IdentifyDiamond at 136, 4096, and 110592 molecules, at one thread and at eight. The recorded 865 ms against 511 ms, and 40.6 ms against 36.1 ms, did not recur.
+The ring path and the symmetry classifier are unchanged. These ring rows time `seams_rings_find`, which builds the cutoff graph, against a pipeline that reruns `CreateBondsModifier` and `FindRingsModifier`. The rings-only boundary, with both graphs built first, is `benchmarks/h2h-ice-ic-rings.csv`. On this host the census and `seams_system_symmetry` (shell RMSD ceiling 0.15, the caller passes 0) are faster than OVITO FindRings and IdentifyDiamond at 136, 4096, and 110592 molecules, at one thread and at eight. The recorded 865 ms against 511 ms did not recur. The symmetry headline had no source in the tree, so that recorded cell is omitted. The identify-diamond times above are this script.
 
 ## Library cages
 

@@ -845,6 +845,7 @@ struct alignas(64) RingPool {
     n = 0;
   }
   std::size_t size() const { return n; }
+  bool empty() const { return n == 0; }
 
   void push_back(const std::vector<int> &ring) {
     if (n == storage.size()) {
@@ -1220,7 +1221,8 @@ void enumerateFromSource(const Graph &adjacency, const DistOracle &oracle,
  */
 static std::vector<std::vector<int>>
 searchPacked(const PackedRows &adjacency, int maxDepth, const std::vector<char> &sources,
-             bool legacy);
+             bool legacy, std::vector<std::vector<int>> *reuse = nullptr,
+             std::vector<std::vector<int>> *spare = nullptr);
 
 [[gnu::noinline]] PackedRows vectorNeighbourRows(
     const std::vector<std::vector<int>> &nList, int nVertices, int use) {
@@ -1470,7 +1472,9 @@ static std::vector<std::vector<int>>
 searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
             const std::vector<char> &sources, bool legacy,
             primitive::RingRows rows = primitive::RingRows::Auto,
-            PackedRows *keep = nullptr) {
+            PackedRows *keep = nullptr,
+            std::vector<std::vector<int>> *reuse = nullptr,
+            std::vector<std::vector<int>> *spare = nullptr) {
   const auto adjStart = std::chrono::steady_clock::now();
   const int nVertices = static_cast<int>(nList.size());
   int use = 1;
@@ -1495,7 +1499,7 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
               : teamNeighbourRows(nList, nVertices,
                                   (serial && rows != primitive::RingRows::Packed) ? 1 : use);
   gRingSplit.adj_ms = millisSince(adjStart);
-  auto found = searchPacked(adjacency, maxDepth, sources, legacy);
+  auto found = searchPacked(adjacency, maxDepth, sources, legacy, reuse, spare);
   if (keep != nullptr) {
     // Copy into the caller's buffer. A move would free the buffer the
     // previous frame left there, and that free was slower than the copy.
@@ -1558,9 +1562,59 @@ primitive::ringNetwork(const std::vector<int> &offsets, const std::vector<int> &
  *  vertex. Balls are filled only within maxDepth/2 hops of a flagged
  *  vertex, where the members of its rings lie.
  */
+// The whole-frame search writes into the caller's ring buffer. Surplus
+// vectors are parked in spare, and the pools keep the previous frame's
+// vectors, so a later call assigns into them instead of freeing.
+static void fitRingSlots(std::vector<std::vector<int>> &dst, std::size_t n,
+                         std::vector<std::vector<int>> &spare) {
+  if (dst.size() > n) {
+    for (std::size_t i = n; i < dst.size(); ++i) {
+      spare.push_back(std::move(dst[i]));
+    }
+    dst.resize(n);
+  }
+  while (dst.size() < n) {
+    if (!spare.empty()) {
+      dst.push_back(std::move(spare.back()));
+      spare.pop_back();
+    } else {
+      dst.emplace_back();
+    }
+  }
+}
+
+static void publishPool(RingPool &pool, std::vector<std::vector<int>> &dst,
+                        std::vector<std::vector<int>> &spare) {
+  const std::size_t n = pool.size();
+  fitRingSlots(dst, n, spare);
+  for (std::size_t i = 0; i < n; ++i) {
+    dst[i].swap(pool.storage[i]);
+  }
+  pool.reset();
+}
+
+static void publishPools(std::vector<RingPool> &pools, int nFrom,
+                         std::vector<std::vector<int>> &dst,
+                         std::vector<std::vector<int>> &spare) {
+  std::size_t n = 0;
+  for (int k = 0; k < nFrom; ++k) {
+    n += pools[static_cast<std::size_t>(k)].size();
+  }
+  fitRingSlots(dst, n, spare);
+  std::size_t at = 0;
+  for (int k = 0; k < nFrom; ++k) {
+    auto &pool = pools[static_cast<std::size_t>(k)];
+    for (std::size_t i = 0; i < pool.size(); ++i) {
+      dst[at++].swap(pool.storage[i]);
+    }
+    pool.reset();
+  }
+}
+
 static std::vector<std::vector<int>>
 searchPacked(const PackedRows &adjacency, int maxDepth, const std::vector<char> &sources,
-             bool legacy) {
+             bool legacy, std::vector<std::vector<int>> *reuse,
+             std::vector<std::vector<int>> *spare) {
   seams::adoptThreads();
   gProfile = false;
   if (const char *prof = std::getenv("SEAMS_RING_PROFILE")) {
@@ -1575,6 +1629,11 @@ searchPacked(const PackedRows &adjacency, int maxDepth, const std::vector<char> 
   std::vector<std::vector<int>> rings;
   const int nVertices = static_cast<int>(adjacency.size());
   if (maxDepth < 3 || nVertices == 0) {
+    if (reuse != nullptr && spare != nullptr) {
+      spare->insert(spare->end(), std::make_move_iterator(reuse->begin()),
+                    std::make_move_iterator(reuse->end()));
+      reuse->clear();
+    }
     return rings;
   }
 
@@ -1804,21 +1863,52 @@ searchPacked(const PackedRows &adjacency, int maxDepth, const std::vector<char> 
     }
     gRingSplit.enumerate_ms = millisSince(enumStart);
     const auto mergeStart = std::chrono::steady_clock::now();
-    for (int k = 0; k < nFrom; k++) {
-      for (const auto &ring : (*pools)[static_cast<std::size_t>(k)]) {
-        rings.push_back(ring);
+    if (reuse != nullptr && spare != nullptr) {
+      publishPools(*pools, nFrom, *reuse, *spare);
+    } else {
+      for (int k = 0; k < nFrom; k++) {
+        for (const auto &ring : (*pools)[static_cast<std::size_t>(k)]) {
+          rings.push_back(ring);
+        }
       }
     }
     balls.clear();
     gRingSplit.merge_ms = millisSince(mergeStart);
     noteRate();
     emitProfile();
-    return rings;
+    return reuse != nullptr ? std::vector<std::vector<int>>{} : rings;
   }
 #endif
 
   const auto enumStart = std::chrono::steady_clock::now();
   RingScratch scratch;
+  if (reuse != nullptr && spare != nullptr) {
+    thread_local RingPool held;
+    held.reset();
+    if (gSourceWorkPtr == nullptr) {
+      for (const int src : from) {
+        enumerateFromSource(adjacency, oracle, src, maxDepth, maxLvl, scratch,
+                            held, nullptr, legacy);
+      }
+    } else {
+      for (const int src : from) {
+        const auto srcStart = std::chrono::steady_clock::now();
+        enumerateFromSource(adjacency, oracle, src, maxDepth, maxLvl, scratch,
+                            held, nullptr, legacy);
+        if (src >= 0 && src < nVertices) {
+          gSourceWorkPtr[src] += std::chrono::duration<double, std::micro>(
+                                     std::chrono::steady_clock::now() - srcStart)
+                                     .count();
+        }
+      }
+    }
+    publishPool(held, *reuse, *spare);
+    gRingSplit.enumerate_ms = millisSince(enumStart);
+    balls.clear();
+    noteRate();
+    emitProfile();
+    return {};
+  }
   if (gSourceWorkPtr == nullptr) {
     for (const int src : from) {
       enumerateFromSource(adjacency, oracle, src, maxDepth, maxLvl, scratch,
@@ -2352,9 +2442,9 @@ struct primitive::RingUpdater::Impl {
   int which = 0;
   bool primed = false;
   std::vector<std::vector<int>> flattened;
-  // Ring buffers dropped by a carried update. Kept so the update does
-  // not free a million blocks before it returns; the next frame reuses
-  // them. The updater releases them when it is destroyed.
+  // Ring vectors parked when a whole-frame search shrinks the result.
+  // The search itself swaps into flattened, so the timer does not free
+  // the previous frame's rings. The updater releases spare on destruction.
   std::vector<std::vector<int>> spare;
   bool ballsStale = true;
   BoundedBalls balls;
@@ -2881,72 +2971,79 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
       st.primed && st.graph[st.which].size() == static_cast<std::size_t>(nVertices);
   const int slot = sameSize ? 1 - st.which : 0;
   st.hot = false;
-  if (sameSize && st.changedBondFraction > ([&]() {
+  // One thread still wins a partial search through 0.55 of the vertices.
+  // A team loses that search past 0.33, and a serial partial of more than
+  // a tenth of the vertices loses to the team's whole-frame search.
+  auto crossOf = [&]() {
 #ifdef SEAMS_HAS_OPENMP
-        if (!omp_in_parallel() && sourceTeam(nVertices) > 1) {
-          return 0.33;
-        }
+    if (!omp_in_parallel() && sourceTeam(nVertices) > 1) {
+      return 0.33;
+    }
 #endif
-        return 0.55;
-      })()) {
-    st.flattened = ringNetwork(nList, st.maxDepth);
+    return 0.55;
+  };
+  auto whole = [&](double fraction) {
+    // Into the buffers already held. Assigning a fresh ringNetwork result
+    // freed the previous frame inside the timer, which a bare call does
+    // not pay when its own buffer is the same shape.
+    searchRings(nList, st.maxDepth, {}, false, primitive::RingRows::Auto, nullptr,
+                &st.flattened, &st.spare);
     st.recomputed = nVertices;
-    st.changedBonds = static_cast<int>(st.changedBondFraction * nVertices);
+    st.changedBondFraction = fraction;
+    st.changedBonds = static_cast<int>(fraction * nVertices);
+    st.primed = true;
+    st.ballsRefreshed = 0;
+    st.ballsStale = true;
+  };
+  const double cross = crossOf();
+  // The previous frame already crossed the share, so this one does not
+  // diff the rows again.
+  if (sameSize && st.changedBondFraction > cross) {
+    whole(st.changedBondFraction);
     return st.flattened;
   }
   if (sameSize) {
-    // A short sample of the rows. The full pass below is ringNetwork's
-    // packed search, so it is only taken when that search is the cheaper
-    // one. The shares are the measured crossovers on 4096 molecules.
-    const int stride = std::max(1, nVertices / 32);
-    int seen = 0;
-    int hits = 0;
-    const auto &prev = st.graph[st.which];
+    // Count changed rows and stop once the count exceeds the share.
+    // One reused buffer, no row allocation. The bond-by-bond diff below
+    // runs only when this count stays under the share.
+    const auto &prevRows = st.graph[st.which];
     std::vector<int> got;
     got.reserve(16);
-    for (int v = 0; v < nVertices; v += stride) {
-      ++seen;
+    const int limit = static_cast<int>(cross * nVertices);
+    int moved = 0;
+    bool stopped = false;
+    for (int v = 0; v < nVertices; ++v) {
       const auto &row = nList[static_cast<std::size_t>(v)];
-      const auto packed = prev[static_cast<std::size_t>(v)];
-      const int nPacked = static_cast<int>(packed.end() - packed.begin());
+      const auto packed = prevRows[static_cast<std::size_t>(v)];
       got.clear();
       if (!row.empty()) {
         got.assign(row.begin() + 1, row.end());
-        if (got.size() > 1) {
-          std::sort(got.begin(), got.end());
-        }
       }
+      if (got.size() > 1) {
+        std::sort(got.begin(), got.end());
+      }
+      const int nPacked = static_cast<int>(packed.end() - packed.begin());
       if (static_cast<int>(got.size()) != nPacked ||
           !std::equal(got.begin(), got.end(), packed.begin())) {
-        ++hits;
+        ++moved;
+        if (moved > limit) {
+          stopped = true;
+          break;
+        }
       }
     }
-    const double est = seen > 0 ? static_cast<double>(hits) / seen : 0.0;
     int fullTeam = 1;
-    int partTeam = 1;
 #ifdef SEAMS_HAS_OPENMP
     if (!omp_in_parallel()) {
       fullTeam = sourceTeam(nVertices);
-      partTeam = sourceTeam(static_cast<int>(est * nVertices));
     }
 #endif
-    // One thread wins the partial search through 0.55 of the vertices
-    // (2255/4096 won, 2742/4096 lost). Eight threads lose it past 0.33
-    // (1180/4096 won, 1555/4096 lost). A partial team of one thread
-    // against a real team also loses (438/4096 at eight threads).
-    const double cross = fullTeam <= 1 ? 0.55 : 0.33;
-    if (est > cross || partTeam < fullTeam) {
-      // Same call the whole-frame benchmark times. Keeping a packed copy
-      // of the rows made this slower than that call, so the next frame
-      // starts from the search again.
-      st.flattened = ringNetwork(nList, st.maxDepth);
-      st.primed = true;
-      st.which = slot;
-      st.recomputed = nVertices;
-      st.ballsRefreshed = 0;
-      st.ballsStale = true;
-      st.changedBonds = static_cast<int>(est * nVertices);
-      st.changedBondFraction = est;
+    const bool teamShort = !stopped && moved * 10 > nVertices &&
+                           sourceTeam(moved) < fullTeam;
+    if (stopped || teamShort) {
+      const double fraction =
+          nVertices > 0 ? static_cast<double>(moved) / nVertices : 0.0;
+      whole(fraction);
       return st.flattened;
     }
   }
@@ -2959,7 +3056,8 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
     st.primed = true;
     st.changedBonds = 0;
     st.changedBondFraction = 0.0;
-    st.flattened = ringNetwork(nList, st.maxDepth);
+    searchRings(nList, st.maxDepth, {}, false, primitive::RingRows::Auto, nullptr,
+                &st.flattened, &st.spare);
     st.recomputed = nVertices;
     return st.flattened;
   }
@@ -3193,15 +3291,22 @@ primitive::RingUpdater::update(const std::vector<std::vector<int>> &nList) {
 #endif
   const double changedShare =
       nVertices > 0 ? static_cast<double>(T.size()) / nVertices : 0.0;
-  const double cross = fullTeam <= 1 ? 0.55 : 0.33;
-  const bool costFull = partTeam < fullTeam || changedShare > cross;
+  // A handful of changed rows stays on the partial search: the tests
+  // require that count to be smaller than the frame. A serial search of
+  // more than a tenth of the vertices loses to a team.
+  const bool costFull =
+      changedShare > cross ||
+      (static_cast<int>(T.size()) * 10 > nVertices && partTeam < fullTeam);
   if (costFull ||
       (static_cast<int>(T.size()) == nVertices && componentExceedsFrame())) {
     // The tuned whole-frame search. The rows are already packed, so this
     // is ringNetwork without packing them a second time.
     st.which = slot;
-    st.flattened = searchPacked(st.graph[st.which], st.maxDepth, {}, false);
+    searchPacked(st.graph[st.which], st.maxDepth, {}, false, &st.flattened, &st.spare);
     st.recomputed = nVertices;
+    if (changedShare > st.changedBondFraction) {
+      st.changedBondFraction = changedShare;
+    }
     st.ballsRefreshed = st.hopOnly ? 0 : nVertices;
     st.ballsStale = false;
     return st.flattened;

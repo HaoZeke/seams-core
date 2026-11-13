@@ -69,11 +69,79 @@ double msSince(std::chrono::steady_clock::time_point t0) {
       .count();
 }
 
+double evenMedian(std::vector<double> values) {
+  std::sort(values.begin(), values.end());
+  const std::size_t n = values.size();
+  return 0.5 * (values[n / 2 - 1] + values[n / 2]);
+}
+
+// Moved fraction k/20. Returns 0 when carry stays at or under the bare search.
+int sweep(int nAtoms, int samples) {
+  std::cout.setf(std::ios::fixed);
+  std::cout.precision(4);
+  std::cout << "moved_fraction,recomputed,molecules,samples,carry_median_ms,"
+               "carry_min_ms,bare_median_ms,bare_min_ms,within\n";
+  bool all = true;
+  for (int step = 0; step <= 20; ++step) {
+    auto cloud = makeCloud(nAtoms, 88172645463325252ULL);
+    auto first = indexList(cloud);
+    const double fraction = step / 20.0;
+    for (int i = 0; i < nAtoms; ++i) {
+      if (i % 20 >= step) {
+        continue;
+      }
+      cloud.pts[static_cast<std::size_t>(i)].x += 1.6;
+      cloud.pts[static_cast<std::size_t>(i)].y += 0.4;
+    }
+    auto idx = indexList(cloud);
+    primitive::RingUpdater updater(6);
+    updater.setFullPassFraction(0.2);
+    updater.setBondCrossover(0.15);
+    updater.update(first);
+    const auto &once = updater.update(idx);
+    const auto fullOnce = primitive::ringNetwork(idx, 6);
+    bool same = once == fullOnce;
+    const int recomputed = updater.lastRecomputedSources();
+    updater.update(first);
+    std::vector<std::vector<int>> heldFull = primitive::ringNetwork(idx, 6);
+    std::vector<double> fullMs;
+    std::vector<double> carryMs;
+    fullMs.reserve(static_cast<std::size_t>(samples));
+    carryMs.reserve(static_cast<std::size_t>(samples));
+    for (int s = 0; s < samples; ++s) {
+      const auto tFull = std::chrono::steady_clock::now();
+      heldFull = primitive::ringNetwork(idx, 6);
+      fullMs.push_back(msSince(tFull));
+      const auto tCarry = std::chrono::steady_clock::now();
+      const auto &carried = updater.update(idx);
+      carryMs.push_back(msSince(tCarry));
+      if (heldFull != carried) {
+        same = false;
+      }
+      updater.update(first);
+    }
+    const double fullMed = evenMedian(fullMs);
+    const double carryMed = evenMedian(carryMs);
+    const double fullMin = *std::min_element(fullMs.begin(), fullMs.end());
+    const double carryMin = *std::min_element(carryMs.begin(), carryMs.end());
+    const bool within = same && carryMed <= fullMed && carryMin <= fullMin;
+    all = all && within;
+    std::cout << fraction << "," << recomputed << "," << nAtoms << ","
+              << samples << "," << carryMed << "," << carryMin << ","
+              << fullMed << "," << fullMin << "," << (within ? "yes" : "no")
+              << "\n";
+  }
+  return all ? 0 : 1;
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
   const int nAtoms = argc > 1 ? std::atoi(argv[1]) : 4096;
   const int samples = argc > 2 ? std::atoi(argv[2]) : 8;
+  if (argc > 3 && std::string(argv[3]) == "sweep") {
+    return sweep(nAtoms, samples);
+  }
   const bool local = argc > 3 && std::string(argv[3]) == "local";
   const bool spread = argc > 3 && std::string(argv[3]) == "spread";
   const int spreadPct = spread && argc > 4 ? std::atoi(argv[4]) : -1;

@@ -1,7 +1,6 @@
 cores 8 affinity 8
 samples 8
 recorded rings OVITO faster at 136, 4096, 110592: 865 ms vs 511 ms
-recorded symmetry d-SEAMS 40.6 ms vs identify-diamond 36.1 ms
 recorded library cages 282 ms vs command 213 ms
 frame cages molecules 69632
 robust op sII69632 cages threads 1 molecules 69632 library_median 252.6892 library_min 249.5304 command_median 323.7633 command_min 316.7289 affinity 1 WIN cages 4096

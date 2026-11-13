@@ -905,6 +905,18 @@ rule h2h_ptm:
         "mv {output}.1 {output}"
 
 
+rule h2h_carry_fraction:
+    input:
+        "bbdir-release/tests/bench_ring_carry",
+        "scripts/h2h_carry_fraction.py",
+    output:
+        "benchmarks/h2h-carry-fraction.csv",
+    shell:
+        "taskset -c 0-7 env "
+        "OMP_PROC_BIND=close OMP_PLACES=cores OMP_WAIT_POLICY=PASSIVE "
+        "python3 scripts/h2h_carry_fraction.py {input[0]} --csv {output}"
+
+
 rule h2h_carry_crossover:
     output:
         "benchmarks/h2h-carry-crossover.txt",

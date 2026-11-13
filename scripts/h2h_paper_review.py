@@ -111,10 +111,6 @@ def main():
         flush=True,
     )
     print(
-        "recorded symmetry d-SEAMS 40.6 ms vs identify-diamond 36.1 ms",
-        flush=True,
-    )
-    print(
         "recorded library cages 282 ms vs command 213 ms",
         flush=True,
     )

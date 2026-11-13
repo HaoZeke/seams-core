@@ -645,6 +645,11 @@ test('sqq_sh_triclinic', find_program('python3'),
 test('ring_carry', bench_ring_carry,
   args: ['800', '2'],
   timeout: 180)
+test('ring_carry_fraction', find_program('python3'),
+  args: [files('test_ring_carry_fraction.py'),
+         meson.project_build_root() / 'tests' / 'bench_ring_carry'],
+  workdir: meson.project_source_root(),
+  timeout: 300)
 test('ovito_chill_atoms', find_program('python3'),
   args: [files('test_ovito_chill_atoms.py'),
          meson.project_build_root() / 'src' / 'libseams.so'],
