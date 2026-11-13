@@ -604,3 +604,69 @@ class HopStride:
 
     def time_carry(self, model, stride, graph):
         _run(self.cmd)
+
+
+class PtmIraIce:
+    """Structure identification on the 884736-molecule ice Ic frame.
+
+    One call of the d-SEAMS classifier, OVITO 3.17.2 with the cubic and
+    hexagonal diamond templates at RMSD 0.1, and ira_mod.IRA.match.
+    Serial and eight threads. The n=8 ice and liquid sitting is
+    benchmarks/paper-cells/sitting-ptm-ira.csv.
+    """
+
+    params = [1, 8]
+    param_names = ["threads"]
+    timeout = 2400
+
+    def setup(self, threads):
+        import numpy as np
+
+        lib = ROOT / "bbdir-release" / "src" / "libyodaLib.so"
+        if not lib.is_file():
+            raise NotImplementedError("release libyodaLib is not built")
+        os.environ["OMP_NUM_THREADS"] = str(threads)
+        os.environ["OVITO_THREAD_COUNT"] = str(threads)
+        os.environ["QT_QPA_PLATFORM"] = "offscreen"
+        os.environ["OMP_DYNAMIC"] = "FALSE"
+        try:
+            import ovito
+        except ImportError as exc:
+            raise NotImplementedError("OVITO is not importable") from exc
+        if tuple(ovito.version)[:3] != (3, 17, 2):
+            raise NotImplementedError("OVITO 3.17.2 is required")
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import paper_sitting_ptm_ira as sitting
+
+        self.sitting = sitting
+        self.np = np
+        self.xyz, _box, self.side = sitting.frame_of("ice")
+        self.lib = sitting.open_core(str(lib))
+        self.labels = np.empty(len(self.xyz), dtype=np.int32)
+        sitting._IDENTS, sitting._TEMPLATES = sitting.ice_templates(self.lib)
+        sitting._SHELLS = sitting.shell_table(self.xyz, self.side, threads)
+        self.work = None
+        if threads > 1:
+            import tempfile
+            self.work = Path(tempfile.mkdtemp(prefix="ptm-ira-"))
+            np.save(self.work / "shells.npy", sitting._SHELLS)
+            np.save(self.work / "templates.npy", sitting._TEMPLATES)
+            np.save(self.work / "idents.npy", sitting._IDENTS)
+
+    def time_classifier(self, threads):
+        self.sitting.classify_into(self.lib, self.xyz, self.side, self.labels)
+
+    def time_ptm_ice(self, threads):
+        self.sitting.ovito_labels(self.xyz, self.side, "ice", False)
+
+    def time_ira(self, threads):
+        if threads == 1:
+            self.sitting.ira_serial()
+        else:
+            self.sitting.ira_parallel(threads, self.work)
+
+    def teardown(self, threads):
+        import shutil
+        work = getattr(self, "work", None)
+        if work is not None:
+            shutil.rmtree(work, ignore_errors=True)

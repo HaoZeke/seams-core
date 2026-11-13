@@ -615,6 +615,23 @@ rule paper_sitting_large:
         "python3 scripts/paper_sitting_large.py --out benchmarks/paper-cells"
 
 
+# PTM and IRA structure labels on the same 884736-molecule frames.
+rule paper_sitting_ptm_ira:
+    input:
+        "scripts/paper_sitting_ptm_ira.py",
+        "scripts/paper_sitting_large.py",
+        "scripts/paper_stats.py",
+        "scripts/h2h_protocol.py",
+        "benchmarks/paper-cells/tip4pice-liquid-4096.txt",
+        "bbdir-release/src/libyodaLib.so",
+    output:
+        "benchmarks/paper-cells/sitting-ptm-ira.csv",
+        "benchmarks/paper-cells/ptm-ira-agreement.csv",
+        "benchmarks/paper-cells/raw-ptm-ira.txt",
+    shell:
+        "python3 scripts/paper_sitting_ptm_ira.py --out benchmarks/paper-cells"
+
+
 # One command per table. Each file is a selection of sitting.csv.
 rule paper_tables:
     input:

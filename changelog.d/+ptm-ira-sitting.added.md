@@ -1,0 +1,1 @@
+One sitting compares structure labels at 884736 molecules on the ice Ic cell and the tiled TIP4P/ice liquid. d-SEAMS, OVITO 3.17.2 polyhedral template matching, and the IRA Python interface each keep their published gates.
