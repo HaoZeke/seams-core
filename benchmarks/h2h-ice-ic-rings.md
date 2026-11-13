@@ -35,7 +35,9 @@ At one thread on 110592 molecules the neighbour list is 27.9 ms of the d-SEAMS c
 
 At eight threads on 110592 molecules the OVITO medians go the other way by 9.4 ms. The rings-only samples run from 252.5 to 311.8 ms and the bonds-and-rings samples run from 256.7 to 295.6 ms, so the ranges overlap and the bond build is not resolved. An earlier eight-thread sitting built a new pipeline inside the rings-only clock and ran that clock to completion before bonds, and reported 316.943 ms against 297.174 ms. That gap was the pipeline construction and the warm core. It is not a property of FindRings.
 
-The eight-thread rings-only ratio on this sitting is 287.152 / 36.371 = 7.90. The bonds-and-rings ratio is 277.778 / 50.806 = 5.47. A seven-times claim is the rings-only ratio. The bonds-and-rings median is not a lower bound on the ring search.
+The eight-thread rings-only ratio on this sitting is 287.152 / 36.371 = 7.90. The bonds-and-rings ratio is 277.778 / 50.806 = 5.47. A seven-times claim is the rings-only ratio.
+
+Sixteen further interleaved samples at eight threads on 110592 molecules, one warm-up discarded, commit `96687cad5c241e441a0fe298c4ea46b089b58189`, are in `benchmarks/h2h-ice-ic-rings-n16.csv`. The paired difference, bonds and rings minus rings-only, has mean 15.231 ms. The 95 percent interval is 4.826 to 25.635 ms and does not contain zero, so bonds and rings is slower. It is not parity. OVITO's pool was 8 and the affinity was cores 0-7. Medians are 251.167 ms and 264.051 ms.
 
 ## Where 82.3 vs 474 and 129.3 vs 612.5 come from
 

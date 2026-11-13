@@ -381,6 +381,7 @@ def main() -> None:
     ap.add_argument("--ovito-worker", metavar="TRAJ")
     ap.add_argument("--molecules", type=int)
     ap.add_argument("--threads", type=int, choices=(1, 8))
+    ap.add_argument("--repeats", type=int, default=REPEATS)
     args = ap.parse_args()
     if args.ovito_worker:
         ovito_worker(args.ovito_worker)
@@ -390,6 +391,7 @@ def main() -> None:
     if not BENCH.is_file():
         raise SystemExit(f"missing {BENCH.name}")
 
+    repeats = args.repeats
     seams_version = version_string()
     cores = os.cpu_count() or 1
     model = cpu_model()
@@ -426,7 +428,7 @@ def main() -> None:
                     ("bonds_and_rings", "d"): [],
                     ("bonds_and_rings", "o"): [],
                 }
-                for i in range(WARMUP + REPEATS):
+                for i in range(WARMUP + repeats):
                     if i % 2 == 0:
                         sequence = (
                             ("rings", "d", "go"),
@@ -445,6 +447,30 @@ def main() -> None:
                         sample = dseams.ask(word) if arm == "d" else ovito.ask(word)
                         if i >= WARMUP:
                             bucket[(variant, arm)].append(sample)
+                ov_rings = bucket[("rings", "o")]
+                ov_bonds = bucket[("bonds_and_rings", "o")]
+                paired = ""
+                if len(ov_rings) == len(ov_bonds) and len(ov_rings) >= 2:
+                    import math
+                    diffs = [b - r for r, b in zip(ov_rings, ov_bonds)]
+                    nn = len(diffs)
+                    mean = sum(diffs) / nn
+                    var = sum((d - mean) ** 2 for d in diffs) / (nn - 1)
+                    se = math.sqrt(var / nn)
+                    tcrit = {7: 2.36462425159, 15: 2.13144954556, 31: 2.0395134464}
+                    tcrit_v = tcrit.get(nn - 1, 1.95996398454)
+                    lo, hi = mean - tcrit_v * se, mean + tcrit_v * se
+                    verdict = "parity" if lo < 0.0 < hi else (
+                        "bonds slower" if lo > 0.0 else "rings slower"
+                    )
+                    paired = (
+                        f"paired diff bonds-rings mean {mean:.3f} ms "
+                        f"95ci {lo:.3f} {hi:.3f} n {nn} {verdict}"
+                    )
+                    print(
+                        f"Ic {len(points)} threads {threads} {paired}",
+                        flush=True,
+                    )
                 for variant in ("rings", "bonds_and_rings"):
                     left = bucket[(variant, "d")]
                     right = bucket[(variant, "o")]
@@ -469,11 +495,15 @@ def main() -> None:
                                 "census": json.dumps(payload["hist"], sort_keys=True),
                                 "cpu_model": model,
                                 "note": (
-                                    f"ovito_threads {payload['threads']} "
-                                    f"affinity {payload['affinity']}; "
-                                    "rings and bonds alternate first"
+                                    (
+                                        f"ovito_threads {payload['threads']} "
+                                        f"affinity {payload['affinity']}; "
+                                        "rings and bonds alternate first"
+                                        + (f"; {paired}" if paired else "")
+                                    )
                                     if code == "OVITO"
                                     else "rings and bonds alternate first"
+                                    + (f"; {paired}" if paired else "")
                                 ),
                             }
                         )

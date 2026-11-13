@@ -96,13 +96,14 @@ def main() -> None:
             "threads": 1,
             "n": PROBE,
             "dseams_median_ms": "",
-            "ira_median_ms": f"{per * molecules:.4f}",
+            "ira_median_ms": "",
             "per_atom_ms": f"{per:.6f}",
             "agreement": (
-                "cluster scans every molecule; "
-                f"extrapolated full frame {per * molecules:.1f} ms "
-                "from the median of 16 atoms"
+                "16 atoms only; cluster scans every molecule; "
+                f"extrapolated full frame {per * molecules:.1f} ms"
             ),
+            "verdict": "probe",
+            "budget_s": "",
             "commit": seams_commit,
             "ira_commit": IRA_COMMIT,
             "version": f"2.14.0/{version[0]}",
@@ -168,6 +169,8 @@ def main() -> None:
         "ira_median_ms": f"{median(right):.4f}",
         "per_atom_ms": f"{median(right) / n:.6f}",
         "agreement": f"hexagonal {n} equal",
+        "verdict": "measured",
+        "budget_s": "",
         "commit": seams_commit,
         "ira_commit": IRA_COMMIT,
         "version": f"2.14.0/{version[0]}",
@@ -189,6 +192,27 @@ def main() -> None:
         "which scales by about 8 to 222000 ms at 884736. "
         "24992 ms is below both estimates, so that row did not classify every molecule."
     )
+    rows.append({
+        "competitor": "IRA",
+        "operation": "shape",
+        "molecules": 884736,
+        "threads": 1,
+        "n": 0,
+        "dseams_median_ms": "",
+        "ira_median_ms": "",
+        "per_atom_ms": f"{per_large:.6f}",
+        "agreement": (
+            "DNF. The full cloud was not classified. "
+            f"Budget 600 s. Extrapolated full frame {per_large * 884736:.0f} ms "
+            "from 16 atoms. " + note
+        ),
+        "verdict": "DNF",
+        "budget_s": "600",
+        "commit": seams_commit,
+        "ira_commit": IRA_COMMIT,
+        "version": "2.14.0/2.2.0",
+        "cpu_model": model,
+    })
     for row in rows:
         if row["operation"] == "per_atom":
             row["agreement"] = row["agreement"] + "; " + note
