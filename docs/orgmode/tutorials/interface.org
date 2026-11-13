@@ -8,8 +8,8 @@ with CHILL+ and reads the profile along the long box edge.
 The published rule on the cutoff list prints
 
 #+begin_src text
-hexagonal 352 water 434
-stack HHHHHHHH....C.
+nop 864 clathrate 3 cubic 1 hexagonal 352 interClathrate 25 interfacial 49 water 434
+phi-c 0.00283286 stack HHHHHHHH....C.
 #+end_src
 
 The stack is eight hexagonal slabs, a gap, and one cubic layer. Cubic

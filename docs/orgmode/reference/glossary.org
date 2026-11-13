@@ -4,10 +4,27 @@
 | term | meaning |
 |------+---------|
 | ~libyodaLib~ | C++ engine library in this repository |
-| ~seams~ | Argum CLI in this repository |
-| ~yoda~ | Compiled Python module in PydSEAMSlib (~_core~ / ~cyoda~ aliases) |
-| ~dseams~ | Lua table from ~require("dseams")~ in yodaStruct |
-| CHILL+ | Four-neighbour staggered/eclipsed star classifier |
+| ~libseams~ | Stable C library. The header is ~seams.h~ |
+| ~libseams_lang~ | Language ABI shared by Fortran, Julia, R, and the engine hooks |
+| ~seams~ | Command-line program in this repository. The parser library is Argum |
+| ~import dseams~ | In-tree Python module, built by Meson (~-Dwith_python=true~, the default) |
+| ~require("dseams")~ | In-tree Lua and Fennel module, built when Lua 5.4 or LuaJIT is present |
+| ~pydseams~ | Released Frame package (~pip install pydseamslib~). ~import pydseamslib~ is the same package |
+| ~yoda~ | Compiled Python module inside PydSEAMSlib (~_core~ / ~cyoda~ aliases) |
+| yodaStruct | 1.x Lua library. This tree ships its own ~require("dseams")~ |
+| CHILL+ | Four-neighbour staggered/eclipsed star classifier. The default neighbour list is the cutoff list |
+| cutoff list | Every pair closer than the cutoff (default 3.5 Å) |
+| mutual list | The four nearest neighbours kept only when each names the other. ~--graph mutual~ |
+| primitive ring | A cycle that survives the Franzblau shortest-path test |
+| Franzblau | The shortest-path test that decides which cycles are primitive rings |
+| Steinhardt | Bond-orientational order. ~q_6~ is the degree-6 parameter. ~q6bar~ is the Lechner-Dellago average |
+| minimum image | The shortest periodic image of a pair |
+| orthorhombic | A rectangular cell: three edge lengths, no tilt |
+| nanobind | The tool that builds ~import dseams~ |
+| TIP4P | A four-site water model. In ~exampleTraj.lammpstrj~ oxygen is LAMMPS type 2 |
+| mW | The coarse-grained water model used for the cubic and interface dumps. LAMMPS type 1 |
+| signature | A cage named by its ring-size census, such as ~512~ for twelve five-rings |
+| ~both~ | A molecule that belongs to a hexagonal cage and a double-diamond cage |
 | CHILL | Original four-neighbour rule (~seams chill~) |
 | HC | Hexagonal cage (ice Ih, 12 waters) |
 | DDC | Double-diamond cage (ice Ic, 14 waters) |

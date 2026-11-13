@@ -1,10 +1,11 @@
 #+TITLE: Contributing
 #+OPTIONS: toc:nil num:nil ^:nil
 
-This repository is the C++ engine (~libyodaLib~) and the ~seams~ CLI.
-Python bindings are [[https://github.com/d-SEAMS/PydSEAMSlib][PydSEAMSlib]].
-Lua/Fennel is [[https://github.com/d-SEAMS/yodaStruct][yodaStruct]].
-Do not add a language binding here.
+This repository is the C++ engine (~libyodaLib~), the ~seams~ command,
+~libseams~, and the in-tree language fronts under ~bindings/~.
+The released Frame package is [[https://github.com/d-SEAMS/PydSEAMSlib][PydSEAMSlib]] (~import pydseams~).
+The 1.x Lua library is [[https://github.com/d-SEAMS/yodaStruct][yodaStruct]].
+New language bindings go in ~bindings/~.
 
 Documentation is authored in ~docs/orgmode/~ and exported with
 ~docs/export.el~ (ox-rst) before Sphinx. Run ~pixi run -e docs docbld~
@@ -65,7 +66,7 @@ meson test -C bbdir
 #+begin_src text
 seams-core/
   src/                   C++ engine
-    seams_cli.cpp        seams (Argum)
+    seams_cli.cpp        seams command (the parser is Argum)
     include/internal/    engine headers
     include/external/    vendored headers (argum, backward, ...)
     mol_sys.cpp          PointCloud
@@ -120,7 +121,8 @@ pixi run test
 nix develop --command meson test -C bbdir
 #+end_src
 
-C++ tests are Catch2. Python tests live in
+C++ tests are Catch2. In-tree Python checks are the docs-suite Meson
+tests and ~bindings/python~. The Frame package tests live in
 [[https://github.com/d-SEAMS/PydSEAMSlib][PydSEAMSlib]].
 
 ~tests/walk_compare~ is a Meson executable. Inputs and columns live

@@ -55,6 +55,77 @@ cache: ~cachix use dseams~.
 
 The flake on/off table lives on [[file:../reference/nix.org][Nix]].
 
+* conda
+
+conda-forge has no ~d-seams~ package. ~environment.yml~ is a micromamba
+environment for the C++ toolchain (compilers, Eigen, BLAS, Catch2, Meson).
+It does not install Lua, yaml-cpp, or the Python module.
+
+#+begin_src bash
+micromamba create -f environment.yml
+micromamba activate dseams
+meson setup build -Dwith_tests=true
+meson compile -C build
+./build/seams --version
+#+end_src
+
+A smaller conda-forge line is enough when you only want Meson, Eigen, and Python:
+
+#+begin_src bash
+conda install -c conda-forge meson ninja pkg-config eigen python numpy
+meson setup build -Dwith_python=true
+meson compile -C build
+#+end_src
+
+~import dseams~ then loads ~build/python~ or the installed extension.
+Put that directory on ~PYTHONPATH~, and ~build/src~ on ~LD_LIBRARY_PATH~.
+
+* pip
+
+#+begin_src bash
+pip install pydseamslib
+#+end_src
+
+That command installs the Frame package. The import is ~pydseams~
+(~import pydseamslib~ is the same package). It does not build the
+~seams~ command, ~libseams~, or the in-tree ~import dseams~ module.
+Those come from the Meson build above. A Frame package built against
+this engine matches the counts in the tutorials. The 2.11 wheel from
+the default branch of PydSEAMSlib is older: on
+~input/traj/exampleTraj.lammpstrj~ its CHILL+ count is 12 interfacial
+clathrate and 238 water, and ~Frame.chill_plus~ does not take ~graph~.
+This tree's ~seams chill-plus~ prints 9 interfacial clathrate and 241 water.
+
+* Spack
+
+~spack.yaml~ is a Spack environment for the toolchain: Eigen, FlexiBLAS,
+Catch2, Ninja, Meson, pkg-config, and GCC. There is no Spack package
+named d-seams. From the repository root:
+
+#+begin_src bash
+spack env activate .
+spack install
+meson setup build -Dwith_tests=true
+meson compile -C build
+./build/seams --version
+#+end_src
+
+* EESSI
+
+d-SEAMS is not an EESSI module. The EESSI 2026.06 stack supplies the
+compiler, Meson, and Ninja. On a machine with that CVMFS repository:
+
+#+begin_src bash
+source /cvmfs/software.eessi.io/versions/2026.06/init/bash
+module load Meson Ninja
+meson setup build -Dwith_tests=true
+meson compile -C build
+./build/seams --version
+#+end_src
+
+The paper's scaling script configures a release build in ~bbdir-eessi~.
+The directory name is local. Any build directory works.
+
 * OpenMP target offload
 
 The host-only pixi and flake builds leave ~with_openmp_offload~

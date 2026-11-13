@@ -26,6 +26,12 @@
           loading="eager" />
    </p>
 
+d-SEAMS reads a molecular-dynamics trajectory and names the ice in it.
+The command is ``seams``. The library behind that command is ``libseams``.
+``nop`` is the number of molecules in the frame.
+CHILL+ labels each molecule from its four neighbours.
+A hexagonal cage (HC) is ice Ih. A double-diamond cage (DDC) is ice Ic.
+
 .. grid:: 1 2 3 3
    :gutter: 2
    :padding: 1 1 0 0
@@ -51,19 +57,68 @@
       :class-card: sd-shadow-sm
 
       Cage membership: HC is ice Ih, DDC is ice Ic, else water.
+
+   .. grid-item-card:: Rings
+      :link: tutorials/rings
+      :link-type: doc
+      :class-card: sd-shadow-sm
+
+      Primitive rings: cycles that survive the shortest-path test.
+
+   .. grid-item-card:: Bond order
+      :link: tutorials/order-parameters
+      :link-type: doc
+      :class-card: sd-shadow-sm
+
+      Local \(q_6\) and the Lechner-Dellago average.
+
+   .. grid-item-card:: Engines
+      :link: howto/engine-lammps
+      :link-type: doc
+      :class-card: sd-shadow-sm
+
+      LAMMPS, GROMACS, OpenMM, PLUMED, or a running simulation.
 #+end_export
+
+* Five minutes
+
+From a checkout, with [[https://pixi.prefix.dev/][pixi]]:
+
+#+begin_src bash
+pixi run setup && pixi run build
+./bbdir/seams chill-plus input/traj/mW_cubic.lammpstrj --type 1
+#+end_src
+
+That prints ~nop 4096 cubic 4096~. Every molecule in the shipped cubic cell is cubic ice.
+When the compilers and Eigen are already on ~PATH~, the same build is ~meson setup build && meson compile -C build~ and the binary is ~./build/seams~.
+Nix, conda, pip, Spack, and an EESSI toolchain are on [[file:howto/install.org][Install]].
+
+If you use this software, cite Goswami, Rohit; Goswami, Amrita; Singh, Jayant Kumar.
+d-SEAMS: Deferred Structural Elucidation Analysis for Molecular Simulations.
+/J. Chem. Inf. Model./ 2020, 60, 2169--2177.
+[[https://doi.org/10.1021/acs.jcim.0c00031][10.1021/acs.jcim.0c00031]]
+(arXiv:1909.09830).
+
+#+begin_src bibtex
+@Article{Goswami2020,
+  author  = {Goswami, Rohit and Goswami, Amrita and Singh, Jayant Kumar},
+  title   = {{d-SEAMS}: Deferred Structural Elucidation Analysis for Molecular Simulations},
+  journal = {Journal of Chemical Information and Modeling},
+  year    = {2020},
+  volume  = {60},
+  number  = {4},
+  pages   = {2169--2177},
+  doi     = {10.1021/acs.jcim.0c00031},
+}
+#+end_src
+
+The full note, and the papers to add when a page uses CHILL or CHILL+, is [[file:explanation/citation.org][Citation]].
 
 * Overview
 
 d-SEAMS 2.14 reads a molecular-dynamics trajectory and names the ice in it.
 ~libseams~ is the library: CHILL+, cages, primitive rings, and \(q_6\) share one cutoff neighbour list.
 The ~seams~ command and the C, C++, Python, Fortran, Julia, Rust, and R fronts call that library.
-
-Install the engine with one line.
-
-#+begin_src bash
-meson setup build && meson compile -C build
-#+end_src
 
 Ten lines classify the cubic cell shipped in ~input/traj~.
 
@@ -89,11 +144,12 @@ d-SEAMS (Deferred Structural Elucidation Analysis for Molecular
 Simulations) classifies ice in molecular-dynamics trajectories. This
 repository is the C++ engine (~libyodaLib~) and the ~seams~ CLI.
 
-The first classification is five lines. Install with
-~pip install pydseamslib~ for the Frame package, with conda-forge's
-Meson toolchain, or with ~meson setup build && meson compile -C build~,
-then run the Python and C programs on
-[[file:quickstart.org][the quick start]]. Both report 8 cubic molecules.
+The eight-atom diamond is the other check. The Python program and the C program on
+[[file:quickstart.org][the quick start]] both report 8 cubic molecules.
+~pip install pydseamslib~ installs the separate Frame package (~import pydseams~).
+It does not build ~seams~ or ~import dseams~.
+conda-forge has no ~d-seams~ package. It does have the Meson toolchain.
+Every install path is on [[file:howto/install.org][Install]].
 
 #+begin_src bash
 seams read water.lammpstrj
@@ -159,6 +215,7 @@ framework.
    :caption: Getting Started
 
    quickstart
+   howto/install
 
 .. toctree::
    :maxdepth: 2

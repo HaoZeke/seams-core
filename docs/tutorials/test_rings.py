@@ -2,8 +2,7 @@
 
 ``pydseams.band.ring_census`` counts Franzblau rings on
 ``Frame.bonds_by_index``. For this oxygen-only frame that list is
-the cutoff list, not the mutual four-nearest list the CLI uses for
-CHILL+.
+the cutoff list, which is also the default CHILL+ graph.
 """
 
 import pytest

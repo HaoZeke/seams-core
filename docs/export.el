@@ -6,12 +6,13 @@
 (package-initialize)
 
 ;; ox-rst tracks current Org. Prefer an ELPA Org over the editor's builtin.
-(let ((org-elpa
-       (car (sort (directory-files (expand-file-name "elpa" user-emacs-directory)
-                                   t "^org-[0-9][0-9.]*$")
-                  #'string>))))
-  (when org-elpa
-    (setq load-path (cons org-elpa load-path))))
+(let ((elpa (expand-file-name "elpa" user-emacs-directory)))
+  (when (file-directory-p elpa)
+    (let ((org-elpa
+           (car (sort (directory-files elpa t "^org-[0-9][0-9.]*$")
+                      #'string>))))
+      (when org-elpa
+        (setq load-path (cons org-elpa load-path))))))
 
 (unless (package-installed-p 'ox-rst)
   (package-refresh-contents)

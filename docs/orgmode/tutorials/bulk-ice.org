@@ -11,9 +11,11 @@ The result is a labelled oxygen set and a reason the two scores disagree.
 - ~seams~ on ~PATH~ (~pixi run build~ produces ~./bbdir/seams~; ~nix build~ produces ~./result/bin/seams~).
 - The in-tree dump ~input/traj/exampleTraj.lammpstrj~ (one frame, 750 atoms, 250 TIP4P waters; LAMMPS type 2 oxygen, type 1 hydrogen).
 
-Python and Lua are not required.
-The Frame tutorial lives in [[https://d-seams.github.io/PydSEAMSlib/][pydseams]].
-Lua is [[https://d-seams.github.io/yodaStruct/][dseams]].
+Python and Lua are not required for the commands below.
+The Frame package is a separate release. Its tutorial is
+[[https://d-seams.github.io/PydSEAMSlib/][pydseams]].
+~require("dseams")~ is built in this tree when Lua 5.4 or LuaJIT is present.
+The 1.x library is [[https://d-seams.github.io/yodaStruct/][yodaStruct]].
 
 * Learning Objectives
 
@@ -95,7 +97,7 @@ seams cages input/traj/exampleTraj.lammpstrj --type 2
 Expected output:
 
 #+begin_example
-nop 250 graph seeded hexagonal 0 cubic 0 water 250
+nop 250 graph seeded hexagonal 0 cubic 0 both 0 water 250
 #+end_example
 
 This mixed frame has no complete HC or DDC.
@@ -132,22 +134,23 @@ The mixed TIP4P frame is the one that separates the two scores.
 * Step 6: Python, the same lists
 
 The in-tree module is ~import dseams~ (~-Dwith_python=true~, the Meson default).
-The Frame package the paper uses is separate:
-
-#+begin_src bash
-pip install pydseamslib
-#+end_src
+The Frame package is separate. Install it with ~pip install pydseamslib~
+when you want ~import pydseams~. A package built against this engine
+prints the same counts as Step 2. The 2.11 wheel does not: its CHILL+
+line on this file is 12 interfacial clathrate and 238 water, and it
+does not take ~graph~.
 
 #+begin_src python
 import pydseams as ds
 
-frame = ds.read("input/traj/exampleTraj.lammpstrj")
+frame = ds.read("input/traj/exampleTraj.lammpstrj", atom_type=2)
 print(frame.chill_plus())
 print(frame.cages())
 #+end_src
 
-~Frame.chill_plus~ defaults to the cutoff list, as ~seams chill-plus~ does; ~frame.chill_plus(graph="mutual")~ is the mutual list.
-On this dump the default prints:
+~Frame.chill_plus~ defaults to the cutoff list, as ~seams chill-plus~ does.
+~frame.chill_plus(graph="mutual")~ is the mutual list on a package that has that argument.
+On a package built against this engine the default prints:
 
 #+begin_example
 IceCounts(interClathrate=9, water=241)
@@ -158,7 +161,7 @@ Those counts are the cutoff list, the same list as Step 2.
 ~import pydseamslib~ is the released Frame package.
 The in-tree module is ~import dseams~, built from ~libseams~.
 The Frame walkthrough is [[https://d-seams.github.io/PydSEAMSlib/][pydseams]].
-Lua is [[https://d-seams.github.io/yodaStruct/][require("dseams")]].
+The in-tree Lua walk-through is ~docs/tutorials/lua.md~.
 
 * Troubleshooting
 
@@ -169,7 +172,8 @@ Lua is [[https://d-seams.github.io/yodaStruct/][require("dseams")]].
   Commands are ~read~, ~chill~, ~chill-plus~, and ~cages~.
 - ~ModuleNotFoundError: pydseams~: that name is the released Frame package.
   ~pip install pydseamslib~. The in-tree module is ~import dseams~.
-- Lua ~require("dseams")~: that module lives in yodaStruct.
+- Lua ~require("dseams")~: build with ~-Dwith_lua=auto~ when Lua 5.4 or LuaJIT is installed.
+  The 1.x module is yodaStruct.
 
 * Next steps
 
@@ -180,4 +184,4 @@ Lua is [[https://d-seams.github.io/yodaStruct/][require("dseams")]].
 
 * Summary
 
-You read one mixed TIP4P frame, printed the CLI CHILL+ star (1 clathrate, 7 interfacial clathrate, 242 water), printed the seeded cage score (zero HC, zero DDC), and stated why those two answers differ.
+You read one mixed TIP4P frame, printed the default CHILL+ star (9 interfacial clathrate, 241 water), printed the mutual-list star (1 clathrate, 7 interfacial clathrate, 242 water), printed the seeded cage score (zero HC, zero DDC, zero in both), and stated why those answers differ.

@@ -18,7 +18,7 @@ seams cages input/traj/exampleTraj.lammpstrj --type 2
 seams cages input/traj/mW_cubic.lammpstrj --type 1
 #+end_src
 
-The mixed frame is ~hexagonal 0 cubic 0 water 250~. The 4096-molecule
+The mixed frame is ~hexagonal 0 cubic 0 both 0 water 250~. ~both~ counts molecules that sit in an HC and a DDC. The 4096-molecule
 cubic mW cell is ~cubic 4096~. ~tests/cli_surface.py~ runs the mixed
 frame and the signature census:
 

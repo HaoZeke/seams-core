@@ -7,7 +7,7 @@ A how-to solves a goal you already have. It is not a learning path.
 |-------+------|
 | [[file:upgrade-2.14.org][Upgrade from 2.13]] | API, engines, threads, and the remaining ~--types~ alias |
 | [[file:migrate-1x.org][Migrate from 1.x]] | Lua and ~yodaStruct -c~ mapped onto ~seams~ and the C API |
-| [[file:install.org][Install the engine]] | Get a ~seams~ binary |
+| [[file:install.org][Install the engine]] | pixi, Nix, conda, pip, Spack, or an EESSI toolchain. The page is under Getting Started. |
 | [[file:bindings.org][Language fronts]] | Python, R, and Julia against ~libseams_lang~ |
 | [[file:lua.org][Lua and Fennel]] | ~require("dseams")~ over ~seams.h~ |
 | [[file:versions.org][Version pins]] | The five files that must agree |
@@ -36,6 +36,7 @@ A how-to solves a goal you already have. It is not a learning path.
 | [[file:engine-openmm.org][OpenMM]] | Build the reporter and read the CHILL+ census |
 | [[file:engine-plumed.org][PLUMED]] | ~PLUMED_NUM_THREADS~, then q6, ice, and rings |
 | [[file:engine-insitu.org][In-situ CHILL+]] | Labels and the ring histogram from ~libseams_lang~ |
+| OpenMM driver and cost | The TIP4P/Ice driver, the match against ~seams~, and the cost of one run. The same text is ~docs/openmm.md~. The page is listed below. |
 | [[file:faq.org][FAQ]] | Short answers |
 | [[file:troubleshooting.org][Troubleshooting]] | Symptom, cause, fix |
 
@@ -45,7 +46,6 @@ A how-to solves a goal you already have. It is not a learning path.
 
    upgrade-2.14
    migrate-1x
-   install
    bindings
    lua
    versions
@@ -75,6 +75,7 @@ A how-to solves a goal you already have. It is not a learning path.
    engine-openmm
    engine-plumed
    engine-insitu
+   openmm-driver
    faq
    troubleshooting
 #+end_export

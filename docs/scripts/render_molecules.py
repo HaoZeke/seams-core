@@ -724,6 +724,33 @@ def fresh(directory, stem):
     return width < WIDTH or height < HEIGHT
 
 
+def _png(path):
+    """1x1 PNG so a docs build can resolve figure paths before the stills are drawn."""
+    import struct
+    import zlib
+
+    def chunk(tag, data):
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+
+    raw = b"\x00\xff\xff\xff"
+    ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+    blob = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(blob)
+
+
+def _placeholder_stills(out):
+    slugs = (
+        "ice-ih", "ice-ic", "rings", "prisms", "cage-si", "cage-sii", "cage-sh",
+        "cage-guest", "brine", "interface", "nucleation", "genice", "solvis",
+        "c", "cpp", "fortran", "julia", "lua", "python", "r", "rust",
+    )
+    for name in slugs:
+        dest = out / name / "overlay-web.png"
+        if not dest.is_file():
+            _png(dest)
+
+
 def write_pages(out):
     """Sphinx figure list. Paths are relative to docs/source/tutorials."""
     lines = [
@@ -769,6 +796,27 @@ def write_pages(out):
 
 def main(argv):
     if not stack_ok():
+        # A build without the drawing stack still has to publish the page.
+        # A build that has libseams.so and is missing the stack is a real failure.
+        libdir = os.environ.get("SEAMS_LIBDIR", "")
+        has_lib = bool(libdir) and os.path.isfile(os.path.join(libdir, "libseams.so"))
+        if not has_lib:
+            for relative in ("bbdir/src/libseams.so", "build/src/libseams.so", "bbdir-eessi/src/libseams.so"):
+                if (ROOT / relative).is_file():
+                    has_lib = True
+                    break
+        if not has_lib:
+            out = None
+            pages = False
+            for index, item in enumerate(argv):
+                if item == "--out" and index + 1 < len(argv):
+                    out = Path(argv[index + 1])
+                if item == "--pages":
+                    pages = True
+            if pages and out is not None:
+                _placeholder_stills(out)
+                write_pages(out)
+                return 0
         return relaunch(argv)
     parser = argparse.ArgumentParser(description="Render molecule stills with chemparseplot")
     parser.add_argument("--out", required=True, help="Directory that receives <slug>/ stills")

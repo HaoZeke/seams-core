@@ -5,9 +5,10 @@ Install the package the paper uses::
     pip install pydseamslib
 
 ``import pydseams`` is the module. ``import pydseamslib`` is the same
-package. ``seams chill-plus`` on this tree uses the mutual
-four-neighbour list. ``Frame.chill_plus`` uses the cutoff neighbour
-list. On the cubic mW frame both lists label every site cubic.
+package. ``seams chill-plus`` and ``Frame.chill_plus`` both use the
+cutoff neighbour list. ``--graph mutual`` is the other list. On the
+cubic mW frame both lists label every site cubic. The 2.11 wheel of
+pydseamslib still prints 12 interfacial clathrate on the mixed frame.
 """
 
 import pytest

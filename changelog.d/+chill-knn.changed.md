@@ -1,1 +1,1 @@
-CHILL and CHILL+ default to the mutual four-nearest graph. vesin still owns cutoff pairs; linkcell still owns k-nearest.
+An intermediate cut of 2.14 defaulted CHILL and CHILL+ to the mutual four-nearest graph. That default did not ship. vesin still owns cutoff pairs when linkcell is absent; linkcell still owns k-nearest.

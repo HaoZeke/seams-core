@@ -687,6 +687,17 @@ def check(reports):
 
 
 def main(argv):
+    try:
+        _seams, libdir, _langdir = locate_tools(argv)
+    except SystemExit:
+        libdir = ""
+    if not libdir or not os.path.isfile(os.path.join(libdir, "libseams.so")):
+        CAPTIONS.parent.mkdir(parents=True, exist_ok=True)
+        CAPTIONS.write_text(
+            "The gallery is drawn when ``libseams.so`` is next to the ``seams`` binary.\n"
+            "``meson test docs_gallery`` checks each caption against the tutorial report.\n"
+        )
+        return 0
     other = find_python()
     if other:
         done = subprocess.run([other, str(Path(__file__).resolve()), *argv], check=False)

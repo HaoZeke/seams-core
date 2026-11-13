@@ -1,14 +1,24 @@
 # Quickstart
 
-Build the C library and the API test:
+Build the engine, then classify the cubic cell shipped in this tree.
+The Sphinx page is `docs/orgmode/quickstart.org`. The same steps are below.
+
+pixi:
 
 ```bash
-meson setup build --wrap-mode=nofallback -Dwith_tests=true
-meson compile -C build test_seams_api docs_ice_example
-./build/src/test_seams_api
-./build/src/docs_ice_example
-meson test -C build docs_check seams_c_api docs_ice_example --print-errorlogs
+pixi run setup && pixi run build
+./bbdir/seams chill-plus input/traj/mW_cubic.lammpstrj --type 1
 ```
+
+Compilers and Eigen already on `PATH`:
+
+```bash
+meson setup build -Dwith_tests=true
+meson compile -C build
+./build/seams chill-plus input/traj/mW_cubic.lammpstrj --type 1
+```
+
+Both print `nop 4096 cubic 4096`.
 
 `libseams.so` exports `seams.h`. The language fronts and the engine hooks link
 that library and do not include the C++ headers.
@@ -18,6 +28,10 @@ export SEAMS_LIB_DIR=$PWD/build/src
 export LD_LIBRARY_PATH=$SEAMS_LIB_DIR:$LD_LIBRARY_PATH
 export SEAMS_LIB=$SEAMS_LIB_DIR/libseams.so
 ```
+
+Nix, conda, pip, Spack, and an EESSI toolchain are on the Sphinx install page.
+`pip install pydseamslib` installs the Frame package (`import pydseams`).
+It does not build `seams` or `import dseams`.
 
 Pages for each front, with the 2.14.0 build command and the test CI runs:
 
@@ -45,6 +59,10 @@ cargo run --manifest-path bindings/rust/Cargo.toml --example ice
 gfortran -Ibindings/fortran bindings/fortran/test_seams.f90 -L$SEAMS_LIB_DIR -lseams
 julia --project=bindings/julia/Dseams bindings/julia/Dseams/test/runtests.jl
 ```
+
+The eight-atom programs are `docs/examples/quickstart.py` and
+`docs/examples/quickstart.c`. `meson test docs_quickstart_py` and
+`meson test docs_quickstart_c` both expect 8 cubic molecules.
 
 A frame is a coordinate array and a cell. Orthorhombic boxes pass three
 lengths. Triclinic boxes pass the nine LAMMPS numbers. CHILL+ accepts the

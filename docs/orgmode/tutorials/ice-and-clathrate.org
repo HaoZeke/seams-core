@@ -20,13 +20,11 @@ print(frame.chill_plus())
 print(frame.cages())
 #+end_src
 
-~Frame.chill_plus~ uses the cutoff neighbour list.
-~IceCounts(interClathrate=9, water=241)~.
-~CageScore(n_ih=0, n_ic=0, n_water=250)~.
-
-~seams chill-plus~ on the same file uses the mutual four-neighbour list and prints ~clathrate 1 interClathrate 7 water 242~.
-The cage score matches the CLI.
-The CHILL+ histogram does not match the CLI.
+~Frame.chill_plus~ uses the cutoff neighbour list, which is also the default for ~seams chill-plus~.
+On this engine both print 9 interfacial clathrate and 241 water.
+~CageScore(n_ih=0, n_ic=0, n_water=250)~ matches ~seams cages~ (hexagonal 0, cubic 0, both 0, water 250).
+~--graph mutual~ is the other CHILL+ list. It prints clathrate 1, interClathrate 7, and water 242.
+A Frame package built against this engine agrees. The 2.11 wheel of pydseamslib still prints 12 interfacial clathrate and 238 water on this file.
 
 * Cubic ice and an sI cage
 
@@ -43,17 +41,19 @@ A nanometre file uses ~0.265,0.315~.
 On sI, sII, the sI 2×2×2 cell and the sII 10×10×10 cell the default and ~none~ return the same cages.
 
 #+begin_src python
-found = frame.cages_by_signature("512")
-found = frame.cages_by_signature("512", edge="none")
-found = frame.cages_by_signature("512", edge="2.4,3.4")
+guest = ds.read("input/traj/genice_sI.lammpstrj", atom_type=1)
+found = guest.cages_by_signature("512")
+print(len(found))
 #+end_src
 
-#+begin_src lua
-local dseams = require("dseams")
-local found = dseams.cages_by_signature(frame, "512")
-found = dseams.cages_by_signature(frame, "512", {edge = "none"})
-found = dseams.cages_by_signature(frame, "512", {edge = "2.4,3.4"})
-#+end_src
+That prints 2. A Frame package built against this engine also accepts the edge window:
+
+#+begin_example
+guest.cages_by_signature("512", edge="none")
+guest.cages_by_signature("512", edge="2.4,3.4")
+#+end_example
+
+The 2.11 wheel does not take ~edge~. The Lua spelling, from ~docs/examples/lua_analyses.lua~, is ~dseams.cages_by_signature(guest, "512")~, ~dseams.cages_by_signature(guest, "512", {edge = "none"})~, and ~dseams.cages_by_signature(guest, "512", {edge = "2.4,3.4"})~.
 
 The CLI spelling is ~--cage-edge~ and ~SEAMS_CAGE_EDGE~.
 The C spelling is ~seams_frame_signature_edge~; a null edge string keeps the default.

@@ -1,9 +1,11 @@
 #+TITLE: Changelog
 #+OPTIONS: toc:nil num:nil
 
-The C++ engine is this repository. Python is ~pydseams~
-([[https://github.com/d-SEAMS/PydSEAMSlib][PydSEAMSlib]]). Lua is
-~require("dseams")~ ([[https://github.com/d-SEAMS/yodaStruct][yodaStruct]]).
+The C++ engine, ~libseams~, and the in-tree fronts are this repository.
+The Frame package is ~pydseams~
+([[https://github.com/d-SEAMS/PydSEAMSlib][PydSEAMSlib]]).
+~require("dseams")~ is built here when Lua is present. The 1.x Lua
+library remains [[https://github.com/d-SEAMS/yodaStruct][yodaStruct]].
 
 The release history is [[file:../../CHANGELOG.md][CHANGELOG.md]]
 (Keep a Changelog, assembled by towncrier). This page is the

@@ -1,9 +1,7 @@
 """Bond-orientational order parameters from pydseamslib.
 
-``Frame.steinhardt`` calls ``yoda.steinhardtQl`` on the cutoff
-neighbour list. The CLI ``seams steinhardt`` command uses the mutual
-four-nearest list, so the means on the mixed frame are not the CLI
-means.
+``Frame.steinhardt`` and ``seams steinhardt`` both use the cutoff
+neighbour list. The means on this mixed frame match.
 """
 
 import math

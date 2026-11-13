@@ -19,7 +19,8 @@ print(ring_census(frame, max_size=8))
 #+end_src
 
 On the 250 oxygens the census is 1 three-ring, 230 four-rings, 4 five-rings, and 192 six-rings.
-The CLI CHILL+ graph is the mutual four-nearest list, so a census of that graph is a different number.
+That census is the cutoff neighbour list, the same list ~seams chill-plus~ uses by default.
+~seams rings~ prints the CLI histogram of that list. ~--max-ring~ defaults to 6, so the CLI row stops at six-rings.
 
 #+begin_export rst
 .. figure:: molecules/rings/overlay-web.png

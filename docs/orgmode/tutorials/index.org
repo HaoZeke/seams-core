@@ -2,8 +2,9 @@
 #+OPTIONS: toc:nil num:nil
 
 A tutorial is a learning path. You finish it with a skill, not a
-lookup table. The one good tutorial on this site classifies the
-in-tree mixed TIP4P dump two ways.
+lookup table. Start with the mixed TIP4P dump. The other paths are
+the same kind of lesson on a clathrate, an interface, a nucleus, or
+a brine front.
 
 | tutorial | you learn |
 |----------+-----------|

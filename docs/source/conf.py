@@ -151,6 +151,24 @@ def _stage_markdown_book():
 
 
 _stage_markdown_book()
+
+
+def _stage_orphan_pages():
+    """Publish repository notes that have no Org source of their own."""
+    import pathlib
+
+    copies = (
+        ("nucleation-pathways.md", "explanation", "nucleation-pathways.md"),
+        ("openmm.md", "howto", "openmm-driver.md"),
+    )
+    for filename, folder, dest_name in copies:
+        src = pathlib.Path(_docs) / filename
+        dest_dir = pathlib.Path(_source) / folder
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        (dest_dir / dest_name).write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+
+
+_stage_orphan_pages()
 _doxyrest = os.path.abspath(os.path.join(_source, "../../subprojects/doxyrest/sphinx"))
 _xml_index = os.path.join(_source, "xml", "index.xml")
 _api_index = os.path.join(_source, "api", "index.rst")
@@ -189,7 +207,10 @@ if os.path.isfile(_xml_index) and os.path.isdir(_doxyrest):
     breathe_default_project = "seams"
 
 templates_path = ["_templates"]
-exclude_patterns = []
+exclude_patterns = [
+    "tutorials/gallery-captions.rst",
+    "tutorials/molecules.rst",
+]
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),

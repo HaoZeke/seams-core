@@ -8,7 +8,7 @@ of ~pydseams.yoda~ and it is not a tutorial.
 
 * Fronts
 
-Four fronts, one engine (~libyodaLib~). Flags live on
+The fronts below call one engine (~libyodaLib~). Flags live on
 [[file:cli.org][seams CLI]]. Formats live on
 [[file:data-formats.org][data formats]].
 

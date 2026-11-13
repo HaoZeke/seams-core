@@ -1,4 +1,4 @@
-# OpenMM
+# OpenMM driver and cost
 
 `DseamsReporter` reads positions from an OpenMM context and hands them to
 `InSitu`. The engine calls `libseams_lang` for CHILL+ and for primitive

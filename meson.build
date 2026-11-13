@@ -911,6 +911,18 @@ if get_option('with_cli')
     depends: [seams_api_lib],
     timeout: 60)
   test(
+    'docs_tutorial_blocks',
+    python3,
+    args: [
+      meson.project_source_root() / 'docs' / 'test_tutorial_blocks.py',
+      seams_exe.full_path(),
+      '--skip-bootstrap',
+    ],
+    env: tutorial_env,
+    depends: [seams_exe],
+    suite: 'docs',
+    timeout: 300)
+  test(
     'docs_tutorial_clathrate',
     python3,
     args: [
