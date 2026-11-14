@@ -650,7 +650,7 @@ rule science_committor_shoot:
         "bbdir/nucleation-pathway",
     output:
         f"data/committor-shards/shot-{_COMMITTOR_TAG}.csv",
-        f"data/committor-shards/baseline-{_COMMITTOR_TAG}.csv",
+        f"data/committor-shards/basins-{_COMMITTOR_TAG}.csv",
         f"data/committor-shards/points-{_COMMITTOR_TAG}.csv",
     params:
         seeds=_COMMITTOR_SEEDS,
