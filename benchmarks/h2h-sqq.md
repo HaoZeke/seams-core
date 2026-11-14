@@ -153,9 +153,9 @@ pip install sqq==0.5.8 MDAnalysis scipy snakemake asv
 git clone --branch v0.5.8 https://github.com/pimooni/sqq sqq-src
 export H2H_PYTHON=python3 MW215_DIR=mw215-frames
 snakemake -j1 h2h_sqq_mw_liquid h2h_sqq_provenance h2h_sqq_agree h2h_sqq_edge h2h_sqq_time h2h_sqq
-asv run --python=same --bench 'H2HSqq\.'
+asv run --python=same --bench H2HSqq
 ```
 
 - `h2h_sqq_mw_liquid` needs `lmp` on `PATH`, and only runs when a frame in `MW215_DIR` is missing.
 - Run the rules with `-j1`: the timing rule pins CPU 0 and CPUs 0-7.
-- The asv class `H2HSqq` (not the older `H2HSqqBox`) covers the same frames, operations and thread counts with eight repeats. It skips a configuration when `libseams.so`, sqq or a frame is missing.
+- The asv class `H2HSqq` covers the same frames, operations and thread counts with eight repeats. It skips a configuration when `libseams.so`, sqq or a frame is missing. The tilted-cell check is `SqqTiltedBox`, so `--bench H2HSqq` selects only this class. `asv.conf.json` benchmarks `HEAD`, whichever branch is checked out.

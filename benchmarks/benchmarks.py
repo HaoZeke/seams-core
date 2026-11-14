@@ -1071,7 +1071,7 @@ H2HFollowup.time_check.repeat = 1
 H2HFollowup.time_check.number = 8
 
 
-class H2HSqqBox:
+class SqqTiltedBox:
     """SQQ rejects the tilted sH dump. asv repeats the check eight times."""
 
     def setup(self):
@@ -1086,8 +1086,8 @@ class H2HSqqBox:
         runpy.run_path(str(ROOT / "scripts" / "h2h_sqq_box.py"), run_name="__main__")
 
 
-H2HSqqBox.time_check.repeat = 1
-H2HSqqBox.time_check.number = 8
+SqqTiltedBox.time_check.repeat = 1
+SqqTiltedBox.time_check.number = 8
 
 
 class H2HSqq:

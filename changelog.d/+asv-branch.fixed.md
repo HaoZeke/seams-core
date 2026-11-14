@@ -1,0 +1,1 @@
+`asv.conf.json` benchmarks the checked-out commit (`HEAD`) instead of the nonexistent `scaling` branch, and the tilted-cell SQQ benchmark is renamed `SqqTiltedBox` so `--bench H2HSqq` selects only the head-to-head.
