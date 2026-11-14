@@ -108,22 +108,27 @@ if lammps_opt.allowed()
     if lammps_mpi.found()
       lammps_plugin_deps += lammps_mpi.partial_dependency(compile_args: true, includes: true)
     endif
-    if cppc.has_header('compute.h', dependencies: lammps_plugin_deps,
-                       include_directories: lammps_incs, args: lammps_args,
-                       required: false)
+    lammps_plugin_args = lammps_args
+    if get_option('lammps_src_include') != ''
+      lammps_plugin_args += ['-I' + get_option('lammps_src_include')]
+    endif
+    # check_header compiles the include, so a src tree without fmt/ fails here.
+    if cppc.check_header('compute.h', dependencies: lammps_plugin_deps,
+                         include_directories: lammps_incs, args: lammps_plugin_args,
+                         required: false)
       lammps_plugin = shared_module(
         'dseamsplugin',
         files('lammps/compute_dseams.cpp', 'lammps/plugin_dseams.cpp'),
         dependencies: lammps_plugin_deps,
         link_with: seams_api_lib,
         include_directories: lammps_incs,
-        cpp_args: _args + lammps_args + seams_api_args,
+        cpp_args: _args + lammps_plugin_args + seams_api_args,
         name_prefix: '',
         build_rpath: lammps_rpath,
         install_rpath: lammps_rpath,
         install: true)
     else
-      message('LAMMPS class headers are not installed; compute dseams is not built')
+      message('LAMMPS class headers are not installed; set lammps_src_include to build compute dseams')
     endif
   endif
 endif
