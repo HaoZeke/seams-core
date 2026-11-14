@@ -195,6 +195,7 @@ by [towncrier](https://towncrier.readthedocs.io/).
 - A plain build writes `bindings/lua/dseams_ffi.lua`, which the LuaJIT FFI tutorial and the Lua video tape load from the build directory. Only `meson test lua_examples` used to generate it, so the tape failed in a fresh build.
 - A tilted cell's cage edge window uses the lattice minimum image, so a GenIce sH dump keeps every 5^12, 4^3 5^6 6^3 and 5^12 6^8 cage. The head-to-head against ClavisCage and cycless is benchmarks/cage-h2h-v8.txt.
 - Accept a cup that fills the signature face count with dangling edges.
+- An install is relocatable. The vendored chemfiles is installed beside `libyodaLib` as `libseams-chemfiles.so.0.10`, and the installed `libyodaLib`, `libseams`, `libseams_lang` and `libSeamsPlumed` find each other through an `$ORIGIN` rpath instead of a build-tree path.
 - An orthorhombic displacement wraps every period, not one. Unfolded coordinates 16 apart in a 10 box are 4 apart, not 6.
 - Build the Sphinx book with warnings as errors from the committed sources. Doxygen XML and the C++ pages are optional, and each page is listed in one toctree.
 - C API: `seams_ql`, `seams_q4q6`, `seams_q4q6_n`, `seams_q6bar`, and `seams_steinhardt` kept their q_lm scratch in function-local statics, so two of them on different handles in different threads corrupted each other's results or the heap. The scratch now belongs to the calling thread, and the one-time affinity setup they reach is guarded, so q calls on different handles may run at the same time.

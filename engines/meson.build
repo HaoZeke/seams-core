@@ -236,6 +236,7 @@ if plumed_opt.allowed()
       include_directories: plumed_incs,
       cpp_args: _args + seams_api_args,
       name_prefix: 'lib',
+      install_rpath: '$ORIGIN',
       install: true)
   elif plumed_opt.enabled()
     error('with_plumed is enabled but PLUMED was not found')
