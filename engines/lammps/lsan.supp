@@ -1,0 +1,10 @@
+# LeakSanitizer suppressions for run_hook, which hosts the LAMMPS wheel.
+# d-SEAMS frames are not matched, so a leak in the hook is still reported.
+# The wheel's MPICH starts UCX, which keeps its startup allocations until
+# exit.
+leak:libucs.so
+leak:libucp.so
+leak:libuct.so
+# A clang build loads libomp, which keeps its thread state until exit
+# (fuzz/lsan.supp names the same allocator).
+leak:___kmp_allocate

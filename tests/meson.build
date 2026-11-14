@@ -106,6 +106,21 @@ endif
 if csm_shape_bin != ''
   _test_env.set('CSM_SHAPE', csm_shape_bin)
 endif
+# The Catch2 executables are native, so they keep LeakSanitizer.
+_unit_env = environment()
+_unit_env.prepend('LD_LIBRARY_PATH', meson.project_build_root() / 'src')
+if chemfiles_libdir != ''
+  _unit_env.prepend('LD_LIBRARY_PATH', chemfiles_libdir)
+endif
+if get_option('b_coverage')
+  _unit_env.set('OMP_NUM_THREADS', '1')
+endif
+if csm_shape_bin != ''
+  _unit_env.set('CSM_SHAPE', csm_shape_bin)
+endif
+if _san_leak_options != ''
+  _unit_env.set('ASAN_OPTIONS', _san_leak_options)
+endif
 
 # --enable-new-dtags is Linux-only (macOS ld does not support it)
 _test_rpath = '$ORIGIN/../src'
@@ -160,7 +175,7 @@ foreach name, src : test_sources
       include_directories: _incdirs,
       build_rpath: _test_rpath),
     workdir: meson.project_source_root() / 'input',
-    env: _test_env,
+    env: _unit_env,
     timeout: _timeout,
     is_parallel: name != 'franzblau_extra' and name != 'bulkTUM',
     suite: (name == 'franzblau_extra' or name == 'bulkTUM') ? 'heavy' : [])
@@ -739,18 +754,22 @@ dump_fault_driver = executable('dump_fault_driver', 'dump_fault_driver.cpp',
   include_directories: _incdirs,
   link_args: _test_link_args,
   build_rpath: _test_rpath)
-_fault_eintr = environment()
-_fault_eintr.prepend('LD_LIBRARY_PATH', meson.project_build_root() / 'src')
-_fault_eintr.prepend('LD_PRELOAD', dump_faults.full_path())
-_fault_eintr.set('DUMP_PREAD_EINTR', '1')
-_fault_eio = environment()
-_fault_eio.prepend('LD_LIBRARY_PATH', meson.project_build_root() / 'src')
-_fault_eio.prepend('LD_PRELOAD', dump_faults.full_path())
-_fault_eio.set('DUMP_PREAD_EIO', '1')
-_fault_fstat = environment()
-_fault_fstat.prepend('LD_LIBRARY_PATH', meson.project_build_root() / 'src')
-_fault_fstat.prepend('LD_PRELOAD', dump_faults.full_path())
-_fault_fstat.set('DUMP_FSTAT_EIO', '1')
-test('dump_index_eintr', dump_fault_driver, args: ['eintr'], env: _fault_eintr, depends: dump_faults)
-test('dump_index_eio', dump_fault_driver, args: ['eio'], env: _fault_eio, depends: dump_faults)
-test('dump_fstat_keeps_atoms', dump_fault_driver, args: ['fstat'], env: _fault_fstat, depends: dump_faults)
+# ASan stays ahead of the fault preload.
+_fault_preload = dump_faults.full_path()
+if _san_runtime != ''
+  _fault_preload = _san_runtime + ':' + _fault_preload
+endif
+_fault_envs = []
+foreach _fault_var : ['DUMP_PREAD_EINTR', 'DUMP_PREAD_EIO', 'DUMP_FSTAT_EIO']
+  _fault_env = environment()
+  _fault_env.prepend('LD_LIBRARY_PATH', meson.project_build_root() / 'src')
+  _fault_env.prepend('LD_PRELOAD', _fault_preload)
+  _fault_env.set(_fault_var, '1')
+  if _san_leak_options != ''
+    _fault_env.set('ASAN_OPTIONS', _san_leak_options)
+  endif
+  _fault_envs += _fault_env
+endforeach
+test('dump_index_eintr', dump_fault_driver, args: ['eintr'], env: _fault_envs[0], depends: dump_faults)
+test('dump_index_eio', dump_fault_driver, args: ['eio'], env: _fault_envs[1], depends: dump_faults)
+test('dump_fstat_keeps_atoms', dump_fault_driver, args: ['fstat'], env: _fault_envs[2], depends: dump_faults)

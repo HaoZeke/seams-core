@@ -38,6 +38,58 @@ if meson.get_compiler('cpp').get_id() == 'clang' and (_capi_san != 'none' or get
   add_project_link_arguments('-Wl,-z,undefs', language: ['c', 'cpp'])
 endif
 
+# Under ASan every test process loads the shared runtime first. Most of
+# the suite runs in hosts this project does not build (CPython, Julia,
+# PLUMED, a fault-injection preload), and a runtime loaded after them
+# frees blocks it never allocated. Clang links that shared runtime too,
+# so a host and the clang executables it starts share one copy. CPython,
+# numpy and OpenMPI leak at exit by themselves, so LeakSanitizer is off by
+# default; _san_leak_options turns it back on for the native tests.
+_san_address = _capi_san.contains('address') or get_option('b_sanitize').contains('address')
+_san_runtime = ''
+_san_leak_options = ''
+_san_clang_shared = []
+_san_setup_env = {}
+if _san_address
+  _san_cc = meson.get_compiler('c')
+  _san_fs = import('fs')
+  _asan_names = ['libasan.so']
+  if _san_cc.get_id() == 'clang'
+    _asan_names = ['libclang_rt.asan.so', 'libclang_rt.asan-x86_64.so']
+  endif
+  foreach _name : _asan_names
+    if _san_runtime == ''
+      _where = run_command(_san_cc.cmd_array(), '-print-file-name=' + _name,
+        check: false).stdout().strip()
+      if _san_fs.is_absolute(_where) and _san_fs.is_file(_where)
+        _san_runtime = _where
+      endif
+    endif
+  endforeach
+  if _san_runtime == ''
+    error('-print-file-name found no shared ASan runtime')
+  endif
+  if _san_cc.get_id() == 'clang'
+    _san_clang_shared = ['-shared-libsan', '-Wl,-rpath,' + _san_fs.parent(_san_runtime)]
+    add_project_link_arguments(_san_clang_shared, language: ['c', 'cpp'])
+    # The libraries need the runtime by name. ld looks for it through
+    # LD_LIBRARY_PATH when a test links a gcc or gfortran program against
+    # them, since a sysroot ld does not search an absolute runpath.
+    _san_setup_env = {'LD_LIBRARY_PATH': _san_fs.parent(_san_runtime)}
+  endif
+  _san_leak_options = 'halt_on_error=1:abort_on_error=1:print_summary=1:verify_asan_link_order=0'
+  add_test_setup('sanitize', is_default: true, env: _san_setup_env + {
+    'LD_PRELOAD': _san_runtime,
+    'ASAN_OPTIONS': _san_leak_options + ':detect_leaks=0',
+    # The tests that turn LeakSanitizer back on share the libomp suppression.
+    'LSAN_OPTIONS': 'suppressions=' + meson.project_source_root() / 'fuzz' / 'lsan.supp',
+    # MPI_Init in plumed rewrites the first bytes of mprotect to hook
+    # memory events. Under ASan that is the interceptor, and the rewritten
+    # jump faults with SIGILL.
+    'OMPI_MCA_memory': '^patcher',
+  })
+endif
+
 host_system = host_machine.system()
 
 # Global accumulator variables (eOn pattern)
@@ -1595,6 +1647,9 @@ if _capi_san.contains('address')
   _capi_env.set('LSAN_OPTIONS',
                 'suppressions=' + meson.project_source_root() / 'fuzz' / 'lsan.supp')
 endif
+if _san_leak_options != ''
+  _capi_env.set('ASAN_OPTIONS', _san_leak_options)
+endif
 _capi_args = [
   meson.project_source_root(),
   capi_cpp_ref.full_path(),
@@ -1869,7 +1924,7 @@ if _fuzz_args.length() > 0
         '@INPUT@',
         '-o', '@OUTPUT@',
         seams_api_lib.full_path(),
-      ] + _fuzz_args + [
+      ] + _fuzz_args + _san_clang_shared + [
         '-Wl,-rpath,' + meson.current_build_dir() / 'src',
         '-lstdc++', '-lpthread', '-lm',
       ],

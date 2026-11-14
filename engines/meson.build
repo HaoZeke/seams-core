@@ -60,11 +60,18 @@ if lammps_opt.allowed()
       include_directories: lammps_incs,
       cpp_args: _args + lammps_args + seams_api_args,
       install: true)
+    lammps_env = environment()
+    if _san_leak_options != ''
+      lammps_env.set('ASAN_OPTIONS', _san_leak_options)
+      lammps_env.set('LSAN_OPTIONS', 'suppressions=' +
+        meson.project_source_root() / 'engines/lammps/lsan.supp')
+    endif
     test(
       'lammps_hook',
       run_hook,
       args: ['in.dseams'],
       workdir: meson.project_source_root() / 'engines/lammps',
+      env: lammps_env,
       timeout: 120)
   endif
 endif
