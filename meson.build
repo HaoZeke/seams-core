@@ -218,6 +218,7 @@ else
   openmp_dep_ok = openmp_dep.found()
 endif
 openmp_found = false
+_omp_rpath = []
 if openmp_dep_ok
   openmp_probe = '''
     #include <omp.h>
@@ -244,8 +245,9 @@ if openmp_dep_ok
       _omp_so = run_command(cppc.cmd_array() + ['-print-file-name=libomp.so'],
                             check: false).stdout().strip()
       if _omp_so.startswith('/') and import('fs').exists(_omp_so)
-        _deps += [declare_dependency(
+        _omp_rpath = [declare_dependency(
           link_args: ['-Wl,-rpath,' + import('fs').parent(_omp_so)])]
+        _deps += _omp_rpath
       endif
     endif
   else
@@ -1777,6 +1779,23 @@ test(
   ],
   env: _capi_env,
   timeout: 300)
+capi_thread_scale = executable(
+  'capi_thread_scale',
+  files('tests/capi_thread_scale.c'),
+  link_with: ydslib,
+  dependencies: [dependency('openmp', language: 'c', required: false)] + _omp_rpath,
+  include_directories: include_directories('src/include/internal'),
+  c_args: ['-std=c11'] + _capi_warn,
+  link_args: ['-lm'],
+  build_rpath: meson.current_build_dir() / 'src')
+# Alone, so the logged times are not shared with other tests.
+test(
+  'capi_thread_scale',
+  capi_thread_scale,
+  args: [meson.current_build_dir() / 'capi_thread_scale.txt'],
+  env: _capi_env,
+  timeout: 1800,
+  is_parallel: false)
 foreach _family : ['neighbours', 'rings', 'chill_plus', 'q4q6', 'cages', 'errors']
   test(
     'capi_example_' + _family,
