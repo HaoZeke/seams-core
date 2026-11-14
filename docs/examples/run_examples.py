@@ -15,9 +15,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "docs"))
+sys.path.insert(0, str(ROOT / "docs" / "examples"))
 
 import check_c_symbols as symbols  # noqa: E402
 import check_examples  # noqa: E402
+import r_package  # noqa: E402
 
 FIXTURE = "input/traj/genice_sI.lammpstrj"
 EXAMPLES = {
@@ -221,17 +223,10 @@ def run_julia(build, fixture):
 
 def run_r(build, fixture):
     script = binding_helpers().rscript()
-    r_cmd = str(Path(script).with_name("R"))
-    dest = build / "docs-r-lib"
-    dest.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env["DSEAMS_ROOT"] = str(ROOT)
-    env["SEAMS_INCLUDE"] = str(ROOT / "bindings/cxx")
-    env["SEAMS_LIBDIR"] = str(build / "bindings")
     env["LD_LIBRARY_PATH"] = library_path(build)
-    env["R_LIBS_USER"] = str(dest)
-    if not (dest / "dseams").is_dir():
-        run([r_cmd, "CMD", "INSTALL", "-l", str(dest), str(ROOT / "bindings/r/dseams")], env=env)
+    r_package.install(script, build, "docs_examples", build / "bindings", env)
     run([script, str(ROOT / "docs/examples/minimal_r.R"), fixture], env=env)
 
 

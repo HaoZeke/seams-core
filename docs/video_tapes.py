@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "examples"))
+import r_package  # noqa: E402
 from tape_parse import parse_tape  # noqa: E402
 
 NUMBER = re.compile(r"(?<![\d.])(\d+(?:\.\d+)?)(?![\d.])")
@@ -72,10 +74,12 @@ def prepare(root, seams, libdir, langdir, build):
     env["SEAMS_LANG_LIB"] = str(Path(langdir) / "libseams_lang.so")
     env["SEAMS_LIB_DIR"] = str(libdir)
     env["SEAMS_INCLUDE"] = str(root / "bindings" / "cxx")
-    env["R_LIBS_USER"] = str(build / "docs-r-lib")
     env["LD_LIBRARY_PATH"] = os.pathsep.join(
         [str(libdir), str(langdir), env.get("LD_LIBRARY_PATH", "")]
     )
+    rscript = shutil.which("Rscript", path=env["PATH"])
+    if rscript:
+        r_package.install(rscript, build, "docs_video_tapes", langdir, env)
     if not env.get("FENNEL_LUA"):
         candidates = [
             "/usr/local/share/fennel.lua",

@@ -9,6 +9,9 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "docs" / "examples"))
+
+import r_package  # noqa: E402
 
 
 def library_path(build):
@@ -117,19 +120,10 @@ def rscript():
 
 def run_r(build):
     script = rscript()
-    r_cmd = str(Path(script).with_name("R"))
-    dest = build / "docs-r-lib"
-    dest.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env["DSEAMS_ROOT"] = str(ROOT)
-    env["SEAMS_INCLUDE"] = str(ROOT / "bindings/cxx")
-    env["SEAMS_LIBDIR"] = str(build / "bindings")
     env["LD_LIBRARY_PATH"] = library_path(build)
-    env["R_LIBS_USER"] = str(dest)
-    subprocess.check_call(
-        [r_cmd, "CMD", "INSTALL", "-l", str(dest), str(ROOT / "bindings/r/dseams")],
-        env=env,
-    )
+    r_package.install(script, build, "docs_api_r", build / "bindings", env)
     env["SEAMS_CPP_ORACLE"] = str(build / "bindings" / "binding_oracle")
     env["OMP_NUM_THREADS"] = "1"
     subprocess.check_call([script, str(ROOT / "docs/examples/r_api.R")], env=env)
