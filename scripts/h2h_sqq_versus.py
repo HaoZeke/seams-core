@@ -335,7 +335,7 @@ class RingIce:
             if len(seen) != 1:
                 raise RuntimeError(f"{len(seen)} copies of libseams.so are mapped; need one")
 
-    def run(self, sys_, operation, labels, six, rings=False):
+    def run(self, sys_, operation, labels, six, rings=False, ordered=False):
         ip = ctypes.POINTER(ctypes.c_int)
         definition = self.DEFINITION[operation]
         got = ctypes.c_size_t()
@@ -350,6 +350,8 @@ class RingIce:
         buf = np.zeros((max(got.value, 1), 6), dtype=np.int32)
         self.engine.check(self.lib.seams_h2h_ring_ice(
             *args, buf.ctypes.data_as(ip), got.value, ctypes.byref(got)), operation)
+        if ordered:
+            return np.ascontiguousarray(buf[:got.value])
         return {frozenset(int(v) for v in row) for row in buf[:got.value]}
 
 
@@ -500,6 +502,17 @@ def reference_chordless6(adj):
                             if ring not in found and is_chordless(ring, adj):
                                 found.add(ring)
     return found
+
+
+def canonical_rows(rings, adj):
+    """Rings as int32 rows from the lowest vertex towards its smaller cycle
+    neighbour, sorted: the order seams_rings_chordless documents."""
+    rows = sorted(tuple(ring_cycle(r, adj)) for r in rings)
+    return np.array(rows, dtype=np.int32).reshape(len(rows), 6)
+
+
+def digest(array):
+    return hashlib.sha256(np.ascontiguousarray(array).tobytes()).hexdigest()
 
 
 def bfs_dist(adj, src, limit):
@@ -812,8 +825,13 @@ def agree(args):
         primitive6 = dsets.get(6, set())
         c_lab_raw = np.zeros(n, dtype=np.int32)
         c_six = np.zeros(n, dtype=np.int32)
+        sqq_adj = [set() for _ in range(n)]
+        for a, b in sqq_e:
+            sqq_adj[a].add(b)
+            sqq_adj[b].add(a)
         for operation in ("ice-primitive", "ice-chordless"):
-            got = census.run(sys_, operation, c_lab_raw, c_six, rings=True)
+            got_rows = census.run(sys_, operation, c_lab_raw, c_six, rings=True, ordered=True)
+            got = {frozenset(int(v) for v in row) for row in got_rows}
             c_lab = np.array([RING_ICE_LABEL[int(v)] for v in c_lab_raw], dtype=object)
             rule_lab, _deg, rule_six = sqq_rule(adj, got, n)
             rule_ok = int(np.sum(rule_lab == c_lab))
@@ -845,6 +863,28 @@ def agree(args):
                 else:
                     complete = f"reference enumeration skipped above {args.enumerate_max} molecules"
                 say(f"rings {name} chordless 6-rings {complete}")
+                # The library promises sorted canonical rows. Equal digests
+                # show the bytes, and so the order, match.
+                code = {"liquid": 0, "interfacial": 1, "ice": 2}
+                lib_rows = digest(got_rows)
+                sqq_rows = digest(canonical_rows(chord6, sqq_adj))
+                lib_lab = digest(c_lab_raw)
+                sqq_lab = digest(np.array([code[v] for v in s_lab], dtype=np.int32))
+                parts = [f"library rows {lib_rows[:16]}",
+                         f"SQQ rows {sqq_rows[:16]} equal {lib_rows == sqq_rows}"]
+                if n <= args.enumerate_max:
+                    ref_rows = digest(canonical_rows(ref6, adj))
+                    ref_rule, _d, ref_six = sqq_rule(adj, ref6, n)
+                    ref_lab = digest(np.array([code[v] for v in ref_rule], dtype=np.int32))
+                    parts += [f"brute-force rows {ref_rows[:16]} equal {lib_rows == ref_rows}",
+                              f"library labels {lib_lab[:16]}",
+                              f"brute-force labels {ref_lab[:16]} equal {lib_lab == ref_lab}",
+                              "brute-force six-ring counts equal "
+                              f"{digest(c_six) == digest(np.asarray(ref_six, dtype=np.int32))}"]
+                else:
+                    parts.append(f"library labels {lib_lab[:16]}")
+                parts.append(f"SQQ labels {sqq_lab[:16]} equal {lib_lab == sqq_lab}")
+                say(f"bytes {name} chordless 6-rings sha256: " + "; ".join(parts))
                 say(f"rings {name} chordless 6-rings d-SEAMS {len(got)} SQQ ice stage {len(chord6)} "
                     f"both {len(got & chord6)}; d-SEAMS-only {len(only_d)} (reference chordless "
                     f"{ok_d}, on an edge SQQ lacks {on_d}); SQQ-only {len(only_s)} (reference "
