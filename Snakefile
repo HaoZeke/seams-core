@@ -537,16 +537,38 @@ rule science_carry_paths:
         "--out {output[0]} --classes {output[1]}"
 
 
-rule science_committor:
+# Published 4096-molecule homogeneous lane. $LMP is the brine-lane
+# binary (MOLECULE, KSPACE, RIGID, EXTRA-MOLECULE, MANYBODY). The
+# 64-molecule deck in.committor is a fixture and is not this rule.
+# One 10 ns climb is about 1.7 h at the measured rate; twenty climbs
+# and the shooting set are longer than one sitting, so this rule is
+# the production command and is not what the rate table runs.
+rule science_committor_climb:
     input:
-        "scripts/committor_basin.py",
-        "data/committor-series.tsv",
+        "input/nucleation/in.homogeneous",
+        "input/nucleation/regenerate.py",
+        "input/mw215/mW.sw",
+        "bbdir/nucleation-pathway",
     output:
-        "data/committor-table.csv",
-        "data/committor-summary.csv",
+        "data/science-frames/committor-climb/mw-4096/timing.tsv",
     shell:
-        "${{SCIENCE_PYTHON:-python3}} scripts/committor_basin.py "
-        "--series {input[1]} --out {output[0]}"
+        "env -u LD_LIBRARY_PATH LMP=\"${{LMP}}\" "
+        "python3 input/nucleation/regenerate.py --lmp \"$$LMP\" --n 16 "
+        "--seeds 20261111-20261130 --melt 10000 --quench 1000000 "
+        "--dump-every 1000 --temperature 180 "
+        "--seams bbdir/nucleation-pathway --threads 1 --jobs 1 "
+        "--dest data/science-frames/committor-climb"
+
+
+rule science_committor_rate:
+    input:
+        "scripts/committor_shoot.py",
+        "input/nucleation/in.homogeneous",
+    output:
+        "data/committor-rate.csv",
+    shell:
+        "${{SCIENCE_PYTHON:-python3}} scripts/committor_shoot.py "
+        "--out {output} --quench-steps 2000 --quench-seconds 12.5328"
 
 
 rule science_phase_window:
