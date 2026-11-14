@@ -540,6 +540,12 @@ def reference_chill_plus(frame):
 
 # ---------------------------------------------------------------- correctness
 
+def jaccard(a, b):
+    """Two empty sets agree completely."""
+    union = len(a | b)
+    return len(a & b) / union if union else 1.0
+
+
 def agree(args):
     engine = Seams(args.lib)
     engine.threads(1)
@@ -572,7 +578,7 @@ def agree(args):
         rows.append(dict(frame=name, molecules=n, quantity="O-O edges", d_seams=len(seams_e),
                          sqq=len(sqq_e), both=len(seams_e & sqq_e),
                          d_seams_only=len(seams_e - sqq_e), sqq_only=len(sqq_e - seams_e),
-                         agreement=f"{len(seams_e & sqq_e) / max(1, len(seams_e | sqq_e)):.6f}",
+                         agreement=f"{jaccard(seams_e, sqq_e):.6f}",
                          resolution=f"reference KD tree {len(ref_edges)} edges; nearest pair "
                                     f"{margin:.3e} A from the cutoff"))
 
@@ -593,7 +599,7 @@ def agree(args):
             rows.append(dict(frame=name, molecules=n, quantity=f"{size}-rings", d_seams=len(d),
                              sqq=len(s), both=len(d & s), d_seams_only=len(only_d),
                              sqq_only=len(only_s),
-                             agreement=f"{len(d & s) / max(1, len(d | s)):.6f}",
+                             agreement=f"{jaccard(d, s):.6f}",
                              resolution="; ".join(verdict)))
         sample = [r for size in (4, 5, 6) for r in sorted(dsets.get(size, ()), key=sorted)[:200]]
         bad = sum(not is_shortest_path_ring(r, adj) for r in sample)
