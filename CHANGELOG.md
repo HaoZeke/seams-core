@@ -228,6 +228,7 @@ by [towncrier](https://towncrier.readthedocs.io/).
 - The C API builds q4 and q6 from one cutoff shell and does not fill an atom-index map on that path.
 - The PLUMED `SEAMS` action scaled positions and the box by 10 whatever PLUMED's length unit, so under `UNITS LENGTH=A` it saw a cell a hundred times too large: on the ideal 64-molecule cell `seams.ice` was 0 and `seams.q6` 0 instead of 1 and 0.6285. It now reads the unit from PLUMED. `meson test plumed_units` is the regression.
 - The PLUMED q6 derivative is expressed per nanometre. A 0.001 angstrom step matched an independent difference to 3.99e-11 on a shifted eight-molecule cell.
+- The `recorded.txt` check of `docs_video_tapes` ignores the note LAMMPS prints when `OMP_NUM_THREADS` is unset, as it is under `meson test`, so the lammps transcript matches with or without that variable. The `using 1 OpenMP thread(s)` line after it is still compared.
 - The brine, interface, nucleation, and rings picture tracks now show the paper-frame transcripts: 873 atoms with hexagonal 352 and water 434, the 864-molecule interface, 148 nucleation frames, and the 11-frame mW cell. `docs_video_tapes` fails when `recorded.txt` disagrees with the tape output or a spoken number is absent from that transcript.
 - The cutoff neighbour list sizes its row buffer from the pairs found. A shell denser than the ideal-gas estimate no longer writes past that buffer.
 - The landing-page and architecture diagrams quote labels that contain a slash or a quote, so Mermaid 11 draws the suite stack.
