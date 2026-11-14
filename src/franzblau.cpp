@@ -13,6 +13,7 @@
 //-----------------------------------------------------------------------------------
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <limits>
@@ -1300,9 +1301,36 @@ struct alignas(64) RingPool {
   std::vector<std::uint32_t> offsets{0};
   std::vector<std::uint8_t> sizes;
   std::size_t n = 0;
+  // Published after this source's rings are complete. The acquire on the
+  // reading side orders those writes without a function-wide suppression.
+  std::atomic<std::uint32_t> ready{0};
+
+  RingPool() = default;
+  RingPool(const RingPool &) = delete;
+  RingPool &operator=(const RingPool &) = delete;
+  RingPool(RingPool &&other) noexcept
+      : verts(std::move(other.verts)), offsets(std::move(other.offsets)),
+        sizes(std::move(other.sizes)), n(other.n),
+        ready(other.ready.load(std::memory_order_relaxed)) {
+    other.n = 0;
+    other.ready.store(0, std::memory_order_relaxed);
+  }
+  RingPool &operator=(RingPool &&other) noexcept {
+    if (this != &other) {
+      verts = std::move(other.verts);
+      offsets = std::move(other.offsets);
+      sizes = std::move(other.sizes);
+      n = other.n;
+      ready.store(other.ready.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      other.n = 0;
+      other.ready.store(0, std::memory_order_relaxed);
+    }
+    return *this;
+  }
 
   void reset() {
     n = 0;
+    ready.store(0, std::memory_order_relaxed);
     verts.clear();
     sizes.clear();
     offsets.clear();
@@ -1314,6 +1342,13 @@ struct alignas(64) RingPool {
     std::vector<std::uint32_t>().swap(offsets);
     offsets.push_back(0);
     n = 0;
+    ready.store(0, std::memory_order_relaxed);
+  }
+  void publish() noexcept {
+    ready.store(static_cast<std::uint32_t>(n), std::memory_order_release);
+  }
+  std::size_t acquireCount() const noexcept {
+    return ready.load(std::memory_order_acquire);
   }
   std::size_t size() const { return n; }
 
@@ -1839,6 +1874,7 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
     }
     const auto enumStart = std::chrono::steady_clock::now();
     std::vector<RingPool> perSource(static_cast<std::size_t>(nFrom));
+    std::vector<std::atomic<int>> binReady(static_cast<std::size_t>(nThreads));
 #pragma omp parallel
     {
       RingScratch scratch;
@@ -1848,12 +1884,20 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
       }
 #pragma omp for schedule(guided)
       for (int k = 0; k < nFrom; k++) {
+        auto &pool = perSource[static_cast<std::size_t>(k)];
         enumerateFromSource(adjacency, oracle, from[k], maxDepth, maxLvl,
-                            scratch, perSource[static_cast<std::size_t>(k)],
-                            nullptr, legacy, minSize, local);
+                            scratch, pool, nullptr, legacy, minSize, local);
+        pool.publish();
+      }
+      if (perAtom != nullptr) {
+        binReady[static_cast<std::size_t>(omp_get_thread_num())].store(
+            1, std::memory_order_release);
       }
     }
     if (perAtom != nullptr) {
+      for (int t = 0; t < nThreads; t++) {
+        binReady[static_cast<std::size_t>(t)].load(std::memory_order_acquire);
+      }
       const int span = nVertices * perStride;
       for (const auto &bin : threadBins) {
         for (int i = 0; i < span; i++) {
@@ -1867,20 +1911,17 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
     for (int k = 0; k < nFrom; k++) {
       offset[static_cast<std::size_t>(k + 1)] =
           offset[static_cast<std::size_t>(k)] +
-          perSource[static_cast<std::size_t>(k)].size();
+          perSource[static_cast<std::size_t>(k)].acquireCount();
     }
     rings.resize(offset[static_cast<std::size_t>(nFrom)]);
-#pragma omp parallel
-    {
-#pragma omp for schedule(static) nowait
-      for (int k = 0; k < nFrom; k++) {
-        auto &pool = perSource[static_cast<std::size_t>(k)];
-        const std::size_t at = offset[static_cast<std::size_t>(k)];
-        for (std::size_t i = 0; i < pool.n; i++) {
-          pool.copyRing(i, rings[at + i]);
-        }
-        pool.release();
+    for (int k = 0; k < nFrom; k++) {
+      auto &pool = perSource[static_cast<std::size_t>(k)];
+      const std::size_t count = pool.acquireCount();
+      const std::size_t at = offset[static_cast<std::size_t>(k)];
+      for (std::size_t i = 0; i < count; i++) {
+        pool.copyRing(i, rings[at + i]);
       }
+      pool.release();
     }
     balls.clear();
     std::vector<std::vector<int>>().swap(uniq);
@@ -2542,7 +2583,7 @@ struct primitive::RingUpdater::Impl {
     oracle.balls = hopOnly ? nullptr : &balls;
     oracle.hop2 = hopOnly;
     if (static_cast<int>(bySource.size()) != nVertices) {
-      bySource.assign(static_cast<std::size_t>(nVertices), {});
+      bySource.resize(static_cast<std::size_t>(nVertices));
     }
     int nThreads = 1;
 #ifdef SEAMS_HAS_OPENMP
@@ -2564,10 +2605,11 @@ struct primitive::RingUpdater::Impl {
         // busy chunk with nothing left to steal.
 #pragma omp for schedule(guided)
         for (int src = 0; src < nVertices; src++) {
-          bySource[static_cast<std::size_t>(src)].reset();
-          enumerateFromSource(adj, oracle, src, maxDepth, maxLvl, scratch,
-                              bySource[static_cast<std::size_t>(src)], nullptr,
-                              false, 3, call);
+          auto &pool = bySource[static_cast<std::size_t>(src)];
+          pool.reset();
+          enumerateFromSource(adj, oracle, src, maxDepth, maxLvl, scratch, pool,
+                              nullptr, false, 3, call);
+          pool.publish();
         }
       }
     } else
@@ -2577,10 +2619,11 @@ struct primitive::RingUpdater::Impl {
         scratches.emplace_back();
       }
       for (int src = 0; src < nVertices; src++) {
-        bySource[static_cast<std::size_t>(src)].reset();
-        enumerateFromSource(adj, oracle, src, maxDepth, maxLvl, scratches[0],
-                            bySource[static_cast<std::size_t>(src)], nullptr,
-                            false, 3, call);
+        auto &pool = bySource[static_cast<std::size_t>(src)];
+        pool.reset();
+        enumerateFromSource(adj, oracle, src, maxDepth, maxLvl, scratches[0], pool,
+                            nullptr, false, 3, call);
+        pool.publish();
       }
     }
 
@@ -2588,19 +2631,17 @@ struct primitive::RingUpdater::Impl {
     for (int src = 0; src < nVertices; src++) {
       offset[static_cast<std::size_t>(src) + 1] =
           offset[static_cast<std::size_t>(src)] +
-          bySource[static_cast<std::size_t>(src)].n;
+          bySource[static_cast<std::size_t>(src)].acquireCount();
     }
     const std::size_t total = offset[static_cast<std::size_t>(nVertices)];
     if (flattened.size() < total) {
       flattened.resize(total);
     }
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp parallel for schedule(static) if (!omp_in_parallel())
-#endif
     for (int src = 0; src < nVertices; src++) {
       RingPool &pool = bySource[static_cast<std::size_t>(src)];
+      const std::size_t count = pool.acquireCount();
       std::size_t at = offset[static_cast<std::size_t>(src)];
-      for (std::size_t k = 0; k < pool.n; k++) {
+      for (std::size_t k = 0; k < count; k++) {
         pool.copyRing(k, flattened[at++]);
       }
     }
