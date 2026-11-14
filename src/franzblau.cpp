@@ -809,6 +809,7 @@ bool shortestPathsFrom(const Graph &adjacency, int src, RingScratch &scr,
 //! two shortest arms to an antipode, or an odd edge between one level, in
 //! the canonical orientation, kept by the same shortcut test.
 template <typename Graph, typename Out, bool PerAtom>
+__attribute__((hot))
 void enumerateChordless(const Graph &adjacency, const DistOracle &oracle,
                         int src, int maxDepth, int minSize, bool legacy,
                         const std::vector<int> &lvl, Out &out,
@@ -1416,7 +1417,47 @@ void sortAppended(Out &out, std::size_t first) {
 
 inline void sortAppended(RingPool &out, std::size_t first) { out.sortFrom(first); }
 
-template <typename Graph, typename Out>
+// Kept out of the one-thread search. A pool per atom on ice is empty,
+// and walking it is slower than searching; one scratch pool per thread
+// is enough because a census does not read the lists back.
+template <typename Graph>
+__attribute__((noinline, cold)) void
+sparseCensusTeam(const Graph &adjacency, const DistOracle &oracle,
+                 const std::vector<int> &from, int maxDepth, int maxLvl,
+                 bool legacy, int minSize, std::vector<int> *hist, RingCall call,
+                 RingSplitTimes &split, int usedBalls) {
+  const int nFrom = static_cast<int>(from.size());
+  const int nThreads = omp_get_max_threads();
+  std::vector<std::vector<int>> threadHists(
+      static_cast<std::size_t>(nThreads), std::vector<int>(hist->size(), 0));
+  const auto enumStart = std::chrono::steady_clock::now();
+#pragma omp parallel
+  {
+    RingScratch scratch;
+    RingPool scratchPool;
+    RingCall local = call;
+    local.hist = &threadHists[static_cast<std::size_t>(omp_get_thread_num())];
+#pragma omp for schedule(guided)
+    for (int k = 0; k < nFrom; k++) {
+      enumerateFromSource<Graph, RingPool, 1>(
+          adjacency, oracle, from[k], maxDepth, maxLvl, scratch, scratchPool,
+          nullptr, legacy, minSize, local);
+    }
+  }
+  for (const auto &h : threadHists) {
+    for (std::size_t i = 0; i < hist->size(); i++) {
+      (*hist)[i] += h[i];
+    }
+  }
+  split.enumerate_ms = millisSince(enumStart);
+  split.merge_ms = 0;
+  publishSplit(split, usedBalls);
+}
+
+// Variant splits the one-thread copy from the sparse team copy. One
+// function with both call sites was compiled more slowly for the
+// one-thread search.
+template <typename Graph, typename Out, int Variant = 0>
 void enumerateFromSource(const Graph &adjacency, const DistOracle &oracle,
                          int src, int maxDepth, int maxLvl, RingScratch &scr,
                          Out &out, const std::vector<char> *through = nullptr,
@@ -1835,6 +1876,7 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
   oracle.hop2 = hopOnly || bitBall;
   const int nFrom = static_cast<int>(from.size());
 
+  bool sparseCensus = false;
 #ifdef SEAMS_HAS_OPENMP
   // One thread writes straight into the output vector. The parallel
   // collector gives every source its own ring list, and on one thread
@@ -1847,7 +1889,19 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
   const bool parallelSources =
       !omp_in_parallel() && omp_get_max_threads() > 1 &&
       (!serial || (cap > 0 && nFrom >= 64));
+  // A sparse census never stores a ring. One scratch pool per thread
+  // replaces a pool per atom; ice would otherwise walk those empty lists
+  // after the search. A dense frame keeps a pool per source. The team is
+  // a cold copy so the one-thread search and this dense search keep the
+  // two call sites they were tuned with.
+  sparseCensus = parallelSources && hist != nullptr && perAtom == nullptr && cap == 0 &&
+                 !legacy && hopOnly;
   if (parallelSources) {
+    if (sparseCensus) {
+      sparseCensusTeam(adjacency, oracle, from, maxDepth, maxLvl, legacy, minSize, hist,
+                       call, split, usedBalls);
+      return rings;
+    }
     // Sources are independent given the shared read-only balls; per-source
     // collection keeps the output identical to the serial ascending-source
     // order
