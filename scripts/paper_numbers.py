@@ -89,6 +89,9 @@ def write_csv(path: Path, rows: list[dict]) -> None:
     commits = {row["source_commit"] for row in rows}
     if len(commits) != 1:
         raise SystemExit(f"{path.name} mixed commits {commits}")
+    spare = ROOT / "bbdir" / "paper-numbers" / path.name
+    spare.parent.mkdir(parents=True, exist_ok=True)
+    spare.write_bytes(path.read_bytes())
     print(f"wrote {path} rows {len(rows)} commit {commits.pop()[:12]}", flush=True)
 
 
@@ -525,7 +528,7 @@ def main() -> int:
         except ImportError:
             os.environ["PAPER_IRA_PIXIE"] = "1"
             os.execvp("pixi", [
-                "pixi", "exec", "--spec", "ira", sys.executable,
+                "pixi", "exec", "--spec", "ira", "python",
                 str(Path(__file__).resolve()), "--worker", "ira",
                 "--threads", str(args.threads), "--core", args.core,
             ])
