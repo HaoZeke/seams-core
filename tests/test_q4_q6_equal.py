@@ -23,10 +23,13 @@ except ImportError:
     raise SystemExit(77)
 
 try:
+    # freud imports matplotlib. Once ovito is imported it loads
+    # matplotlib's FreeType module with RTLD_DEEPBIND, which ASan refuses,
+    # so freud comes first.
+    import freud
     from ovito.data import DataCollection, Particles, SimulationCell
     from ovito.modifiers import SteinhardtParametersModifier
     from ovito.pipeline import Pipeline, StaticSource
-    import freud
 except ImportError:
     sys.stderr.write("ovito or freud is not installed\n")
     raise SystemExit(77)

@@ -123,7 +123,10 @@ if ! command -v julia >/dev/null 2>&1 && [ -d "${HOME}/.local/julia" ]; then
     fi
   done
 fi
-if command -v julia >/dev/null 2>&1; then
+if [ "${DSEAMS_SANITIZE:-}" = address ]; then
+  # Julia dlopens libpcre2 with RTLD_DEEPBIND, which ASan refuses.
+  echo "language front skipped under ASan: julia" >&2
+elif command -v julia >/dev/null 2>&1; then
   (cd "$root/bindings/julia/Dseams" && \
     SEAMS_LANG_LIB=$lang/libseams_lang.so \
     SEAMS_LIB=$lib/libseams.so \

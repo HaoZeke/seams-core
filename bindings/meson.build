@@ -81,47 +81,49 @@ seams_frames_test = executable(
 )
 test('seams_lang_frames', seams_frames_test, timeout: 60)
 
-# R is not built with the sanitizer. Loading libasan into R fails with
-# "ASan runtime does not come first". The same test passes in the
-# default suite, so the sanitizer run does not register it.
-
 # Exit 77 (skipped) when pydseamslib, R dseams, or Julia is missing; CI
 # passes --require-all after installing all three.
-if get_option('with_cli') and get_option('with_tests') and not get_option('b_sanitize').contains('address')
-  # conda-forge Julia under the toolchain loader. juliaup faults at
-  # shutdown. R and pydseams are already on the default interpreter.
-  chill_env = environment()
-  chill_env.set('DSEAMS_ROOT', meson.project_source_root())
-  _fs = import('fs')
-  _julia_wrap = get_option('julia_wrap')
-  if _julia_wrap != ''
-    chill_env.prepend('PATH', _julia_wrap)
-  else
-    _julia = find_program('julia', required: false)
-    if _julia.found()
-      chill_env.prepend('PATH', _fs.parent(_julia.full_path()))
+if get_option('with_cli') and get_option('with_tests')
+  # R is not built with the sanitizer. Loading libasan into R fails with
+  # "ASan runtime does not come first", and Julia dlopens libpcre2 with
+  # RTLD_DEEPBIND, which ASan refuses. The same test passes in the default
+  # suite, so the sanitizer run does not register it.
+  if not _san_address
+    # conda-forge Julia under the toolchain loader. juliaup faults at
+    # shutdown. R and pydseams are already on the default interpreter.
+    chill_env = environment()
+    chill_env.set('DSEAMS_ROOT', meson.project_source_root())
+    _fs = import('fs')
+    _julia_wrap = get_option('julia_wrap')
+    if _julia_wrap != ''
+      chill_env.prepend('PATH', _julia_wrap)
+    else
+      _julia = find_program('julia', required: false)
+      if _julia.found()
+        chill_env.prepend('PATH', _fs.parent(_julia.full_path()))
+      endif
     endif
+    _rscript = find_program('Rscript', required: false)
+    if _rscript.found()
+      chill_env.prepend('PATH', _fs.parent(_rscript.full_path()))
+    endif
+    _r_libs = get_option('r_libs_user')
+    if _r_libs != ''
+      chill_env.set('R_LIBS_USER', _r_libs)
+    endif
+    test(
+      'chill_plus_fronts_agree',
+      find_program('python3', required: true),
+      args: [
+        meson.project_source_root() / 'tests' / 'chill_plus_fronts.py',
+        seams_exe.full_path(),
+        seams_lang.full_path(),
+      ],
+      env: chill_env,
+      depends: [seams_exe, seams_lang],
+      timeout: 600,
+    )
   endif
-  _rscript = find_program('Rscript', required: false)
-  if _rscript.found()
-    chill_env.prepend('PATH', _fs.parent(_rscript.full_path()))
-  endif
-  _r_libs = get_option('r_libs_user')
-  if _r_libs != ''
-    chill_env.set('R_LIBS_USER', _r_libs)
-  endif
-  test(
-    'chill_plus_fronts_agree',
-    find_program('python3', required: true),
-    args: [
-      meson.project_source_root() / 'tests' / 'chill_plus_fronts.py',
-      seams_exe.full_path(),
-      seams_lang.full_path(),
-    ],
-    env: chill_env,
-    depends: [seams_exe, seams_lang],
-    timeout: 600,
-  )
   test(
     'chill_plus_ctypes',
     find_program('python3', required: true),

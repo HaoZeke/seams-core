@@ -87,6 +87,7 @@ if _san_address
     # memory events. Under ASan that is the interceptor, and the rewritten
     # jump faults with SIGILL.
     'OMPI_MCA_memory': '^patcher',
+    'DSEAMS_SANITIZE': 'address',
   })
 endif
 
@@ -1647,18 +1648,21 @@ if get_option('with_cli')
     depends: [seams_lang],
     suite: 'docs',
     timeout: 300)
-  test(
-    'docs_api_julia',
-    python3,
-    args: [
-      meson.project_source_root() / 'docs' / 'examples' / 'run_binding.py',
-      'julia',
-      meson.project_build_root(),
-    ],
-    env: binding_env,
-    depends: [seams_lang],
-    suite: 'docs',
-    timeout: 180)
+  # Julia dlopens libpcre2 with RTLD_DEEPBIND, which ASan refuses.
+  if not _san_address
+    test(
+      'docs_api_julia',
+      python3,
+      args: [
+        meson.project_source_root() / 'docs' / 'examples' / 'run_binding.py',
+        'julia',
+        meson.project_build_root(),
+      ],
+      env: binding_env,
+      depends: [seams_lang],
+      suite: 'docs',
+      timeout: 180)
+  endif
 endif
 
 # C API proof. Sanitizers and valgrind are separate configure options.

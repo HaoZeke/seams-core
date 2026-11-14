@@ -261,7 +261,11 @@ def main():
     require_example_links()
     fixture = str(ROOT / FIXTURE)
     compile_and_run(build)
-    run_julia(build, fixture)
+    if os.environ.get("DSEAMS_SANITIZE") == "address":
+        # Julia dlopens libpcre2 with RTLD_DEEPBIND, which ASan refuses.
+        print("julia example skipped under ASan")
+    else:
+        run_julia(build, fixture)
     run_r(build, fixture)
     run_lua(build, fixture)
     print("docs examples ok")

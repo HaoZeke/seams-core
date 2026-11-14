@@ -174,6 +174,12 @@ def fail(message):
 
 def stack_ok():
     try:
+        # OVITO loads matplotlib's FreeType module with RTLD_DEEPBIND, which
+        # an ASan runtime refuses, so it is loaded first.
+        import matplotlib.ft2font  # noqa: F401
+    except ImportError:
+        pass
+    try:
         import ase  # noqa: F401
         import chemparseplot  # noqa: F401
         import ovito  # noqa: F401

@@ -76,9 +76,22 @@ def _fallback_png(png):
 _ovito_note = False
 
 
+def before_ovito():
+    """Load matplotlib's FreeType module before OVITO is imported.
+
+    OVITO loads it with RTLD_DEEPBIND, which an ASan runtime refuses. Loaded
+    first, it binds its own FreeType, which is what OVITO's hook ensures.
+    """
+    try:
+        import matplotlib.ft2font  # noqa: F401
+    except ImportError:
+        pass
+
+
 def render(dump, png):
     global _ovito_note
     prepare_vulkan()
+    before_ovito()
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     try:
         import warnings

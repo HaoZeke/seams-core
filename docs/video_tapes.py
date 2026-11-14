@@ -151,6 +151,12 @@ def check_folder(folder, env, root, record):
             timing = block.splitlines()[1]
             if timing not in vtt:
                 fail("{} vtt was not converted from srt ({})".format(folder.name, timing))
+    commands = [command for item in parsed for command in item["commands"]]
+    if os.environ.get("DSEAMS_SANITIZE") == "address" and any(
+            command.split()[0] == "julia" for command in commands if command.split()):
+        # Julia dlopens libpcre2 with RTLD_DEEPBIND, which ASan refuses.
+        print(folder.name, "scenes skipped under ASan")
+        return
     combined = []
     recorded = []
     for item in parsed:

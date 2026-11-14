@@ -216,6 +216,7 @@ def color_q6(values):
 def render_atoms(path, positions, colors, radii, bonds, bond_positions, size):
     """Ray-trace the atoms. Tachyon is preferred; OSPRay is the fallback engine."""
     paper_module().prepare_vulkan()
+    paper_module().before_ovito()
     import warnings
 
     warnings.filterwarnings("ignore", message=".*OVITO.*PyPI")
