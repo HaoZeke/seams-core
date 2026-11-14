@@ -40,6 +40,12 @@ def stamp_env() -> None:
     os.environ["LJOS_SEAT"] = "dseams-paper"
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     os.environ.setdefault("MPLBACKEND", "Agg")
+    # libgomp reads this when the runtime first loads. An active team of
+    # eight threads on this host spends tens of milliseconds inside every
+    # parallel region; the passive policy leaves the neighbour and ring
+    # calls at the kernel time. Setting it after another library has
+    # loaded libgomp does not change the team that is already running.
+    os.environ["OMP_WAIT_POLICY"] = "PASSIVE"
     extra = os.environ.get("OVITO_EXTRA", "").strip() or str(ROOT / ".cache" / "ovito-extra")
     os.environ["OVITO_EXTRA"] = extra
 
@@ -118,6 +124,7 @@ def pin_and_run(threads: int, script_args: list[str]) -> str:
     env = os.environ.copy()
     env["OMP_NUM_THREADS"] = str(threads)
     env["OVITO_THREAD_COUNT"] = str(threads)
+    env["OMP_WAIT_POLICY"] = "PASSIVE"
     env.pop("OMP_PROC_BIND", None)
     env.pop("OMP_PLACES", None)
     cmd = ["taskset", "-c", stats.taskset_cores(threads), sys.executable, *script_args]
@@ -202,6 +209,7 @@ def run_carry(info) -> list[dict]:
         full, inc = [], []
         env = os.environ.copy()
         env["OMP_NUM_THREADS"] = str(threads)
+        env["OMP_WAIT_POLICY"] = "PASSIVE"
         env["OMP_PROC_BIND"] = "close"
         env["OMP_PLACES"] = "cores"
 
@@ -539,7 +547,6 @@ def run_rivals(info, lib: str) -> list[dict]:
     mdapy.set_num_threads(threads)
     pyscal3.set_num_threads(threads)
     freud.parallel.set_num_threads(threads)
-    os.environ["OMP_WAIT_POLICY"] = "PASSIVE"
     seams = load_seams(library_path())
     bind_rings(seams)
     seams.seams_neighbours_build.argtypes = [
@@ -698,6 +705,7 @@ def run_figs(info) -> tuple[list[dict], list[dict]]:
     def once(n_atoms: int, threads: int) -> dict[str, float]:
         env = os.environ.copy()
         env["OMP_NUM_THREADS"] = str(threads)
+        env["OMP_WAIT_POLICY"] = "PASSIVE"
         env.pop("OMP_PROC_BIND", None)
         env.pop("OMP_PLACES", None)
         done = subprocess.run(

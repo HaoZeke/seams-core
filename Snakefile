@@ -1060,7 +1060,7 @@ rule paper_numbers:
         "benchmarks/paper-numbers/manifest.txt",
         "paper/NUMBERS.tsv",
     shell:
-        "export LJOS_SEAT=dseams-paper QT_QPA_PLATFORM=offscreen; "
+        "export LJOS_SEAT=dseams-paper QT_QPA_PLATFORM=offscreen OMP_WAIT_POLICY=PASSIVE; "
         "python3 scripts/paper_numbers.py --out benchmarks/paper-numbers "
         "--lib bbdir-release/bindings/libseams_lang.so "
         "--core bbdir-release/src/libyodaLib.so && "
