@@ -663,6 +663,20 @@ rule science_committor_shoot:
         "--seeds '{params.seeds}' --shard '{params.shard}'"
 
 
+# Pearson and Spearman correlation of n_chill_core, n_chill_ext and
+# n_q6solid over every climb of the shard, from its frames.
+rule science_committor_order:
+    input:
+        f"data/committor-shards/climb-{_COMMITTOR_TAG}.csv",
+        "scripts/committor_order.py",
+    output:
+        f"data/committor-shards/order-{_COMMITTOR_TAG}.csv",
+    params:
+        frames=_COMMITTOR_FRAMES,
+    shell:
+        "python3 scripts/committor_order.py {params.frames}/mw-4096/seed-* --out {output}"
+
+
 rule science_committor_merge:
     input:
         "scripts/committor_shoot.py",
