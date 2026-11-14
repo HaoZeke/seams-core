@@ -149,7 +149,7 @@ Each group has one warm-up round and then n = 8 timed rounds. Even rounds call i
 - **Ratio.** The ratio is sum(SQQ) / sum(d-SEAMS). The interval is a 95% paired-bootstrap percentile interval with B = 10000 and seed 20261114.
 - **Raw data.** The raw samples are `benchmarks/h2h-sqq-time-1.txt` and `-8.txt`; the table is `benchmarks/h2h-sqq.csv`. Its `agreement` column is the lowest agreement among the quantities the row's call produces.
 
-All timing was measured in one Snakemake session at commit 2ef12775, and both log headers record that the code tree was clean. Later commits change only benchmark outputs and this file.
+All timing was measured in one Snakemake session at commit 2ef12775 ("feat(bench): time SQQ's ice rule on d-SEAMS rings against SQQ"; the subject identifies it if the hash is re-stamped), and both log headers record that the code tree was clean. Later commits change only benchmark outputs and this file.
 
 Times are milliseconds, mean ± sd. In the ice-primitive and ice-chordless rows, the SQQ column is the SQQ ice call.
 
