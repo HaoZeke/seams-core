@@ -552,10 +552,10 @@ rule science_carry_paths:
 #   snakemake -j1 data/committor-shards/shot-0-of-20.csv \
 #       --config seeds=20261111-20261130 shard=0/20
 # A climb that has not nucleated continues 10 ns per extension, to
-# 30 ns, from its restart, or from its last dump frame with fresh
+# 40 ns, from its restart, or from its last dump frame with fresh
 # velocities when it has no restart. Each extension rewrites the climb
-# table and leaves extend-<k>-of-<K>.<segment>.log:
-#   snakemake -j1 data/committor-shards/extend-0-of-20.1.log \
+# table and leaves extend-<k>-of-<K>.<segment>.log, segments 1 to 3:
+#   snakemake -j1 data/committor-shards/extend-0-of-20.3.log \
 #       --config seeds=20261111-20261130 shard=0/20
 # science_committor_merge folds the shot shards into p_B(n) and n*.
 _COMMITTOR_SEEDS = config.get("seeds", "20261111-20261130")
@@ -630,7 +630,7 @@ rule science_committor_extend:
     wildcard_constraints:
         k=r"\d+",
         n=r"\d+",
-        segment=r"[12]",
+        segment=r"[123]",
     params:
         seeds=_COMMITTOR_SEEDS,
         frames=lambda w: f"data/science-frames/committor-climb-{w.k}-of-{w.n}",
