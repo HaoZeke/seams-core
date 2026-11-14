@@ -22,6 +22,14 @@ runs this deck, and `meson test docs_engine_lammps` runs the same hook on
 and `rule` (`published` or `ovito`). The deck's `fix ext` line is
 `external pf/callback`.
 
+`meson test lammps_e2e` loads the plugin into `lmp` (or `$LMP`), runs 200
+steps of mW ice and liquid with `engines/lammps/in.mw.lmp`, and compares the
+`c_ice` column of every dumped frame with `seams chill-plus --per-atom` on
+the same dump. `lammps_e2e_np2` repeats it on two ranks.
+
+```{literalinclude} ../../../engines/lammps/in.mw.lmp
+```
+
 ```{literalinclude} ../../../engines/lammps/in.dseams
 :lines: 1-15
 ```
