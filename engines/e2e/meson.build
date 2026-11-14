@@ -22,6 +22,14 @@ if e2e_py.found()
   test('lammps_e2e_np2', e2e_py,
     args: [e2e_src / 'lammps' / 'e2e_mw.py', e2e_build, '--ranks', '2'],
     env: e2e_env, depends: e2e_deps, suite: 'engines-e2e', timeout: 900)
+  # Regression: compute dseams had no type or mol keyword, so a frame with
+  # hydrogens or ions put them in the CHILL+ graph.
+  test('lammps_select', e2e_py,
+    args: [e2e_src / 'lammps' / 'e2e_select.py', e2e_build],
+    env: e2e_env, depends: e2e_deps, suite: 'engines-e2e', timeout: 300)
+  test('lammps_select_np2', e2e_py,
+    args: [e2e_src / 'lammps' / 'e2e_select.py', e2e_build, '--ranks', '2'],
+    env: e2e_env, depends: e2e_deps, suite: 'engines-e2e', timeout: 300)
   test('plumed_e2e', e2e_py,
     args: [e2e_src / 'plumed' / 'e2e_mw.py', e2e_build],
     env: e2e_env, depends: e2e_deps, suite: 'engines-e2e', timeout: 900)
