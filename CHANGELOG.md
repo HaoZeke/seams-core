@@ -121,7 +121,7 @@ by [towncrier](https://towncrier.readthedocs.io/).
   `seams --mol 1,5-12` keeps those molecule ids.
   A type or molecule that is not in the frame is an error.
   On a LAMMPS dump with multi-atom molecules and no `--type`, the same choice replaces the old preference for type 2, which labelled hydrogens or sodium.
-  `compute dseams` takes `type I` and `mol water`. A mixed frame that sets neither is an error.
+  `compute dseams`, as the LAMMPS plugin and as the copy-in style in `extras/lammps`, takes `type I` and `mol water` and scores only those oxygens; the other atoms it is given read 6. A group of several types that sets neither is an error.
   CHILL+ then reports `ion-ice`, `ion-liquid` and `ion-front` when ions remain in the frame.
 - Pair distances use the fractional wrap below half the narrowest face separation, and call the Euclidean image only past that. The in-plane RDF bins the cell-list distance inside that ball, and the direct loop runs in parallel.
 - Release builds define NDEBUG, so the libstdc++ assertions that meson adds when b_ndebug is false no longer run in them. The closed-cage search on the sI 2x2x2 crystal takes 13.2 ms instead of 16.0 ms, with the same output.
