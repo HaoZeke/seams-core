@@ -1,0 +1,8 @@
+source_commit 59f0546323e9e39ab7075b65969bbfd9ed4280bb
+version seams 2.14.0
+cpu_model Intel Xeon Processor
+cpu_cores 8
+warmup 1
+n 8
+one release build
+host name is not recorded

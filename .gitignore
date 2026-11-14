@@ -431,3 +431,4 @@ bench/local/
 
 docs/_build/
 __pycache__/
+/paper-numbers
