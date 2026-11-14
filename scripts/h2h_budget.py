@@ -46,7 +46,7 @@ def cycless(molecules: int) -> None:
     found = sum(1 for _ in cycles_iter(graph, 6))
     if found < 1:
         raise SystemExit("cycless returned no rings")
-    print(f"cycless {molecules} rings {found}", flush=True)
+    print(f"cycless {molecules} rings {found}", file=sys.stderr, flush=True)
 
 
 def ira(molecules: int) -> None:
@@ -65,7 +65,7 @@ def ira(molecules: int) -> None:
     labels = classify_serial(engine, ih, ic, pos, box)
     if int(labels.shape[0]) != molecules:
         raise SystemExit("IRA short")
-    print(f"ira {molecules} hexagonal {int((labels == 0).sum())}", flush=True)
+    print(f"ira {molecules} hexagonal {int((labels == 0).sum())}", file=sys.stderr, flush=True)
 
 
 def sqq(molecules: int, threads: int) -> None:
@@ -93,7 +93,7 @@ def sqq(molecules: int, threads: int) -> None:
         "parallel": {"workers": threads, "math_threads": 1},
     }, engine="py")
     result = analyze_frame(frame, cfg, engine="py")
-    print(f"sqq {molecules} cages {len(result.cages)}", flush=True)
+    print(f"sqq {molecules} cages {len(result.cages)}", file=sys.stderr, flush=True)
 
 
 def _ovito_frame(molecules: int):
@@ -125,7 +125,7 @@ def ovito_rings(molecules: int, threads: int) -> None:
             hexagons = int(count)
     if hexagons < 1:
         raise SystemExit("OVITO rings returned no hexagons")
-    print(f"ovito-rings {molecules} hexagons {hexagons}", flush=True)
+    print(f"ovito-rings {molecules} hexagons {hexagons}", file=sys.stderr, flush=True)
 
 
 def ovito_ptm(molecules: int, threads: int) -> None:
@@ -144,7 +144,7 @@ def ovito_ptm(molecules: int, threads: int) -> None:
     labels = np.asarray(pipe.compute().particles["Structure Type"])
     if int(labels.shape[0]) != molecules:
         raise SystemExit("OVITO PTM short")
-    print(f"ovito-ptm {molecules} hexagonal {int((labels == 7).sum())}", flush=True)
+    print(f"ovito-ptm {molecules} hexagonal {int((labels == 7).sum())}", file=sys.stderr, flush=True)
 
 
 def plumed(molecules: int) -> None:
@@ -184,7 +184,7 @@ def plumed(molecules: int) -> None:
     calc.cmd("calc")
     if data.size < molecules:
         raise SystemExit("PLUMED q6 short")
-    print(f"plumed {molecules} q6 {float(np.max(np.abs(data))):.6e}", flush=True)
+    print(f"plumed {molecules} q6 {float(np.max(np.abs(data))):.6e}", file=sys.stderr, flush=True)
 
 
 def ptm_lib(molecules: int, threads: int) -> None:
@@ -209,7 +209,7 @@ def ptm_lib(molecules: int, threads: int) -> None:
     )
     if code != 0:
         raise SystemExit(f"ptm_ice_classify {code}")
-    print(f"ptm-lib {molecules} hexagonal {sum(1 for v in types if v == 7)}", flush=True)
+    print(f"ptm-lib {molecules} hexagonal {sum(1 for v in types if v == 7)}", file=sys.stderr, flush=True)
 
 
 def main() -> None:

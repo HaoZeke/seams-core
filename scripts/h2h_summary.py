@@ -369,7 +369,12 @@ def main() -> None:
         if done.returncode not in (0, 1):
             sys.stderr.write(done.stdout[-2000:])
             raise SystemExit(done.returncode or 1)
-        parsed = list(csv.DictReader(done.stdout.splitlines()))
+        lines = done.stdout.splitlines()
+        start = next((i for i, line in enumerate(lines) if line.startswith("competitor,")), None)
+        if start is None:
+            sys.stderr.write(done.stdout[-2000:])
+            raise SystemExit(f"no csv header from threads {threads}")
+        parsed = list(csv.DictReader(lines[start:]))
         if not parsed:
             sys.stderr.write(done.stdout[-2000:])
             raise SystemExit(f"no rows from threads {threads}")

@@ -37,7 +37,11 @@ At eight threads on 110592 molecules the OVITO medians go the other way by 9.4 m
 
 The eight-thread rings-only ratio on this sitting is 287.152 / 36.371 = 7.90. The bonds-and-rings ratio is 277.778 / 50.806 = 5.47. A seven-times claim is the rings-only ratio.
 
-Sixteen further interleaved samples at eight threads on 110592 molecules, one warm-up discarded, commit `96687cad5c241e441a0fe298c4ea46b089b58189`, are in `benchmarks/h2h-ice-ic-rings-n16.csv`. The paired difference, bonds and rings minus rings-only, has mean 15.231 ms. The 95 percent interval is 4.826 to 25.635 ms and does not contain zero, so bonds and rings is slower. It is not parity. OVITO's pool was 8 and the affinity was cores 0-7. Medians are 251.167 ms and 264.051 ms.
+Sixteen further interleaved samples at eight threads on 110592 molecules, one warm-up discarded, are in `benchmarks/h2h-ice-ic-rings-n16.csv`. That file is one sitting: d-SEAMS rings, OVITO rings-only, d-SEAMS bonds and rings, and OVITO bonds and rings. OVITO's pool was 8 and the affinity was cores 0-7.
+
+The ratio is the OVITO median divided by the d-SEAMS median. A paired bootstrap redraws the 16 passes, recomputes both medians, and takes the 2.5 and 97.5 percentiles of 10000 ratios (seed 20261113). Rings-only is 251.167 / 40.614 = 6.184, interval 5.948 to 6.542. Bonds and rings is 264.051 / 55.737 = 4.737, interval 4.674 to 4.894.
+
+On the same samples, bonds and rings minus rings-only has mean 15.231 ms. The 95 percent t interval is 4.826 to 25.635 ms and does not contain zero, so bonds and rings is slower. It is not parity.
 
 ## Where 82.3 vs 474 and 129.3 vs 612.5 come from
 

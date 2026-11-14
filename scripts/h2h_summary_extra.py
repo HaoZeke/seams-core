@@ -119,7 +119,10 @@ def budget_probe(kind, molecules, threads):
     cmd = [sys.executable, "-u", str(ROOT / "scripts" / "h2h_budget.py"), kind, str(molecules), str(width)]
     t0 = time.perf_counter()
     try:
-        subprocess.run(cmd, cwd=ROOT, env=os.environ.copy(), timeout=BUDGET_S, check=True)
+        subprocess.run(
+            cmd, cwd=ROOT, env=os.environ.copy(), timeout=BUDGET_S, check=True,
+            stdout=subprocess.DEVNULL,
+        )
         rec = {"ok": True, "seconds": round(time.perf_counter() - t0, 3)}
     except subprocess.TimeoutExpired:
         rec = {"ok": False, "seconds": BUDGET_S}
