@@ -517,6 +517,83 @@ def ira_samples(pos, lattice, threads: int):
     )
 
 
+def cycless_large(info, graph, molecules: int, threads: int, version: str) -> dict:
+    """Primitive rings at one size. Stop at one hour and record that wall time."""
+    import signal
+    from cycless.cycles import cycles_iter
+
+    cap_s = 3600.0
+    started = time.perf_counter()
+    deadline = started + cap_s
+
+    class Stop(Exception):
+        pass
+
+    def alarm(signum, frame):
+        raise Stop
+
+    def one():
+        sum(1 for _ in cycles_iter(graph, 6))
+
+    def limited(seconds: float) -> None:
+        if seconds <= 0.0:
+            raise Stop
+        old = signal.signal(signal.SIGALRM, alarm)
+        signal.setitimer(signal.ITIMER_REAL, seconds)
+        try:
+            one()
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            signal.signal(signal.SIGALRM, old)
+
+    samples: list[float] = []
+    stopped = False
+    try:
+        limited(deadline - time.perf_counter())
+        while len(samples) < REPEATS:
+            t0 = time.perf_counter()
+            limited(deadline - time.perf_counter())
+            samples.append((time.perf_counter() - t0) * 1e3)
+    except Stop:
+        stopped = True
+    elapsed_ms = (time.perf_counter() - started) * 1e3
+    phase = f"ice-Ih-{molecules}"
+    if not stopped and len(samples) >= REPEATS:
+        return row_of(
+            info, "h2h-rings", phase, "rings", "cycless", molecules, threads, samples,
+            "bond graph built outside the timer; cutoff 3.5 A",
+            version=version,
+        )
+    shown = f"{elapsed_ms:.6f}"
+    text = " ".join(f"{sample:.6f}" for sample in samples) if samples else shown
+    import paper_stats as stats
+    return {
+        "source_commit": info["source_commit"],
+        "version": version,
+        "cpu_model": info["cpu_model"],
+        "cpu_cores": info["cpu_cores"],
+        "affinity": stats.taskset_cores(int(threads)),
+        "processes": 1,
+        "family": "h2h-rings",
+        "phase": phase,
+        "operation": "rings",
+        "code": "cycless",
+        "molecules": molecules,
+        "threads": threads,
+        "warmup": WARMUP,
+        "n": len(samples),
+        "median_ms": shown,
+        "iqr_ms": "0.000000",
+        "q1_ms": shown,
+        "q3_ms": shown,
+        "samples_ms": text,
+        "detail": (
+            f"timeout; cap {cap_s:.0f} s; stopped at {elapsed_ms / 1000.0:.3f} s; "
+            f"completed timed calls {len(samples)}; bond graph built outside the timer"
+        ),
+    }
+
+
 def run_rivals(info, lib: str) -> list[dict]:
     """Cutoff neighbours and primitive rings at 4096, 32768 and 110592.
 
@@ -689,6 +766,14 @@ def run_rivals(info, lib: str) -> list[dict]:
                         name, n, threads, samples, detail,
                         version=versions[name],
                     ))
+            if n > 4096:
+                rows.append(cycless_large(
+                    info, graph, n, threads, versions["cycless"]))
+                print(
+                    f"cycless molecules {n} threads {threads} "
+                    f"median_ms {rows[-1]['median_ms']} n {rows[-1]['n']}",
+                    flush=True,
+                )
         finally:
             seams.seams_system_destroy(held)
         print(f"rivals molecules {n} threads {threads}", flush=True)

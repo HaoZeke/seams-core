@@ -1649,6 +1649,94 @@ molSys::PointCloud<molSys::Point<double>, double> shearedIce(int cells) {
   return cloud;
 }
 
+molSys::PointCloud<molSys::Point<double>, double> hexIce(int ncell) {
+  molSys::PointCloud<molSys::Point<double>, double> cloud;
+  const double bond = 2.76;
+  const double a = bond * std::sqrt(8.0 / 3.0);
+  const double cLen = a * std::sqrt(8.0 / 3.0);
+  const double b = a * std::sqrt(3.0);
+  const double basis[4][3] = {
+      {1.0 / 3.0, 2.0 / 3.0, 0.0},
+      {2.0 / 3.0, 1.0 / 3.0, 0.5},
+      {1.0 / 3.0, 2.0 / 3.0, 3.0 / 8.0},
+      {2.0 / 3.0, 1.0 / 3.0, 7.0 / 8.0},
+  };
+  const double lx = ncell * a;
+  const double ly = ncell * b;
+  const double lz = ncell * cLen;
+  int id = 1;
+  for (int ix = 0; ix < ncell; ++ix) {
+    for (int iy = 0; iy < ncell; ++iy) {
+      for (int iz = 0; iz < ncell; ++iz) {
+        for (double shift : {0.0, 0.5}) {
+          for (const auto &site : basis) {
+            molSys::Point<double> p;
+            const double x = shift * a + site[0] * a - site[1] * a / 2.0 + ix * a;
+            const double y = shift * b + site[1] * b / 2.0 + iy * b;
+            p.x = x - lx * std::floor(x / lx);
+            p.y = y - ly * std::floor(y / ly);
+            p.z = (site[2] + iz) * cLen;
+            p.type = 1;
+            p.atomID = id;
+            p.molID = id;
+            cloud.idIndexMap[id] = cloud.nop;
+            cloud.pts.push_back(p);
+            ++cloud.nop;
+            ++id;
+          }
+        }
+      }
+    }
+  }
+  cloud.box = {lx, ly, lz};
+  cloud.boxLow = {0.0, 0.0, 0.0};
+  return cloud;
+}
+
+std::vector<std::pair<int, int>> bruteOrthoPairs(
+    const molSys::PointCloud<molSys::Point<double>, double> &cloud, double cutoff) {
+  const double rc2 = cutoff * cutoff;
+  const double lx = cloud.box[0];
+  const double ly = cloud.box[1];
+  const double lz = cloud.box[2];
+  std::vector<std::pair<int, int>> pairs;
+  for (int i = 0; i < cloud.nop; ++i) {
+    const auto &a = cloud.pts[static_cast<std::size_t>(i)];
+    for (int j = i + 1; j < cloud.nop; ++j) {
+      const auto &b = cloud.pts[static_cast<std::size_t>(j)];
+      double dx = a.x - b.x;
+      double dy = a.y - b.y;
+      double dz = a.z - b.z;
+      dx -= lx * std::nearbyint(dx / lx);
+      dy -= ly * std::nearbyint(dy / ly);
+      dz -= lz * std::nearbyint(dz / lz);
+      if (dx * dx + dy * dy + dz * dz < rc2) {
+        pairs.emplace_back(i, j);
+      }
+    }
+  }
+  return pairs;
+}
+
+std::vector<std::pair<int, int>> csrPairs(const std::vector<int> &offsets,
+                                         const std::vector<int> &cols, bool lowerOnly) {
+  std::vector<std::pair<int, int>> pairs;
+  const int n = static_cast<int>(offsets.size()) - 1;
+  for (int i = 0; i < n; ++i) {
+    for (int k = offsets[static_cast<std::size_t>(i)];
+         k < offsets[static_cast<std::size_t>(i) + 1]; ++k) {
+      const int j = cols[static_cast<std::size_t>(k)];
+      if (!lowerOnly || i < j) {
+        pairs.emplace_back(i, j);
+      }
+    }
+  }
+  if (lowerOnly) {
+    std::sort(pairs.begin(), pairs.end());
+  }
+  return pairs;
+}
+
 std::uint64_t csrDigest(const std::vector<int> &offsets, const std::vector<int> &cols) {
   std::uint64_t h = 1469598103934665603ull;
   auto mix = [&](std::uint64_t v) {
@@ -1667,6 +1755,59 @@ std::uint64_t csrDigest(const std::vector<int> &offsets, const std::vector<int> 
 }
 
 } // namespace
+
+TEST_CASE("hexagonal ice CSR matches the previous build", "[neighbours]") {
+  // Digests of the orthorhombic cutoff list before the half-stencil
+  // walk stored eight slots instead of forty-eight. One thread and
+  // eight threads write the same bytes, including a shell that does
+  // not fit in the stash and takes the recount.
+  const struct {
+    int cells;
+    double cutoff;
+    unsigned long long digest;
+  } locked[] = {
+      {8, 3.5, 0x458c130f56be6efeull},
+      {24, 3.5, 0x6ab0569077b7187eull},
+      {4, 6.0, 0x18b5720943d5198eull},
+  };
+#ifdef SEAMS_HAS_OPENMP
+  const int saved = omp_get_max_threads();
+#endif
+  for (const auto &row : locked) {
+    auto cloud = hexIce(row.cells);
+    std::vector<int> serialOff, serialCols, wideOff, wideCols;
+#ifdef SEAMS_HAS_OPENMP
+    omp_set_num_threads(1);
+#endif
+    REQUIRE(nneigh::orthoFullCsr(cloud, nullptr, row.cutoff, serialOff, serialCols, false));
+    REQUIRE(csrDigest(serialOff, serialCols) == row.digest);
+#ifdef SEAMS_HAS_OPENMP
+    omp_set_num_threads(saved < 8 ? saved : 8);
+    REQUIRE(nneigh::orthoFullCsr(cloud, nullptr, row.cutoff, wideOff, wideCols, false));
+    REQUIRE(wideOff == serialOff);
+    REQUIRE(wideCols == serialCols);
+#endif
+  }
+#ifdef SEAMS_HAS_OPENMP
+  omp_set_num_threads(saved);
+#endif
+  auto small = hexIce(2);
+  const auto expect = bruteOrthoPairs(small, 3.5);
+#ifdef SEAMS_HAS_OPENMP
+  omp_set_num_threads(1);
+#endif
+  std::vector<int> off, cols;
+  REQUIRE(nneigh::orthoFullCsr(small, nullptr, 3.5, off, cols, false));
+  REQUIRE(csrPairs(off, cols, true) == expect);
+#ifdef SEAMS_HAS_OPENMP
+  omp_set_num_threads(saved < 8 ? saved : 8);
+  std::vector<int> off8, cols8;
+  REQUIRE(nneigh::orthoFullCsr(small, nullptr, 3.5, off8, cols8, false));
+  REQUIRE(off8 == off);
+  REQUIRE(cols8 == cols);
+  omp_set_num_threads(saved);
+#endif
+}
 
 TEST_CASE("sheared ice keeps the shared shift-table pairs", "[neighbours][triclinic]") {
   std::vector<int> offsets, cols;

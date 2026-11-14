@@ -115,7 +115,10 @@ def annotate_sitting_large(path: Path) -> None:
             if code == "d-SEAMS":
                 continue
             other = group[code]
-            point, lo, hi = paired_ratio(_samples(other), den, rng)
+            other_samples = _samples(other)
+            if "timeout" in other.get("detail", "") or len(other_samples) != len(den):
+                continue
+            point, lo, hi = paired_ratio(other_samples, den, rng)
             other["ratio_vs_dseams"] = _fmt(point)
             other["ratio_lo"] = _fmt(lo)
             other["ratio_hi"] = _fmt(hi)
@@ -235,6 +238,15 @@ def check(tsv_path: Path) -> None:
                 missing.append(f"{item['key']}: CI {item['ci']} has no source row")
     if missing:
         raise SystemExit("numbers with no source row:\n" + "\n".join(missing))
+    low = []
+    for item in published:
+        if not str(item["key"]).endswith("ratio_vs_dseams") or not item.get("ci"):
+            continue
+        lo = float(item["ci"].split(",", 1)[0])
+        if not lo > 1.0:
+            low.append(f"{item['key']}: lower bound {item['ci']}")
+    if low:
+        raise SystemExit("ratio CI lower bound is not above 1:\n" + "\n".join(low))
     print(f"checked {len(published)} numbers, each has a source row", flush=True)
 
 

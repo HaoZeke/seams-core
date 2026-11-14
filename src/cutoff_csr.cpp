@@ -68,6 +68,45 @@ int teamSize() {
 #endif
 }
 
+// Turn per-thread cell counts into an exclusive prefix and a write cursor
+// for each thread. Every member of the current team calls this. The
+// histogram stays laid out as thread-major blocks of nCells.
+void assignCellCursors(int *hist, int nCells, int nThreads, int *cellStart) {
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp for schedule(static)
+#endif
+  for (int c = 0; c < nCells; ++c) {
+    int sum = 0;
+    for (int t = 0; t < nThreads; ++t) {
+      sum += hist[static_cast<std::size_t>(t) * static_cast<std::size_t>(nCells) +
+                  static_cast<std::size_t>(c)];
+    }
+    cellStart[c + 1] = sum;
+  }
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp single
+#endif
+  {
+    cellStart[0] = 0;
+    for (int c = 0; c < nCells; ++c) {
+      cellStart[c + 1] += cellStart[c];
+    }
+  }
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp for schedule(static)
+#endif
+  for (int c = 0; c < nCells; ++c) {
+    int cursor = cellStart[c];
+    for (int t = 0; t < nThreads; ++t) {
+      int &slot = hist[static_cast<std::size_t>(t) * static_cast<std::size_t>(nCells) +
+                       static_cast<std::size_t>(c)];
+      const int take = slot;
+      slot = cursor;
+      cursor += take;
+    }
+  }
+}
+
 double minImage2(double dx, double dy, double dz, double lx, double ly,
                  double lz) {
   dx -= lx * std::floor(dx / lx + 0.5);
@@ -103,7 +142,12 @@ struct Scratch {
   int overflowed = 0;
 };
 
-constexpr int kStashCap = 48;
+// Slots kept beside each molecule during the half-stencil walk. Ice at
+// the 3.5 A cutoff has four neighbours, and a stride of 48 ints touched
+// three cache lines per molecule to store those four. Eight slots keep a
+// molecular shell on this path. A longer shell sets the overflow flag and
+// the caller recounts with the full stencil, which writes the same CSR.
+constexpr int kStashCap = 8;
 
 Scratch &scratch() {
   // One buffer per calling thread. A trial pool outside OpenMP used to
@@ -123,6 +167,7 @@ struct Phase {
   double prefix = 0;
   double fill = 0;
   double rows = 0;
+  double mirror = 0;
   int threads = 1;
   int n = 0;
   int pairs = 0;
@@ -146,8 +191,8 @@ void publishProfile() {
   const Phase &p = phase();
   std::fprintf(stderr,
                "neigh_profile n=%d threads=%d pairs=%d bin_ms=%.4f "
-               "count_ms=%.4f prefix_ms=%.4f fill_ms=%.4f rows_ms=%.4f\n",
-               p.n, p.threads, p.pairs, p.bin, p.count, p.prefix, p.fill,
+               "count_ms=%.4f mirror_ms=%.4f prefix_ms=%.4f fill_ms=%.4f rows_ms=%.4f\n",
+               p.n, p.threads, p.pairs, p.bin, p.count, p.mirror, p.prefix, p.fill,
                p.rows);
 }
 
@@ -347,9 +392,9 @@ void passFast(const double *xs, const double *ys, const double *zs,
 }
 
 // One z layer of the half stencil. The pair is stored only on the atom
-// in this layer. A forward step in x reaches back one z layer, so two
-// layers of the same parity both touch the atoms between them; the
-// partner row is filled after those layers have stopped.
+// in this layer. The partner row is written by mirrorStash after every
+// layer has stopped, so the layers do not need to take turns. A forward
+// step only reads the neighbour cell.
 void halfZLayer(int cz, const double *xs, const double *ys, const double *zs,
                 const int *ids, const int *cellStart, int ncx, int ncy, int ncz,
                 const double *shx, const double *shy, const double *shz, double rc2,
@@ -549,28 +594,20 @@ void passFastStash(const double *xs, const double *ys, const double *zs,
                    int *counts, int *stash, int *overflowed) {
   *overflowed = 0;
 #ifdef SEAMS_HAS_OPENMP
-  if (ncz >= 2 && omp_get_max_threads() > 1) {
-    // Each layer stores a pair only on its own atoms. The last layer's +z
-    // wraps onto layer 0 when the length is odd, which is the same parity,
-    // so that layer runs alone after the others have stopped.
-    const int lastWraps = (ncz % 2) == 1;
-    const int nEven = ncz / 2;
+  if (ncz >= 1 && omp_get_max_threads() > 1) {
+    // One team, consecutive z layers. Atom ids follow z, and the degree
+    // array is indexed by id, so splitting even and odd layers made
+    // neighbouring molecules bounce a cache line between cores. Each
+    // layer writes only its own rows; mirrorStash fills the partners
+    // after this team has stopped.
 #pragma omp parallel for schedule(static)
-    for (int k = 0; k < nEven; ++k) {
-      halfZLayer(k * 2, xs, ys, zs, ids, cellStart, ncx, ncy, ncz, shx, shy, shz, rc2,
+    for (int cz = 0; cz < ncz; ++cz) {
+      halfZLayer(cz, xs, ys, zs, ids, cellStart, ncx, ncy, ncz, shx, shy, shz, rc2,
                  counts, stash, overflowed);
     }
-    if (lastWraps) {
-      halfZLayer(ncz - 1, xs, ys, zs, ids, cellStart, ncx, ncy, ncz, shx, shy, shz, rc2,
-                 counts, stash, overflowed);
-    }
-    const int nOdd = ncz / 2;
-#pragma omp parallel for schedule(static)
-    for (int k = 0; k < nOdd; ++k) {
-      halfZLayer(k * 2 + 1, xs, ys, zs, ids, cellStart, ncx, ncy, ncz, shx, shy, shz, rc2,
-                 counts, stash, overflowed);
-    }
+    const auto tMirror = Clock::now();
     mirrorStash(ids, cellStart[ncx * ncy * ncz], counts, stash, overflowed);
+    phase().mirror = msSince(tMirror);
     return;
   }
 #endif
@@ -1187,7 +1224,16 @@ bool tiltFullCsr(const molSys::PointCloud<molSys::Point<double>, double> &yCloud
   sc.cellOf.resize(static_cast<std::size_t>(nSubset));
   sc.ids.resize(static_cast<std::size_t>(nSubset));
   sc.cellStart.assign(static_cast<std::size_t>(nCells) + 1, 0);
-  sc.hist.assign(static_cast<std::size_t>(maxThreads) * static_cast<std::size_t>(nCells), 0);
+  // The parallel region fills each thread's histogram. Resizing, rather
+  // than assigning, leaves a warm buffer in place instead of zeroing it
+  // on every call.
+  {
+    const std::size_t histNeed =
+        static_cast<std::size_t>(maxThreads) * static_cast<std::size_t>(nCells);
+    if (sc.hist.size() != histNeed) {
+      sc.hist.resize(histNeed);
+    }
+  }
   sc.counts.assign(static_cast<std::size_t>(nop), 0);
   const auto tBin = Clock::now();
 #ifdef SEAMS_HAS_OPENMP
@@ -1224,30 +1270,7 @@ bool tiltFullCsr(const molSys::PointCloud<molSys::Point<double>, double> &yCloud
       sc.pz[static_cast<std::size_t>(k)].v = s[2];
       ++hist[cid];
     }
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp barrier
-#pragma omp single
-#endif
-    {
-      sc.cellStart[0] = 0;
-      for (int c = 0; c < nCells; ++c) {
-        int sum = 0;
-        for (int t = 0; t < nt; ++t) {
-          sum += sc.hist[static_cast<std::size_t>(t) * static_cast<std::size_t>(nCells) +
-                         static_cast<std::size_t>(c)];
-        }
-        sc.cellStart[static_cast<std::size_t>(c) + 1] =
-            sc.cellStart[static_cast<std::size_t>(c)] + sum;
-        int acc = sc.cellStart[static_cast<std::size_t>(c)];
-        for (int t = 0; t < nt; ++t) {
-          int &slot = sc.hist[static_cast<std::size_t>(t) * static_cast<std::size_t>(nCells) +
-                              static_cast<std::size_t>(c)];
-          const int take = slot;
-          slot = acc;
-          acc += take;
-        }
-      }
-    }
+    assignCellCursors(sc.hist.data(), nCells, nt, sc.cellStart.data());
 #ifdef SEAMS_HAS_OPENMP
 #pragma omp barrier
 #pragma omp for schedule(static)
@@ -1290,6 +1313,7 @@ bool tiltFullCsr(const molSys::PointCloud<molSys::Point<double>, double> &yCloud
     }
   }
   const auto tCount = Clock::now();
+  phase().mirror = 0;
   const bool stashOk = shifted && !half;
   if (stashOk &&
       sc.stash.size() < static_cast<std::size_t>(nop) * static_cast<std::size_t>(kStashCap)) {
@@ -1961,8 +1985,13 @@ bool orthoFullCsr(
   sc.cellOf.resize(static_cast<std::size_t>(nSubset));
   sc.ids.resize(static_cast<std::size_t>(nSubset));
   sc.cellStart.assign(static_cast<std::size_t>(nCells) + 1, 0);
-  sc.hist.assign(static_cast<std::size_t>(maxThreads) * static_cast<std::size_t>(nCells),
-                 0);
+  {
+    const std::size_t histNeed =
+        static_cast<std::size_t>(maxThreads) * static_cast<std::size_t>(nCells);
+    if (sc.hist.size() != histNeed) {
+      sc.hist.resize(histNeed);
+    }
+  }
   sc.counts.assign(static_cast<std::size_t>(nop), 0);
 
   const auto tBin = Clock::now();
@@ -2018,30 +2047,7 @@ bool orthoFullCsr(
       sc.pz[static_cast<std::size_t>(k)].v = wrapped[2];
       ++hist[cid];
     }
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp barrier
-#pragma omp single
-#endif
-    {
-      sc.cellStart[0] = 0;
-      for (int c = 0; c < nCells; ++c) {
-        int sum = 0;
-        for (int t = 0; t < nt; ++t) {
-          sum += sc.hist[static_cast<std::size_t>(t) * static_cast<std::size_t>(nCells) +
-                         static_cast<std::size_t>(c)];
-        }
-        sc.cellStart[static_cast<std::size_t>(c) + 1] =
-            sc.cellStart[static_cast<std::size_t>(c)] + sum;
-        int acc = sc.cellStart[static_cast<std::size_t>(c)];
-        for (int t = 0; t < nt; ++t) {
-          int &h = sc.hist[static_cast<std::size_t>(t) * static_cast<std::size_t>(nCells) +
-                           static_cast<std::size_t>(c)];
-          const int take = h;
-          h = acc;
-          acc += take;
-        }
-      }
-    }
+    assignCellCursors(sc.hist.data(), nCells, nt, sc.cellStart.data());
 #ifdef SEAMS_HAS_OPENMP
 #pragma omp barrier
 #pragma omp for schedule(static)
@@ -2067,6 +2073,7 @@ bool orthoFullCsr(
   fillOrthoShift(len[0], len[1], len[2], shx, shy, shz);
 
   const auto tCount = Clock::now();
+  phase().mirror = 0;
   const bool stashOk = fast && !half;
   if (stashOk &&
       sc.stash.size() < static_cast<std::size_t>(nop) * static_cast<std::size_t>(kStashCap)) {
