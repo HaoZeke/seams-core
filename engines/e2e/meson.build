@@ -22,4 +22,11 @@ if e2e_py.found()
   test('lammps_e2e_np2', e2e_py,
     args: [e2e_src / 'lammps' / 'e2e_mw.py', e2e_build, '--ranks', '2'],
     env: e2e_env, depends: e2e_deps, suite: 'engines-e2e', timeout: 900)
+  test('plumed_e2e', e2e_py,
+    args: [e2e_src / 'plumed' / 'e2e_mw.py', e2e_build],
+    env: e2e_env, depends: e2e_deps, suite: 'engines-e2e', timeout: 900)
+  # Regression: SEAMS assumed PLUMED lengths were nm.
+  test('plumed_units', e2e_py,
+    args: [e2e_src / 'plumed' / 'run_units.py', e2e_build],
+    depends: e2e_deps, suite: 'engines-e2e', timeout: 120)
 endif
