@@ -727,9 +727,6 @@ inline void tallyRing(const int *ring, int k, std::vector<int> *hist, int *perAt
     }
   }
   if (hist != nullptr && k >= 0 && k < static_cast<int>(hist->size())) {
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp atomic
-#endif
     (*hist)[static_cast<std::size_t>(k)]++;
   }
 }
@@ -875,9 +872,6 @@ void enumerateChordless(const Graph &adjacency, const DistOracle &oracle,
     }
     if (hist != nullptr) {
       if (k < static_cast<int>(hist->size())) {
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp atomic
-#endif
         (*hist)[static_cast<std::size_t>(k)]++;
       }
       return;
@@ -1482,9 +1476,6 @@ void enumerateFromSource(const Graph &adjacency, const DistOracle &oracle,
     }
     if (call.hist != nullptr && through == nullptr) {
       if (static_cast<int>(r.size()) < static_cast<int>(call.hist->size())) {
-#ifdef SEAMS_HAS_OPENMP
-#pragma omp atomic
-#endif
         (*call.hist)[r.size()]++;
       }
       return;
@@ -1872,6 +1863,13 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
                                              static_cast<std::size_t>(perStride),
                                          0));
     }
+    // Each thread counts into its own histogram. A shared counter is one
+    // cache line, and a dense frame hits it once per ring.
+    std::vector<std::vector<int>> threadHists;
+    if (hist != nullptr) {
+      threadHists.assign(static_cast<std::size_t>(nThreads),
+                         std::vector<int>(hist->size(), 0));
+    }
     const auto enumStart = std::chrono::steady_clock::now();
     std::vector<RingPool> perSource(static_cast<std::size_t>(nFrom));
     std::vector<std::atomic<int>> binReady(static_cast<std::size_t>(nThreads));
@@ -1879,8 +1877,12 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
     {
       RingScratch scratch;
       RingCall local = call;
+      const int tid = omp_get_thread_num();
       if (perAtom != nullptr) {
-        local.perAtom = threadBins[static_cast<std::size_t>(omp_get_thread_num())].data();
+        local.perAtom = threadBins[static_cast<std::size_t>(tid)].data();
+      }
+      if (hist != nullptr) {
+        local.hist = &threadHists[static_cast<std::size_t>(tid)];
       }
 #pragma omp for schedule(guided)
       for (int k = 0; k < nFrom; k++) {
@@ -1892,6 +1894,13 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
       if (perAtom != nullptr) {
         binReady[static_cast<std::size_t>(omp_get_thread_num())].store(
             1, std::memory_order_release);
+      }
+    }
+    if (hist != nullptr) {
+      for (const auto &h : threadHists) {
+        for (std::size_t i = 0; i < hist->size(); i++) {
+          (*hist)[i] += h[i];
+        }
       }
     }
     if (perAtom != nullptr) {
