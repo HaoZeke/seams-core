@@ -191,14 +191,30 @@ if gromacs_opt.allowed()
       endif
     endif
   endif
-  if gromacs_dep.found()
+  gromacs_args = []
+  if gromacs_dep.found() and get_option('gromacs_legacy_include') != ''
+    gromacs_args += ['-I' + get_option('gromacs_legacy_include'),
+      '-I' + (meson.current_source_dir() / 'gromacs' / 'compat')]
+  endif
+  gromacs_header = gromacs_dep.found() and cppc.has_header(
+    'gromacs/trajectoryanalysis/analysismodule.h', dependencies: gromacs_dep,
+    args: gromacs_args, required: false)
+  if gromacs_dep.found() and not gromacs_header
+    if gromacs_opt.enabled()
+      error('libgromacs was found without its trajectory-analysis headers; set gromacs_legacy_include')
+    endif
+    message('libgromacs has no trajectory-analysis headers; set gromacs_legacy_include to build gmx-seams')
+  endif
+  if gromacs_header
     gmx_seams = executable(
       'gmx-seams',
       files('gromacs/seams_ice.cpp'),
       dependencies: [gromacs_dep],
       link_with: seams_api_lib,
       include_directories: [seams_inc, include_directories('.')],
-      cpp_args: _args + seams_api_args,
+      cpp_args: _args + seams_api_args + gromacs_args,
+      # GROMACS 2024 headers call ssize() unqualified, ambiguous with std::ssize.
+      override_options: ['cpp_std=c++17'],
       build_rpath: gromacs_rpath,
       install_rpath: gromacs_rpath,
       install: true)
