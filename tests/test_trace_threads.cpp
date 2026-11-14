@@ -12,11 +12,13 @@
 #include <topo_bulk.hpp>
 
 #include <algorithm>
+#include <filesystem>
 #include <string>
 #include <thread>
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #ifdef SEAMS_HAS_OPENMP
@@ -24,6 +26,10 @@
 #endif
 
 namespace {
+
+// Relative to the test workdir, input/. data/hop/ is gitignored.
+constexpr const char *kNucleationTrj = "../data/hop/nucleation.lammpstrj";
+bool gNucleationSkipped = false;
 
 using Cloud = molSys::PointCloud<molSys::Point<double>, double>;
 using Face = std::vector<int>;
@@ -262,11 +268,15 @@ TEST_CASE("signature cages match the serial census on GenIce and mW",
 
 TEST_CASE("nucleation frames keep cage membership at every width",
           "[trace][threads]") {
-  const int frames = sinp::nLammpsFrames("../data/hop/nucleation.lammpstrj");
+  if (!std::filesystem::is_regular_file(kNucleationTrj)) {
+    gNucleationSkipped = true;
+    SKIP(kNucleationTrj << " is not committed; the 148-frame check needs it");
+  }
+  const int frames = sinp::nLammpsFrames(kNucleationTrj);
   REQUIRE(frames >= 148);
   const int wide = teamWidth();
   for (int frame = 1; frame <= 148; ++frame) {
-    const Cloud cloud = loadFrame("../data/hop/nucleation.lammpstrj", frame);
+    const Cloud cloud = loadFrame(kNucleationTrj, frame);
     setThreads(1);
     const Snapshot serial = take(cloud);
     for (int threads = 2; threads <= wide; threads *= 2) {
@@ -277,4 +287,10 @@ TEST_CASE("nucleation frames keep cage membership at every width",
     }
   }
   setThreads(1);
+}
+
+// Meson reads 77 as a skip. Any failure in the other case still fails.
+int main(int argc, char *argv[]) {
+  const int result = Catch::Session().run(argc, argv);
+  return result == 0 && gNucleationSkipped ? 77 : result;
 }

@@ -9,6 +9,12 @@ if not catch2_dep.found() or not cppc.links(
     name: 'installed catch2 links')
   catch2_dep = subproject('catch2').get_variable('catch2_with_main_dep')
 endif
+# trace_threads has its own main so a missing trajectory can exit 77.
+if catch2_dep.type_name() == 'internal'
+  catch2_nomain_dep = subproject('catch2').get_variable('catch2_dep')
+else
+  catch2_nomain_dep = dependency('catch2')
+endif
 
 test_sources = {
   'franzblau': 'franzblau-test.cpp',
@@ -145,7 +151,7 @@ foreach name, src : test_sources
   endif
   test(name,
     executable('test_' + name, src,
-      dependencies: [yds_dep, catch2_dep],
+      dependencies: [yds_dep, name == 'trace_threads' ? catch2_nomain_dep : catch2_dep],
       cpp_args: _args,
       link_args: _test_link_args,
       include_directories: _incdirs,
