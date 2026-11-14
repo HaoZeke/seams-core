@@ -1053,6 +1053,7 @@ rule paper_numbers:
         "benchmarks/paper-numbers/h2h-ice-ic-rings.csv",
         "benchmarks/paper-numbers/ice-ic-session.txt",
         "benchmarks/paper-numbers/symmetry-rows.csv",
+        "benchmarks/paper-numbers/h2h-rivals.csv",
         "benchmarks/paper-numbers/sitting-large.csv",
         "benchmarks/paper-numbers/fig-scaling.csv",
         "benchmarks/paper-numbers/fig-strong.csv",

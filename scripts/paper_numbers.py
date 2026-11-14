@@ -509,6 +509,175 @@ def ira_samples(pos, lattice, threads: int):
     )
 
 
+def run_rivals(info, lib: str) -> list[dict]:
+    """Cutoff neighbours and primitive rings at 4096, 32768 and 110592.
+
+    The tool list is the one in the h2h-mdapy-pyscal3-vesin and ring
+    sittings: freud, OVITO, mdapy, pyscal3, vesin, cycless and
+    rings-statistics-matter. Calls alternate with d-SEAMS.
+    """
+    import ctypes
+    import numpy as np
+    import freud
+    import mdapy
+    import pyscal3
+    import vesin
+    import rings_statistics_matter
+    from ase import Atoms
+    from cycless.cycles import cycles_iter
+    import networkx as nx
+    from ovito.data import DataCollection
+    from ovito.modifiers import CreateBondsModifier, FindRingsModifier
+    from ovito.pipeline import Pipeline, StaticSource
+    import ovito
+    import paper_sitting as sit
+    from h2h_mdapy_pyscal3_vesin import ice_positions, park_openmp
+    from mdapy.analysis import RingStatistics
+
+    threads = int(os.environ.get("OMP_NUM_THREADS", "1"))
+    mdapy.set_num_threads(threads)
+    pyscal3.set_num_threads(threads)
+    freud.parallel.set_num_threads(threads)
+    lang = sit.open_lang(lib)
+    versions = {
+        "d-SEAMS": info["version"],
+        "freud": freud.__version__,
+        "OVITO": ".".join(str(part) for part in tuple(ovito.version)[:3]),
+        "mdapy": mdapy.__version__,
+        "pyscal3": pyscal3.__version__,
+        "vesin": vesin.__version__,
+        "cycless": __import__("cycless").__version__ if hasattr(__import__("cycless"), "__version__") else "0.7",
+        "rings-statistics-matter": "0.3.0",
+    }
+    rows = []
+    for ncell in (8, 16, 24):
+        pos, lengths = ice_positions(ncell)
+        pos = np.ascontiguousarray(pos, dtype=np.float64)
+        n = len(pos)
+        lx, ly, lz = (float(v) for v in lengths)
+        box9 = np.array([0, 0, 0, lx, ly, lz, 0, 0, 0], dtype=np.float64)
+        cell = np.diag([lx, ly, lz])
+        system = mdapy.System(pos, box=lengths)
+        atoms = Atoms(positions=pos, cell=list(lengths), pbc=True)
+        handle = sit.frame_from(lang, pos, box9)[0]
+        fbox = freud.box.Box(lx, ly, lz)
+        vesin_list = vesin.NeighborList(cutoff=CUTOFF, full_list=True, n_threads=threads)
+
+        data = DataCollection()
+        data.create_cell(cell, pbc=(True, True, True))
+        parts = data.create_particles(count=n)
+        parts.create_property("Position", data=pos)
+        bond_pipe = Pipeline(source=StaticSource(data=data))
+        bond_pipe.modifiers.append(CreateBondsModifier(cutoff=CUTOFF))
+        ring_pipe = Pipeline(source=StaticSource(data=data))
+        ring_pipe.modifiers.append(CreateBondsModifier(cutoff=CUTOFF))
+        ring_pipe.modifiers.append(FindRingsModifier(minimum_ring_size=3, maximum_ring_size=6))
+
+        query = freud.locality.AABBQuery(fbox, pos).query(
+            pos, {"r_max": CUTOFF, "exclude_ii": True}).toNeighborList()
+        graph = nx.Graph()
+        graph.add_nodes_from(range(n))
+        graph.add_edges_from(
+            (int(i), int(j)) for i, j in zip(query[:, 0], query[:, 1]) if int(i) < int(j)
+        )
+
+        def dseams_neigh():
+            sit.fail_lang(lang, lang.seams_frame_neighbours(
+                handle, CUTOFF, 1, b"cutoff"), "neighbours")
+
+        def freud_neigh():
+            found = freud.locality.AABBQuery(fbox, pos).query(
+                pos, {"r_max": CUTOFF, "exclude_ii": True}).toNeighborList()
+            if int(found.neighbor_counts.shape[0]) != n:
+                raise RuntimeError("freud neighbours")
+
+        def ovito_neigh():
+            for modifier in bond_pipe.modifiers:
+                modifier.notify_object_changed()
+            if bond_pipe.compute().particles.bonds.count < 1:
+                raise RuntimeError("OVITO neighbours")
+
+        def mdapy_neigh():
+            neigh = mdapy.NeighborList.build(system, cutoff=CUTOFF)
+            if int(neigh.offsets.shape[0]) != n + 1:
+                raise RuntimeError("mdapy neighbours")
+
+        def pyscal_neigh():
+            pyscal3.find_neighbors(atoms, method="cutoff", cutoff=CUTOFF, store_rows=False)
+
+        def vesin_neigh():
+            left, _right = vesin_list.compute(
+                points=pos, box=cell, periodic=True, quantities="ij", copy=False)
+            if left.shape[0] < n:
+                raise RuntimeError("vesin neighbours")
+
+        def dseams_rings():
+            counts = (ctypes.c_int * 7)()
+            sit.fail_lang(lang, lang.seams_frame_rings(
+                handle, CUTOFF, 1, b"cutoff", 6, counts, 7), "rings")
+
+        def ovito_rings():
+            for modifier in ring_pipe.modifiers:
+                modifier.notify_object_changed()
+            ring_pipe.compute()
+
+        def mdapy_rings():
+            RingStatistics(max_size=6, min_size=3, cutoff=CUTOFF).compute(system)
+
+        def rsm_rings():
+            rings_statistics_matter.ring_statistics(
+                atoms, cutoff=CUTOFF, maxlvl=8, supercell=False,
+                deduplicate=True, backend="rust", num_threads=threads,
+            )
+
+        def cycless_rings():
+            sum(1 for _ in cycles_iter(graph, 6))
+
+        neigh = {
+            "d-SEAMS": dseams_neigh,
+            "freud": freud_neigh,
+            "OVITO": ovito_neigh,
+            "mdapy": mdapy_neigh,
+            "pyscal3": pyscal_neigh,
+            "vesin": vesin_neigh,
+        }
+        rings = {
+            "d-SEAMS": dseams_rings,
+            "OVITO": ovito_rings,
+            "mdapy": mdapy_rings,
+            "rings-statistics-matter": rsm_rings,
+        }
+        if n <= 4096:
+            rings["cycless"] = cycless_rings
+        try:
+            for family, calls in (("h2h-neighbours", neigh), ("h2h-rings", rings)):
+                names = list(calls)
+                buckets = {name: [] for name in names}
+                for index in range(WARMUP + REPEATS):
+                    order = names[index % len(names):] + names[:index % len(names)]
+                    for name in order:
+                        if name != "d-SEAMS":
+                            park_openmp()
+                        sample = timed(calls[name])
+                        if index >= WARMUP:
+                            buckets[name].append(sample)
+                phase = f"ice-Ih-{n}"
+                for name, samples in buckets.items():
+                    detail = "alternating calls; cutoff 3.5 A"
+                    if name == "cycless":
+                        detail += "; bond graph built outside the timer"
+                    rows.append(row_of(
+                        info, family, phase,
+                        "neighbours" if family.endswith("neighbours") else "rings",
+                        name, n, threads, samples, detail,
+                        version=versions[name],
+                    ))
+        finally:
+            lang.seams_frame_free(handle)
+        print(f"rivals molecules {n} threads {threads}", flush=True)
+    return rows
+
+
 def run_figs(info) -> tuple[list[dict], list[dict]]:
     """Figs 8 and 9: size sweep and the 65536-atom pipeline, 1 and 8 threads."""
     import paper_stats as stats
@@ -626,6 +795,12 @@ def main() -> int:
             import json
             print(json.dumps(item), flush=True)
         return 0
+    if args.worker == "rivals":
+        info = identity()
+        for item in run_rivals(info, args.lib):
+            import json
+            print(json.dumps(item), flush=True)
+        return 0
     if args.worker == "large":
         info = identity()
         for item in run_large(info, args.core):
@@ -674,6 +849,15 @@ def main() -> int:
         encoding="utf-8",
     )
     write_csv(out / "symmetry-rows.csv", run_symmetry(info))
+    rivals = []
+    for threads in (1, 8):
+        text = pin_and_run(threads, [
+            str(Path(__file__).resolve()), "--worker", "rivals",
+            "--threads", str(threads), "--lib", args.lib,
+        ])
+        import json
+        rivals.extend(json.loads(line) for line in text.splitlines() if line.startswith("{"))
+    write_csv(out / "h2h-rivals.csv", rivals)
     large = []
     for threads in (1, 8):
         text = pin_and_run(threads, [

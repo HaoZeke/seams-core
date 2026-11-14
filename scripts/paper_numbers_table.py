@@ -98,6 +98,33 @@ def annotate_sitting_large(path: Path) -> None:
             )
             if note not in other.get("detail", ""):
                 other["detail"] = f"{other['detail']}; {note}"
+    by_op: dict[tuple, dict[str, dict]] = {}
+    for row in rows:
+        if not row.get("samples_ms"):
+            continue
+        by_op.setdefault(
+            (row.get("phase", ""), row.get("operation", ""), row.get("molecules", ""), row.get("threads", "")),
+            {},
+        )[row["code"]] = row
+    for group in by_op.values():
+        base = group.get("d-SEAMS")
+        if base is None:
+            continue
+        den = _samples(base)
+        for code in sorted(group):
+            if code == "d-SEAMS":
+                continue
+            other = group[code]
+            point, lo, hi = paired_ratio(_samples(other), den, rng)
+            other["ratio_vs_dseams"] = _fmt(point)
+            other["ratio_lo"] = _fmt(lo)
+            other["ratio_hi"] = _fmt(hi)
+            note = (
+                f"paired-bootstrap ratio of medians vs d-SEAMS "
+                f"draws={DRAWS} seed={SEED}"
+            )
+            if note not in other.get("detail", ""):
+                other["detail"] = f"{other['detail']}; {note}"
     for row in rows:
         for name in RATIO_FIELDS:
             row.setdefault(name, "")
@@ -212,9 +239,11 @@ def check(tsv_path: Path) -> None:
 
 
 def publish(csv_dir: Path, tsv_path: Path) -> None:
-    large = csv_dir / "sitting-large.csv"
-    if large.is_file():
-        annotate_sitting_large(large)
+    for path in sorted(csv_dir.glob("*.csv")):
+        with path.open(newline="") as handle:
+            fields = csv.DictReader(handle).fieldnames or []
+        if "samples_ms" in fields and "code" in fields:
+            annotate_sitting_large(path)
     write_numbers(csv_dir, tsv_path)
     check(tsv_path)
 
