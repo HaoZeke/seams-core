@@ -117,7 +117,8 @@ def cpus_allowed():
 
 def code_state():
     """Commit, and whether the code the timings depend on matches it."""
-    paths = ["scripts", "bench", "src", "include", "Snakefile", "meson.build"]
+    paths = ["scripts", "bench", "src", "include", "Snakefile", "meson.build",
+             "benchmarks/benchmarks.py", "asv.conf.json"]
     try:
         out = subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain", "--", *paths],
                              capture_output=True, text=True, check=True)
@@ -1111,6 +1112,23 @@ def summarize(args):
             writer.writerow(row)
 
 
+def asv_session(args):
+    """Run the asv class in this session and keep its output, paths scrubbed."""
+    with open(args.log, "w", encoding="utf-8") as log:
+        log.write(f"commit {code_state()}\n")
+        log.write(f"cores {len(os.sched_getaffinity(0))} cpus {cpus_allowed()}\n")
+        cmd = ["asv", "run", "--python=same", "--machine", "anon", "--bench", args.bench]
+        log.write(" ".join(cmd) + "\n")
+        log.flush()
+        proc = subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True)
+        for line in proc.stdout:
+            log.write(scrub(line.rstrip("\n")) + "\n")
+            log.flush()
+        if proc.wait() != 0:
+            raise SystemExit(f"asv exited {proc.returncode}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1144,8 +1162,13 @@ def main():
     p.add_argument("--agree", default="benchmarks/h2h-sqq-agree.csv")
     p.add_argument("--logs", nargs="+", required=True)
     p.add_argument("--out", default="benchmarks/h2h-sqq.csv")
+    p = sub.add_parser("asv")
+    p.add_argument("--bench", default="H2HSqq")
+    p.add_argument("--log", default="benchmarks/h2h-sqq-asv.txt")
     args = parser.parse_args()
-    if args.cmd == "agree":
+    if args.cmd == "asv":
+        asv_session(args)
+    elif args.cmd == "agree":
         agree(args)
     elif args.cmd == "time":
         time_session(args)

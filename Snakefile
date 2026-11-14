@@ -1071,6 +1071,21 @@ rule h2h_sqq:
         "--agree {input[0]} --logs {input[1]} {input[2]} --out {output}"
 
 
+rule h2h_sqq_asv:
+    input:
+        "scripts/h2h_sqq_versus.py",
+        "benchmarks/benchmarks.py",
+        "benchmarks/h2h-sqq.csv",
+        "bbdir-release/src/libseams.so",
+        "bbdir-release/bench/libseams_ring_ice.so",
+    output:
+        "benchmarks/h2h-sqq-asv.txt",
+    shell:
+        "MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
+        "TIP4P2005_DIR=\"${{TIP4P2005_DIR:-tip4p2005-frames}}\" "
+        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_versus.py asv --log {output}"
+
+
 rule h2h_followup:
     output:
         "benchmarks/h2h-followup.txt",
