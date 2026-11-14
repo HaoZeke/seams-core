@@ -10,6 +10,10 @@ ComputeStyle(dseams, ComputeDseams)
 
 namespace LAMMPS_NS {
 
+// Per-atom CHILL+ label (the seams_label integer). Atoms outside the group
+// read -1. Every rank sends its owned atoms to rank 0, which classifies the
+// whole group and returns the labels, so the result does not depend on the
+// domain decomposition.
 class ComputeDseams : public Compute {
  public:
   ComputeDseams(class LAMMPS *, int, char **);
@@ -24,6 +28,8 @@ class ComputeDseams : public Compute {
   double cutoff_;
   int graph_;
   int rule_;
+  long calls_;
+  double seconds_;
 };
 
 }  // namespace LAMMPS_NS

@@ -2,8 +2,12 @@
 
 Meson builds `run_hook`, the in-run hook. It links `liblammps` and registers a
 `fix external` callback. Every step the callback calls the same C API as
-`seams chill-plus`. `engines/lammps/compute_dseams.cpp` is a per-atom style
-you can copy into a LAMMPS source tree. This build does not compile it.
+`seams chill-plus`. `engines/lammps/compute_dseams.cpp` is a per-atom style.
+When the LAMMPS class headers are installed, as in conda-forge and EESSI,
+Meson builds it as `dseamsplugin.so` for `plugin load`; otherwise copy it
+into a LAMMPS source tree. On several MPI ranks the compute gathers every
+atom to rank 0, classifies the whole cell once, and returns each rank its
+own labels, so the result does not depend on the domain decomposition.
 
 `in.dseams` is the deck. `ice.data` is 64 oxygens of cubic ice. Forces are
 zeroed so the cell does not melt. The hook prints `overhead_s`, the mean
