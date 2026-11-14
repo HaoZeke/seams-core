@@ -1,0 +1,1 @@
+Reading a MOL2 molecule whose counts line is missing or empty no longer segfaults in chemfiles 0.10.4. The vendored build applies `cmake/patches/chemfiles-0.10.4-mol2-counts.patch` so the reader throws a format error, which `seams_path_nframes` and `seams_system_read` report as a status, and the system chemfiles probe rejects an unpatched library. `capi_fuzzer` found the crash.

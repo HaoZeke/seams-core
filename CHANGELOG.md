@@ -212,6 +212,7 @@ by [towncrier](https://towncrier.readthedocs.io/).
 - Load oxygen and hydrogen together for `seams f4` so Rodger F4 is finite when mol IDs exist.
 - On a crowded shell the diamond label uses the four nearest neighbours, the list mdapy uses, and the labels stay those of the cutoff list.
 - Place sI hydrogens with TIP3P HOH and a 15 degree libration so Rodger F4 sits near 0.7, score Zeron q12bar against a disordered liquid, and evaluate host l=12 Ylm when sphericart is off.
+- Reading a MOL2 molecule whose counts line is missing or empty no longer segfaults in chemfiles 0.10.4. The vendored build applies `cmake/patches/chemfiles-0.10.4-mol2-counts.patch` so the reader throws a format error, which `seams_path_nframes` and `seams_system_read` report as a status, and the system chemfiles probe rejects an unpatched library. `capi_fuzzer` found the crash.
 - Rename the site-site pair flag from `--types` to `--pair-types`, so `--type` is not a prefix of another flag. Give the gpulite and vesin wraps their own option files so `meson configure` does not copy the engine options onto them.
 - Require readcon-db 0.1.7 so static consumers receive only the archive and shared consumers receive the runtime search path.
 - SOAP now fills every l through lMax. classifyBonds reuses a Ylm buffer. Fingerprint builds one hop graph per atom.
