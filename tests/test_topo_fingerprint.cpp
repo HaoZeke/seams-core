@@ -312,3 +312,41 @@ TEST_CASE("a shallower library names what a defect hides from the deeper one", "
   REQUIRE_FALSE(legacy.coloured);
   REQUIRE(legacy.hops == 2);
 }
+
+namespace topo {
+FrameFingerprint fingerprintPaths(const Rows &rows, int hops, int maxRingSize,
+                                  const std::vector<int> &colours, int which);
+}
+
+TEST_CASE("shared ball and per-atom keys agree on a dense frame", "[fingerprint]") {
+  constexpr int n = 130;
+  topo::Rows rows(static_cast<std::size_t>(n));
+  for (int i = 0; i < n; i++) {
+    auto &row = rows[static_cast<std::size_t>(i)];
+    row.push_back(i);
+    for (int j = 0; j < n; j++) {
+      if (j != i) {
+        row.push_back(j);
+      }
+    }
+  }
+  auto agree = [&](const std::vector<int> &colours) {
+    const auto shared = topo::fingerprintPaths(rows, 1, 7, colours, 1);
+    const auto atom = topo::fingerprintPaths(rows, 1, 7, colours, 2);
+    if (atom.method != "wl") {
+      SKIP("shared ball is the wl host");
+    }
+    REQUIRE(shared.method == "wl");
+    REQUIRE(shared.atomKeys == atom.atomKeys);
+    REQUIRE(shared.classes == atom.classes);
+    REQUIRE(shared.wlAtom == atom.wlAtom);
+  };
+  agree({});
+  agree(std::vector<int>(static_cast<std::size_t>(n), 1));
+  std::vector<int> many(static_cast<std::size_t>(n));
+  for (int i = 0; i < n; i++) {
+    many[static_cast<std::size_t>(i)] = i;
+  }
+  REQUIRE(many.size() > 64);
+  agree(many);
+}
