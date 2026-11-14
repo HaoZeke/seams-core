@@ -11,13 +11,17 @@ export LD_LIBRARY_PATH="$prefix/lib:$prefix/lib.AVX2_256${LD_LIBRARY_PATH:+:$LD_
 
 # conda-forge LAMMPS installs library.h only; compute dseams needs the class
 # headers of the same release.
-lammps_src=$(sh scripts/fetch_lammps_headers.sh "${RUNNER_TEMP:-$(mktemp -d)}/lammps-src")
+scratch=${RUNNER_TEMP:-$(mktemp -d)}
+lammps_src=$(sh scripts/fetch_lammps_headers.sh "$scratch/lammps-src")
+# The Lua examples and the lua video tape compile Fennel.
+fennel=$(sh scripts/fetch_fennel.sh "$scratch/fennel")
 
 meson setup build --buildtype=release \
   -Dwith_tests=true -Dwith_python=true -Dwith_cli=true \
   -Dwith_gromacs=enabled -Dwith_lammps=enabled \
   -Dwith_openmm=enabled -Dwith_plumed=enabled \
-  -Dlammps_src_include="$lammps_src"
+  -Dlammps_src_include="$lammps_src" -Dfennel_lua="$fennel" \
+  ${SEAMS_MESON_ARGS:-}
 ninja -C build -j2
 
 set +e

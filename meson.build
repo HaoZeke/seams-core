@@ -908,6 +908,9 @@ if get_option('with_cli')
     timeout: 60)
   tutorial_env = environment()
   tutorial_env.prepend('LD_LIBRARY_PATH', meson.project_build_root() / 'src')
+  if get_option('fennel_lua') != ''
+    tutorial_env.set('FENNEL_LUA', get_option('fennel_lua'))
+  endif
   test(
     'docs_quickstart_py',
     python3,

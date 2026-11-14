@@ -75,7 +75,7 @@ endif
 
 fs = import('fs')
 fennel_lua = ''
-foreach candidate : ['/usr/local/share/fennel.lua', '/usr/share/lua/5.4/fennel.lua']
+foreach candidate : [get_option('fennel_lua'), '/usr/local/share/fennel.lua', '/usr/share/lua/5.4/fennel.lua']
   if fennel_lua == '' and fs.exists(candidate)
     fennel_lua = candidate
   endif
