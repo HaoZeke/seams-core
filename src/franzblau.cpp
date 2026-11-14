@@ -15,7 +15,9 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <limits>
 #include <mutex>
+#include <new>
 #include <numeric>
 #include <utility>
 #include <vector>
@@ -31,7 +33,8 @@
 static std::vector<std::vector<int>>
 searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
             const std::vector<char> &sources, bool legacy, int minSize = 3,
-            std::vector<int> *hist = nullptr, int forcedCap = -1);
+            std::vector<int> *hist = nullptr, int forcedCap = -1,
+            int *perAtom = nullptr, int perStride = 0);
 
 namespace {
 
@@ -702,11 +705,33 @@ struct alignas(64) RingScratch {
 constexpr int kPathCap = 1;
 
 // One search's census and path cap. A null histogram means the rings are
-// stored. A zero cap is the pairing walk with no count against the cap.
+// stored, unless perAtom is set: then each member is counted and the ring
+// is not stored. A zero cap is the pairing walk with no count against the cap.
 struct RingCall {
   std::vector<int> *hist = nullptr;
   int cap = 0;
+  int *perAtom = nullptr;
+  int perStride = 0;
 };
+
+inline void tallyRing(const int *ring, int k, std::vector<int> *hist, int *perAtom,
+                      int perStride) {
+  if (perAtom != nullptr) {
+    for (int i = 0; i < k; i++) {
+      const int a = ring[i];
+      if (a >= 0) {
+        perAtom[static_cast<std::size_t>(a) * static_cast<std::size_t>(perStride) +
+                static_cast<std::size_t>(k)] += 1;
+      }
+    }
+  }
+  if (hist != nullptr && k >= 0 && k < static_cast<int>(hist->size())) {
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp atomic
+#endif
+    (*hist)[static_cast<std::size_t>(k)]++;
+  }
+}
 
 template <typename Graph>
 int capForGraph(const Graph &adjacency) {
@@ -785,11 +810,11 @@ bool shortestPathsFrom(const Graph &adjacency, int src, RingScratch &scr,
 //! already cleared). A ring is the same one the pairing walk would emit:
 //! two shortest arms to an antipode, or an odd edge between one level, in
 //! the canonical orientation, kept by the same shortcut test.
-template <typename Graph, typename Out>
+template <typename Graph, typename Out, bool PerAtom>
 void enumerateChordless(const Graph &adjacency, const DistOracle &oracle,
                         int src, int maxDepth, int minSize, bool legacy,
                         const std::vector<int> &lvl, Out &out,
-                        std::vector<int> *hist) {
+                        std::vector<int> *hist, int *perAtom, int perStride) {
   const int nVertices = static_cast<int>(adjacency.size());
   if (maxDepth < 3 || nVertices <= 0) {
     return;
@@ -843,6 +868,10 @@ void enumerateChordless(const Graph &adjacency, const DistOracle &oracle,
   // (and the legacy pair set) go through the shared predicate.
   const bool fast = !legacy && oracle.hop2;
   auto record = [&](const int *r, int k) {
+    if constexpr (PerAtom) {
+      tallyRing(r, k, hist, perAtom, perStride);
+      return;
+    }
     if (hist != nullptr) {
       if (k < static_cast<int>(hist->size())) {
 #ifdef SEAMS_HAS_OPENMP
@@ -958,7 +987,7 @@ void enumerateChordless(const Graph &adjacency, const DistOracle &oracle,
         }
       }
     }
-    const bool count5 = hist != nullptr && fast && minSize <= 5 && !L1.empty();
+    const bool count5 = !PerAtom && hist != nullptr && fast && minSize <= 5 && !L1.empty();
     std::vector<int> rank1;
     std::vector<std::uint64_t> shellAdj;
     std::vector<std::uint64_t> shellArms;
@@ -1001,7 +1030,49 @@ void enumerateChordless(const Graph &adjacency, const DistOracle &oracle,
         }
       }
     }
-    if (maxDepth >= 5) {
+    if (maxDepth >= 5 && count5) {
+      // |{(a,c)}| with the three shortcut tests, without listing rings.
+      for (std::size_t pi = 0; pi < L2.size(); pi++) {
+        const int p = L2[pi];
+        const auto &ap = arms2[static_cast<std::size_t>(p)];
+        if (ap.empty()) {
+          continue;
+        }
+        const std::uint64_t *pArms =
+            shellArms.data() + static_cast<std::size_t>(p) * static_cast<std::size_t>(lwords);
+        for (std::size_t qi = pi + 1; qi < L2.size(); qi++) {
+          const int q = L2[qi];
+          if (!adjacent(p, q)) {
+            continue;
+          }
+          const std::uint64_t *qArms =
+              shellArms.data() + static_cast<std::size_t>(q) * static_cast<std::size_t>(lwords);
+          int pc = 0;
+          for (int w = 0; w < lwords; w++) {
+            rightBits[static_cast<std::size_t>(w)] = qArms[w] & ~pArms[w];
+            pc += __builtin_popcountll(rightBits[static_cast<std::size_t>(w)]);
+          }
+          if (pc == 0) {
+            continue;
+          }
+          for (const int a : ap) {
+            const int ra = rank1[static_cast<std::size_t>(a)];
+            if (ra < 0 ||
+                ((qArms[static_cast<unsigned>(ra) >> 6] >> (static_cast<unsigned>(ra) & 63u)) &
+                 1ull) != 0ull) {
+              continue;
+            }
+            const std::uint64_t *ba =
+                shellAdj.data() + static_cast<std::size_t>(ra) * static_cast<std::size_t>(lwords);
+            int cut = 0;
+            for (int w = 0; w < lwords; w++) {
+              cut += __builtin_popcountll(ba[w] & rightBits[static_cast<std::size_t>(w)]);
+            }
+            c5 += pc - cut;
+          }
+        }
+      }
+    } else if (maxDepth >= 5) {
       for (std::size_t pi = 0; pi < L2.size(); pi++) {
         const int p = L2[pi];
         const auto &ap = arms2[static_cast<std::size_t>(p)];
@@ -1014,38 +1085,6 @@ void enumerateChordless(const Graph &adjacency, const DistOracle &oracle,
             continue;
           }
           const auto &aq = arms2[static_cast<std::size_t>(q)];
-          if (count5) {
-            // |{(a,c)}| with the three shortcut tests, without listing rings.
-            // a is an arm of p, so it is disjoint from the right-hand set.
-            const std::uint64_t *pArms =
-                shellArms.data() + static_cast<std::size_t>(p) * static_cast<std::size_t>(lwords);
-            const std::uint64_t *qArms =
-                shellArms.data() + static_cast<std::size_t>(q) * static_cast<std::size_t>(lwords);
-            int pc = 0;
-            for (int w = 0; w < lwords; w++) {
-              rightBits[static_cast<std::size_t>(w)] = qArms[w] & ~pArms[w];
-              pc += __builtin_popcountll(rightBits[static_cast<std::size_t>(w)]);
-            }
-            if (pc == 0) {
-              continue;
-            }
-            for (const int a : ap) {
-              const int ra = rank1[static_cast<std::size_t>(a)];
-              if (ra < 0 ||
-                  ((qArms[static_cast<unsigned>(ra) >> 6] >> (static_cast<unsigned>(ra) & 63u)) &
-                   1ull) != 0ull) {
-                continue;
-              }
-              const std::uint64_t *ba =
-                  shellAdj.data() + static_cast<std::size_t>(ra) * static_cast<std::size_t>(lwords);
-              int cut = 0;
-              for (int w = 0; w < lwords; w++) {
-                cut += __builtin_popcountll(ba[w] & rightBits[static_cast<std::size_t>(w)]);
-              }
-              c5 += pc - cut;
-            }
-            continue;
-          }
           for (const int a : ap) {
             for (const int c : aq) {
               if (a == c) {
@@ -1161,7 +1200,7 @@ void enumerateChordless(const Graph &adjacency, const DistOracle &oracle,
             }
             rights.push_back(arm);
           }
-          if (hist != nullptr && fast) {
+          if (!PerAtom && hist != nullptr && fast) {
             // Arms that share the far vertex fail or pass together on every
             // test that does not look at the near vertex.
             byD.clear();
@@ -1252,37 +1291,101 @@ void enumerateChordless(const Graph &adjacency, const DistOracle &oracle,
  *  instead, appended unsorted: the incremental updater collects those for
  *  the flagged vertices around a change.
  */
-//! Logical prefix of a persistent ring buffer. push_back assigns into storage
-//! that already has capacity, so a later frame does not allocate. One pool
+//! Rings of one source in a flat CSR. `offsets` has one more entry than
+//! `sizes`; vertex ids sit in `verts`. A byte holds the ring size. One pool
 //! occupies its own cache line: adjacent sources are often in flight on
 //! different threads, and a shared line makes those writes wait on each other.
 struct alignas(64) RingPool {
-  std::vector<std::vector<int>> storage;
+  std::vector<std::uint32_t> verts;
+  std::vector<std::uint32_t> offsets{0};
+  std::vector<std::uint8_t> sizes;
   std::size_t n = 0;
 
-  void reset() { n = 0; }
+  void reset() {
+    n = 0;
+    verts.clear();
+    sizes.clear();
+    offsets.clear();
+    offsets.push_back(0);
+  }
   void release() {
-    std::vector<std::vector<int>>().swap(storage);
+    std::vector<std::uint32_t>().swap(verts);
+    std::vector<std::uint8_t>().swap(sizes);
+    std::vector<std::uint32_t>().swap(offsets);
+    offsets.push_back(0);
     n = 0;
   }
   std::size_t size() const { return n; }
 
   void push_back(const std::vector<int> &ring) {
-    if (n == storage.size()) {
-      storage.emplace_back();
+    const auto k = static_cast<std::uint32_t>(ring.size());
+    const std::size_t next = verts.size() + ring.size();
+    if (next > static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max())) {
+      throw std::bad_alloc();
     }
-    auto &dst = storage[n];
-    if (dst.capacity() < ring.size()) {
-      dst.reserve(ring.size());
+    sizes.push_back(static_cast<std::uint8_t>(k));
+    const auto base = static_cast<std::uint32_t>(verts.size());
+    verts.resize(next);
+    for (std::uint32_t i = 0; i < k; i++) {
+      verts[static_cast<std::size_t>(base) + i] =
+          static_cast<std::uint32_t>(ring[static_cast<std::size_t>(i)]);
     }
-    dst.assign(ring.begin(), ring.end());
+    offsets.push_back(static_cast<std::uint32_t>(verts.size()));
     ++n;
   }
 
-  using iterator = std::vector<std::vector<int>>::iterator;
-  iterator begin() { return storage.begin(); }
-  iterator end() { return storage.begin() + static_cast<std::ptrdiff_t>(n); }
+  void copyRing(std::size_t i, std::vector<int> &dst) const {
+    const std::uint32_t b = offsets[i];
+    const int s = static_cast<int>(sizes[i]);
+    dst.resize(static_cast<std::size_t>(s));
+    for (int k = 0; k < s; k++) {
+      dst[static_cast<std::size_t>(k)] =
+          static_cast<int>(verts[static_cast<std::size_t>(b) + static_cast<std::size_t>(k)]);
+    }
+  }
+
+  // Lexicographic order of the rings appended since `first`, the same order
+  // as sorting the rings as vectors of ints.
+  void sortFrom(std::size_t first) {
+    if (first >= n) {
+      return;
+    }
+    std::vector<std::uint32_t> order(n - first);
+    std::iota(order.begin(), order.end(), static_cast<std::uint32_t>(first));
+    std::sort(order.begin(), order.end(), [&](std::uint32_t a, std::uint32_t b) {
+      const std::uint32_t *ap = verts.data() + offsets[a];
+      const std::uint32_t *bp = verts.data() + offsets[b];
+      const int as = static_cast<int>(sizes[a]);
+      const int bs = static_cast<int>(sizes[b]);
+      return std::lexicographical_compare(ap, ap + as, bp, bp + bs);
+    });
+    std::vector<std::uint32_t> nv;
+    std::vector<std::uint8_t> ns;
+    nv.reserve(verts.size() - static_cast<std::size_t>(offsets[first]));
+    ns.reserve(n - first);
+    for (const std::uint32_t id : order) {
+      const int s = static_cast<int>(sizes[id]);
+      const std::uint32_t *p = verts.data() + offsets[id];
+      nv.insert(nv.end(), p, p + s);
+      ns.push_back(static_cast<std::uint8_t>(s));
+    }
+    verts.resize(static_cast<std::size_t>(offsets[first]));
+    verts.insert(verts.end(), nv.begin(), nv.end());
+    sizes.resize(first);
+    sizes.insert(sizes.end(), ns.begin(), ns.end());
+    offsets.resize(first + 1);
+    for (std::size_t i = first; i < n; i++) {
+      offsets.push_back(offsets.back() + static_cast<std::uint32_t>(sizes[i]));
+    }
+  }
 };
+
+template <typename Out>
+void sortAppended(Out &out, std::size_t first) {
+  std::sort(out.begin() + static_cast<std::ptrdiff_t>(first), out.end());
+}
+
+inline void sortAppended(RingPool &out, std::size_t first) { out.sortFrom(first); }
 
 template <typename Graph, typename Out>
 void enumerateFromSource(const Graph &adjacency, const DistOracle &oracle,
@@ -1324,14 +1427,24 @@ void enumerateFromSource(const Graph &adjacency, const DistOracle &oracle,
     // vertices inside this ball, so it lists the same rings. The updater
     // still consumes the paths, and rebuilds them without the cap.
     if (through == nullptr && nVertices <= 4096) {
-      enumerateChordless(adjacency, oracle, src, maxDepth, minSize,
-                         legacyPairs, scr.lvl, out, call.hist);
-      std::sort(out.begin() + static_cast<std::ptrdiff_t>(first), out.end());
+      if (call.perAtom == nullptr) {
+        enumerateChordless<Graph, Out, false>(adjacency, oracle, src, maxDepth, minSize,
+                                              legacyPairs, scr.lvl, out, call.hist, nullptr, 0);
+      } else {
+        enumerateChordless<Graph, Out, true>(adjacency, oracle, src, maxDepth, minSize,
+                                             legacyPairs, scr.lvl, out, call.hist, call.perAtom,
+                                             call.perStride);
+      }
+      sortAppended(out, first);
       return;
     }
     shortestPathsFrom<Graph, false>(adjacency, src, scr, 0);
   }
   auto keep = [&](std::vector<int> &r) {
+    if (call.perAtom != nullptr) {
+      tallyRing(r.data(), static_cast<int>(r.size()), nullptr, call.perAtom, call.perStride);
+      return;
+    }
     if (call.hist != nullptr && through == nullptr) {
       if (static_cast<int>(r.size()) < static_cast<int>(call.hist->size())) {
 #ifdef SEAMS_HAS_OPENMP
@@ -1411,7 +1524,7 @@ void enumerateFromSource(const Graph &adjacency, const DistOracle &oracle,
     }
   }
   if (through == nullptr) {
-    std::sort(out.begin() + static_cast<std::ptrdiff_t>(first), out.end());
+    sortAppended(out, first);
   }
 }
 
@@ -1431,6 +1544,20 @@ std::vector<int> countRingsImpl(const std::vector<std::vector<int>> &nList, int 
 namespace primitive {
 std::vector<int> ringCensusCounts(const std::vector<std::vector<int>> &nList, int maxDepth) {
   return countRingsImpl(nList, maxDepth);
+}
+
+std::vector<int> atomRingSizeCounts(const std::vector<std::vector<int>> &nList, int maxDepth) {
+  const int n = static_cast<int>(nList.size());
+  const int stride = std::max(maxDepth, 0) + 1;
+  std::vector<int> counts(static_cast<std::size_t>(std::max(n, 0)) *
+                              static_cast<std::size_t>(stride),
+                          0);
+  if (n == 0 || maxDepth < 3) {
+    return counts;
+  }
+  (void)searchRings(nList, maxDepth, std::vector<char>(), false, 3, nullptr, -1,
+                    counts.data(), stride);
+  return counts;
 }
 
 std::vector<std::vector<int>>
@@ -1478,7 +1605,7 @@ ringNetworkAtCap(const std::vector<std::vector<int>> &nList, int maxDepth, int c
 static std::vector<std::vector<int>>
 searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
             const std::vector<char> &sources, bool legacy, int minSize,
-            std::vector<int> *hist, int forcedCap);
+            std::vector<int> *hist, int forcedCap, int *perAtom, int perStride);
 
 std::vector<std::vector<int>>
 primitive::ringNetwork(const std::vector<std::vector<int>> &nList, int maxDepth) {
@@ -1529,7 +1656,7 @@ primitive::ringNetworkBalls(const std::vector<std::vector<int>> &nList, int maxD
 static std::vector<std::vector<int>>
 searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
             const std::vector<char> &sources, bool legacy, int minSize,
-            std::vector<int> *hist, int forcedCap) {
+            std::vector<int> *hist, int forcedCap, int *perAtom, int perStride) {
   std::vector<std::vector<int>> rings;
   if (maxDepth < 3 || nList.empty()) {
     return rings;
@@ -1584,7 +1711,7 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
     // Ice and the other sparse frames never enter the cap pass.
     cap = maxDeg > 16 ? kPathCap : 0;
   }
-  const RingCall call{hist, cap};
+  const RingCall call{hist, cap, perAtom, perStride};
   adjacency.cols.resize(adjacency.first[nVertices]);
 #ifdef SEAMS_HAS_OPENMP
 #pragma omp parallel for schedule(static) if (!serial && !omp_in_parallel())
@@ -1688,12 +1815,12 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
   // that list of lists costs more than the search. The directing step
   // clears levels only inside the ball this source touched, so the
   // search stays linear in the number of vertices.
-  // A dense census is worth a team below the sparse cutoff: that path
-  // only counts. Storing every ring of a small dense ball stays on one
-  // thread. One thread still writes straight into the output vector.
+  // A dense census only counts, and a stored ring is a flat run of
+  // uint32 ids, so a dense frame below the sparse cutoff can take the team
+  // too. One thread still writes straight into one pool.
   const bool parallelSources =
       !omp_in_parallel() && omp_get_max_threads() > 1 &&
-      (!serial || (hist != nullptr && cap > 0 && nFrom >= 64));
+      (!serial || (cap > 0 && nFrom >= 64));
   if (parallelSources) {
     // Sources are independent given the shared read-only balls; per-source
     // collection keeps the output identical to the serial ascending-source
@@ -1702,22 +1829,40 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
     // used to share a line, and the threads then waited on each other's
     // size updates. A static share of the sources is even on a crystal
     // and keeps each thread on its own lines.
+    const int nThreads = omp_get_max_threads();
+    std::vector<std::vector<int>> threadBins;
+    if (perAtom != nullptr) {
+      threadBins.assign(static_cast<std::size_t>(nThreads),
+                        std::vector<int>(static_cast<std::size_t>(nVertices) *
+                                             static_cast<std::size_t>(perStride),
+                                         0));
+    }
     const auto enumStart = std::chrono::steady_clock::now();
     std::vector<RingPool> perSource(static_cast<std::size_t>(nFrom));
 #pragma omp parallel
     {
       RingScratch scratch;
+      RingCall local = call;
+      if (perAtom != nullptr) {
+        local.perAtom = threadBins[static_cast<std::size_t>(omp_get_thread_num())].data();
+      }
 #pragma omp for schedule(guided)
       for (int k = 0; k < nFrom; k++) {
         enumerateFromSource(adjacency, oracle, from[k], maxDepth, maxLvl,
                             scratch, perSource[static_cast<std::size_t>(k)],
-                            nullptr, legacy, minSize, call);
+                            nullptr, legacy, minSize, local);
+      }
+    }
+    if (perAtom != nullptr) {
+      const int span = nVertices * perStride;
+      for (const auto &bin : threadBins) {
+        for (int i = 0; i < span; i++) {
+          perAtom[static_cast<std::size_t>(i)] += bin[static_cast<std::size_t>(i)];
+        }
       }
     }
     split.enumerate_ms = millisSince(enumStart);
     const auto mergeStart = std::chrono::steady_clock::now();
-    // Every ring, source list and ball is a heap block of its own; moving
-    // and freeing them on one thread is a sizeable share of a threaded search
     std::vector<std::size_t> offset(static_cast<std::size_t>(nFrom) + 1, 0);
     for (int k = 0; k < nFrom; k++) {
       offset[static_cast<std::size_t>(k + 1)] =
@@ -1730,9 +1875,10 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
 #pragma omp for schedule(static) nowait
       for (int k = 0; k < nFrom; k++) {
         auto &pool = perSource[static_cast<std::size_t>(k)];
-        std::move(pool.begin(), pool.end(),
-                  rings.begin() +
-                      static_cast<std::ptrdiff_t>(offset[static_cast<std::size_t>(k)]));
+        const std::size_t at = offset[static_cast<std::size_t>(k)];
+        for (std::size_t i = 0; i < pool.n; i++) {
+          pool.copyRing(i, rings[at + i]);
+        }
         pool.release();
       }
     }
@@ -1749,10 +1895,16 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
 
   const auto enumStart = std::chrono::steady_clock::now();
   RingScratch scratch;
+  RingPool gathered;
   for (const int src : from) {
     enumerateFromSource(adjacency, oracle, src, maxDepth, maxLvl, scratch,
-                        rings, nullptr, legacy, minSize, call);
+                        gathered, nullptr, legacy, minSize, call);
   }
+  rings.resize(gathered.n);
+  for (std::size_t i = 0; i < gathered.n; i++) {
+    gathered.copyRing(i, rings[i]);
+  }
+  gathered.release();
   split.enumerate_ms = millisSince(enumStart);
   const auto mergeStart = std::chrono::steady_clock::now();
   balls.clear();
@@ -2449,9 +2601,7 @@ struct primitive::RingUpdater::Impl {
       RingPool &pool = bySource[static_cast<std::size_t>(src)];
       std::size_t at = offset[static_cast<std::size_t>(src)];
       for (std::size_t k = 0; k < pool.n; k++) {
-        // Exchange buffers with the previous frame. The ints are not
-        // copied, and the pool keeps a buffer for the next frame.
-        flattened[at++].swap(pool.storage[k]);
+        pool.copyRing(k, flattened[at++]);
       }
     }
     if (flattened.size() != total) {
