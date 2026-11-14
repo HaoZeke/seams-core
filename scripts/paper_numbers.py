@@ -517,6 +517,43 @@ def ira_samples(pos, lattice, threads: int):
     )
 
 
+def _require_clear_wins(rows: list[dict]) -> None:
+    """Stop before the long cycless points if a paired interval reaches 1."""
+    import random
+    import paper_numbers_table as table
+    groups: dict[tuple, dict[str, dict]] = {}
+    for row in rows:
+        if "timeout" in row.get("detail", ""):
+            continue
+        groups.setdefault(
+            (row["operation"], str(row["molecules"]), str(row["threads"])), {})[row["code"]] = row
+    rng = random.Random(table.SEED)
+    bad = []
+    for (operation, molecules, threads), group in sorted(groups.items()):
+        base = group.get("d-SEAMS")
+        if base is None:
+            continue
+        den = [float(part) for part in base["samples_ms"].split()]
+        for code, other in sorted(group.items()):
+            if code == "d-SEAMS":
+                continue
+            num = [float(part) for part in other["samples_ms"].split()]
+            if len(num) != len(den):
+                continue
+            point, lo, hi = table.paired_ratio(num, den, rng)
+            print(
+                f"ratio {operation} {code} n={molecules} t={threads} "
+                f"{point:.6f} {lo:.6f},{hi:.6f}",
+                flush=True,
+            )
+            if not lo > 1.0:
+                bad.append(
+                    f"{operation} {code} n={molecules} t={threads} {point:.6f} {lo:.6f},{hi:.6f}"
+                )
+    if bad:
+        raise SystemExit("ratio CI lower bound is not above 1:\n" + "\n".join(bad))
+
+
 def cycless_large(info, graph, molecules: int, threads: int, version: str) -> dict:
     """Primitive rings at one size. Stop at one hour and record that wall time."""
     import signal
@@ -766,14 +803,6 @@ def run_rivals(info, lib: str) -> list[dict]:
                         name, n, threads, samples, detail,
                         version=versions[name],
                     ))
-            if n > 4096:
-                rows.append(cycless_large(
-                    info, graph, n, threads, versions["cycless"]))
-                print(
-                    f"cycless molecules {n} threads {threads} "
-                    f"median_ms {rows[-1]['median_ms']} n {rows[-1]['n']}",
-                    flush=True,
-                )
         finally:
             seams.seams_system_destroy(held)
         print(f"rivals molecules {n} threads {threads}", flush=True)
@@ -904,6 +933,38 @@ def main() -> int:
             import json
             print(json.dumps(item), flush=True)
         return 0
+    if args.worker == "cycless":
+        import json
+        import freud
+        import networkx as nx
+        from h2h_mdapy_pyscal3_vesin import ice_positions
+        info = identity()
+        version = "0.7"
+        try:
+            import cycless
+            version = getattr(cycless, "__version__", version)
+        except ImportError:
+            pass
+        for ncell in (16, 24):
+            pos, lengths = ice_positions(ncell)
+            pos = __import__("numpy").ascontiguousarray(pos, dtype="float64")
+            n = len(pos)
+            lx, ly, lz = (float(v) for v in lengths)
+            query = freud.locality.AABBQuery(freud.box.Box(lx, ly, lz), pos).query(
+                pos, {"r_max": CUTOFF, "exclude_ii": True}).toNeighborList()
+            graph = nx.Graph()
+            graph.add_nodes_from(range(n))
+            graph.add_edges_from(
+                (int(i), int(j)) for i, j in zip(query[:, 0], query[:, 1]) if int(i) < int(j)
+            )
+            row = cycless_large(info, graph, n, args.threads, version)
+            print(json.dumps(row), flush=True)
+            print(
+                f"cycless molecules {n} threads {args.threads} "
+                f"median_ms {row['median_ms']} n {row['n']}",
+                flush=True,
+            )
+        return 0
     if args.worker == "large":
         info = identity()
         for item in run_large(info, args.core):
@@ -956,6 +1017,14 @@ def main() -> int:
     for threads in (1, 8):
         text = pin_and_run(threads, [
             str(Path(__file__).resolve()), "--worker", "rivals",
+            "--threads", str(threads), "--lib", args.lib,
+        ])
+        import json
+        rivals.extend(json.loads(line) for line in text.splitlines() if line.startswith("{"))
+    _require_clear_wins(rivals)
+    for threads in (1, 8):
+        text = pin_and_run(threads, [
+            str(Path(__file__).resolve()), "--worker", "cycless",
             "--threads", str(threads), "--lib", args.lib,
         ])
         import json

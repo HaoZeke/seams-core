@@ -44,6 +44,9 @@ def paired_ratio(num: list[float], den: list[float], rng: random.Random) -> tupl
     """
     if len(num) != len(den) or len(num) < 2:
         raise ValueError("a paired ratio needs two samples of the same length")
+    # One stream per comparison. A shared stream made an interval depend on
+    # which row was annotated first.
+    rng = random.Random(SEED)
     count = len(num)
     ratios = []
     for _ in range(DRAWS):
