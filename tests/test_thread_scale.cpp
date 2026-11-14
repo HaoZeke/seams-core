@@ -16,6 +16,9 @@
 #ifdef SEAMS_HAS_OPENMP
 #include <omp.h>
 #endif
+#ifdef __linux__
+#include <sched.h>
+#endif
 
 namespace {
 
@@ -251,3 +254,123 @@ TEST_CASE("spatial ranks match the serial neighbour list, CHILL+ labels and q6",
     }
   }
 }
+
+#ifdef __linux__
+namespace {
+
+bool sameMask(const cpu_set_t &a, const cpu_set_t &b) {
+  for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu) {
+    if (CPU_ISSET(cpu, &a) != CPU_ISSET(cpu, &b)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+struct AffinityGuard {
+  cpu_set_t saved{};
+#ifdef SEAMS_HAS_OPENMP
+  int threads = 1;
+#endif
+  AffinityGuard() {
+    CPU_ZERO(&saved);
+    sched_getaffinity(0, sizeof(saved), &saved);
+#ifdef SEAMS_HAS_OPENMP
+    threads = omp_get_max_threads();
+#endif
+  }
+  ~AffinityGuard() {
+    sched_setaffinity(0, sizeof(saved), &saved);
+#ifdef SEAMS_HAS_OPENMP
+    omp_set_num_threads(threads);
+#endif
+  }
+};
+
+} // namespace
+
+int maskCount(const cpu_set_t &set) {
+  int n = 0;
+  for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu) {
+    if (CPU_ISSET(cpu, &set)) {
+      ++n;
+    }
+  }
+  return n;
+}
+
+// The pool follows the mask the process was given. Proc-bind pins the
+// calling thread to one place, so the place count is that inherited
+// width when it is wider than this thread.
+int expectedPool(int requested, int maskCpus) {
+  int limit = maskCpus;
+#ifdef SEAMS_HAS_OPENMP
+  const int places = omp_get_num_procs();
+  const char *bind = std::getenv("OMP_PROC_BIND");
+  const bool procBind = bind != nullptr && bind[0] != '\0' && bind[0] != 'f' &&
+                        bind[0] != 'F' && bind[0] != '0';
+  if (places > 0 && places < limit) {
+    limit = places;
+  } else if (procBind && places > limit) {
+    limit = places;
+  }
+#else
+  (void)requested;
+  return 1;
+#endif
+  if (limit > 0 && requested > limit) {
+    requested = limit;
+  }
+  return requested < 1 ? 1 : requested;
+}
+
+TEST_CASE("a restricted affinity mask is kept and sizes the pool", "[thread]") {
+  AffinityGuard guard;
+  cpu_set_t saved = guard.saved;
+  int allowed[8];
+  int nAllowed = 0;
+  for (int cpu = 0; cpu < CPU_SETSIZE && nAllowed < 8; ++cpu) {
+    if (CPU_ISSET(cpu, &saved)) {
+      allowed[nAllowed++] = cpu;
+    }
+  }
+  REQUIRE(nAllowed >= 1);
+
+  auto check = [](const cpu_set_t &want, int requested) {
+    REQUIRE(sched_setaffinity(0, sizeof(want), &want) == 0);
+#ifdef SEAMS_HAS_OPENMP
+    omp_set_num_threads(requested);
+#endif
+    seams::adoptThreads();
+    cpu_set_t after;
+    CPU_ZERO(&after);
+    REQUIRE(sched_getaffinity(0, sizeof(after), &after) == 0);
+    REQUIRE(sameMask(want, after));
+    const int expect = expectedPool(requested, maskCount(after));
+    REQUIRE(lc_num_threads() == expect);
+#ifdef SEAMS_HAS_OPENMP
+    REQUIRE(omp_get_max_threads() == expect);
+#endif
+    // A mask the runtime still reports as the place count sizes the pool.
+#ifdef SEAMS_HAS_OPENMP
+    if (omp_get_num_procs() == maskCount(after)) {
+      const int capped = requested < maskCount(after) ? requested : maskCount(after);
+      REQUIRE(lc_num_threads() == (capped < 1 ? 1 : capped));
+    }
+#endif
+  };
+
+  cpu_set_t one;
+  CPU_ZERO(&one);
+  CPU_SET(allowed[0], &one);
+  check(one, 4);
+
+  if (nAllowed >= 2) {
+    cpu_set_t two;
+    CPU_ZERO(&two);
+    CPU_SET(allowed[0], &two);
+    CPU_SET(allowed[1], &two);
+    check(two, 8);
+  }
+}
+#endif
