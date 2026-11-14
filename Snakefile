@@ -541,8 +541,8 @@ rule science_carry_paths:
 # LMP is a launcher command line and may already hold mpirun. LMP_NP
 # adds "mpirun -np LMP_NP" in front of a bare LMP. Use nproc --all:
 # the drivers set OMP_NUM_THREADS=1, and plain nproc then returns 1.
-# The census is the release build of nucleation-pathway; a debug build
-# gives the same series several times slower and is refused.
+# The census is the release build of nucleation-pathway. A debug build
+# writes the same frames, about twice as slowly, and is refused.
 # Snakemake 9 reads every word after --config as a config value, so the
 # target comes first.
 #   export LMP=lmp LMP_NP=$(nproc --all)
