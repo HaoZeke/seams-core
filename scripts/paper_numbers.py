@@ -554,45 +554,70 @@ def _require_clear_wins(rows: list[dict]) -> None:
         raise SystemExit("ratio CI lower bound is not above 1:\n" + "\n".join(bad))
 
 
-def cycless_large(info, graph, molecules: int, threads: int, version: str) -> dict:
-    """Primitive rings at one size. Stop at one hour and record that wall time."""
-    import signal
-    from cycless.cycles import cycles_iter
+def _cycless_once(ncell: int, timeout_s: float) -> float | None:
+    """One primitive-ring search. None when the process is killed at the cap.
 
+    The search spends long stretches inside the heap C extension, which does
+    not deliver SIGALRM, so the cap is a killed child rather than an alarm.
+    """
+    script = r"""
+import sys
+import time
+sys.path.insert(0, "scripts")
+import numpy as np
+import networkx as nx
+import freud
+from h2h_mdapy_pyscal3_vesin import ice_positions
+from cycless.cycles import cycles_iter
+ncell = int(sys.argv[1])
+pos, lengths = ice_positions(ncell)
+pos = np.ascontiguousarray(pos, dtype=np.float64)
+n = len(pos)
+lx, ly, lz = (float(v) for v in lengths)
+query = freud.locality.AABBQuery(freud.box.Box(lx, ly, lz), pos).query(
+    pos, {"r_max": 3.5, "exclude_ii": True}).toNeighborList()
+graph = nx.Graph()
+graph.add_nodes_from(range(n))
+graph.add_edges_from(
+    (int(i), int(j)) for i, j in zip(query[:, 0], query[:, 1]) if int(i) < int(j)
+)
+t0 = time.perf_counter()
+sum(1 for _ in cycles_iter(graph, 6))
+print(f"{(time.perf_counter() - t0) * 1e3:.6f}", flush=True)
+"""
+    proc = subprocess.Popen(
+        [sys.executable, "-c", script, str(ncell)],
+        cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        text=True, start_new_session=True,
+    )
+    try:
+        out, _err = proc.communicate(timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, 9)
+        proc.wait()
+        return None
+    if proc.returncode != 0:
+        raise RuntimeError(f"cycless search failed for {ncell} cells")
+    return float(out.strip().splitlines()[-1])
+
+
+def cycless_large(info, ncell: int, threads: int, version: str) -> dict:
+    """Primitive rings at one size. Stop at one hour and record that wall time."""
     cap_s = 3600.0
     started = time.perf_counter()
     deadline = started + cap_s
-
-    class Stop(Exception):
-        pass
-
-    def alarm(signum, frame):
-        raise Stop
-
-    def one():
-        sum(1 for _ in cycles_iter(graph, 6))
-
-    def limited(seconds: float) -> None:
-        if seconds <= 0.0:
-            raise Stop
-        old = signal.signal(signal.SIGALRM, alarm)
-        signal.setitimer(signal.ITIMER_REAL, seconds)
-        try:
-            one()
-        finally:
-            signal.setitimer(signal.ITIMER_REAL, 0.0)
-            signal.signal(signal.SIGALRM, old)
-
+    molecules = {16: 32768, 24: 110592}[ncell]
     samples: list[float] = []
     stopped = False
-    try:
-        limited(deadline - time.perf_counter())
-        while len(samples) < REPEATS:
-            t0 = time.perf_counter()
-            limited(deadline - time.perf_counter())
-            samples.append((time.perf_counter() - t0) * 1e3)
-    except Stop:
+    if _cycless_once(ncell, max(0.0, deadline - time.perf_counter())) is None:
         stopped = True
+    while not stopped and len(samples) < REPEATS:
+        left = deadline - time.perf_counter()
+        sample = _cycless_once(ncell, left)
+        if sample is None:
+            stopped = True
+            break
+        samples.append(sample)
     elapsed_ms = (time.perf_counter() - started) * 1e3
     phase = f"ice-Ih-{molecules}"
     if not stopped and len(samples) >= REPEATS:
@@ -935,9 +960,6 @@ def main() -> int:
         return 0
     if args.worker == "cycless":
         import json
-        import freud
-        import networkx as nx
-        from h2h_mdapy_pyscal3_vesin import ice_positions
         info = identity()
         version = "0.7"
         try:
@@ -946,21 +968,10 @@ def main() -> int:
         except ImportError:
             pass
         for ncell in (16, 24):
-            pos, lengths = ice_positions(ncell)
-            pos = __import__("numpy").ascontiguousarray(pos, dtype="float64")
-            n = len(pos)
-            lx, ly, lz = (float(v) for v in lengths)
-            query = freud.locality.AABBQuery(freud.box.Box(lx, ly, lz), pos).query(
-                pos, {"r_max": CUTOFF, "exclude_ii": True}).toNeighborList()
-            graph = nx.Graph()
-            graph.add_nodes_from(range(n))
-            graph.add_edges_from(
-                (int(i), int(j)) for i, j in zip(query[:, 0], query[:, 1]) if int(i) < int(j)
-            )
-            row = cycless_large(info, graph, n, args.threads, version)
+            row = cycless_large(info, ncell, args.threads, version)
             print(json.dumps(row), flush=True)
             print(
-                f"cycless molecules {n} threads {args.threads} "
+                f"cycless molecules {row['molecules']} threads {args.threads} "
                 f"median_ms {row['median_ms']} n {row['n']}",
                 flush=True,
             )
