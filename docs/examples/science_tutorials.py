@@ -381,29 +381,14 @@ def _load_science_render(root: Path):
 
 
 def _ensure_display():
-    """Start Xvfb so OVITO's Qt platform can create a Vulkan instance."""
-    if os.environ.get("DISPLAY"):
-        return None
-    xvfb = shutil.which("Xvfb")
-    if xvfb is None:
-        return None
-    display = ":%d" % (20 + os.getpid() % 50)
-    proc = subprocess.Popen(
-        [xvfb, display, "-screen", "0", "1280x1024x24"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    os.environ["DISPLAY"] = display
-    os.environ["QT_QPA_PLATFORM"] = "xcb"
-    os.environ["LIBGL_ALWAYS_SOFTWARE"] = "1"
-    icd = "/usr/share/vulkan/icd.d/lvp_icd.json"
-    if os.path.isfile(icd):
-        os.environ["VK_ICD_FILENAMES"] = icd
-        os.environ["VK_DRIVER_FILES"] = icd
-    import time
+    """Give Qt a platform without a display: Tachyon draws in software.
 
-    time.sleep(0.4)
-    return proc
+    Qt's xcb plugin aborts the process without libxcb-cursor0, so an
+    Xvfb display is no use on a runner that lacks it.
+    """
+    if not os.environ.get("DISPLAY"):
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    return None
 
 
 def render_interface_v12(root: Path, pos, chill, box, figures: Path):
@@ -615,6 +600,18 @@ def run_r(root: Path, build: Path, libdir: Path, frames):
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parents[2])
     build = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(os.environ.get("SEAMS_BUILD", root / "bbdir"))
+    # docs_science_tutorials and the science snippet pages write the same
+    # figures; a reader between two writers sees a half-written png.
+    import fcntl
+
+    lock_dir = build if build.is_dir() else root / "docs" / ".cache"
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    with open(lock_dir / "science-figures.lock", "a", encoding="utf-8") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        return tutorials(root, build)
+
+
+def tutorials(root: Path, build: Path):
     libdir = Path(os.environ.get("SEAMS_LIBDIR", str(build / "src")))
     lib = _lib(libdir)
     traj = root / "input" / "traj"
