@@ -40,6 +40,8 @@ def stable(text):
     text = re.sub(r"Total wall time:.*", "Total wall time: TIME", text)
     text = re.sub(r"read_data CPU = \S+ seconds", "read_data CPU = TIME", text)
     text = re.sub(r"(?m)^((?:Pair|Neigh|Comm|Output|Modify|Other)\s+\|).*$", r"\1 TIME", text)
+    # LAMMPS notes an unset OMP_NUM_THREADS; the thread count line follows.
+    text = re.sub(r"(?m)^OMP_NUM_THREADS environment is not set\..*\n", "", text)
     return text
 
 
