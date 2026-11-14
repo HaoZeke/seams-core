@@ -531,13 +531,14 @@ def run_rivals(info, lib: str) -> list[dict]:
     from ovito.pipeline import Pipeline, StaticSource
     import ovito
     import paper_sitting as sit
-    from h2h_mdapy_pyscal3_vesin import ice_positions, park_openmp
+    from h2h_mdapy_pyscal3_vesin import ice_positions
     from mdapy.analysis import RingStatistics
 
     threads = int(os.environ.get("OMP_NUM_THREADS", "1"))
     mdapy.set_num_threads(threads)
     pyscal3.set_num_threads(threads)
     freud.parallel.set_num_threads(threads)
+    os.environ["OMP_WAIT_POLICY"] = "PASSIVE"
     lang = sit.open_lang(lib)
     versions = {
         "d-SEAMS": info["version"],
@@ -656,8 +657,6 @@ def run_rivals(info, lib: str) -> list[dict]:
                 for index in range(WARMUP + REPEATS):
                     order = names[index % len(names):] + names[:index % len(names)]
                     for name in order:
-                        if name != "d-SEAMS":
-                            park_openmp()
                         sample = timed(calls[name])
                         if index >= WARMUP:
                             buckets[name].append(sample)
