@@ -3,8 +3,9 @@
 
 usage: e2e_mw.py BUILD [--cells C] [--steps S] [--record FILE]
 
-Needs lmp (or $LMP) built with the PLUMED package and PLUMED_KERNEL set
-to the libplumedKernel.so that libSeamsPlumed.so was built against. The
+Needs lmp (or $LMP) built with the PLUMED package. PLUMED_KERNEL names the
+libplumedKernel.so that libSeamsPlumed.so was built against; unset, it is
+the one beside plumed on PATH. The
 SEAMS labels are checked against the CLI on SEAMS's own dump and on the
 LAMMPS dump of the same steps.
 """
@@ -34,9 +35,9 @@ def main():
     ap.add_argument("--record", default="")
     args = ap.parse_args()
 
-    kernel = os.environ.get("PLUMED_KERNEL", "")
-    if not kernel or not Path(kernel).is_file():
-        e2e.skip("PLUMED_KERNEL does not name a libplumedKernel.so")
+    kernel = e2e.plumed_kernel()
+    if kernel is None:
+        e2e.skip("no libplumedKernel.so in PLUMED_KERNEL or beside plumed on PATH")
     lmp = e2e.which("lmp", "LMP")
     if lmp is None:
         e2e.skip("LAMMPS (lmp or $LMP), the PLUMED host, was not found")
@@ -57,7 +58,8 @@ def main():
         deck = (HERE / "plumed.mw.dat").read_text()
         deck = deck.replace("@PLUGIN@", str(plugin)).replace("@NATOMS@", str(natoms))
         (work / "plumed.dat").write_text(deck.replace("@EVERY@", str(args.every)))
-        env = dict(os.environ, OMP_NUM_THREADS="1", PLUMED_NUM_THREADS="1")
+        env = dict(os.environ, OMP_NUM_THREADS="1", PLUMED_NUM_THREADS="1",
+                   PLUMED_KERNEL=kernel)
         cmd = [lmp, "-var", "cells", str(args.cells), "-var", "steps", str(args.steps),
                "-var", "every", str(args.every), "-var", "melt", str(args.melt),
                "-var", "dump", "native.lammpstrj", "-in", "in.mw.lmp", "-log", "log.lammps",

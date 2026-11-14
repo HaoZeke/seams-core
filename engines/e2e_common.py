@@ -44,6 +44,18 @@ def which(name, env_var=None):
     return shutil.which(name)
 
 
+def plumed_kernel():
+    """PLUMED_KERNEL, else the libplumedKernel.so beside plumed on PATH. None when absent."""
+    kernel = os.environ.get("PLUMED_KERNEL", "")
+    if kernel:
+        return kernel if Path(kernel).is_file() else None
+    plumed = shutil.which("plumed")
+    if plumed is None:
+        return None
+    lib = Path(plumed).resolve().parent.parent / "lib" / "libplumedKernel.so"
+    return str(lib) if lib.is_file() else None
+
+
 def read_dump(path, column):
     """Frames of a LAMMPS text dump as (timestep, {id: int(column)})."""
     frames = []

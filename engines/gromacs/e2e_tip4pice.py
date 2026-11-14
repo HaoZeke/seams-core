@@ -125,9 +125,10 @@ def main():
                OMP_NUM_THREADS=str(args.threads), PLUMED_NUM_THREADS="1")
     plugin = None
     if args.plumed:
-        kernel = env.get("PLUMED_KERNEL", "")
-        if not kernel or not Path(kernel).is_file():
-            e2e.skip("PLUMED_KERNEL does not name a libplumedKernel.so")
+        kernel = e2e.plumed_kernel()
+        if kernel is None:
+            e2e.skip("no libplumedKernel.so in PLUMED_KERNEL or beside plumed on PATH")
+        env["PLUMED_KERNEL"] = kernel
         mdrun_help = subprocess.run([gmx, "-quiet", "mdrun", "-h"], env=env,
                                     capture_output=True, text=True).stdout
         if "-plumed" not in mdrun_help:
@@ -178,7 +179,11 @@ def main():
         out = run([str(hook), "-quiet", "-s", "md.tpr", "-f", "md.trr", "-select", "name OW",
                    "-dump", hook_dump], work, env, "gmx-seams")
         if plugin is not None:
+            # The PLUMED patch logs into md.log; GROMACS 2025 and later, which
+            # link PLUMED themselves, write PLUMED.OUT.
             plog = (work / "md.log").read_text() + log
+            if (work / "PLUMED.OUT").is_file():
+                plog += (work / "PLUMED.OUT").read_text()
             timing = re.search(r"SEAMS calls (\d+) seconds (\S+) per_call (\S+)", plog)
             if timing is None:
                 sys.exit("the SEAMS action did not report its timing")
