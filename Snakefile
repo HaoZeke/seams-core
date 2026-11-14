@@ -557,10 +557,29 @@ rule science_carry_paths:
 # table and leaves extend-<k>-of-<K>.<segment>.log, segments 1 to 3:
 #   snakemake -j1 data/committor-shards/extend-0-of-20.3.log \
 #       --config seeds=20261111-20261130 shard=0/20
-# science_committor_merge folds the shot shards into p_B(n) and n*.
+# window_ns is the shot window, 20 ns by default. sizes shoots only
+# those sizes, into tables named shot-<k>-of-<K>.n<a>-<b>.csv. A shot
+# table and its extension shot-<k>-of-<K>[.n...].w<window_ps>.csv are
+# separate files: science_committor_extend_shots continues each
+# unresolved shot from its saved state to the window or its first
+# basin, and copies the rest. science_committor_pb writes p_commit with
+# its Wilson interval per n, and n*, from the extended tables:
+#   snakemake -j1 data/committor-shards/pb-0-of-20.csv \
+#       --config seeds=20261111-20261130 shard=0/20 window_ns=20
+#   snakemake -j1 data/committor-shards/pb-0-of-20.csv \
+#       --config seeds=20261111-20261130 shard=0/20 sizes=225,250,275
+# science_committor_merge folds the shot shards into p_B(n) and n*,
+# taking each shot from its table with the longest window.
 _COMMITTOR_SEEDS = config.get("seeds", "20261111-20261130")
 _COMMITTOR_SHARD = config.get("shard", "0/1")
 _COMMITTOR_TAG = _COMMITTOR_SHARD.replace("/", "-of-")
+_COMMITTOR_WINDOW_PS = int(round(float(config.get("window_ns", 20)) * 1000))
+_COMMITTOR_SIZES = sorted(
+    {int(word) for word in str(config.get("sizes", "")).replace("-", ",").split(",") if word}
+)
+_COMMITTOR_SUFFIX = (
+    ".n" + "-".join(str(n) for n in _COMMITTOR_SIZES) if _COMMITTOR_SIZES else ""
+)
 _COMMITTOR_FRAMES = f"data/science-frames/committor-climb-{_COMMITTOR_TAG}"
 _COMMITTOR_ENV = (
     "test -n \"$LMP\" || {{ echo \"LMP is unset\" >&2; exit 1; }}\n"
@@ -649,18 +668,61 @@ rule science_committor_shoot:
         "scripts/lmp_launch.py",
         "bbdir/nucleation-pathway",
     output:
-        f"data/committor-shards/shot-{_COMMITTOR_TAG}.csv",
-        f"data/committor-shards/basins-{_COMMITTOR_TAG}.csv",
-        f"data/committor-shards/points-{_COMMITTOR_TAG}.csv",
+        f"data/committor-shards/shot-{_COMMITTOR_TAG}{_COMMITTOR_SUFFIX}.csv",
+        f"data/committor-shards/basins-{_COMMITTOR_TAG}{_COMMITTOR_SUFFIX}.csv",
+        f"data/committor-shards/points-{_COMMITTOR_TAG}{_COMMITTOR_SUFFIX}.csv",
     params:
         seeds=_COMMITTOR_SEEDS,
         shard=_COMMITTOR_SHARD,
         frames=_COMMITTOR_FRAMES,
+        sizes=",".join(str(n) for n in _COMMITTOR_SIZES),
+        window=_COMMITTOR_WINDOW_PS,
     shell:
         _COMMITTOR_ENV
         + "python3 scripts/committor_shoot.py --write-shot {output[0]} "
         "--frames {params.frames} --pathway bbdir/nucleation-pathway "
-        "--seeds '{params.seeds}' --shard '{params.shard}'"
+        "--seeds '{params.seeds}' --shard '{params.shard}' "
+        "--sizes '{params.sizes}' --window-ps {params.window}"
+
+
+# Extend unresolved shots. The shot table is ancient: a table that is
+# already there is continued, never shot again.
+rule science_committor_extend_shots:
+    input:
+        ancient("data/committor-shards/shot-{base}.csv"),
+        "input/nucleation/in.shot",
+        "scripts/committor_shoot.py",
+        "scripts/lmp_launch.py",
+        "bbdir/nucleation-pathway",
+    output:
+        "data/committor-shards/shot-{base}.w{window}.csv",
+    wildcard_constraints:
+        base=r"\d+-of-\d+(\.n\d+(-\d+)*)?",
+        window=r"\d+",
+    params:
+        frames=lambda w: "data/science-frames/committor-climb-" + w.base.split(".")[0],
+    shell:
+        _COMMITTOR_ENV
+        + "python3 scripts/committor_shoot.py --extend-shots {input[0]} --out {output} "
+        "--frames {params.frames} --pathway bbdir/nucleation-pathway "
+        "--window-ps {wildcards.window}"
+
+
+rule science_committor_pb:
+    input:
+        tables=sorted(
+            {
+                f"data/committor-shards/shot-{_COMMITTOR_TAG}.w{_COMMITTOR_WINDOW_PS}.csv",
+                f"data/committor-shards/shot-{_COMMITTOR_TAG}{_COMMITTOR_SUFFIX}"
+                f".w{_COMMITTOR_WINDOW_PS}.csv",
+            }
+        ),
+        script="scripts/committor_shoot.py",
+    output:
+        f"data/committor-shards/pb-{_COMMITTOR_TAG}.csv",
+        f"data/committor-shards/nstar-{_COMMITTOR_TAG}.csv",
+    shell:
+        "python3 scripts/committor_shoot.py --pb {output[0]} --tables {input.tables}"
 
 
 # Pearson and Spearman correlation of n_chill_core, n_chill_ext and
