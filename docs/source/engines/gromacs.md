@@ -58,4 +58,6 @@ loop, and also requires the same labels from `gmx-seams` on the same
 steps. With GROMACS 2024 and PLUMED 2.9 that test sets
 `GMX_DD_SINGLE_RANK=0`: under single-rank domain decomposition about 5%
 of the oxygens reached PLUMED with a neighbouring atom's coordinates.
+The test reads the action's timing from `md.log` under the PLUMED patch and
+from `PLUMED.OUT` under GROMACS 2025 and later, which link PLUMED without it.
 
