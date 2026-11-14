@@ -255,6 +255,7 @@ by [towncrier](https://towncrier.readthedocs.io/).
   an all-pairs scan, and the ice Ih stacking-plane pass runs across
   threads. Ring lists and labels on the 4096- and 32768-molecule cells
   are unchanged.
+- `seams_status_string` reads its argument as an `int`, so a code outside `seams_status` returns "unknown status" without undefined behaviour in the C++ library; clang's UBSan enum check aborted on it.
 - `tests/check_invariance` exits 2 when the trajectory cannot be read, the frame holds no atom of the requested type, or the graph has no six-ring. It used to compare empty results, print PASS and exit 0. The meson tests `invariance_missing_input` and `invariance_empty_frame` expect that failure.
 - q4 and q6 build the multi-thread cutoff list in one pass again, instead of copying each linkcell block.
 
