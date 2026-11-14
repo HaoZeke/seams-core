@@ -966,9 +966,10 @@ rule h2h_sqq_sh_ortho:
 
 
 # d-SEAMS against SQQ 0.5.8 (pimooni/sqq, tag v0.5.8) on rings and ice
-# labels. benchmarks/h2h-sqq.md reads the outputs. The mW liquids need
-# `lmp` on PATH; the frames stay under MW215_DIR. Run with -j1: the
-# timing rules pin cpu 0 and cpus 0-7 and must not share them.
+# labels. benchmarks/h2h-sqq.md reads the outputs. The mW and TIP4P/2005
+# liquids need `lmp` on PATH; the frames stay under MW215_DIR and
+# TIP4P2005_DIR. Run with -j1: the timing rules pin cpu 0 and cpus 0-7
+# and must not share them.
 rule h2h_sqq_mw_liquid:
     input:
         "input/mw215/in.equilibrate",
@@ -980,6 +981,19 @@ rule h2h_sqq_mw_liquid:
     shell:
         "OMP_NUM_THREADS=1 MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
         "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_mw.py 16 48 --log {output}"
+
+
+rule h2h_sqq_tip4p2005:
+    input:
+        "input/tip4p2005/in.bulk",
+        "input/tip4p2005/regenerate.py",
+        "input/hop/regenerate_tip4p.py",
+        "input/brine/regenerate.py",
+    output:
+        "benchmarks/h2h-sqq-tip4p2005.txt",
+    shell:
+        "TIP4P2005_DIR=\"${{TIP4P2005_DIR:-tip4p2005-frames}}\" "
+        "\"${{H2H_PYTHON:-python3}}\" input/tip4p2005/regenerate.py --threads 8 --log {output}"
 
 
 rule h2h_sqq_provenance:
