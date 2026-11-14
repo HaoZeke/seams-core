@@ -428,8 +428,10 @@ DumpIdIndex scanDumpIds(const std::string &path) {
   int natoms = 0;
   int idCol = -1;
   int got = 0;
-  int unique = 0;
   bool atoms = false;
+  // Ids in [1, natoms], one per row read. The header count is untrusted,
+  // so the bitmap is sized only once the rows have shown it is real.
+  std::vector<int> ids;
   std::vector<char> seenId;
   std::string line;
   auto finish = [&]() {
@@ -437,7 +439,17 @@ DumpIdIndex scanDumpIds(const std::string &path) {
       return;
     }
     out.oneToN.resize(static_cast<std::size_t>(seen) + 1, 0);
-    const bool ok = natoms > 0 && unique == natoms;
+    bool ok = natoms > 0 && ids.size() == static_cast<std::size_t>(natoms);
+    if (ok) {
+      seenId.assign(static_cast<std::size_t>(natoms) + 1, 0);
+      for (const int id : ids) {
+        if (seenId[static_cast<std::size_t>(id)] != 0) {
+          ok = false;
+          break;
+        }
+        seenId[static_cast<std::size_t>(id)] = 1;
+      }
+    }
     out.oneToN[static_cast<std::size_t>(seen)] = ok ? 1 : 0;
   };
   while (std::getline(in, line)) {
@@ -448,8 +460,7 @@ DumpIdIndex scanDumpIds(const std::string &path) {
       natoms = 0;
       idCol = -1;
       got = 0;
-      unique = 0;
-      seenId.clear();
+      ids.clear();
       continue;
     }
     if (startsWith(line, "ITEM: NUMBER OF ATOMS")) {
@@ -472,8 +483,7 @@ DumpIdIndex scanDumpIds(const std::string &path) {
       }
       atoms = true;
       got = 0;
-      unique = 0;
-      seenId.assign(static_cast<std::size_t>(std::max(natoms, 0)) + 1, 0);
+      ids.clear();
       continue;
     }
     if (!atoms || got >= natoms) {
@@ -490,9 +500,8 @@ DumpIdIndex scanDumpIds(const std::string &path) {
       continue;
     }
     const int id = std::atoi(fields[static_cast<std::size_t>(idCol)].c_str());
-    if (id >= 1 && id <= natoms && seenId[static_cast<std::size_t>(id)] == 0) {
-      seenId[static_cast<std::size_t>(id)] = 1;
-      unique += 1;
+    if (id >= 1 && id <= natoms) {
+      ids.push_back(id);
     }
   }
   finish();
