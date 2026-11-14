@@ -861,3 +861,19 @@ rule engines_e2e:
     shell:
         "python3 scripts/engines_e2e.py table {input} --out {output}"
 
+
+# PLUMED Q6/LOCAL_AVERAGE/LOCAL_Q6 against d-SEAMS q6/q6bar inside PLUMED.
+# H2H_PLUMED_BUILD names the build holding libSeamsPlumed.so and
+# H2H_PLUMED_SHELL an optional prefix that puts plumed and lmp on PATH.
+rule h2h_plumed_q6:
+    input:
+        "scripts/h2h_plumed_q6.py",
+        "engines/plumed/SeamsColvar.cpp",
+        "engines/lammps/mw_setup.lmp",
+    output:
+        "benchmarks/h2h-plumed-q6.csv",
+    params:
+        build=os.environ.get("H2H_PLUMED_BUILD", "build"),
+        shell=os.environ.get("H2H_PLUMED_SHELL", ""),
+    shell:
+        "{params.shell} python3 scripts/h2h_plumed_q6.py {params.build} --out {output}"
