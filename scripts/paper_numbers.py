@@ -528,7 +528,7 @@ def main() -> int:
         except ImportError:
             os.environ["PAPER_IRA_PIXIE"] = "1"
             os.execvp("pixi", [
-                "pixi", "exec", "--spec", "ira", "python",
+                "pixi", "exec", "--spec", "ira", "--spec", "vesin", "python",
                 str(Path(__file__).resolve()), "--worker", "ira",
                 "--threads", str(args.threads), "--core", args.core,
             ])
