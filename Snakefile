@@ -636,6 +636,21 @@ rule science_recall:
         "--bench {input[0]} --out {output[0]} --sites {output[1]}"
 
 
+# Open-face padding on bulk liquid, the brine front, and the TIP4P basal
+# dump. The probe compares the shell label with the completion off and on.
+# CHILL+ stays the published rule. Dumps are not committed.
+rule science_recall_padding:
+    input:
+        "bbdir/tests/padding_probe",
+        "scripts/recall_padding.py",
+    output:
+        "data/recall-padding-validation.csv",
+    shell:
+        "${{SCIENCE_PYTHON:-python3}} scripts/recall_padding.py "
+        "--probe {input[0]} --out {output} --reps 8 "
+        "--ctest \"${{SCIENCE_CTEST:-not-run}}\" --pytest \"${{SCIENCE_PYTEST:-not-run}}\""
+
+
 rule science_interface:
     input:
         "paper/tex/figures/data/science/interface-230K/interface-layers.csv",

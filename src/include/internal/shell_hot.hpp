@@ -29,8 +29,11 @@ struct Shell17 {
 // xyz is n by 3, row major. lat rows are the cell edges. kind[i] is written
 // as ice Ih (0), ice Ic (1), ice Isd (2), or -1.
 // x, y, z are length n. Column-major coordinates, no interleaving copy.
+// openFace completes a short second shell on a bonded neighbour that has
+// fewer than four bonds. A full coordination shell is never padded.
 void classifyPrepared(const double *x, const double *y, const double *z, int n,
-                      const double lat[3][3], const CanonShell &canon, double gate, int *kind);
+                      const double lat[3][3], const CanonShell &canon, double gate, int *kind,
+                      bool openFace = true);
 
 } // namespace symm
 
