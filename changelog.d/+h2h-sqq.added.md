@@ -1,0 +1,1 @@
+Add a per-ring and per-molecule head-to-head against SQQ 0.5.8 on ice Ih, ice Ic, 215 K mW liquid and confined TIP4P, with paired-bootstrap timing at one and eight threads in `benchmarks/h2h-sqq.csv`.

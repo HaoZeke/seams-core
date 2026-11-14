@@ -1,0 +1,31 @@
+d-SEAMS 2.14.0 commit 66e81515f32e300a4a7f65329d4ebabd03bf2979 build release -O3
+SQQ 0.5.8 commit 17cf76f9a2fc18848321025674a0f4d4adfa26e8 engine py
+threads 8 cores 8 cpus 0-7 python 3.13.14 warmup 1 n 8
+sample Ic-4096 molecules 4096 operation rings threads 8 code d-SEAMS ms 4.2774 5.5966 2.6095 5.0681 3.6447 4.5331 2.9960 4.3966
+sample Ic-4096 molecules 4096 operation rings threads 8 code SQQ ms 614.4074 639.5484 654.9969 628.8455 594.4394 613.5382 595.1278 624.0890
+sample Ic-4096 molecules 4096 operation ice threads 8 code d-SEAMS ms 1.4062 1.0967 0.4781 1.4668 0.5056 2.6521 0.9884 1.5326
+sample Ic-4096 molecules 4096 operation ice threads 8 code SQQ ms 550.5312 573.1709 546.9444 571.0229 546.1253 565.8064 542.8888 564.5390
+sample Ih-4096 molecules 4096 operation rings threads 8 code d-SEAMS ms 3.3524 3.9879 2.3498 3.4085 2.3907 3.7716 2.6297 4.1806
+sample Ih-4096 molecules 4096 operation rings threads 8 code SQQ ms 673.7382 640.0659 663.4651 662.6420 642.8813 663.9048 635.6666 660.2484
+sample Ih-4096 molecules 4096 operation ice threads 8 code d-SEAMS ms 2.5558 1.2419 0.5340 2.7487 0.4710 1.6325 0.4641 2.2221
+sample Ih-4096 molecules 4096 operation ice threads 8 code SQQ ms 606.8802 584.5252 611.3036 584.3217 606.5537 611.7058 709.7352 795.4529
+sample mw-liquid-4096 molecules 4096 operation rings threads 8 code d-SEAMS ms 8.2160 7.8155 7.1866 8.0957 6.2373 8.2529 6.5571 6.8897
+sample mw-liquid-4096 molecules 4096 operation rings threads 8 code SQQ ms 869.3667 863.1574 865.4778 850.5245 870.5899 855.2009 874.0739 845.5930
+sample mw-liquid-4096 molecules 4096 operation ice threads 8 code d-SEAMS ms 2.5923 2.4944 0.7433 1.5344 1.2080 1.5450 0.6365 1.3284
+sample mw-liquid-4096 molecules 4096 operation ice threads 8 code SQQ ms 721.0447 724.8848 751.0653 731.5438 749.8133 722.9002 719.3293 738.6006
+sample tip4p-o-250 molecules 250 operation rings threads 8 code d-SEAMS ms 0.4651 0.4937 0.6172 0.5344 0.6569 0.4295 0.6205 0.4603
+sample tip4p-o-250 molecules 250 operation rings threads 8 code SQQ ms 23.6708 23.5711 23.6718 24.8873 23.5758 23.6674 23.7327 23.6159
+sample tip4p-o-250 molecules 250 operation ice threads 8 code d-SEAMS ms 0.1272 0.1353 0.0906 0.1279 0.0894 0.1316 0.0892 0.1496
+sample tip4p-o-250 molecules 250 operation ice threads 8 code SQQ ms 19.1047 19.0655 19.0865 18.8855 19.0204 18.8892 19.0159 18.7300
+sample Ic-110592 molecules 110592 operation rings threads 8 code d-SEAMS ms 63.7769 77.7104 67.4936 64.8077 52.4160 78.9352 62.5958 68.2776
+sample Ic-110592 molecules 110592 operation rings threads 8 code SQQ ms 18456.2723 19044.4039 18626.8559 17980.3632 18425.1488 18415.6050 18454.0362 18563.9842
+sample Ic-110592 molecules 110592 operation ice threads 8 code d-SEAMS ms 14.1939 15.9263 9.6000 15.5451 9.9390 14.4091 12.2484 15.1781
+sample Ic-110592 molecules 110592 operation ice threads 8 code SQQ ms 16976.4715 17205.0833 16868.3881 17218.5828 16910.7848 17179.7511 17095.1872 17024.2954
+sample Ih-110592 molecules 110592 operation rings threads 8 code d-SEAMS ms 63.9371 61.1899 56.6416 72.0988 52.1426 149.2396 59.1543 83.9574
+sample Ih-110592 molecules 110592 operation rings threads 8 code SQQ ms 19742.5509 19447.9530 19721.8099 20576.8139 19715.3157 23212.2245 20885.2128 20394.5024
+sample Ih-110592 molecules 110592 operation ice threads 8 code d-SEAMS ms 15.7273 17.9340 8.4223 16.3122 10.1432 17.0656 12.2263 20.0911
+sample Ih-110592 molecules 110592 operation ice threads 8 code SQQ ms 18601.2653 18693.8161 18075.7507 18601.9694 18305.7707 18829.4600 18612.7810 18719.3018
+sample mw-liquid-110592 molecules 110592 operation rings threads 8 code d-SEAMS ms 167.8541 161.2300 168.6246 174.3537 151.1668 162.4943 143.6580 164.4482
+sample mw-liquid-110592 molecules 110592 operation rings threads 8 code SQQ ms 26625.2138 27165.8890 30090.4912 29961.9720 28397.1696 27798.3495 28932.5149 27366.0008
+sample mw-liquid-110592 molecules 110592 operation ice threads 8 code d-SEAMS ms 22.9113 21.2099 15.7217 22.1256 16.3889 19.8679 14.9934 22.4681
+sample mw-liquid-110592 molecules 110592 operation ice threads 8 code SQQ ms 22330.3764 23263.7103 24196.5742 22712.3778 23540.9980 23591.9351 23300.8389 22276.3845

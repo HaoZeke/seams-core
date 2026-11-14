@@ -1,0 +1,4 @@
+Large-scale Atomic/Molecular Massively Parallel Simulator - 22 Jul 2025 - Update 4
+deck input/mw215/in.equilibrate seed 215 OMP_NUM_THREADS 1
+mw-liquid-4096 cells 16 sha256 1b18b513dbb7f447f13fabff9d1ca5b2aaa1b280a9f12ea0a2fd5f74c2e16f73
+mw-liquid-110592 cells 48 sha256 a576324b104d3344582e6485d31a86d198ae8d4672e246fb4b6a9fc2cbb27fe0
