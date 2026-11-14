@@ -35,4 +35,7 @@ if e2e_py.found()
   test('gromacs_plumed_e2e', e2e_py,
     args: [e2e_src / 'gromacs' / 'e2e_tip4pice.py', e2e_build, '--plumed'],
     env: e2e_env, depends: e2e_deps, suite: 'engines-e2e', timeout: 900)
+  test('openmm_e2e', e2e_py,
+    args: [e2e_src / 'openmm' / 'e2e_tip4pice.py', e2e_build],
+    env: e2e_env, depends: e2e_deps, suite: 'engines-e2e', timeout: 900)
 endif

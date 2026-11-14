@@ -236,6 +236,7 @@ if openmm_opt.allowed()
     error('with_openmm is enabled but libOpenMM was not found')
   endif
   if openmm_dep.found()
+    # The test runs the driver without LD_LIBRARY_PATH.
     openmm_rpath = ''
     if openmm_dep.type_name() == 'pkgconfig'
       openmm_rpath = openmm_dep.get_variable('libdir', default_value: '')
@@ -245,13 +246,15 @@ if openmm_opt.allowed()
       if openmm_lib_py.found()
         openmm_lib_where = run_command(openmm_lib_py, '-c',
           'import os, pathlib\n' +
-          'prefix = os.environ.get("CONDA_PREFIX", "")\n' +
-          'if not prefix:\n' +
-          '    raise SystemExit(1)\n' +
-          'root = pathlib.Path(prefix)\n' +
-          'for folder in (root / "lib", root / "lib64"):\n' +
-          '    if (folder / "libOpenMM.so").is_file():\n' +
-          '        print(folder)\n' +
+          'dirs = []\n' +
+          'for var in ("CONDA_PREFIX", "OPENMM_DIR"):\n' +
+          '    if os.environ.get(var):\n' +
+          '        dirs += [pathlib.Path(os.environ[var]) / "lib", pathlib.Path(os.environ[var]) / "lib64"]\n' +
+          'for var in ("LIBRARY_PATH", "LD_RUN_PATH"):\n' +
+          '    dirs.extend(pathlib.Path(p) for p in os.environ.get(var, "").split(os.pathsep) if p)\n' +
+          'for root in dirs:\n' +
+          '    if (root / "libOpenMM.so").is_file():\n' +
+          '        print(root)\n' +
           '        raise SystemExit(0)\n' +
           'raise SystemExit(1)\n',
           check: false)
