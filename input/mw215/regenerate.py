@@ -41,16 +41,20 @@ def frame_path(cells: int) -> Path:
     return OUT / f"mw-liquid-{cells ** 3}.lammpstrj"
 
 
-def generate(cells: int) -> Path:
+def generate(cells: int, threads: int = 1) -> Path:
+    """threads > 1 runs pair sw/omp; that trajectory is fixed for the seed
+    only at the same thread count."""
     OUT.mkdir(parents=True, exist_ok=True)
     dest = frame_path(cells)
     env = os.environ.copy()
-    env["OMP_NUM_THREADS"] = "1"
+    env["OMP_NUM_THREADS"] = str(threads)
+    accel = ["-sf", "omp", "-pk", "omp", str(threads)] if threads > 1 else []
     with tempfile.TemporaryDirectory(prefix="mw215-") as work:
         shutil.copy(DECK / "mW.sw", work)
         shutil.copy(DECK / "in.equilibrate", work)
         subprocess.run(
-            ["lmp", "-in", "in.equilibrate", "-var", "n", str(cells), "-log", "log.lammps"],
+            ["lmp", *accel, "-in", "in.equilibrate", "-var", "n", str(cells), "-log",
+             "log.lammps"],
             cwd=work,
             env=env,
             check=True,

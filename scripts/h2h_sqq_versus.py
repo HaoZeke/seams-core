@@ -78,7 +78,8 @@ BOOT = 10000
 BOOT_SEED = 20261114
 FRAMES = (
     "Ic-4096", "Ih-4096", "mw-liquid-4096", "tip4p2005-4096",
-    "Ic-110592", "Ih-110592", "mw-liquid-110592", "tip4p-o-250",
+    "Ic-110592", "Ih-110592", "mw-liquid-110592",
+    "Ic-884736", "Ih-884736", "mw-liquid-884736", "tip4p-o-250",
 )
 OPERATIONS = ("rings", "ice", "ice-primitive", "ice-chordless")
 # The d-SEAMS ice calls, in the order of an even round. SQQ's ice call
@@ -1123,7 +1124,7 @@ def main():
     p.add_argument("--frames", nargs="+", default=list(FRAMES))
     p.add_argument("--examples", type=int, default=5)
     p.add_argument("--causes", type=int, default=12)
-    p.add_argument("--enumerate-max", type=int, default=110592,
+    p.add_argument("--enumerate-max", type=int, default=884736,
                    help="largest frame for the brute-force chordless 6-cycle reference")
     p.add_argument("--out", default="benchmarks/h2h-sqq-agree.csv")
     p.add_argument("--log", default="benchmarks/h2h-sqq-agree.txt")

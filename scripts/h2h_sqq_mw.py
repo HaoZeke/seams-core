@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """215 K mW liquids for the SQQ head-to-head.
 
-input/mw215/in.equilibrate on one OpenMP thread with velocity seed 215.
-16 cells on an edge is 4096 molecules and 48 is 110592. The public
+input/mw215/in.equilibrate with velocity seed 215. 16 cells on an edge
+is 4096 molecules, 48 is 110592 and 96 is 884736. The first two run on
+one OpenMP thread, the 96-cell frame on eight; the log records the count. The public
 d-SEAMS/mw-liquid-215K download answers 401, so the deck is rerun with
 `lmp` from PATH. Frames land under MW215_DIR, outside the tree. The log
 records the LAMMPS banner and the sha256 of every dump.
@@ -41,14 +42,19 @@ def lammps_banner() -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("cells", nargs="*", type=int, default=[16, 48])
+    parser.add_argument("--threads-from", type=int, default=0, metavar="CELLS",
+                        help="run frames of at least CELLS cells on --threads OpenMP threads")
+    parser.add_argument("--threads", type=int, default=1)
     parser.add_argument("--log", required=True)
     args = parser.parse_args()
-    lines = [lammps_banner(), "deck input/mw215/in.equilibrate seed 215 OMP_NUM_THREADS 1"]
+    lines = [lammps_banner(), "deck input/mw215/in.equilibrate seed 215"]
     for cells in args.cells:
+        threads = args.threads if args.threads_from and cells >= args.threads_from else 1
         path = regenerate.frame_path(cells)
         if not path.is_file():
-            regenerate.generate(cells)
-        lines.append(f"mw-liquid-{cells ** 3} cells {cells} sha256 {sha256(path)}")
+            regenerate.generate(cells, threads)
+        lines.append(f"mw-liquid-{cells ** 3} cells {cells} OMP_NUM_THREADS {threads} "
+                     f"sha256 {sha256(path)}")
     Path(args.log).write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
     return 0

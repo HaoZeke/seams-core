@@ -980,7 +980,8 @@ rule h2h_sqq_mw_liquid:
         "benchmarks/h2h-sqq-mw.txt",
     shell:
         "OMP_NUM_THREADS=1 MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
-        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_mw.py 16 48 --log {output}"
+        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_mw.py 16 48 96 --threads-from 96 "
+        "--threads 8 --log {output}"
 
 
 rule h2h_sqq_tip4p2005:
