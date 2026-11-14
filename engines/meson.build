@@ -339,6 +339,10 @@ if plumed_opt.allowed()
       include_directories: plumed_incs,
       cpp_args: _args + seams_api_args + plumed_cpp,
       name_prefix: 'lib',
+      # PLUMED's LOAD dlopens this; without an rpath libplumedKernel.so
+      # resolves only through LD_LIBRARY_PATH.
+      build_rpath: plumed_libdir,
+      install_rpath: plumed_libdir,
       install: true)
   elif plumed_opt.enabled()
     error('with_plumed is enabled but PLUMED was not found')
