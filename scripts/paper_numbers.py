@@ -396,6 +396,66 @@ def _ira_chunk(shells, templates, types):
             ira.match(17, types, templ, 17, types, shell, 1.5)
 
 
+def _write_ira_shells(path: Path) -> None:
+    """17-atom shells for the 884736-molecule ice, written before IRA starts."""
+    import numpy as np
+    import vesin
+    import paper_ptm_templates as ptm
+    pos, lattice = ptm.ice_ic(48)
+    points = np.ascontiguousarray(pos, dtype=np.float64)
+    n = len(points)
+    side = float(np.asarray(lattice).reshape(-1)[0])
+    finder = vesin.NeighborList(cutoff=5.0, full_list=True, n_threads=1)
+    left, dist, vec = finder.compute(
+        points=points, box=np.eye(3) * side, periodic=True, quantities="idD", copy=True)
+    order = np.argsort(left, kind="mergesort")
+    left, dist, vec = left[order], dist[order], vec[order]
+    cuts = np.searchsorted(left, np.arange(n + 1))
+    shells = np.full((n, 17, 3), np.nan)
+    for i in range(n):
+        start, stop = int(cuts[i]), int(cuts[i + 1])
+        if stop - start < 16:
+            continue
+        block = dist[start:stop]
+        pick = np.argpartition(block, 15)[:16]
+        pick = pick[np.argsort(block[pick])]
+        shells[i, 0] = points[i]
+        shells[i, 1:] = points[i] + vec[start:stop][pick]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(path, shells=shells)
+    print(f"wrote {path.name} atoms {n}", flush=True)
+
+
+def ira_from_shells(path: Path, threads: int):
+    import multiprocessing as mp
+    import numpy as np
+    import ira_mod
+    shells = np.load(path)["shells"]
+    n = len(shells)
+    types = np.ones(17, dtype=np.int32)
+    templates = [shells[i] for i in range(n) if np.isfinite(shells[i, 0, 0])][:3]
+    if not templates:
+        raise SystemExit("no IRA shells")
+    processes = max(int(threads), 1)
+    edges = np.linspace(0, n, processes + 1, dtype=int)
+    chunks = [(shells[int(a):int(b)], templates, types) for a, b in zip(edges[:-1], edges[1:])]
+
+    def one():
+        if processes == 1:
+            _ira_chunk(*chunks[0])
+            return
+        with mp.get_context("fork").Pool(processes) as pool:
+            pool.starmap(_ira_chunk, chunks)
+
+    one()
+    samples = [timed(one) for _ in range(REPEATS)]
+    version = str(getattr(ira_mod, "version", "ira"))
+    return (
+        samples, version, processes,
+        f"shells built once; processes={processes}; the column is that process count",
+    )
+
+
 def ira_samples(pos, lattice, threads: int):
     """Match every oxygen. The process count is `threads`, and the column says so."""
     import numpy as np
@@ -519,6 +579,7 @@ def main() -> int:
     parser.add_argument("--core", default=str(ROOT / "bbdir-release/src/libyodaLib.so"))
     parser.add_argument("--worker", default="")
     parser.add_argument("--threads", type=int, default=1)
+    parser.add_argument("--shells", default="")
     args = parser.parse_args()
     stamp_env()
     prepare_libs(args.lib)
@@ -526,18 +587,25 @@ def main() -> int:
         try:
             import ira_mod  # noqa: F401
         except ImportError:
+            shells = ROOT / "bbdir" / f"ira-shells-{args.threads}.npz"
+            _write_ira_shells(shells)
             os.environ["PAPER_IRA_PIXIE"] = "1"
             os.execvp("pixi", [
-                "pixi", "exec", "--spec", "ira", "--spec", "vesin", "python",
+                "pixi", "exec", "--spec", "ira", "python",
                 str(Path(__file__).resolve()), "--worker", "ira",
                 "--threads", str(args.threads), "--core", args.core,
+                "--shells", str(shells),
             ])
     if args.worker == "ira":
         info = identity()
         import json
-        import paper_ptm_templates as ptm
-        pos, lattice = ptm.ice_ic(48)
-        got = ira_samples(pos, lattice, args.threads)
+        shells = Path(args.shells) if args.shells else None
+        if shells is None or not shells.is_file():
+            import paper_ptm_templates as ptm
+            pos, lattice = ptm.ice_ic(48)
+            got = ira_samples(pos, lattice, args.threads)
+        else:
+            got = ira_from_shells(shells, args.threads)
         if got is None:
             raise SystemExit("IRA is not importable")
         samples, version, processes, detail = got
