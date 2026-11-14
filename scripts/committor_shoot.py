@@ -89,7 +89,6 @@ COMMIT_MULTIPLE = 2.0
 COMMIT_FLOOR = 300
 LIQUID_PERCENTILE = 95.0
 SHOT_NS = 1.0
-N_SHOOT_SIZES = 5
 N_SHOTS = 20
 BOOT_DRAWS = 10000
 BOOT_SEED = 20261111
@@ -106,6 +105,7 @@ SERIES = ("n_chill_core", "n_chill_ext", "n_q6solid")
 NUCLEUS_CUT = 300
 HOLD_PS = 1000.0
 SHOOT_SIZES = (50, 75, 100, 150, 200, 300)
+N_SHOOT_SIZES = len(SHOOT_SIZES)
 EQUIL_PS = 1000.0
 TEMPERATURE = 180.0
 N_CELL = 16
@@ -677,6 +677,9 @@ def self_test() -> None:
     hours = eta_hours(160.0)
     if not (1.5 < hours["one_climb_h"] < 2.0 and hours["shooting_h"] > hours["twenty_climbs_h"]):
         raise SystemExit(f"eta {hours}")
+    want = N_SEEDS * len(SHOOT_SIZES) * N_SHOTS * SHOT_STEPS / 160.0 / 3600.0
+    if N_SHOOT_SIZES != 6 or abs(hours["shooting_h"] - want) > 1e-9:
+        raise SystemExit(f"eta shooting {hours['shooting_h']} is not six sizes")
     seeds = parse_seed_list("20261111-20261130")
     if len(seeds) != 20:
         raise SystemExit("the published seed list is not 20 long")
