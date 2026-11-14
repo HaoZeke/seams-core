@@ -1,6 +1,4 @@
-replica,molecules,barrier,final_nmax,fate,cut_at_2n,commit
-r1,64,2.000000,160.000000,committed,0,56f6eb627754be679c9d87892b9b1f05f19ab035
-r2,64,,3.000000,uncommitted,0,56f6eb627754be679c9d87892b9b1f05f19ab035
-r3,64,10.000000,128.000000,truncated,1,56f6eb627754be679c9d87892b9b1f05f19ab035
-r4,64,20.000000,10.000000,uncommitted,0,56f6eb627754be679c9d87892b9b1f05f19ab035
-r5,64,4.000000,220.000000,committed,0,56f6eb627754be679c9d87892b9b1f05f19ab035
+# commit ab549f1483a628d45ee3df6424adf776d77d1a5d
+# command $LMP -in input/nucleation/in.homogeneous -var n 16 --seeds 20261111-20261130 --melt 10000 --quench 1000000 --dump-every 1000 --temperature 180
+# No 4096 climb has finished in this sitting, so there is no p_B.
+replica,shoot_n,molecules,fate,commit

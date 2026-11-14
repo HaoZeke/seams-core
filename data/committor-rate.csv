@@ -1,0 +1,4 @@
+# commit ab549f1483a628d45ee3df6424adf776d77d1a5d
+# command $LMP -in input/nucleation/in.homogeneous -var n 16 -var nmelt 500 -var nquench 2000 -var ndump 2000 -var nskip 0 -var Tq 180 -var seed 20261111
+molecules,quench_steps,loop_s,steps_per_s,eta_10ns_h,eta_20climbs_h,eta_shooting_h,commit
+4096,2000,12.5328,159.581,1.741,34.813,348.133,ab549f1483a628d45ee3df6424adf776d77d1a5d

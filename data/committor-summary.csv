@@ -1,2 +1,4 @@
-n_replicas,n_used,n_committed,p_commit,commit
-5,4,2,0.500000,56f6eb627754be679c9d87892b9b1f05f19ab035
+# commit ab549f1483a628d45ee3df6424adf776d77d1a5d
+# command $LMP -in input/nucleation/in.homogeneous -var n 16 --seeds 20261111-20261130 --melt 10000 --quench 1000000 --dump-every 1000 --temperature 180
+# No 4096 climb has finished in this sitting, so there is no p_B.
+n_star,n_star_lo,n_star_hi,n_resolved,n_unresolved,commit
