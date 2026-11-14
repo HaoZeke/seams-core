@@ -708,6 +708,8 @@ def main() -> int:
         encoding="utf-8",
     )
     print(f"wrote {manifest}", flush=True)
+    import paper_numbers_table as table
+    table.publish(out, ROOT / "paper/NUMBERS.tsv")
     return 0
 
 

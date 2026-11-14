@@ -1039,6 +1039,7 @@ rule release_build:
 rule paper_numbers:
     input:
         "scripts/paper_numbers.py",
+        "scripts/paper_numbers_table.py",
         "scripts/paper_stats.py",
         "scripts/paper_sitting.py",
         "scripts/paper_ptm_templates.py",
@@ -1056,6 +1057,7 @@ rule paper_numbers:
         "benchmarks/paper-numbers/fig-scaling.csv",
         "benchmarks/paper-numbers/fig-strong.csv",
         "benchmarks/paper-numbers/manifest.txt",
+        "paper/NUMBERS.tsv",
     shell:
         "export LJOS_SEAT=dseams-paper QT_QPA_PLATFORM=offscreen; "
         "python3 scripts/paper_numbers.py --out benchmarks/paper-numbers "
