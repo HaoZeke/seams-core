@@ -223,6 +223,8 @@ r-cpp11 = ">=0.4"
 r-testthat = ">=3.2"
 # The Lua video tape loads require("dseams") from LuaJIT.
 luajit = ">=2.1"
+# The docs Lua tests and the example counts run under PUC Lua 5.4.
+lua = ">=5.4,<5.5"
 
 [pypi-dependencies]
 ovito = ">=3.12.0, <4"
