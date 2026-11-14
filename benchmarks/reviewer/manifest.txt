@@ -1,0 +1,10 @@
+source_commit fdc14b6003d1625a0494a6d4bd005210b8fbf803
+version seams 2.14.0
+cpu_model Intel Xeon Processor
+cpu_cores 8
+warmup 1
+n 8
+one release build
+host name is not recorded
+serial affinity is core 1
+eight-thread affinity is cores 0-7
