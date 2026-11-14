@@ -29,4 +29,10 @@ if e2e_py.found()
   test('plumed_units', e2e_py,
     args: [e2e_src / 'plumed' / 'run_units.py', e2e_build],
     depends: e2e_deps, suite: 'engines-e2e', timeout: 120)
+  test('gromacs_e2e', e2e_py,
+    args: [e2e_src / 'gromacs' / 'e2e_tip4pice.py', e2e_build],
+    env: e2e_env, depends: e2e_deps, suite: 'engines-e2e', timeout: 900)
+  test('gromacs_plumed_e2e', e2e_py,
+    args: [e2e_src / 'gromacs' / 'e2e_tip4pice.py', e2e_build, '--plumed'],
+    env: e2e_env, depends: e2e_deps, suite: 'engines-e2e', timeout: 900)
 endif
