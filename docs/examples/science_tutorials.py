@@ -309,23 +309,35 @@ def brine_frame(lib, path: Path):
 
 
 def fetch_brine(cache: Path):
+    """The frames, fetched once. Several docs tests read them at the same time."""
+    import fcntl
+
     cache.mkdir(parents=True, exist_ok=True)
+    with open(cache / ".fetch.lock", "a", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        return _fetch_brine(cache)
+
+
+def _fetch_brine(cache: Path):
     paths = []
     for name, digest in BRINE_FILES.items():
         dest = cache / Path(name).name
         if dest.is_file() and hashlib.sha256(dest.read_bytes()).hexdigest() == digest:
             paths.append(dest)
             continue
+        part = dest.with_name(dest.name + ".part")
         try:
-            urllib.request.urlretrieve(BRINE_URL + "/" + name, dest)
+            urllib.request.urlretrieve(BRINE_URL + "/" + name, part)
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            part.unlink(missing_ok=True)
             print(f"{SKIP}: {exc}")
             return None
-        got = hashlib.sha256(dest.read_bytes()).hexdigest()
+        got = hashlib.sha256(part.read_bytes()).hexdigest()
         if got != digest:
-            dest.unlink(missing_ok=True)
+            part.unlink(missing_ok=True)
             print(f"{SKIP}: checksum mismatch for {name}")
             return None
+        part.replace(dest)
         paths.append(dest)
     return paths
 
