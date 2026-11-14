@@ -1,5 +1,6 @@
 # Copyright (c) d-SEAMS developers
-"""Run the OpenMM reporter. Skip only when OpenMM itself is absent."""
+"""Run the OpenMM reporter. Skip when OpenMM is absent or the build has no
+Python module (-Dwith_python=false)."""
 
 import importlib.util
 import os
@@ -15,6 +16,9 @@ if importlib.util.find_spec("openmm") is None:
 build = Path(os.environ.get("DSEAMS_BUILD", "build"))
 src = Path(os.environ.get("DSEAMS_SRC", Path(__file__).resolve().parents[2]))
 cores = list(build.rglob("_core*.so"))
+if not cores and os.environ.get("DSEAMS_WITH_PYTHON") == "0":
+    print("this build has -Dwith_python=false, so there is no dseams._core")
+    sys.exit(77)
 if not cores:
     print("openmm is installed but dseams._core was not built")
     sys.exit(1)
