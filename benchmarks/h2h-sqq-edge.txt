@@ -1,17 +1,21 @@
-d-SEAMS 2.14.0 commit 66e81515f32e300a4a7f65329d4ebabd03bf2979
+d-SEAMS 2.14.0 commit 2ef127758d00922621e0e4696abfa89544c2ffc0 code clean
 SQQ 0.5.8 commit 17cf76f9a2fc18848321025674a0f4d4adfa26e8; MDAnalysis 2.11.0
 cutoff 3.5 A; SQQ asks self_capped_distance for pairs within 0.35 + 1e-7 nm and keeps a pair when its float64 distance <= 0.35 nm
 frame Ic-4096 edges reference 8192 d-SEAMS 8192 SQQ 8192 differing 0
 frame Ih-4096 edges reference 8192 d-SEAMS 8192 SQQ 8192 differing 0
 frame mw-liquid-4096 edges reference 9579 d-SEAMS 9579 SQQ 9579 differing 0
-frame tip4p-o-250 edges reference 509 d-SEAMS 509 SQQ 509 differing 0
+frame tip4p2005-4096 edges reference 10495 d-SEAMS 10495 SQQ 10495 differing 0
 frame Ic-110592 edges reference 221184 d-SEAMS 221184 SQQ 221184 differing 0
 frame Ih-110592 edges reference 221184 d-SEAMS 221184 SQQ 221184 differing 0
 frame mw-liquid-110592 edges reference 259187 d-SEAMS 259187 SQQ 259186 differing 1
 edge mw-liquid-110592 21148-30374 reference True d-SEAMS True SQQ False; float64 3.499998773 A (cutoff - d = 1.227e-06); float32 3.500004292 A; self_capped_distance does not return it
 ice mw-liquid-110592 molecule 21148 SQQ interfacial; SQQ rule on the reference graph liquid (degree 5), on SQQ's graph interfacial (degree 4); next to 21148-30374
 ice mw-liquid-110592 SQQ rule on SQQ's own graph reproduces 110592/110592 SQQ labels
+chordless mw-liquid-110592 SQQ only [414, 2917, 11936, 18660, 21148, 30374] contains 21148-30374; chordless only in SQQ's graph; in the reference graph 21148-30374 is a chord of it
+chordless mw-liquid-110592 SQQ only [414, 4879, 11936, 18660, 21148, 30374] contains 21148-30374; chordless only in SQQ's graph; in the reference graph 21148-30374 is a chord of it
+ice mw-liquid-110592 molecule 21148 SQQ rule on d-SEAMS chordless 6-rings liquid, SQQ interfacial; SQQ rule on the reference graph liquid; next to 21148-30374
 ring mw-liquid-110592 size 4 SQQ only [2917, 4879, 21148, 30374] contains 21148-30374; a chordless cycle of SQQ's graph; in the reference graph 21148-30374 is a chord of it
 ring mw-liquid-110592 size 5 d-SEAMS only [414, 11936, 18660, 21148, 30374] contains 21148-30374; shortest-path ring of the reference graph
 ring mw-liquid-110592 size 6 SQQ only [414, 2917, 11936, 18660, 21148, 30374] contains 21148-30374; a chordless cycle of SQQ's graph; in the reference graph 21148-30374 is a chord of it
 ring mw-liquid-110592 size 6 SQQ only [414, 4879, 11936, 18660, 21148, 30374] contains 21148-30374; a chordless cycle of SQQ's graph; in the reference graph 21148-30374 is a chord of it
+frame tip4p-o-250 edges reference 509 d-SEAMS 509 SQQ 509 differing 0
