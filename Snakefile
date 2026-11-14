@@ -537,27 +537,70 @@ rule science_carry_paths:
         "--out {output[0]} --classes {output[1]}"
 
 
-# Published 4096-molecule homogeneous lane. $LMP is the brine-lane
-# binary (MOLECULE, KSPACE, RIGID, EXTRA-MOLECULE, MANYBODY). The
-# 64-molecule deck in.committor is a fixture and is not this rule.
-# One 10 ns climb is about 1.7 h at the measured rate; twenty climbs
-# and the shooting set are longer than one sitting, so this rule is
-# the production command and is not what the rate table runs.
+# One VM, one shard of the 4096-molecule climbs. k starts at 0.
+#   export LMP=/path/to/lmp
+#   export SEAMS_LIB=/path/to/lib
+#   snakemake -j1 --config seeds=20261111-20261130 shard=0/20 \
+#       data/committor-shards/climb-0-of-20.csv
+# The shot rule uses the same --config and writes shot-<k>-of-<K>.csv.
+# science_committor_merge folds those shot shards into p_B(n) and n*.
+_COMMITTOR_SEEDS = config.get("seeds", "20261111-20261130")
+_COMMITTOR_SHARD = config.get("shard", "0/1")
+_COMMITTOR_TAG = _COMMITTOR_SHARD.replace("/", "-of-")
+
+
 rule science_committor_climb:
     input:
         "input/nucleation/in.homogeneous",
         "input/nucleation/regenerate.py",
         "input/mw215/mW.sw",
+        "scripts/committor_shoot.py",
         "bbdir/nucleation-pathway",
     output:
-        "data/science-frames/committor-climb/mw-4096/timing.tsv",
+        f"data/committor-shards/climb-{_COMMITTOR_TAG}.csv",
+    params:
+        seeds=_COMMITTOR_SEEDS,
+        shard=_COMMITTOR_SHARD,
     shell:
-        "env -u LD_LIBRARY_PATH LMP=\"${{LMP}}\" "
-        "python3 input/nucleation/regenerate.py --lmp \"$$LMP\" --n 16 "
-        "--seeds 20261111-20261130 --melt 10000 --quench 1000000 "
-        "--dump-every 1000 --temperature 180 "
+        "test -n \"$LMP\" || {{ echo \"LMP is unset\" >&2; exit 1; }}\n"
+        "test -n \"$SEAMS_LIB\" || {{ echo \"SEAMS_LIB is unset\" >&2; exit 1; }}\n"
+        "env -u LD_LIBRARY_PATH LMP=\"$LMP\" SEAMS_LIB=\"$SEAMS_LIB\" "
+        "python3 input/nucleation/regenerate.py --lmp \"$LMP\" --n 16 "
+        "--seeds \"$(python3 scripts/committor_shoot.py --print-shard "
+        "--seeds '{params.seeds}' --shard '{params.shard}')\" "
+        "--melt 10000 --quench 1000000 --dump-every 1000 --temperature 180 "
         "--seams bbdir/nucleation-pathway --threads 1 --jobs 1 "
-        "--dest data/science-frames/committor-climb"
+        "--dest data/science-frames/committor-climb-{_COMMITTOR_TAG} "
+        "&& python3 scripts/committor_shoot.py --write-climb {output} "
+        "--seeds '{params.seeds}' --shard '{params.shard}'"
+
+
+rule science_committor_shoot:
+    input:
+        f"data/committor-shards/climb-{_COMMITTOR_TAG}.csv",
+        "scripts/committor_shoot.py",
+    output:
+        f"data/committor-shards/shot-{_COMMITTOR_TAG}.csv",
+    params:
+        seeds=_COMMITTOR_SEEDS,
+        shard=_COMMITTOR_SHARD,
+    shell:
+        "test -n \"$LMP\" || {{ echo \"LMP is unset\" >&2; exit 1; }}\n"
+        "test -n \"$SEAMS_LIB\" || {{ echo \"SEAMS_LIB is unset\" >&2; exit 1; }}\n"
+        "python3 scripts/committor_shoot.py --write-shot {output} "
+        "--seeds '{params.seeds}' --shard '{params.shard}' "
+        "--climb {input[0]}"
+
+
+rule science_committor_merge:
+    input:
+        "scripts/committor_shoot.py",
+    output:
+        "data/committor-table.csv",
+        "data/committor-summary.csv",
+    shell:
+        "python3 scripts/committor_shoot.py --merge data/committor-shards "
+        "--table {output[0]} --summary {output[1]}"
 
 
 rule science_committor_rate:

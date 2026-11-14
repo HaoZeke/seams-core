@@ -1,3 +1,4 @@
+# synthetic test fixture: hand-constructed, not simulation output
 replica	frame	molecules	nmax
 r1	0	64	2
 r1	1	64	2

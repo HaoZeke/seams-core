@@ -1,4 +1,1 @@
-# commit ab549f1483a628d45ee3df6424adf776d77d1a5d
-# command $LMP -in input/nucleation/in.homogeneous -var n 16 --seeds 20261111-20261130 --melt 10000 --quench 1000000 --dump-every 1000 --temperature 180
-# No 4096 climb has finished in this sitting, so there is no p_B.
-replica,shoot_n,molecules,fate,commit
+pending: 4096-molecule p_B(n)
