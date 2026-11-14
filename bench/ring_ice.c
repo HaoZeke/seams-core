@@ -9,7 +9,8 @@
 **
 ** definition 0 counts the primitive six-rings of seams_rings_find.
 ** definition 1 counts the chordless six-cycles of the same cutoff graph,
-** which is the ring set SQQ's ice stage counts.
+** from seams_rings_chordless, which is the ring set SQQ's ice stage
+** counts.
 */
 
 #include "seams.h"
@@ -21,8 +22,6 @@ enum { H2H_PRIMITIVE = 0, H2H_CHORDLESS = 1 };
 enum { H2H_LIQUID = 0, H2H_INTERFACIAL = 1, H2H_ICE = 2 };
 
 typedef struct {
-  const int *off;
-  const int *cols;
   int *six;
   int *rings;
   size_t cap;
@@ -41,49 +40,6 @@ static void record(const walk_t *w, const int *path) {
     if (w->rings != NULL && slot < w->cap) {
       memcpy(w->rings + 6 * slot, path, 6 * sizeof(int));
     }
-  }
-}
-
-/* mark[x] is one more than the position of x on the path, or 0. Each
-** cycle is found once: from its lowest vertex, with path[1] < path[5]. */
-static void extend(const walk_t *w, unsigned char *mark, int *path, int k) {
-  const int s = path[0];
-  const int last = path[k - 1];
-  for (int a = w->off[last]; a < w->off[last + 1]; ++a) {
-    const int v = w->cols[a];
-    if (v <= s || mark[v] != 0) {
-      continue;
-    }
-    int closes = 0;
-    int chord = 0;
-    for (int b = w->off[v]; b < w->off[v + 1] && !chord; ++b) {
-      const int pos = mark[w->cols[b]];
-      if (pos == 0 || pos == k) {
-        continue;
-      }
-      if (pos == 1) {
-        closes = 1;
-      } else {
-        chord = 1;
-      }
-    }
-    if (chord) {
-      continue;
-    }
-    if (k == 5) {
-      if (closes && path[1] < v) {
-        path[5] = v;
-        record(w, path);
-      }
-      continue;
-    }
-    if (closes) {
-      continue;
-    }
-    mark[v] = (unsigned char)(k + 1);
-    path[k] = v;
-    extend(w, mark, path, k + 1);
-    mark[v] = 0;
   }
 }
 
@@ -116,31 +72,6 @@ static int primitive_six(seams_system *sys, double cutoff, const walk_t *w) {
   free(sizes);
   seams_rings_destroy(found);
   return status;
-}
-
-static int chordless_six(int n, const walk_t *w) {
-  int failed = 0;
-#pragma omp parallel num_threads(seams_get_num_threads())
-  {
-    unsigned char *mark = calloc((size_t)(n > 0 ? n : 1), 1);
-    if (mark == NULL) {
-#pragma omp atomic write
-      failed = 1;
-    }
-#pragma omp for schedule(dynamic, 256)
-    for (int s = 0; s < n; ++s) {
-      if (mark == NULL) {
-        continue;
-      }
-      int path[6];
-      path[0] = s;
-      mark[s] = 1;
-      extend(w, mark, path, 1);
-      mark[s] = 0;
-    }
-    free(mark);
-  }
-  return failed ? SEAMS_ERR_NOMEM : SEAMS_OK;
 }
 
 /*
@@ -179,16 +110,18 @@ int seams_h2h_ring_ice(seams_system *sys, double cutoff, int definition, int min
                  ? SEAMS_ERR_NOMEM
                  : seams_neighbours_copy(nb, off, n_off, &n_off, cols, nnz, &nnz);
   }
-  seams_neighbours_destroy(nb);
   size_t next = 0;
-  if (status == SEAMS_OK) {
+  if (status == SEAMS_OK && definition == H2H_CHORDLESS) {
+    status = seams_rings_chordless(nb, 6, rings, rings != NULL ? 6 * rings_cap : 0,
+                                   rings != NULL || n_rings != NULL ? &next : NULL, six, n);
+  } else if (status == SEAMS_OK) {
     memset(six, 0, n * sizeof(int));
-    const walk_t w = {off, cols, six, rings, rings_cap,
-                      rings != NULL || n_rings != NULL ? &next : NULL};
-    status = definition == H2H_PRIMITIVE ? primitive_six(sys, cutoff, &w)
-                                         : chordless_six((int)n, &w);
+    const walk_t w = {six, rings, rings_cap, rings != NULL || n_rings != NULL ? &next : NULL};
+    status = primitive_six(sys, cutoff, &w);
   }
-  if (status == SEAMS_OK) {
+  seams_neighbours_destroy(nb);
+  const int ranged = status == SEAMS_ERR_RANGE && definition == H2H_CHORDLESS;
+  if (status == SEAMS_OK || ranged) {
     const int count = (int)n;
 #pragma omp parallel for num_threads(seams_get_num_threads()) schedule(static)
     for (int i = 0; i < count; ++i) {
