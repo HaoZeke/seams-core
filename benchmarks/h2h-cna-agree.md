@@ -31,4 +31,6 @@ Adaptive CNA writes Structure Type Other, FCC, HCP, BCC, or ICO (ovito/modifiers
 
 On Ih every atom is hexagonal ice, coordination 4, adaptive CNA Other. That is 3 staggered bonds and 1 eclipsed bond. On Ic every atom is cubic ice, coordination 4, adaptive CNA Other. That is 4 staggered bonds. The 222 liquid disagreements are the waters that still have exactly four neighbors inside 3.5 A and still match one CHILL+ row after the shift: 1 hexagonal, 49 hydrate, 168 interfacial hydrate, and 4 interfacial ice. Every one of them is adaptive CNA Other. Another 634 waters also have four neighbors and stay CHILL+ other, because the staggered and eclipsed counts match no row; those agree with adaptive CNA Other. Four liquid atoms have 12 neighbors inside 3.5 A and are still Other. Coordination by itself is not an FCC signature. The FCC control is a copper lattice; the shifted ice is not.
 
+Four shifted-ice waters have 12 neighbours inside 3.5 A: 690 at (4.490, 15.864, 50.345), 1673 at (16.865, 18.399, 11.795), 1675 at (15.210, 17.036, 12.464), 2304 at (16.902, 34.179, 1.355). An independent minimum-image count gives the same 12 distinct ids. The nearest pair in the frame is 0.183 A, from the Gaussian shift, not a repeated periodic image.
+
 Per-atom rows are benchmarks/h2h-cna-atoms.csv.

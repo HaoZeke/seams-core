@@ -381,10 +381,15 @@ def main() -> None:
             sys.stderr.write(done.stdout[-2000:])
             raise SystemExit(f"no rows from threads {threads}")
         rows.extend(parsed)
+    if any(row["verdict"] == "LOSE" for row in rows):
+        _write(Path(args.csv), rows)
+        raise SystemExit(1)
+    cage_path = ROOT / "benchmarks" / "h2h-clavis-cages.csv"
+    if cage_path.is_file():
+        with cage_path.open(encoding="ascii", newline="") as handle:
+            rows.extend(csv.DictReader(handle))
     _write(Path(args.csv), rows)
     print(f"wrote {Path(args.csv).name} rows {len(rows)}", file=sys.stderr, flush=True)
-    if any(row["verdict"] == "LOSE" for row in rows):
-        raise SystemExit(1)
 
 
 def _write(path: Path, rows: list[dict]) -> None:

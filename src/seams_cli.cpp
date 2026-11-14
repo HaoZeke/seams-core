@@ -1614,6 +1614,16 @@ int cmdCages(std::ostream &os, FrameCarry &carry, Cloud &cloud, double cutoff,
           }
         }
         os << "\n";
+        // One sorted vertex list per cage. The count line above stays intact.
+        if (std::getenv("SEAMS_CAGE_VERTICES") != nullptr) {
+          for (const auto &cage : found) {
+            os << "vertex " << sig.str();
+            for (int vertex : cage.vertices) {
+              os << " " << vertex;
+            }
+            os << "\n";
+          }
+        }
       }
       return 0;
     };

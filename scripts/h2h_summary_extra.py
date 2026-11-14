@@ -292,9 +292,11 @@ def cna_rows(lib, h, threads, cores, model, version, row_of, ih_pos, ih_lengths)
     for phase, pos, lengths in frames:
         names = chill_names(lib, h, pos, lengths)
         codes = cna_codes(pos, lengths)
+        from h2h_summary_v2 import summary_cna_text
+
         rows.append(correctness(
             row_of, "OVITO", "cna", int(len(pos)), threads, cores, model, version,
-            mismatch_text(phase, names, codes),
+            summary_cna_text(phase, names, codes, pos, lengths),
         ))
     return rows
 

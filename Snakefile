@@ -817,7 +817,21 @@ rule paper_cells:
 # One process, eight samples, d-SEAMS, mdapy, pyscal3, vesin, and OVITO.
 # CHILL+ is timed as paper (four closest) and ovito (every neighbour inside 3.5 A).
 # Core count, no host name.
+rule h2h_clavis_cages:
+    output:
+        "benchmarks/h2h-clavis-cages.csv",
+        "benchmarks/h2h-clavis-cages.md",
+        "benchmarks/h2h-clavis-cage-ids.csv",
+    shell:
+        "export LJOS_SEAT=\"${{LJOS_SEAT:-dseams-paper}}\"; "
+        "PY=\"${{H2H_PYTHON:-python3}}\"; "
+        "LD_LIBRARY_PATH=\"bbdir-release/src:bbdir-release/subprojects/readcon-core/cargo-target/release:bbdir-release/subprojects/readcon-db/cargo-target/release${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}\" "
+        "\"$PY\" scripts/h2h_clavis_cages.py"
+
+
 rule h2h_summary:
+    input:
+        "benchmarks/h2h-clavis-cages.csv",
     output:
         "benchmarks/h2h-summary.csv",
     shell:

@@ -42,6 +42,20 @@ CHILL_ROW = {
     "interfacial_hydrate": "3 eclipsed",
     "other": "no CHILL+ row",
 }
+# The shifted ice is ice Ih plus a 1.5 A Gaussian draw (PCG64 seed 20261113).
+# These four waters have 12 distinct neighbours inside 3.5 A. The count
+# matches an independent minimum-image loop, so it is the frame.
+SHIFTED_SHELL_NOTE = (
+    "Four shifted-ice waters have 12 neighbours inside 3.5 A: "
+    "690 at (4.490, 15.864, 50.345), "
+    "1673 at (16.865, 18.399, 11.795), "
+    "1675 at (15.210, 17.036, 12.464), "
+    "2304 at (16.902, 34.179, 1.355). "
+    "An independent minimum-image count gives the same 12 distinct ids. "
+    "The nearest pair in the frame is 0.183 A, from the Gaussian shift, "
+    "not a repeated periodic image."
+)
+
 CLAVIS_NAME = {
     0: "other",
     1: "hexagonal_ice",
@@ -204,6 +218,9 @@ def _coordination(pos, lengths) -> np.ndarray:
 
 def fcc_control() -> dict:
     """The same adaptive-CNA call on periodic FCC copper. Every atom is FCC."""
+    cached = getattr(fcc_control, "cached", None)
+    if cached is not None:
+        return cached
     from ase.build import bulk
 
     import h2h_summary_extra as extra
@@ -214,7 +231,9 @@ def fcc_control() -> dict:
     codes = extra.cna_codes(pos, (length, length, length))
     counts = {CNA_NAME.get(int(value), str(int(value))): int(np.count_nonzero(codes == value))
               for value in np.unique(codes)}
-    return {"n": int(pos.shape[0]), "counts": counts, "fcc": int(np.count_nonzero(codes == 1))}
+    found = {"n": int(pos.shape[0]), "counts": counts, "fcc": int(np.count_nonzero(codes == 1))}
+    fcc_control.cached = found
+    return found
 
 
 def explain_cna() -> tuple[str, list[dict], list[dict]]:
@@ -287,6 +306,32 @@ def explain_cna() -> tuple[str, list[dict], list[dict]]:
             f"{control_text}."
         )
     return " ".join(sentences), groups, atoms
+
+
+def summary_cna_text(phase, names, codes, pos, lengths) -> str:
+    """Agreement sentence for one summary correctness row."""
+    coord = _coordination(pos, lengths)
+    groups = []
+    bucket = {}
+    for name, code, degree in zip(names, np.asarray(codes), coord):
+        cause = disagreement_cause(str(name), int(code), int(degree))
+        label = CNA_NAME.get(int(code), str(int(code)))
+        key = (str(name), label, int(degree), cause)
+        bucket[key] = bucket.get(key, 0) + 1
+    for (name, label, degree, cause), count in sorted(bucket.items()):
+        groups.append({
+            "phase": phase,
+            "chill": name,
+            "cna": label,
+            "coordination": degree,
+            "cause": cause,
+            "atoms": count,
+            "chill_row": CHILL_ROW.get(name, ""),
+        })
+    text = cna_agreement(phase, groups, fcc_control())
+    if phase == "liquid":
+        text = text + " " + SHIFTED_SHELL_NOTE
+    return text
 
 
 def cna_agreement(phase: str, groups: list[dict], control: dict) -> str:
@@ -617,6 +662,8 @@ def write_cna_md(groups: list[dict], control: dict) -> None:
     lines.extend([
         "",
         "On Ih every atom is hexagonal ice, coordination 4, adaptive CNA Other. That is 3 staggered bonds and 1 eclipsed bond. On Ic every atom is cubic ice, coordination 4, adaptive CNA Other. That is 4 staggered bonds. The 222 liquid disagreements are the waters that still have exactly four neighbors inside 3.5 A and still match one CHILL+ row after the shift: 1 hexagonal, 49 hydrate, 168 interfacial hydrate, and 4 interfacial ice. Every one of them is adaptive CNA Other. Another 634 waters also have four neighbors and stay CHILL+ other, because the staggered and eclipsed counts match no row; those agree with adaptive CNA Other. Four liquid atoms have 12 neighbors inside 3.5 A and are still Other. Coordination by itself is not an FCC signature. The FCC control is a copper lattice; the shifted ice is not.",
+        "",
+        SHIFTED_SHELL_NOTE,
         "",
         "Per-atom rows are benchmarks/h2h-cna-atoms.csv.",
         "",
