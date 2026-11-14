@@ -538,15 +538,47 @@ rule science_carry_paths:
 
 
 # One VM, one shard of the 4096-molecule climbs. k starts at 0.
-#   export LMP=/path/to/lmp
-#   export SEAMS_LIB=/path/to/lib
-#   snakemake -j1 --config seeds=20261111-20261130 shard=0/20 \
-#       data/committor-shards/climb-0-of-20.csv
-# The shot rule uses the same --config and writes shot-<k>-of-<K>.csv.
-# science_committor_merge folds those shot shards into p_B(n) and n*.
+# LMP is a launcher command line and may already hold mpirun. LMP_NP
+# adds "mpirun -np LMP_NP" in front of a bare LMP. Use nproc --all:
+# the drivers set OMP_NUM_THREADS=1, and plain nproc then returns 1.
+# The census is the release build of nucleation-pathway; a debug build
+# gives the same series several times slower and is refused.
+# Snakemake 9 reads every word after --config as a config value, so the
+# target comes first.
+#   export LMP=lmp LMP_NP=$(nproc --all)
+#   export SEAMS_LIB=$PWD/bbdir/src
+#   snakemake -j1 data/committor-shards/climb-0-of-20.csv \
+#       --config seeds=20261111-20261130 shard=0/20
+#   snakemake -j1 data/committor-shards/shot-0-of-20.csv \
+#       --config seeds=20261111-20261130 shard=0/20
+# A climb that has not nucleated continues 10 ns per extension, to
+# 30 ns, from its restart, or from its last dump frame with fresh
+# velocities when it has no restart. Each extension rewrites the climb
+# table and leaves extend-<k>-of-<K>.<segment>.log:
+#   snakemake -j1 data/committor-shards/extend-0-of-20.1.log \
+#       --config seeds=20261111-20261130 shard=0/20
+# science_committor_merge folds the shot shards into p_B(n) and n*.
 _COMMITTOR_SEEDS = config.get("seeds", "20261111-20261130")
 _COMMITTOR_SHARD = config.get("shard", "0/1")
 _COMMITTOR_TAG = _COMMITTOR_SHARD.replace("/", "-of-")
+_COMMITTOR_FRAMES = f"data/science-frames/committor-climb-{_COMMITTOR_TAG}"
+_COMMITTOR_ENV = (
+    "test -n \"$LMP\" || {{ echo \"LMP is unset\" >&2; exit 1; }}\n"
+    "test -n \"$SEAMS_LIB\" || {{ echo \"SEAMS_LIB is unset\" >&2; exit 1; }}\n"
+    "python3 scripts/committor_shoot.py --check-release bbdir\n"
+)
+
+
+rule seams_census_release:
+    input:
+        "scripts/nucleation_pathway.cpp",
+        "src/nucleation_pathway.cpp",
+    output:
+        "bbdir/nucleation-pathway",
+    shell:
+        "if test -f bbdir/build.ninja; then meson configure bbdir --buildtype=release; "
+        "else meson setup bbdir --buildtype=release; fi\n"
+        "ninja -C bbdir nucleation-pathway"
 
 
 rule science_committor_climb:
@@ -555,41 +587,80 @@ rule science_committor_climb:
         "input/nucleation/regenerate.py",
         "input/mw215/mW.sw",
         "scripts/committor_shoot.py",
+        "scripts/lmp_launch.py",
         "bbdir/nucleation-pathway",
     output:
         f"data/committor-shards/climb-{_COMMITTOR_TAG}.csv",
     params:
         seeds=_COMMITTOR_SEEDS,
         shard=_COMMITTOR_SHARD,
+        frames=_COMMITTOR_FRAMES,
     shell:
-        "test -n \"$LMP\" || {{ echo \"LMP is unset\" >&2; exit 1; }}\n"
-        "test -n \"$SEAMS_LIB\" || {{ echo \"SEAMS_LIB is unset\" >&2; exit 1; }}\n"
-        "env -u LD_LIBRARY_PATH LMP=\"$LMP\" SEAMS_LIB=\"$SEAMS_LIB\" "
-        "python3 input/nucleation/regenerate.py --lmp \"$LMP\" --n 16 "
+        _COMMITTOR_ENV
+        + "env -u LD_LIBRARY_PATH python3 input/nucleation/regenerate.py --n 16 "
         "--seeds \"$(python3 scripts/committor_shoot.py --print-shard "
         "--seeds '{params.seeds}' --shard '{params.shard}')\" "
         "--melt 10000 --quench 1000000 --dump-every 1000 --temperature 180 "
         "--seams bbdir/nucleation-pathway --threads 1 --jobs 1 "
-        "--dest data/science-frames/committor-climb-{_COMMITTOR_TAG} "
+        "--dest {params.frames} "
         "&& python3 scripts/committor_shoot.py --write-climb {output} "
+        "--frames {params.frames} --pathway bbdir/nucleation-pathway "
         "--seeds '{params.seeds}' --shard '{params.shard}'"
+
+
+def _committor_extend_input(wildcards):
+    segment = int(wildcards.segment)
+    tag = f"{wildcards.k}-of-{wildcards.n}"
+    deps = [
+        f"data/committor-shards/climb-{tag}.csv",
+        "input/nucleation/in.extend",
+        "scripts/committor_shoot.py",
+        "bbdir/nucleation-pathway",
+    ]
+    if segment > 1:
+        deps.append(f"data/committor-shards/extend-{tag}.{segment - 1}.log")
+    return deps
+
+
+rule science_committor_extend:
+    input:
+        _committor_extend_input,
+    output:
+        "data/committor-shards/extend-{k}-of-{n}.{segment}.log",
+    wildcard_constraints:
+        k=r"\d+",
+        n=r"\d+",
+        segment=r"[12]",
+    params:
+        seeds=_COMMITTOR_SEEDS,
+        frames=lambda w: f"data/science-frames/committor-climb-{w.k}-of-{w.n}",
+    shell:
+        _COMMITTOR_ENV
+        + "python3 scripts/committor_shoot.py --extend-climb {output} "
+        "--climb {input[0]} --frames {params.frames} --pathway bbdir/nucleation-pathway "
+        "--seeds '{params.seeds}' --shard '{wildcards.k}/{wildcards.n}'"
 
 
 rule science_committor_shoot:
     input:
         f"data/committor-shards/climb-{_COMMITTOR_TAG}.csv",
+        "input/nucleation/in.shot",
         "scripts/committor_shoot.py",
+        "scripts/lmp_launch.py",
+        "bbdir/nucleation-pathway",
     output:
         f"data/committor-shards/shot-{_COMMITTOR_TAG}.csv",
+        f"data/committor-shards/baseline-{_COMMITTOR_TAG}.csv",
+        f"data/committor-shards/points-{_COMMITTOR_TAG}.csv",
     params:
         seeds=_COMMITTOR_SEEDS,
         shard=_COMMITTOR_SHARD,
+        frames=_COMMITTOR_FRAMES,
     shell:
-        "test -n \"$LMP\" || {{ echo \"LMP is unset\" >&2; exit 1; }}\n"
-        "test -n \"$SEAMS_LIB\" || {{ echo \"SEAMS_LIB is unset\" >&2; exit 1; }}\n"
-        "python3 scripts/committor_shoot.py --write-shot {output} "
-        "--seeds '{params.seeds}' --shard '{params.shard}' "
-        "--climb {input[0]}"
+        _COMMITTOR_ENV
+        + "python3 scripts/committor_shoot.py --write-shot {output[0]} "
+        "--frames {params.frames} --pathway bbdir/nucleation-pathway "
+        "--seeds '{params.seeds}' --shard '{params.shard}'"
 
 
 rule science_committor_merge:
