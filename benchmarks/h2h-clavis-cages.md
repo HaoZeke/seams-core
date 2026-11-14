@@ -47,6 +47,17 @@ d-SEAMS counts closed cages on the oxygen cutoff graph at 3.5 A, with the edge w
 51262 both 0 d-SEAMS-only 0 TRACE-only 0
 51264 both 64 d-SEAMS-only 0 TRACE-only 0
 
+## Where 4.29 ms and 12.7 ms come from
+
+Those two numbers are d-SEAMS, not ClavisCage. In `benchmarks/paper-cells/sitting.csv` as committed by `85cf0a24` (`bench: time the quoted kernels in one sitting`, 12 November 2026), the `source_commit` column is `2914162cb8200dc1a5668a54d570130785ccef0c` (`fix(cages): measure tilt-cell edges on the fractional image`). Eight threads, one warm-up, eight calls, `seams` 2.14.0:
+
+- sI 2x2x2, 368 molecules, median 4.285754 ms, which is 4.29 to three significant figures.
+- sII 2x2x2, 1088 molecules, median 12.734558 ms, which is 12.7 to three significant figures.
+
+The ClavisCage rows in that same file are 324.664 ms and 739.347 ms. TRACE 0.3.18 has no thread argument (`analyze_waters` takes the water text, the guest text, the box, the kind, a cutoff and an angle; `Cargo.toml` leaves `rayon` commented out), so an eight-thread pin does not speed it up.
+
+The sentence the paper should carry: On the 2x2x2 cells, one thread, d-SEAMS takes 3.72 ms (sI, 368 molecules) and 10.7 ms (sII, 1088 molecules). ClavisCage TRACE 0.3.18 takes 298 ms and 698 ms on those frames. The figures 4.29 ms and 12.7 ms are the eight-thread d-SEAMS medians from commit 2914162c, recorded in sitting.csv by 85cf0a24, and are not TRACE.
+
 ## sII-9x9x10
 
 110160 molecules. TRACE cutoff 0.35 nm and angle 35 degrees. Hydrogens sit 0.96 A along an out-degree-2 orientation of the four nearest oxygen neighbours
@@ -54,4 +65,6 @@ d-SEAMS counts closed cages on the oxygen cutoff graph at 3.5 A, with the edge w
 512 both 12960 d-SEAMS-only 0 TRACE-only 0
 51262 both 0 d-SEAMS-only 0 TRACE-only 0
 51264 both 6480 d-SEAMS-only 0 TRACE-only 0
+
+TRACE does not expose a thread count. `analyze_waters` has no thread argument, and ClavisCage 0.3.18 leaves `rayon` commented out in `Cargo.toml`. The eight-thread row pins the process to cores 0-7 and times the same serial call: 61957 ms against 61962 ms at one thread. d-SEAMS on that pin is 303 ms.
 
