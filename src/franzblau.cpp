@@ -1021,6 +1021,7 @@ void enumerateChordless(const Graph &adjacency, const DistOracle &oracle,
     std::vector<std::uint64_t> shellAdj;
     std::vector<std::uint64_t> shellArms;
     std::vector<std::uint64_t> rightBits;
+    std::vector<std::uint64_t> leftBits;
     int lwords = 0;
     if (count5) {
       // Neighbour bits of the first shell only. A full-frame row is several
@@ -1034,6 +1035,7 @@ void enumerateChordless(const Graph &adjacency, const DistOracle &oracle,
       shellAdj.assign(static_cast<std::size_t>(nL1) * static_cast<std::size_t>(lwords), 0);
       shellArms.assign(static_cast<std::size_t>(nVertices) * static_cast<std::size_t>(lwords), 0);
       rightBits.assign(static_cast<std::size_t>(lwords), 0);
+      leftBits.assign(static_cast<std::size_t>(lwords), 0);
       for (int i = 0; i < nL1; i++) {
         const int a = L1[static_cast<std::size_t>(i)];
         std::uint64_t *row =
@@ -1078,15 +1080,23 @@ void enumerateChordless(const Graph &adjacency, const DistOracle &oracle,
           const std::uint64_t *qArms =
               shellArms.data() + static_cast<std::size_t>(q) * static_cast<std::size_t>(lwords);
           int pc = 0;
+          int lc = 0;
           for (int w = 0; w < lwords; w++) {
             rightBits[static_cast<std::size_t>(w)] = qArms[w] & ~pArms[w];
+            leftBits[static_cast<std::size_t>(w)] = pArms[w] & ~qArms[w];
             pc += __builtin_popcountll(rightBits[static_cast<std::size_t>(w)]);
+            lc += __builtin_popcountll(leftBits[static_cast<std::size_t>(w)]);
           }
-          if (pc == 0) {
+          if (pc == 0 || lc == 0) {
             continue;
           }
+          // Each exclusive arm of one side is tested against the other side.
+          // The two sides are the same count, so the shorter one is enough.
+          const std::uint64_t *walk = lc <= pc ? leftBits.data() : rightBits.data();
+          const std::uint64_t *other = lc <= pc ? rightBits.data() : leftBits.data();
+          const int otherN = lc <= pc ? pc : lc;
           for (int w = 0; w < lwords; w++) {
-            std::uint64_t word = pArms[w] & ~qArms[w];
+            std::uint64_t word = walk[w];
             const int base = w << 6;
             while (word != 0) {
               const int ra = base + std::countr_zero(word);
@@ -1095,9 +1105,9 @@ void enumerateChordless(const Graph &adjacency, const DistOracle &oracle,
                   shellAdj.data() + static_cast<std::size_t>(ra) * static_cast<std::size_t>(lwords);
               int cut = 0;
               for (int k = 0; k < lwords; k++) {
-                cut += __builtin_popcountll(ba[k] & rightBits[static_cast<std::size_t>(k)]);
+                cut += __builtin_popcountll(ba[k] & other[k]);
               }
-              c5 += pc - cut;
+              c5 += otherN - cut;
             }
           }
         }
