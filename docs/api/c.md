@@ -108,6 +108,10 @@ read a site spec such as `1=waterO`. `seams_cages` and
 `seams_neighbours_copy` fills caller buffers. A null buffer queries the
 length. `seams_neighbours_csr` still returns pointers owned by the handle
 until `seams_neighbours_destroy`.
+`seams_rings_chordless` lists the chordless cycles of one size on a
+neighbour list, sorted and starting at each cycle's lowest atom, with an
+optional count per atom. Every primitive ring is chordless; the converse
+fails in liquids.
 
 One handle is used by one thread. Distinct handles may run together.
 `seams_set_num_threads` is process-global.
@@ -1232,6 +1236,16 @@ Purpose: Opaque handle of one primitive-ring set.
 Parameters: none
 
 Units: handle
+
+Example: `docs/examples/minimal_c.c`
+
+### seams_rings_chordless
+
+Purpose: List the chordless cycles of one size.
+
+Parameters: nb; size; rings; rings_len; n_rings; per_atom; per_atom_len
+
+Units: dimensionless indices and counts; a null rings buffer skips the list
 
 Example: `docs/examples/minimal_c.c`
 

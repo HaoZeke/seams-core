@@ -258,6 +258,15 @@ extern "C" {
         cap: usize,
         n_out: *mut usize,
     ) -> c_int;
+    pub fn seams_rings_chordless(
+        nb: *const seams_neighbours,
+        size: c_int,
+        rings: *mut c_int,
+        rings_len: usize,
+        n_rings: *mut usize,
+        per_atom: *mut c_int,
+        per_atom_len: usize,
+    ) -> c_int;
     pub fn seams_rings_fraction(
         rings: *const seams_rings,
         size: c_int,
