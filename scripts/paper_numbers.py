@@ -530,8 +530,9 @@ def run_rivals(info, lib: str) -> list[dict]:
     from ovito.modifiers import CreateBondsModifier, FindRingsModifier
     from ovito.pipeline import Pipeline, StaticSource
     import ovito
-    import paper_sitting as sit
+    from h2h_freud_ovito import frame_system, library_path, load_seams, require
     from h2h_mdapy_pyscal3_vesin import ice_positions
+    from h2h_rings import bind_rings
     from mdapy.analysis import RingStatistics
 
     threads = int(os.environ.get("OMP_NUM_THREADS", "1"))
@@ -539,7 +540,15 @@ def run_rivals(info, lib: str) -> list[dict]:
     pyscal3.set_num_threads(threads)
     freud.parallel.set_num_threads(threads)
     os.environ["OMP_WAIT_POLICY"] = "PASSIVE"
-    lang = sit.open_lang(lib)
+    seams = load_seams(library_path())
+    bind_rings(seams)
+    seams.seams_neighbours_build.argtypes = [
+        ctypes.c_void_p, ctypes.c_double, ctypes.c_int, ctypes.c_int,
+        ctypes.POINTER(ctypes.c_void_p),
+    ]
+    seams.seams_neighbours_build.restype = ctypes.c_int
+    seams.seams_neighbours_destroy.argtypes = [ctypes.c_void_p]
+    require(seams, seams.seams_set_num_threads(threads), "threads")
     versions = {
         "d-SEAMS": info["version"],
         "freud": freud.__version__,
@@ -556,11 +565,10 @@ def run_rivals(info, lib: str) -> list[dict]:
         pos = np.ascontiguousarray(pos, dtype=np.float64)
         n = len(pos)
         lx, ly, lz = (float(v) for v in lengths)
-        box9 = np.array([0, 0, 0, lx, ly, lz, 0, 0, 0], dtype=np.float64)
         cell = np.diag([lx, ly, lz])
         system = mdapy.System(pos, box=lengths)
         atoms = Atoms(positions=pos, cell=list(lengths), pbc=True)
-        handle = sit.frame_from(lang, pos, box9)[0]
+        held = frame_system(seams, pos, lengths)
         fbox = freud.box.Box(lx, ly, lz)
         vesin_list = vesin.NeighborList(cutoff=CUTOFF, full_list=True, n_threads=threads)
 
@@ -583,8 +591,10 @@ def run_rivals(info, lib: str) -> list[dict]:
         )
 
         def dseams_neigh():
-            sit.fail_lang(lang, lang.seams_frame_neighbours(
-                handle, CUTOFF, 1, b"cutoff"), "neighbours")
+            nb = ctypes.c_void_p()
+            require(seams, seams.seams_neighbours_build(
+                held, CUTOFF, 1, 0, ctypes.byref(nb)), "neighbours")
+            seams.seams_neighbours_destroy(nb)
 
         def freud_neigh():
             found = freud.locality.AABBQuery(fbox, pos).query(
@@ -613,9 +623,10 @@ def run_rivals(info, lib: str) -> list[dict]:
                 raise RuntimeError("vesin neighbours")
 
         def dseams_rings():
-            counts = (ctypes.c_int * 7)()
-            sit.fail_lang(lang, lang.seams_frame_rings(
-                handle, CUTOFF, 1, b"cutoff", 6, counts, 7), "rings")
+            rings_handle = ctypes.c_void_p()
+            require(seams, seams.seams_rings_find(
+                held, CUTOFF, 1, 0, 6, ctypes.byref(rings_handle)), "rings")
+            seams.seams_rings_destroy(rings_handle)
 
         def ovito_rings():
             for modifier in ring_pipe.modifiers:
@@ -672,7 +683,7 @@ def run_rivals(info, lib: str) -> list[dict]:
                         version=versions[name],
                     ))
         finally:
-            lang.seams_frame_free(handle)
+            seams.seams_system_destroy(held)
         print(f"rivals molecules {n} threads {threads}", flush=True)
     return rows
 
