@@ -22,15 +22,23 @@ least two six-rings; four neighbours and one six-ring is interfacial.
 SQQ's six-rings are its default chordless cycles. SQQ is asked for
 size 6 only, the only size its rule reads.
 
+Like for like. CHILL+ reads bond orientations and no rings, so the ice
+row compares two whole tools. bench/ring_ice.c applies SQQ's rule to
+d-SEAMS rings through the public C API: on the primitive six-rings of
+`seams_rings_find` (ice-primitive), and on the chordless six-cycles of
+the same d-SEAMS cutoff graph (ice-chordless), the ring set SQQ counts.
+The three d-SEAMS ice calls and one SQQ ice call share each timing
+round, so every d-SEAMS ice row is paired with the same SQQ samples.
+
 Correctness writes one row per frame and quantity with the overlap and
 every disagreement. Each disagreement is checked against reference
 implementations in this file that call neither code: a periodic KD
 tree graph, a breadth-first shortest-path test, the SQQ rule, and
 CHILL+ from scipy spherical harmonics.
 
-Timing is one process per thread count. One warm-up of each code,
-then n paired calls, the order alternating so neither code always runs
-first. Frames are built before the clock. One thread is cpu 0; eight
+Timing is one process per thread count. One warm-up of each call,
+then n paired rounds, the order reversing every round so neither code
+always runs first. Frames are built before the clock. One thread is cpu 0; eight
 threads are cpus 0-7. The cpu list and core count are logged, host
 names are not.
 """
@@ -69,10 +77,14 @@ SQQ_DOI = "10.1021/acs.jpca.6c05769"
 BOOT = 10000
 BOOT_SEED = 20261114
 FRAMES = (
-    "Ic-4096", "Ih-4096", "mw-liquid-4096", "tip4p-o-250",
-    "Ic-110592", "Ih-110592", "mw-liquid-110592",
+    "Ic-4096", "Ih-4096", "mw-liquid-4096", "tip4p2005-4096",
+    "Ic-110592", "Ih-110592", "mw-liquid-110592", "tip4p-o-250",
 )
-OPERATIONS = ("rings", "ice")
+OPERATIONS = ("rings", "ice", "ice-primitive", "ice-chordless")
+# The d-SEAMS ice calls, in the order of an even round. SQQ's ice call
+# is the same for all three.
+ICE_CALLS = ("ice", "ice-primitive", "ice-chordless")
+RING_ICE_LABEL = {0: "liquid", 1: "interfacial", 2: "ice"}
 
 # seams_label codes.
 CUBIC, HEX, WATER, INTERFACIAL, CLATH, INTERCLATH = 0, 1, 2, 3, 4, 5
@@ -102,6 +114,18 @@ def cpus_allowed():
     return ",".join(parts)
 
 
+def code_state():
+    """Commit, and whether the code the timings depend on matches it."""
+    paths = ["scripts", "bench", "src", "include", "Snakefile", "meson.build"]
+    try:
+        out = subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain", "--", *paths],
+                             capture_output=True, text=True, check=True)
+        clean = "clean" if not out.stdout.strip() else "modified"
+    except Exception:
+        clean = "unknown"
+    return f"{git_head()} code {clean}"
+
+
 def git_head():
     try:
         out = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"],
@@ -115,6 +139,10 @@ def git_head():
 
 def mw_dir():
     return Path(os.environ.get("MW215_DIR", "mw215-frames"))
+
+
+def tip4p2005_dir():
+    return Path(os.environ.get("TIP4P2005_DIR", "tip4p2005-frames"))
 
 
 def wrapped(frame):
@@ -146,6 +174,18 @@ def load_frame(name):
                 f"{path.name} is missing; run scripts/h2h_sqq_mw.py with lmp on PATH")
         frame = ice.read_lammps_first(path, 1, name, "liquid-mw")
         frame["source"] = f"{path.name} sha256 {sha256(path)}"
+    elif name == "tip4p2005-4096":
+        path = tip4p2005_dir() / "tip4p2005-4096.lammpstrj"
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"{path.name} is missing; run input/tip4p2005/regenerate.py with lmp on PATH")
+        frame = ice.read_lammps_first(path, 1, name, "liquid-tip4p2005")
+        got = sha256(path)
+        want = (ROOT / "input" / "tip4p2005" / "tip4p2005-4096.sha256").read_text().split()[0]
+        # LAMMPS with OpenMP is not bitwise reproducible across machines, so a
+        # regenerated frame is recorded rather than refused.
+        frame["source"] = f"{path.name} sha256 {got} " + (
+            "committed" if got == want else f"differs from committed {want}")
     elif name == "tip4p-o-250":
         path = ROOT / "input" / "traj" / "exampleTraj.lammpstrj"
         frame = ice.read_lammps_first(path, 2, name, "tip4p-o")
@@ -274,6 +314,45 @@ class Seams:
         return edges
 
 
+class RingIce:
+    """bench/ring_ice.c: SQQ's ice rule on d-SEAMS primitive or chordless six-rings."""
+
+    DEFINITION = {"ice-primitive": 0, "ice-chordless": 1}
+
+    def __init__(self, path, engine):
+        lib = ctypes.CDLL(path)
+        ip = ctypes.POINTER(ctypes.c_int)
+        lib.seams_h2h_ring_ice.argtypes = [
+            ctypes.c_void_p, ctypes.c_double, ctypes.c_int, ctypes.c_int, ip, ip,
+            ctypes.c_size_t, ip, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
+        lib.seams_h2h_ring_ice.restype = ctypes.c_int
+        self.lib = lib
+        self.engine = engine
+        maps = Path("/proc/self/maps")
+        if maps.is_file():
+            seen = {line.split()[-1] for line in maps.read_text().splitlines()
+                    if line.rstrip().endswith("/libseams.so")}
+            if len(seen) != 1:
+                raise RuntimeError(f"{len(seen)} copies of libseams.so are mapped; need one")
+
+    def run(self, sys_, operation, labels, six, rings=False):
+        ip = ctypes.POINTER(ctypes.c_int)
+        definition = self.DEFINITION[operation]
+        got = ctypes.c_size_t()
+        n = labels.size
+        args = (sys_, CUTOFF_A, definition, 2, labels.ctypes.data_as(ip), six.ctypes.data_as(ip),
+                n)
+        if not rings:
+            self.engine.check(self.lib.seams_h2h_ring_ice(*args, None, 0, None), operation)
+            return None
+        self.engine.check(self.lib.seams_h2h_ring_ice(*args, None, 0, ctypes.byref(got)),
+                          operation)
+        buf = np.zeros((max(got.value, 1), 6), dtype=np.int32)
+        self.engine.check(self.lib.seams_h2h_ring_ice(
+            *args, buf.ctypes.data_as(ip), got.value, ctypes.byref(got)), operation)
+        return {frozenset(int(v) for v in row) for row in buf[:got.value]}
+
+
 # ---------------------------------------------------------------- SQQ
 
 def sqq_version():
@@ -396,6 +475,31 @@ def ring_cycle(nodes, adj):
 def is_chordless(nodes, adj):
     nodes = set(nodes)
     return all(len(adj[v] & nodes) == 2 for v in nodes) and ring_cycle(nodes, adj) is not None
+
+
+def reference_chordless6(adj):
+    """Every simple 6-cycle from its lowest vertex, kept when is_chordless accepts it."""
+    found = set()
+    for s in range(len(adj)):
+        for b in adj[s]:
+            if b <= s:
+                continue
+            for c in adj[b]:
+                if c <= s or c == b:
+                    continue
+                for d in adj[c]:
+                    if d <= s or d in (b, c):
+                        continue
+                    for e in adj[d]:
+                        if e <= s or e in (b, c, d):
+                            continue
+                        for f in adj[e]:
+                            if f <= s or f in (b, c, d, e) or s not in adj[f]:
+                                continue
+                            ring = frozenset((s, b, c, d, e, f))
+                            if ring not in found and is_chordless(ring, adj):
+                                found.add(ring)
+    return found
 
 
 def bfs_dist(adj, src, limit):
@@ -549,6 +653,7 @@ def jaccard(a, b):
 def agree(args):
     engine = Seams(args.lib)
     engine.threads(1)
+    census = RingIce(args.ring_ice_lib, engine)
     version = sqq_version()
     rows = []
     log = open(args.log, "w", encoding="utf-8")
@@ -558,7 +663,7 @@ def agree(args):
         log.flush()
         print(text, flush=True)
 
-    say(f"d-SEAMS {engine.version} commit {git_head()}")
+    say(f"d-SEAMS {engine.version} commit {code_state()}")
     say(f"SQQ {version} commit {SQQ_COMMIT} doi {SQQ_DOI} engine py")
     say(f"cutoff_A {CUTOFF_A} cores {len(os.sched_getaffinity(0))} cpus {cpus_allowed()}")
     for name in args.frames:
@@ -699,11 +804,80 @@ def agree(args):
                          resolution=(f"CHILL+ reproduced {int(np.sum(r_lab == labels))}/{n} by "
                                      f"scipy; SQQ rule reproduced {int(np.sum(ref_lab == s_lab))}/{n}"
                                      f" from the reference graph; mismatches {len(mismatch)}")))
+
+        # SQQ's rule on d-SEAMS rings. The rule itself is checked against
+        # sqq_rule on the reference graph; the ring sets against SQQ's.
+        missing = {v for e in (ref_edges ^ sqq_e) for v in e}
+        near_missing = {i for i in range(n) if i in missing or adj[i] & missing}
+        primitive6 = dsets.get(6, set())
+        c_lab_raw = np.zeros(n, dtype=np.int32)
+        c_six = np.zeros(n, dtype=np.int32)
+        for operation in ("ice-primitive", "ice-chordless"):
+            got = census.run(sys_, operation, c_lab_raw, c_six, rings=True)
+            c_lab = np.array([RING_ICE_LABEL[int(v)] for v in c_lab_raw], dtype=object)
+            rule_lab, _deg, rule_six = sqq_rule(adj, got, n)
+            rule_ok = int(np.sum(rule_lab == c_lab))
+            six_ok = int(np.sum(rule_six == c_six))
+            off = np.flatnonzero(c_lab != s_lab)
+            if operation == "ice-primitive":
+                ring_tag = "primitive"
+                say(f"ice {name} {operation}: six-rings {len(got)} equal to seams_rings_find "
+                    f"size 6: {got == primitive6}")
+                chord_count = np.zeros(n, dtype=np.int64)
+                for r in chord6:
+                    for v in r:
+                        chord_count[v] += 1
+                differ = int(sum(1 for i in off if chord_count[i] != c_six[i]
+                                 or any(chord_count[j] != c_six[j] for j in adj[i])))
+                why = (f"each mismatch has a primitive and a chordless six-ring count that differ "
+                       f"on the molecule or a neighbour: {differ}/{len(off)}")
+            else:
+                ring_tag = "chordless"
+                only_d, only_s = got - chord6, chord6 - got
+                ok_d = sum(is_chordless(r, adj) for r in only_d)
+                ok_s = sum(is_chordless(r, adj) for r in only_s)
+                on_d = sum(1 for r in only_d if any(v in missing for v in r))
+                on_s = sum(1 for r in only_s if any(v in missing for v in r))
+                if n <= args.enumerate_max:
+                    ref6 = reference_chordless6(adj)
+                    complete = (f"reference enumeration {len(ref6)}, equal to d-SEAMS "
+                                f"{ref6 == got}, to SQQ {ref6 == chord6}")
+                else:
+                    complete = f"reference enumeration skipped above {args.enumerate_max} molecules"
+                say(f"rings {name} chordless 6-rings {complete}")
+                say(f"rings {name} chordless 6-rings d-SEAMS {len(got)} SQQ ice stage {len(chord6)} "
+                    f"both {len(got & chord6)}; d-SEAMS-only {len(only_d)} (reference chordless "
+                    f"{ok_d}, on an edge SQQ lacks {on_d}); SQQ-only {len(only_s)} (reference "
+                    f"chordless {ok_s}, on an edge SQQ lacks {on_s}); primitive inside "
+                    f"{len(primitive6 & got)}/{len(primitive6)}")
+                rows.append(dict(frame=name, molecules=n, quantity="chordless 6-rings",
+                                 d_seams=len(got), sqq=len(chord6), both=len(got & chord6),
+                                 d_seams_only=len(only_d), sqq_only=len(only_s),
+                                 agreement=f"{jaccard(got, chord6):.6f}",
+                                 resolution=(f"d-SEAMS-only {len(only_d)}, reference chordless "
+                                             f"{ok_d}; SQQ-only {len(only_s)}, reference "
+                                             f"chordless {ok_s}; every primitive 6-ring inside: "
+                                             f"{primitive6 <= got}; {complete}")))
+                beside = sum(1 for i in off if i in near_missing)
+                why = f"mismatches on or next to an edge SQQ lacks: {beside}/{len(off)}"
+            say(f"ice {name} {operation}: SQQ rule re-derived on the reference graph and these "
+                f"rings {rule_ok}/{n} labels, {six_ok}/{n} six-ring counts; against SQQ "
+                f"{n - len(off)}/{n}; {why}")
+            say(f"ice {name} {operation} counts "
+                + " ".join(f"{k}={int(np.sum(c_lab == k))}" for k in ("ice", "interfacial", "liquid")))
+            rows.append(dict(frame=name, molecules=n,
+                             quantity=f"ice label, SQQ rule on d-SEAMS {ring_tag} 6-rings",
+                             d_seams=int(np.sum(c_lab != "liquid")),
+                             sqq=int(np.sum(s_lab != "liquid")),
+                             both=int(n - len(off)), d_seams_only="", sqq_only="",
+                             agreement=f"{(n - len(off)) / n:.6f}",
+                             resolution=(f"rule reproduced {rule_ok}/{n} from the reference "
+                                         f"graph; {why}")))
         engine.lib.seams_system_destroy(sys_)
     fields = ["frame", "molecules", "quantity", "d_seams", "sqq", "both", "d_seams_only",
               "sqq_only", "agreement", "resolution"]
     with open(args.out, "w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         for row in rows:
             writer.writerow(row)
@@ -717,6 +891,7 @@ def time_session(args):
     os.sched_setaffinity(0, set(range(threads)))
     engine = Seams(args.lib)
     engine.threads(threads)
+    census = RingIce(args.ring_ice_lib, engine)
     version = sqq_version()
     log = open(args.log, "w", encoding="utf-8")
 
@@ -725,42 +900,48 @@ def time_session(args):
         log.flush()
         print(text, flush=True)
 
-    say(f"d-SEAMS {engine.version} commit {git_head()} build release -O3")
+    say(f"d-SEAMS {engine.version} commit {code_state()} build release -O3")
     say(f"SQQ {version} commit {SQQ_COMMIT} engine py")
     say(f"threads {threads} cores {len(os.sched_getaffinity(0))} cpus {cpus_allowed()} "
         f"python {platform.python_version()} warmup 1 n {args.n}")
+    groups = []
+    if "rings" in args.operations:
+        groups.append(("rings", ["rings"]))
+    ice_ops = [op for op in ICE_CALLS if op in args.operations]
+    if ice_ops:
+        groups.append(("ice", ice_ops))
     for name in args.frames:
         frame = load_frame(name)
         n = frame["molecules"]
         sys_ = engine.system(frame)
         built = sqq_frame(frame)
         labels = np.zeros(n, dtype=np.int32)
-        for operation in args.operations:
-            cfg = sqq_config(operation, threads)
-            if operation == "rings":
-                def seams_call():
+        six = np.zeros(n, dtype=np.int32)
+        for sqq_op, seams_ops in groups:
+            cfg = sqq_config(sqq_op, threads)
+
+            def seams_call(op):
+                if op == "rings":
                     h = engine.rings_handle(sys_)
                     engine.lib.seams_rings_destroy(h)
-            else:
-                def seams_call():
+                elif op == "ice":
                     engine.chill_plus(sys_, labels)
+                else:
+                    census.run(sys_, op, labels, six)
 
-            def sqq_call():
-                sqq_run(built, cfg)
-
-            calls = {"d-SEAMS": seams_call, "SQQ": sqq_call}
-            for code in ("d-SEAMS", "SQQ"):
-                calls[code]()
-            samples = {"d-SEAMS": [], "SQQ": []}
+            calls = [((op, "d-SEAMS"), lambda op=op: seams_call(op)) for op in seams_ops]
+            calls.append(((sqq_op, "SQQ"), lambda: sqq_run(built, cfg)))
+            for _key, call in calls:
+                call()
+            samples = {key: [] for key, _call in calls}
             for k in range(args.n):
-                order = ("d-SEAMS", "SQQ") if k % 2 == 0 else ("SQQ", "d-SEAMS")
-                for code in order:
+                for key, call in (calls if k % 2 == 0 else calls[::-1]):
                     t0 = time.perf_counter()
-                    calls[code]()
-                    samples[code].append((time.perf_counter() - t0) * 1e3)
-            for code in ("d-SEAMS", "SQQ"):
-                say(f"sample {name} molecules {n} operation {operation} threads {threads} "
-                    f"code {code} ms {' '.join(f'{v:.4f}' for v in samples[code])}")
+                    call()
+                    samples[key].append((time.perf_counter() - t0) * 1e3)
+            for (op, code), vals in samples.items():
+                say(f"sample {name} molecules {n} operation {op} threads {threads} "
+                    f"code {code} ms {' '.join(f'{v:.4f}' for v in vals)}")
         engine.lib.seams_system_destroy(sys_)
     log.close()
 
@@ -820,6 +1001,7 @@ def parse_log(path):
         elif line.startswith("d-SEAMS "):
             meta["dseams"] = parts[1]
             meta["commit"] = parts[3]
+            meta["code"] = parts[5] if len(parts) > 5 and parts[4] == "code" else ""
         elif line.startswith("SQQ "):
             meta["sqq"] = parts[1]
         elif line.startswith("sample "):
@@ -836,22 +1018,32 @@ def summarize(args):
     fields = ["frame", "molecules", "operation", "threads", "cores", "cpus", "n",
               "dseams_mean_ms", "dseams_sd_ms", "sqq_mean_ms", "sqq_sd_ms",
               "ratio_sqq_over_dseams", "ratio_ci95_lo", "ratio_ci95_hi", "bootstrap",
-              "agreement", "dseams_version", "dseams_commit", "sqq_version", "sqq_commit",
-              "sqq_engine", "note"]
+              "agreement", "dseams_version", "dseams_commit", "dseams_code", "sqq_version",
+              "sqq_commit", "sqq_engine", "note"]
     out_rows = []
     for path in args.logs:
         meta, samples = parse_log(path)
         for (name, n, op, threads, code), vals in samples.items():
             if code != "d-SEAMS":
                 continue
-            other = samples[(name, n, op, threads, "SQQ")]
+            other = samples[(name, n, "rings" if op == "rings" else "ice", threads, "SQQ")]
             lo, hi = paired_ratio_ci(vals, other)
             if op == "rings":
                 keys = [(name, f"{k}-rings") for k in (4, 5, 6)]
                 note = "d-SEAMS primitive 3-6 vs SQQ shortest_path 4-6"
-            else:
+            elif op == "ice":
                 keys = [(name, "ice label (merged)")]
-                note = "d-SEAMS CHILL+ (published) vs SQQ ice chill on chordless 6-rings"
+                note = ("whole tools: d-SEAMS CHILL+ (published; no rings) vs SQQ ice chill "
+                        "on chordless 6-rings")
+            elif op == "ice-primitive":
+                keys = [(name, "ice label, SQQ rule on d-SEAMS primitive 6-rings")]
+                note = ("SQQ rule on d-SEAMS primitive 6-rings (bench/ring_ice.c) vs SQQ ice; "
+                        "SQQ samples shared by the three ice rows")
+            else:
+                keys = [(name, "ice label, SQQ rule on d-SEAMS chordless 6-rings"),
+                        (name, "chordless 6-rings")]
+                note = ("like for like: SQQ rule on chordless 6-cycles of the d-SEAMS graph "
+                        "(bench/ring_ice.c) vs SQQ ice; SQQ samples shared by the three ice rows")
             agree_vals = [float(agreement[k]) for k in keys if k in agreement]
             out_rows.append(dict(
                 frame=name, molecules=n, operation=op, threads=threads, cores=meta["cores"],
@@ -865,13 +1057,14 @@ def summarize(args):
                 bootstrap=f"paired percentile B={BOOT} seed={BOOT_SEED}",
                 agreement=f"{min(agree_vals):.6f}" if agree_vals else "",
                 dseams_version=meta["dseams"], dseams_commit=meta["commit"],
+                dseams_code=meta.get("code", ""),
                 sqq_version=meta["sqq"], sqq_commit=SQQ_COMMIT, sqq_engine="py",
                 note=note))
     order = {name: i for i, name in enumerate(FRAMES)}
     out_rows.sort(key=lambda r: (OPERATIONS.index(r["operation"]), order.get(r["frame"], 99),
                                  int(r["threads"])))
     with open(args.out, "w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         for row in out_rows:
             writer.writerow(row)
@@ -882,15 +1075,21 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd", required=True)
     lib_default = os.environ.get("SEAMS_C_LIB", str(ROOT / "bbdir-release" / "src" / "libseams.so"))
+    ring_ice_default = os.environ.get(
+        "SEAMS_RING_ICE_LIB", str(ROOT / "bbdir-release" / "bench" / "libseams_ring_ice.so"))
     p = sub.add_parser("agree")
     p.add_argument("--lib", default=lib_default)
+    p.add_argument("--ring-ice-lib", default=ring_ice_default)
     p.add_argument("--frames", nargs="+", default=list(FRAMES))
     p.add_argument("--examples", type=int, default=5)
     p.add_argument("--causes", type=int, default=12)
+    p.add_argument("--enumerate-max", type=int, default=110592,
+                   help="largest frame for the brute-force chordless 6-cycle reference")
     p.add_argument("--out", default="benchmarks/h2h-sqq-agree.csv")
     p.add_argument("--log", default="benchmarks/h2h-sqq-agree.txt")
     p = sub.add_parser("time")
     p.add_argument("--lib", default=lib_default)
+    p.add_argument("--ring-ice-lib", default=ring_ice_default)
     p.add_argument("--threads", type=int, required=True)
     p.add_argument("--n", type=int, default=8)
     p.add_argument("--frames", nargs="+", default=list(FRAMES))

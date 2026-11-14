@@ -5,7 +5,9 @@ For each edge in one graph and not the other the log gives the pair
 distance from the float64 coordinates, the distance after a float32
 round trip (MDAnalysis distance kernels are float32), and whether
 MDAnalysis `self_capped_distance` with SQQ's arguments returns the
-pair. Every ring found by one code only is then tested for the edge.
+pair. Every ring found by one code only is then tested for the edge,
+and so is every chordless six-ring and ice label on which SQQ's rule
+applied to d-SEAMS rings (bench/ring_ice.c) and SQQ itself differ.
 """
 
 from __future__ import annotations
@@ -33,6 +35,8 @@ def pair_distance(pos, lengths, a, b, dtype):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lib", default=str(hv.ROOT / "bbdir-release" / "src" / "libseams.so"))
+    parser.add_argument("--ring-ice-lib",
+                        default=str(hv.ROOT / "bbdir-release" / "bench" / "libseams_ring_ice.so"))
     parser.add_argument("--frames", nargs="+", default=list(hv.FRAMES))
     parser.add_argument("--log", default="benchmarks/h2h-sqq-edge.txt")
     args = parser.parse_args()
@@ -41,7 +45,8 @@ def main():
 
     engine = hv.Seams(args.lib)
     engine.threads(1)
-    lines = [f"d-SEAMS {engine.version} commit {hv.git_head()}",
+    census = hv.RingIce(args.ring_ice_lib, engine)
+    lines = [f"d-SEAMS {engine.version} commit {hv.code_state()}",
              f"SQQ {hv.sqq_version()} commit {hv.SQQ_COMMIT}; MDAnalysis {MDAnalysis.__version__}",
              f"cutoff {hv.CUTOFF_A} A; SQQ asks self_capped_distance for pairs within "
              f"{hv.CUTOFF_A / 10.0} + 1e-7 nm and keeps a pair when its float64 distance <= 0.35 nm"]
@@ -95,6 +100,26 @@ def main():
                 f"(degree {deg_sqq[i]}); next to {', '.join(ends) or 'no differing edge'}")
         lines.append(f"ice {name} SQQ rule on SQQ's own graph reproduces "
                      f"{int(np.sum(on_sqq == labels))}/{n} SQQ labels")
+        raw = np.zeros(n, dtype=np.int32)
+        count = np.zeros(n, dtype=np.int32)
+        chordless = census.run(sys_, "ice-chordless", raw, count, rings=True)
+        mine = np.array([hv.RING_ICE_LABEL[int(v)] for v in raw], dtype=object)
+        for tag, group in (("d-SEAMS only", chordless - six), ("SQQ only", six - chordless)):
+            for ring in sorted(group, key=sorted):
+                touches = [f"{a}-{b}" for a, b in diff if a in ring and b in ring]
+                why = ("chordless in the reference graph" if hv.is_chordless(ring, adj)
+                       else "not chordless in the reference graph")
+                if not hv.is_chordless(ring, adj) and hv.is_chordless(ring, sqq_adj):
+                    why = (f"chordless only in SQQ's graph; in the reference graph "
+                           f"{', '.join(touches)} is a chord of it")
+                lines.append(f"chordless {name} {tag} {sorted(ring)} contains "
+                             f"{', '.join(touches) or 'no differing edge'}; {why}")
+        for i in np.flatnonzero(mine != labels):
+            ends = [f"{a}-{b}" for a, b in diff if i in (a, b) or i in adj[a] | adj[b]]
+            lines.append(
+                f"ice {name} molecule {i} SQQ rule on d-SEAMS chordless 6-rings {mine[i]}, SQQ "
+                f"{labels[i]}; SQQ rule on the reference graph {on_ref[i]}; next to "
+                f"{', '.join(ends) or 'no differing edge'}")
         for size in (4, 5, 6):
             for tag, group in (("d-SEAMS only", dsets.get(size, set()) - ssets.get(size, set())),
                                ("SQQ only", ssets.get(size, set()) - dsets.get(size, set()))):

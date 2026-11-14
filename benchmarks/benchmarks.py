@@ -1090,18 +1090,31 @@ SqqTiltedBox.time_check.repeat = 1
 SqqTiltedBox.time_check.number = 8
 
 
+try:
+    from asv_runner.benchmarks.mark import skip_for_params
+except ImportError:
+    def skip_for_params(_params):
+        return lambda func: func
+
+
+_SQQ_FRAMES = ["Ic-4096", "Ih-4096", "mw-liquid-4096", "tip4p2005-4096",
+               "Ic-110592", "Ih-110592", "mw-liquid-110592", "tip4p-o-250"]
+
+
 class H2HSqq:
     """d-SEAMS against SQQ 0.5.8 on rings and ice labels.
 
     The same calls as scripts/h2h_sqq_versus.py, which the Snakemake rule
     h2h_sqq runs with paired samples. One thread is cpu 0; eight threads
-    are cpus 0-7. The mW liquids are read from MW215_DIR.
+    are cpus 0-7. The mW and TIP4P/2005 liquids are read from MW215_DIR
+    and TIP4P2005_DIR. ice-primitive and ice-chordless are SQQ's rule on
+    d-SEAMS rings (bench/ring_ice.c); SQQ's own call for them is the ice
+    call, so time_sqq runs once per frame under ice.
     """
 
     params = (
-        ["Ic-4096", "Ih-4096", "mw-liquid-4096", "tip4p-o-250",
-         "Ic-110592", "Ih-110592", "mw-liquid-110592"],
-        ["rings", "ice"],
+        _SQQ_FRAMES,
+        ["rings", "ice", "ice-primitive", "ice-chordless"],
         [1, 8],
     )
     param_names = ["frame", "operation", "threads"]
@@ -1132,8 +1145,15 @@ class H2HSqq:
         self._mod = mod
         self._sys = self._engine.system(built)
         self._labels = mod.np.zeros(built["molecules"], dtype=mod.np.int32)
+        self._six = mod.np.zeros(built["molecules"], dtype=mod.np.int32)
+        if operation.startswith("ice-"):
+            ring_ice = os.environ.get(
+                "SEAMS_RING_ICE_LIB", str(ROOT / "bbdir-release" / "bench" / "libseams_ring_ice.so"))
+            if not Path(ring_ice).is_file():
+                raise NotImplementedError("bbdir-release/bench/libseams_ring_ice.so is not built")
+            self._census = mod.RingIce(ring_ice, self._engine)
         self._sqq_frame = mod.sqq_frame(built)
-        self._cfg = mod.sqq_config(operation, threads)
+        self._cfg = mod.sqq_config("rings" if operation == "rings" else "ice", threads)
 
     def teardown(self, frame, operation, threads):
         if hasattr(self, "_sys"):
@@ -1145,9 +1165,13 @@ class H2HSqq:
         if operation == "rings":
             handle = self._engine.rings_handle(self._sys)
             self._engine.lib.seams_rings_destroy(handle)
-        else:
+        elif operation == "ice":
             self._engine.chill_plus(self._sys, self._labels)
+        else:
+            self._census.run(self._sys, operation, self._labels, self._six)
 
+    @skip_for_params([(f, op, t) for f in _SQQ_FRAMES for op in ("ice-primitive", "ice-chordless")
+                      for t in (1, 8)])
     def time_sqq(self, frame, operation, threads):
         self._mod.sqq_run(self._sqq_frame, self._cfg)
 

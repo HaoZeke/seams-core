@@ -1,0 +1,1 @@
+The SQQ head-to-head also times a like-for-like ice census built on the public C API (`bench/ring_ice.c`): SQQ's two-six-ring rule applied to d-SEAMS primitive six-rings and to chordless six-cycles, reported beside the whole-tool CHILL+ against SQQ ratio.

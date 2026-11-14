@@ -1011,12 +1011,15 @@ rule h2h_sqq_agree:
         "scripts/h2h_sqq_versus.py",
         "scripts/gen_ideal_ice.py",
         "benchmarks/h2h-sqq-mw.txt",
+        "benchmarks/h2h-sqq-tip4p2005.txt",
         "bbdir-release/src/libseams.so",
+        "bbdir-release/bench/libseams_ring_ice.so",
     output:
         "benchmarks/h2h-sqq-agree.csv",
         "benchmarks/h2h-sqq-agree.txt",
     shell:
         "OMP_NUM_THREADS=1 MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
+        "TIP4P2005_DIR=\"${{TIP4P2005_DIR:-tip4p2005-frames}}\" "
         "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_versus.py agree "
         "--out {output[0]} --log {output[1]}"
 
@@ -1026,11 +1029,14 @@ rule h2h_sqq_edge:
         "scripts/h2h_sqq_versus.py",
         "scripts/h2h_sqq_edge.py",
         "benchmarks/h2h-sqq-mw.txt",
+        "benchmarks/h2h-sqq-tip4p2005.txt",
         "bbdir-release/src/libseams.so",
+        "bbdir-release/bench/libseams_ring_ice.so",
     output:
         "benchmarks/h2h-sqq-edge.txt",
     shell:
         "OMP_NUM_THREADS=1 MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
+        "TIP4P2005_DIR=\"${{TIP4P2005_DIR:-tip4p2005-frames}}\" "
         "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_edge.py --log {output}"
 
 
@@ -1039,6 +1045,7 @@ rule h2h_sqq_time:
         "scripts/h2h_sqq_versus.py",
         "benchmarks/h2h-sqq-agree.txt",
         "bbdir-release/src/libseams.so",
+        "bbdir-release/bench/libseams_ring_ice.so",
     output:
         "benchmarks/h2h-sqq-time-1.txt",
         "benchmarks/h2h-sqq-time-8.txt",
@@ -1046,6 +1053,7 @@ rule h2h_sqq_time:
         "for t in 1 8; do "
         "env OMP_NUM_THREADS=$t OMP_WAIT_POLICY=PASSIVE OPENBLAS_NUM_THREADS=$t "
         "MKL_NUM_THREADS=$t MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
+        "TIP4P2005_DIR=\"${{TIP4P2005_DIR:-tip4p2005-frames}}\" "
         "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_versus.py time --threads $t --n 8 "
         "--log benchmarks/h2h-sqq-time-$t.txt || exit 1; done"
 
