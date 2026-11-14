@@ -405,13 +405,19 @@ def extra_rows(lib, held, pos, lengths, threads, cores, model, seams, pin, abab,
     rows.extend(ptm_rows(
         lib, held, pos, lengths, threads, cores, model, version, row_of, h, pin, abab,
     ))
-    rows.append(absent(
-        row_of, "ClavisCage", "chill_plus", n, threads, cores, model, version,
-        "ClavisCage is not installed; the clavis package here is unrelated",
-    ))
+    from h2h_summary_v2 import clavis_absent_reason, clavis_available, freud_ring_reason, time_clavis_cell
+
+    ncell = {4096: 8, 110592: 24, 884736: 48}[n]
+    if clavis_available():
+        rows.append(time_clavis_cell(ncell, threads))
+    else:
+        rows.append(absent(
+            row_of, "ClavisCage", "chill_plus", n, threads, cores, model, version,
+            clavis_absent_reason(),
+        ))
     rows.append(absent(
         row_of, "freud", "rings", n, threads, cores, model, version,
-        "freud has no primitive-ring finder",
+        freud_ring_reason(),
     ))
     from ovito.data import DataCollection
     from ovito.modifiers import (
@@ -675,19 +681,27 @@ def extra_rows(lib, held, pos, lengths, threads, cores, model, seams, pin, abab,
     )
     if not run_cycless:
         blocked = smaller_timeout("cycless", n, threads)
+        from h2h_summary_v2 import fit_suffix
+
         rows.append(dnf(
             row_of, "cycless", "rings", n, threads, cores, model, "0.7",
             largest_finished("cycless") or 4096,
-            f"{blocked} molecules exceeded {BUDGET_S} s, so this size was not started"
-            if blocked else f"one sample exceeded {BUDGET_S} s",
+            (
+                f"{blocked} molecules exceeded {BUDGET_S} s, so this size was not started"
+                if blocked else f"one sample exceeded {BUDGET_S} s"
+            ) + fit_suffix("cycless", n),
         ))
     if not run_ira:
         blocked = smaller_timeout("ira", n, threads)
+        from h2h_summary_v2 import fit_suffix
+
         rows.append(dnf(
             row_of, "IRA", "shape", n, threads, cores, model, "2.2.0",
             largest_finished("ira") or 4096,
-            f"{blocked} molecules exceeded {BUDGET_S} s, so this size was not started"
-            if blocked else f"one sample exceeded {BUDGET_S} s",
+            (
+                f"{blocked} molecules exceeded {BUDGET_S} s, so this size was not started"
+                if blocked else f"one sample exceeded {BUDGET_S} s"
+            ) + fit_suffix("ira", n),
         ))
     if run_cycless or run_ira:
         import networkx as nx

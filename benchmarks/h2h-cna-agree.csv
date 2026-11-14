@@ -1,0 +1,21 @@
+phase,chill,cna,coordination,cause,atoms,chill_row
+Ih,hexagonal_ice,Other,4,four_neighbor,4096,3 staggered and 1 eclipsed
+Ic,cubic_ice,Other,4,four_neighbor,4096,4 staggered and 0 eclipsed
+liquid,hexagonal_ice,Other,4,four_neighbor,1,3 staggered and 1 eclipsed
+liquid,hydrate,Other,4,four_neighbor,49,4 eclipsed and 0 staggered
+liquid,interfacial_hydrate,Other,4,four_neighbor,168,3 eclipsed
+liquid,interfacial_ice,Other,4,four_neighbor,4,"2 staggered, or 3 staggered and 0 eclipsed"
+liquid,other,Other,0,agree,8,no CHILL+ row
+liquid,other,Other,1,agree,63,no CHILL+ row
+liquid,other,Other,2,agree,261,no CHILL+ row
+liquid,other,Other,3,agree,566,no CHILL+ row
+liquid,other,Other,4,agree,634,no CHILL+ row
+liquid,other,Other,5,agree,830,no CHILL+ row
+liquid,other,Other,6,agree,723,no CHILL+ row
+liquid,other,Other,7,agree,421,no CHILL+ row
+liquid,other,Other,8,agree,221,no CHILL+ row
+liquid,other,Other,9,agree,108,no CHILL+ row
+liquid,other,Other,10,agree,29,no CHILL+ row
+liquid,other,Other,11,agree,5,no CHILL+ row
+liquid,other,Other,12,agree,4,no CHILL+ row
+liquid,other,Other,13,agree,1,no CHILL+ row

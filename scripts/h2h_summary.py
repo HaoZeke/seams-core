@@ -133,7 +133,9 @@ def run_width(threads: int) -> list[dict]:
         "pyscal3": getattr(pyscal3, "__version__", "pyscal3"),
     }
     rows = []
-    # pyscal3 exports no CHILL or CHILL+ function.
+    # pyscal3 exports no CHILL or CHILL+ function. The reason cites the API.
+    from h2h_summary_v2 import pyscal_chill_reason
+
     rows.append({
         "competitor": "pyscal3",
         "operation": "chill_plus",
@@ -148,7 +150,7 @@ def run_width(threads: int) -> list[dict]:
         "other_min_ms": "",
         "ratio": "",
         "verdict": "absent",
-        "agreement": "pyscal3 has no CHILL+",
+        "agreement": pyscal_chill_reason(),
         "version": f"{seams}/{versions['pyscal3']}",
         "cpu_model": model,
     })

@@ -826,6 +826,27 @@ rule h2h_summary:
         "\"$PY\" scripts/h2h_summary.py --csv {output}"
 
 
+# Citations for the tools that have no such call, the adaptive-CNA
+# atom trace, and the IRA and cycless power-law fits. Rewrites the
+# agreement text of those summary rows. Does not retime the wins.
+rule h2h_summary_v2:
+    input:
+        "benchmarks/h2h-summary.csv",
+    output:
+        "benchmarks/h2h-absent.md",
+        "benchmarks/h2h-cna-agree.md",
+        "benchmarks/h2h-cna-agree.csv",
+        "benchmarks/h2h-cna-atoms.csv",
+        "benchmarks/h2h-scale-fit.md",
+        "benchmarks/h2h-scale-fit.csv",
+    shell:
+        "export LJOS_SEAT=\"${{LJOS_SEAT:-dseams-paper}}\"; "
+        "PY=\"${{H2H_PYTHON:-python3}}\"; "
+        "QT_QPA_PLATFORM=offscreen "
+        "LD_LIBRARY_PATH=\"/lib/x86_64-linux-gnu${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}\" "
+        "taskset -c 0-7 \"$PY\" scripts/h2h_summary_v2.py"
+
+
 rule h2h_mdapy_pyscal3_vesin:
     output:
         "benchmarks/h2h-mdapy-pyscal3-vesin.txt",
