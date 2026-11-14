@@ -90,6 +90,27 @@ if _san_address
   })
 endif
 
+# A program built against an instrumented libseams is built with the same
+# sanitizer, and under clang with the same shared runtime, so the library
+# and the program share one copy of it.
+_san_consumer_flags = []
+if _capi_san != 'none'
+  _san_consumer_flags = _san_args
+else
+  _bsan_names = []
+  foreach _name : ['address', 'undefined', 'thread', 'leak', 'memory']
+    if get_option('b_sanitize').contains(_name)
+      _bsan_names += _name
+    endif
+  endforeach
+  if _bsan_names.length() > 0
+    _san_consumer_flags = ['-fsanitize=' + ','.join(_bsan_names)]
+  endif
+endif
+if _san_clang_shared.length() > 0
+  _san_consumer_flags += ['-shared-libsan']
+endif
+
 host_system = host_machine.system()
 
 # Global accumulator variables (eOn pattern)
@@ -914,17 +935,22 @@ if get_option('with_cli')
   test('seams_print_config', seams_exe, args: ['--print-config'])
 
   python3 = find_program('python3', required: true)
+  _consumer_env = {
+    'CC': ' '.join(meson.get_compiler('c').cmd_array()),
+    'SEAMS_CONSUMER_FLAGS': ' '.join(_san_consumer_flags),
+  }
   test(
     'docs_c_api_tour',
     python3,
     args: [
       meson.project_source_root() / 'docs' / 'check_c_api_tour.py',
       meson.project_source_root(),
-      meson.project_build_root() / 'src',
       meson.project_build_root(),
     ],
+    env: _consumer_env,
     suite: 'docs',
-    timeout: 120)
+    depends: [seams_api_lib, ydslib],
+    timeout: 300)
   test(
     'docs_check',
     python3,
@@ -970,6 +996,7 @@ if get_option('with_cli')
       meson.project_build_root(),
       meson.project_source_root(),
     ],
+    env: _consumer_env,
     suite: 'docs',
     depends: [seams_api_lib, ydslib],
     timeout: 600)
@@ -1767,7 +1794,10 @@ test(
     meson.project_build_root(),
     meson.project_source_root(),
   ],
-  env: {'CC': ' '.join(meson.get_compiler('c').cmd_array())},
+  env: {
+    'CC': ' '.join(meson.get_compiler('c').cmd_array()),
+    'SEAMS_CONSUMER_FLAGS': ' '.join(_san_consumer_flags),
+  },
   depends: [seams_api_lib, ydslib],
   timeout: 600)
 test(

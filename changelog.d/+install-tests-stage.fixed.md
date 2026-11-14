@@ -1,0 +1,1 @@
+`c_api_installed`, `capi_installed_examples` and `docs_c_api_tour` build and run their programs against a staged install only. They fail when a library resolves outside the stage or not at all, and a sanitizer build compiles those programs with the same `-fsanitize` flags. `docs_c_api_tour` takes the compiler from `CC` instead of running `gcc`.

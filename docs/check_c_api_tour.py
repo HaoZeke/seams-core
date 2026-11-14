@@ -2,8 +2,11 @@
 # Copyright (c) d-SEAMS developers
 """Compile c_api_tour.c, run it, and require docs/api/c.md to quote every line."""
 
+import importlib.util
 import os
 import re
+import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -14,54 +17,51 @@ def fail(message):
     raise SystemExit(1)
 
 
+def helpers(root):
+    path = root / "examples" / "c" / "check_installed.py"
+    spec = importlib.util.spec_from_file_location("quickstart_installed", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def main():
-    root = Path(sys.argv[1])
-    libdir = Path(sys.argv[2])
-    build = Path(sys.argv[3])
+    root = Path(sys.argv[1]).resolve()
+    build = Path(sys.argv[2]).resolve()
+    help_mod = helpers(root)
     page = (root / "docs" / "api" / "c.md").read_text()
     source = root / "docs" / "examples" / "c_api_tour.c"
     header = (root / "include" / "seams.h").read_text()
     functions = re.findall(r"SEAMS_API\s+(?:const\s+char\s+\*|[\w\s\*]+?)\s*(seams_[A-Za-z0-9_]+)\s*\(", header)
-    binary = build / "c_api_tour"
+    # The tour links an installed copy, so it reads the same headers and
+    # library a consumer gets.
+    stage = build / "c-api-tour-destdir"
+    shutil.rmtree(stage, ignore_errors=True)
+    subprocess.check_call(
+        ["meson", "install", "-C", str(build), "--no-rebuild", "--quiet", "--destdir", str(stage)]
+    )
+    libdir = help_mod.staged_libdir(stage)
+    headers = list(stage.rglob("seams_version.h"))
+    if len(headers) != 1 or not (headers[0].parent / "seams.h").is_file():
+        fail("install did not produce seams.h and seams_version.h together")
+    binary = build / "c-api-tour-work" / "c_api_tour"
     binary.parent.mkdir(parents=True, exist_ok=True)
     compile_cmd = [
-        "gcc",
-        "-I" + str(root / "include"),
-        "-I" + str(libdir.parent / "src") if (libdir.parent / "src" / "seams_version.h").is_file() else "-I" + str(libdir),
+        *shlex.split(os.environ.get("CC", "cc")),
+        *help_mod.consumer_flags(),
+        "-I" + str(headers[0].parent),
         str(source),
         "-L" + str(libdir),
         "-lseams",
         "-lm",
-        "-Wl,-rpath," + str(libdir),
-        "-o",
-        str(binary),
-    ]
-    # seams_version.h is generated next to the library sources.
-    version = None
-    for folder in (libdir, libdir.parent / "src", Path(sys.argv[2])):
-        candidate = Path(folder) / "seams_version.h"
-        if candidate.is_file():
-            version = candidate.parent
-            break
-    if version is None:
-        fail("seams_version.h was not found beside the library")
-    compile_cmd = [
-        "gcc",
-        "-I" + str(root / "include"),
-        "-I" + str(version),
-        str(source),
-        "-L" + str(libdir),
-        "-lseams",
-        "-lm",
-        "-Wl,-rpath," + str(libdir),
         "-o",
         str(binary),
     ]
     done = subprocess.run(compile_cmd, text=True, capture_output=True)
     if done.returncode != 0:
         fail(done.stderr[-800:])
-    env = os.environ.copy()
-    env["LD_LIBRARY_PATH"] = str(libdir) + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+    env = help_mod.run_env(os.environ.copy(), libdir)
+    help_mod.check_resolved(binary, env, stage)
     env["OMP_NUM_THREADS"] = "1"
     run = subprocess.run([str(binary), str(root)], text=True, capture_output=True, env=env)
     if run.returncode != 0:
