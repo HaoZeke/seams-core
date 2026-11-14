@@ -1007,6 +1007,19 @@ rule h2h_sqq_agree:
         "--out {output[0]} --log {output[1]}"
 
 
+rule h2h_sqq_edge:
+    input:
+        "scripts/h2h_sqq_versus.py",
+        "scripts/h2h_sqq_edge.py",
+        "benchmarks/h2h-sqq-mw.txt",
+        "bbdir-release/src/libseams.so",
+    output:
+        "benchmarks/h2h-sqq-edge.txt",
+    shell:
+        "OMP_NUM_THREADS=1 MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
+        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_edge.py --log {output}"
+
+
 rule h2h_sqq_time:
     input:
         "scripts/h2h_sqq_versus.py",
