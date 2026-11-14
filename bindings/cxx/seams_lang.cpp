@@ -258,6 +258,16 @@ struct seams_frame {
   std::vector<double> rdf_g;
   std::vector<int> ring_counts;
   int neighbour_pairs = -1;
+  // Cutoff list kept for a later ring call. seams_frame_rings reuses it
+  // instead of building the same list again. bond_builds counts how many
+  // times this frame actually constructed that list.
+  std::vector<int> bond_off;
+  std::vector<int> bond_col;
+  double bond_cutoff = -1.0;
+  int bond_type = -1;
+  std::string bond_graph;
+  bool bond_ready = false;
+  int bond_builds = 0;
   std::vector<std::vector<int>> wide_list;
   std::vector<double> wide_xyz;
   double wide_box[9] = {};
@@ -959,10 +969,23 @@ int seams_frame_rings(seams_frame *frame, double cutoff, int type,
         }
         sub = &subset;
       }
-      std::vector<int> offsets;
-      std::vector<int> cols;
-      if (nneigh::orthoFullCsr(frame->cloud, sub, cutoff, offsets, cols, false)) {
-        const auto rings = primitive::ringNetwork(offsets, cols, max_depth);
+      const bool cached = frame->bond_ready && frame->bond_graph == "cutoff" &&
+                          frame->bond_cutoff == cutoff && frame->bond_type == typ;
+      std::vector<int> built_off;
+      std::vector<int> built_col;
+      const std::vector<int> *offsets = nullptr;
+      const std::vector<int> *cols = nullptr;
+      if (cached) {
+        offsets = &frame->bond_off;
+        cols = &frame->bond_col;
+      } else if (nneigh::orthoFullCsr(frame->cloud, sub, cutoff, built_off, built_col,
+                                     false)) {
+        frame->bond_builds += 1;
+        offsets = &built_off;
+        cols = &built_col;
+      }
+      if (offsets != nullptr) {
+        const auto rings = primitive::ringNetwork(*offsets, *cols, max_depth);
         std::fill(counts, counts + counts_len, 0);
         for (const auto &ring : rings) {
           const int size = static_cast<int>(ring.size());
@@ -996,6 +1019,38 @@ int seams_frame_neighbours(seams_frame *frame, double cutoff, int type,
   try {
     const int typ = resolve_type(frame->cloud, type);
     const std::string which = graph == nullptr ? "cutoff" : graph;
+    frame->bond_ready = false;
+    if (which == "cutoff") {
+      std::vector<int> subset;
+      const std::vector<int> *sub = nullptr;
+      if (typ > 0) {
+        bool uniform = frame->cloud.nop > 0;
+        for (int i = 0; i < frame->cloud.nop && uniform; ++i) {
+          if (frame->cloud.pts[static_cast<std::size_t>(i)].type != typ) {
+            uniform = false;
+          }
+        }
+        if (!uniform) {
+          subset.reserve(static_cast<std::size_t>(frame->cloud.nop));
+          for (int i = 0; i < frame->cloud.nop; ++i) {
+            if (frame->cloud.pts[static_cast<std::size_t>(i)].type == typ) {
+              subset.push_back(i);
+            }
+          }
+          sub = &subset;
+        }
+      }
+      if (nneigh::orthoFullCsr(frame->cloud, sub, cutoff, frame->bond_off, frame->bond_col,
+                               false)) {
+        frame->bond_builds += 1;
+        frame->bond_cutoff = cutoff;
+        frame->bond_type = typ;
+        frame->bond_graph = which;
+        frame->bond_ready = true;
+        frame->neighbour_pairs = static_cast<int>(frame->bond_col.size());
+        return 0;
+      }
+    }
     auto rows = bond_list(frame->cloud, cutoff, typ, which, 4);
     // Each row begins with the molecule itself. The pairs are the rest.
     int pairs = 0;
@@ -1016,6 +1071,10 @@ int seams_frame_neighbours(seams_frame *frame, double cutoff, int type,
 
 int seams_frame_neighbour_pairs(const seams_frame *frame) {
   return frame == nullptr ? -1 : frame->neighbour_pairs;
+}
+
+int seams_frame_bond_builds(const seams_frame *frame) {
+  return frame == nullptr ? -1 : frame->bond_builds;
 }
 
 int seams_frame_steinhardt(seams_frame *frame, double cutoff, int type,

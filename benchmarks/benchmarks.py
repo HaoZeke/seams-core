@@ -1023,6 +1023,57 @@ H2HPtm.time_check.repeat = 1
 H2HPtm.time_check.number = 1
 
 
+class PaperReview:
+    """One call of each reviewer arm. The n>=8 sitting is bench_reviewer.py."""
+
+    def setup(self):
+        self.script = [
+            sys.executable, str(ROOT / "scripts/bench_reviewer.py"),
+            "--lib", str(ROOT / "bbdir-release/bindings/libseams_lang.so"),
+            "--core", str(ROOT / "bbdir-release/src/libyodaLib.so"),
+        ]
+        if not (ROOT / "bbdir-release/bindings/libseams_lang.so").is_file():
+            raise NotImplementedError("release language library is not built")
+
+    def _one(self, worker):
+        subprocess.run(
+            self.script + ["--worker", worker, "--threads", "1"],
+            cwd=ROOT, check=True, stdout=subprocess.DEVNULL,
+        )
+
+    def time_rings(self):
+        self._one("rings")
+
+    def time_freud_neighbours(self):
+        self._one("freud")
+
+    def time_sqq(self):
+        self._one("sqq")
+
+    def time_carry(self):
+        self._one("carry")
+
+    def time_large(self):
+        self._one("large")
+
+    def time_fig8(self):
+        self._one("scale")
+
+
+PaperReview.time_rings.repeat = 1
+PaperReview.time_rings.number = 1
+PaperReview.time_freud_neighbours.repeat = 1
+PaperReview.time_freud_neighbours.number = 1
+PaperReview.time_sqq.repeat = 1
+PaperReview.time_sqq.number = 1
+PaperReview.time_carry.repeat = 1
+PaperReview.time_carry.number = 1
+PaperReview.time_large.repeat = 1
+PaperReview.time_large.number = 1
+PaperReview.time_fig8.repeat = 1
+PaperReview.time_fig8.number = 1
+
+
 class H2HCages:
     """cmdCages against SQQ. The Snakemake rule writes the log."""
 

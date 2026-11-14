@@ -125,6 +125,9 @@ int seams_frame_neighbours(seams_frame *frame, double cutoff, int type,
 /** @brief seams_frame_neighbour_pairs. @ingroup lang_order */
 int seams_frame_neighbour_pairs(const seams_frame *frame);
 
+/** @brief How many times this frame constructed a cutoff neighbour list. @ingroup lang_order */
+int seams_frame_bond_builds(const seams_frame *frame);
+
 /** Local Steinhardt q_l on the cutoff shell. A null qlbar skips the
  * Lechner-Dellago average; the local values do not use that pass. */
 /** @ingroup lang_order */

@@ -1036,6 +1036,25 @@ rule release_build:
         "ninja -C bbdir-release -j2 && git rev-parse HEAD > bbdir-release/BUILT"
 
 
+rule reviewer_session:
+    input:
+        "scripts/bench_reviewer.py",
+        "scripts/paper_numbers.py",
+        "scripts/paper_sitting.py",
+        "scripts/paper_ptm_templates.py",
+        "bbdir-release/BUILT",
+        "data/hop/nucleation.lammpstrj",
+    output:
+        "benchmarks/reviewer/samples.csv",
+        "benchmarks/reviewer/MACROS.tsv",
+        "benchmarks/reviewer/manifest.txt",
+    shell:
+        "export LJOS_SEAT=dseams-paper QT_QPA_PLATFORM=offscreen OMP_WAIT_POLICY=PASSIVE; "
+        "python3 scripts/bench_reviewer.py --out benchmarks/reviewer "
+        "--lib bbdir-release/bindings/libseams_lang.so "
+        "--core bbdir-release/src/libyodaLib.so"
+
+
 rule paper_numbers:
     input:
         "scripts/paper_numbers.py",

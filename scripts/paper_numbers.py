@@ -215,8 +215,8 @@ def run_carry(info) -> list[dict]:
 
         def one():
             done = subprocess.run(
-                ["taskset", "-c", stats.taskset_cores(threads), str(bench),
-                 str(dump), "148", "1", "6", "2.0", "cutoff"],
+                ["taskset", "-c", os.environ.get("PAPER_TASKSET", stats.taskset_cores(threads)),
+                 str(bench), str(dump), "148", "1", "6", "2.0", "cutoff"],
                 cwd=ROOT, env=env, text=True, capture_output=True)
             if done.returncode != 0:
                 raise RuntimeError((done.stderr or done.stdout or "carry failed")[-400:])
@@ -275,14 +275,26 @@ def run_rings(info, lib: str) -> list[dict]:
                 handle, CUTOFF, 1, b"cutoff", 6, counts, 7), "rings")
             return int(counts[6])
 
+        lang.seams_frame_bond_builds.argtypes = [ctypes.c_void_p]
+        lang.seams_frame_bond_builds.restype = ctypes.c_int
+
         def dseams(inside: bool):
             handle = fresh()
             try:
                 if not inside:
-                    lang.seams_frame_neighbours(handle, CUTOFF, 1, b"cutoff")
+                    sit.fail_lang(lang, lang.seams_frame_neighbours(
+                        handle, CUTOFF, 1, b"cutoff"), "prebuild")
+                before = int(lang.seams_frame_bond_builds(handle))
                 t0 = time.perf_counter()
                 six_on(handle)
-                return (time.perf_counter() - t0) * 1e3
+                elapsed = (time.perf_counter() - t0) * 1e3
+                after = int(lang.seams_frame_bond_builds(handle))
+                built = after - before
+                if inside and built != 1:
+                    raise RuntimeError(f"bonds-inside built the list {built} times")
+                if not inside and built != 0:
+                    raise RuntimeError(f"prebuilt rings rebuilt the list {built} times")
+                return elapsed
             finally:
                 lang.seams_frame_free(handle)
 
