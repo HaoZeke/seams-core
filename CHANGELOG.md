@@ -68,6 +68,7 @@ by [towncrier](https://towncrier.readthedocs.io/).
 - Saved trajectories other than CON are read with chemfiles, including xyz, a LAMMPS dump, gro, pdb, dcd, xtc and Amber NetCDF. A selection expression names water oxygen and hydrogen. The dependency is optional and on by default.
 - TIP4P/2005 ring updates at 0.01, 0.1 and 1 ps stay inside the hop ball and match a full search. The strict seeded graph is 8.3, 3.3 and 2.6 times a rebuild.
 - The 884736-molecule sitting adds pyscal3 neighbours and q6, PLUMED q6 with PLUMED_NUM_THREADS set to the row width, and OVITO coordination. Those rows agree with d-SEAMS on the same ice Ic frame. scripts/plot_sitting_large_time.py draws time against threads and does not store the PDF.
+- The C API workflow has a `capi-asan-ubsan-suite` job that builds with `-Dcapi_sanitize=address,undefined` and runs the full meson test suite.
 - The PLUMED SEAMS collective variable reports q6, the CHILL+ ice fraction and the six-ring fraction, and a restraint can bias q6.
 - The Rust, Fortran, and Python ctypes bindings call the analyses `seams.h` now exports, including frame reading, CHILL, Steinhardt parameters, cages, neighbour lists, the RDF, hydrogen bonds, density, the fingerprint, prisms, and the monolayer.
 - The binding-overhead session times each language wrapper of read, k-nearest neighbours, q6 with q6bar, CHILL, and primitive rings on ice Ih, and records the median and interquartile range.

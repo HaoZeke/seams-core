@@ -18,6 +18,22 @@ jobs:
       - run: pixi run ninja -C build-asan capi_suite capi_cpp_ref
       - run: pixi run meson test -C build-asan --print-errorlogs capi_suite capi_header_c99_seams_h capi_header_cxx17_seams_h capi_header_c99_seams_lang_h capi_header_cxx17_seams_lang_h capi_header_c99_seams_version_h capi_header_cxx17_seams_version_h
 
+  # The whole suite on the capi_sanitize libraries. The default "sanitize"
+  # test setup preloads the ASan runtime and sets ASAN_OPTIONS, so no step
+  # sets either.
+  capi-asan-ubsan-suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: prefix-dev/setup-pixi@f00437f565399d418b0acc85936d12c1fb668347 # v0.10.1
+        with:
+          environments: default
+          cache-key: pixi-capi-asan-ubsan-suite-
+      - run: pixi run meson setup build-san-suite --buildtype=debugoptimized -Dwith_tests=true -Dwith_python=false -Dcapi_sanitize=address,undefined
+      - run: pixi run ninja -C build-san-suite
+      - run: pixi run meson test -C build-san-suite --print-errorlogs
+
   capi-ubsan:
     runs-on: ubuntu-latest
     steps:
