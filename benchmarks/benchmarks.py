@@ -1088,3 +1088,71 @@ class H2HSqqBox:
 
 H2HSqqBox.time_check.repeat = 1
 H2HSqqBox.time_check.number = 8
+
+
+class H2HSqq:
+    """d-SEAMS against SQQ 0.5.8 on rings and ice labels.
+
+    The same calls as scripts/h2h_sqq_versus.py, which the Snakemake rule
+    h2h_sqq runs with paired samples. One thread is cpu 0; eight threads
+    are cpus 0-7. The mW liquids are read from MW215_DIR.
+    """
+
+    params = (
+        ["Ic-4096", "Ih-4096", "mw-liquid-4096", "tip4p-o-250",
+         "Ic-110592", "Ih-110592", "mw-liquid-110592"],
+        ["rings", "ice"],
+        [1, 8],
+    )
+    param_names = ["frame", "operation", "threads"]
+    timeout = 3600
+
+    def setup(self, frame, operation, threads):
+        import importlib.util
+
+        lib = os.environ.get("SEAMS_C_LIB", str(ROOT / "bbdir-release" / "src" / "libseams.so"))
+        if not Path(lib).is_file():
+            raise NotImplementedError("bbdir-release/src/libseams.so is not built")
+        try:
+            import sqq  # noqa: F401
+        except ImportError as exc:
+            raise NotImplementedError("sqq is not installed") from exc
+        spec = importlib.util.spec_from_file_location(
+            "h2h_sqq_versus", ROOT / "scripts" / "h2h_sqq_versus.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        try:
+            built = mod.load_frame(frame)
+        except FileNotFoundError as exc:
+            raise NotImplementedError(str(exc)) from exc
+        self._affinity = os.sched_getaffinity(0)
+        os.sched_setaffinity(0, set(range(threads)))
+        self._engine = mod.Seams(lib)
+        self._engine.threads(threads)
+        self._mod = mod
+        self._sys = self._engine.system(built)
+        self._labels = mod.np.zeros(built["molecules"], dtype=mod.np.int32)
+        self._sqq_frame = mod.sqq_frame(built)
+        self._cfg = mod.sqq_config(operation, threads)
+
+    def teardown(self, frame, operation, threads):
+        if hasattr(self, "_sys"):
+            self._engine.lib.seams_system_destroy(self._sys)
+        if hasattr(self, "_affinity"):
+            os.sched_setaffinity(0, self._affinity)
+
+    def time_dseams(self, frame, operation, threads):
+        if operation == "rings":
+            handle = self._engine.rings_handle(self._sys)
+            self._engine.lib.seams_rings_destroy(handle)
+        else:
+            self._engine.chill_plus(self._sys, self._labels)
+
+    def time_sqq(self, frame, operation, threads):
+        self._mod.sqq_run(self._sqq_frame, self._cfg)
+
+
+for _name in ("time_dseams", "time_sqq"):
+    getattr(H2HSqq, _name).number = 1
+    getattr(H2HSqq, _name).repeat = 8
+    getattr(H2HSqq, _name).warmup_time = 0

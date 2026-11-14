@@ -965,6 +965,66 @@ rule h2h_sqq_sh_ortho:
         "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_sh_ortho.py > {output}"
 
 
+# d-SEAMS against SQQ 0.5.8 (pimooni/sqq, tag v0.5.8) on rings and ice
+# labels. benchmarks/h2h-sqq.md reads the outputs. The mW liquids need
+# `lmp` on PATH; the frames stay under MW215_DIR. Run with -j1: the
+# timing rules pin cpu 0 and cpus 0-7 and must not share them.
+rule h2h_sqq_mw_liquid:
+    input:
+        "input/mw215/in.equilibrate",
+        "input/mw215/mW.sw",
+        "input/mw215/regenerate.py",
+        "scripts/h2h_sqq_mw.py",
+    output:
+        "benchmarks/h2h-sqq-mw.txt",
+    shell:
+        "OMP_NUM_THREADS=1 MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
+        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_mw.py 16 48 --log {output}"
+
+
+rule h2h_sqq_agree:
+    input:
+        "scripts/h2h_sqq_versus.py",
+        "scripts/gen_ideal_ice.py",
+        "benchmarks/h2h-sqq-mw.txt",
+        "bbdir-release/src/libseams.so",
+    output:
+        "benchmarks/h2h-sqq-agree.csv",
+        "benchmarks/h2h-sqq-agree.txt",
+    shell:
+        "OMP_NUM_THREADS=1 MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
+        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_versus.py agree "
+        "--out {output[0]} --log {output[1]}"
+
+
+rule h2h_sqq_time:
+    input:
+        "scripts/h2h_sqq_versus.py",
+        "benchmarks/h2h-sqq-agree.txt",
+        "bbdir-release/src/libseams.so",
+    output:
+        "benchmarks/h2h-sqq-time-1.txt",
+        "benchmarks/h2h-sqq-time-8.txt",
+    shell:
+        "for t in 1 8; do "
+        "env OMP_NUM_THREADS=$t OMP_WAIT_POLICY=PASSIVE OPENBLAS_NUM_THREADS=$t "
+        "MKL_NUM_THREADS=$t MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
+        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_versus.py time --threads $t --n 8 "
+        "--log benchmarks/h2h-sqq-time-$t.txt || exit 1; done"
+
+
+rule h2h_sqq:
+    input:
+        "benchmarks/h2h-sqq-agree.csv",
+        "benchmarks/h2h-sqq-time-1.txt",
+        "benchmarks/h2h-sqq-time-8.txt",
+    output:
+        "benchmarks/h2h-sqq.csv",
+    shell:
+        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_versus.py summarize "
+        "--agree {input[0]} --logs {input[1]} {input[2]} --out {output}"
+
+
 rule h2h_followup:
     output:
         "benchmarks/h2h-followup.txt",
