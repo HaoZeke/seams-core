@@ -15,6 +15,12 @@
 #include <topo_one_dim.hpp>
 #include <neighbours.hpp>
 
+#include <algorithm>
+
+#ifdef SEAMS_HAS_OPENMP
+#include <omp.h>
+#endif
+
 // -----------------------------------------------------------------------------------------------------
 // PRISM ALGORITHMS
 // -----------------------------------------------------------------------------------------------------
@@ -223,64 +229,168 @@ ring::findPrisms(const std::vector<std::vector<int>> &rings,
   // ascending jring order, keeps every count and ring type of the full
   // pair loop.
   if (!doShapeMatching) {
-    std::vector<std::vector<int>> ringsOf(nList.size());
-    for (int iring = 0; iring < totalRingNum; iring++) {
-      for (int atom : rings[iring]) {
-        if (atom >= 0 && atom < static_cast<int>(ringsOf.size())) {
-          ringsOf[atom].push_back(iring);
-        }
-      }
+    // A ring's final type depends only on its starting type and whether it
+    // is in any passing pair, so rings can be visited in any order. Each
+    // thread marks the rings of its pairs, and the marks are merged after.
+    const int nAtoms = static_cast<int>(nList.size());
+    const bool wide = totalRingNum >= 2048;
+    std::vector<int> ringOff(static_cast<std::size_t>(nAtoms) + 1, 0);
+    std::vector<int> ringCol;
+    int team = 1;
+#ifdef SEAMS_HAS_OPENMP
+    if (wide && !omp_in_parallel()) {
+      team = omp_get_max_threads();
     }
-    std::vector<int> candidates;
-    for (int iring = 0; iring < totalRingNum - 1; iring++) {
-      const int l1 = rings[iring][0];
-      candidates.clear();
-      if (l1 >= 0 && l1 < static_cast<int>(nList.size()) && nList[l1].size() > 1) {
-        for (auto nb = nList[l1].begin() + 1; nb != nList[l1].end(); ++nb) {
-          if (*nb < 0 || *nb >= static_cast<int>(ringsOf.size())) {
-            continue;
+#endif
+    if (team > 1) {
+#ifdef SEAMS_HAS_OPENMP
+      // Row t counts, then places, the rings of thread t's contiguous
+      // block, so every atom's slice lists its rings in ascending order.
+      std::vector<int> blockAt(static_cast<std::size_t>(team) * nAtoms, 0);
+#pragma omp parallel num_threads(team)
+      {
+        const int tid = omp_get_thread_num();
+        const int width = omp_get_num_threads();
+        const int lo = static_cast<int>(1LL * totalRingNum * tid / width);
+        const int hi = static_cast<int>(1LL * totalRingNum * (tid + 1) / width);
+        int *mine = blockAt.data() + static_cast<std::size_t>(tid) * nAtoms;
+        for (int iring = lo; iring < hi; iring++) {
+          for (int atom : rings[iring]) {
+            if (atom >= 0 && atom < nAtoms) {
+              ++mine[atom];
+            }
           }
-          for (int jring : ringsOf[*nb]) {
-            if (jring > iring) {
-              candidates.push_back(jring);
+        }
+#pragma omp barrier
+#pragma omp for schedule(static)
+        for (int atom = 0; atom < nAtoms; atom++) {
+          int total = 0;
+          for (int t = 0; t < width; t++) {
+            total += blockAt[static_cast<std::size_t>(t) * nAtoms + atom];
+          }
+          ringOff[static_cast<std::size_t>(atom) + 1] = total;
+        }
+#pragma omp single
+        {
+          for (int atom = 0; atom < nAtoms; atom++) {
+            ringOff[static_cast<std::size_t>(atom) + 1] +=
+                ringOff[static_cast<std::size_t>(atom)];
+          }
+          ringCol.resize(static_cast<std::size_t>(ringOff[static_cast<std::size_t>(nAtoms)]));
+        }
+#pragma omp for schedule(static)
+        for (int atom = 0; atom < nAtoms; atom++) {
+          int at = ringOff[static_cast<std::size_t>(atom)];
+          for (int t = 0; t < width; t++) {
+            int &slot = blockAt[static_cast<std::size_t>(t) * nAtoms + atom];
+            const int count = slot;
+            slot = at;
+            at += count;
+          }
+        }
+        int *col = ringCol.data();
+        for (int iring = lo; iring < hi; iring++) {
+          for (int atom : rings[iring]) {
+            if (atom >= 0 && atom < nAtoms) {
+              col[mine[atom]++] = iring;
             }
           }
         }
       }
-      if (candidates.empty()) {
-        continue;
+#endif
+    } else {
+      for (int iring = 0; iring < totalRingNum; iring++) {
+        for (int atom : rings[iring]) {
+          if (atom >= 0 && atom < nAtoms) {
+            ++ringOff[static_cast<std::size_t>(atom) + 1];
+          }
+        }
       }
-      std::sort(candidates.begin(), candidates.end());
-      candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
-      basal1 = rings[iring];
-      for (int jring : candidates) {
-        basal2 = rings[jring];
-        if (ringSize == 4 && !ring::discardExtraTetragonBlocks(basal1, basal2, yCloud)) {
-          continue;
-        }
-        if (ring::hasCommonElements(basal1, basal2)) {
-          continue;
-        }
-        if (!ring::basalPrismConditions(nList, basal1, basal2)) {
-          continue;
-        }
-        nPerfectPrisms += 1;
-        if (ringType[iring] == ring::strucType::unclassified) {
-          ringType[iring] = ring::strucType::Prism;
-          listPrism.push_back(iring);
-        } else if (ringType[iring] == ring::strucType::deformedPrism) {
-          ringType[iring] = ring::strucType::mixedPrismRing;
-        }
-        if (ringType[jring] == ring::strucType::unclassified) {
-          ringType[jring] = ring::strucType::Prism;
-          listPrism.push_back(jring);
-        } else if (ringType[jring] == ring::strucType::deformedPrism) {
-          ringType[jring] = ring::strucType::mixedPrismRing;
+      for (int atom = 0; atom < nAtoms; atom++) {
+        ringOff[static_cast<std::size_t>(atom) + 1] += ringOff[static_cast<std::size_t>(atom)];
+      }
+      ringCol.resize(static_cast<std::size_t>(ringOff[static_cast<std::size_t>(nAtoms)]));
+      std::vector<int> cursor(ringOff.begin(), ringOff.end() - 1);
+      for (int iring = 0; iring < totalRingNum; iring++) {
+        for (int atom : rings[iring]) {
+          if (atom >= 0 && atom < nAtoms) {
+            ringCol[static_cast<std::size_t>(cursor[static_cast<std::size_t>(atom)]++)] = iring;
+          }
         }
       }
     }
-    sort(listPrism.begin(), listPrism.end());
-    listPrism.erase(std::unique(listPrism.begin(), listPrism.end()), listPrism.end());
+    std::vector<char> inPair(static_cast<std::size_t>(std::max(totalRingNum, 0)), 0);
+    long long pairs = 0;
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel reduction(+ : pairs) if (team > 1)
+#endif
+    {
+      std::vector<int> candidates;
+      std::vector<int> first;
+      std::vector<int> second;
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp for schedule(dynamic, 512)
+#endif
+      for (int iring = 0; iring < totalRingNum - 1; iring++) {
+        const int l1 = rings[iring][0];
+        candidates.clear();
+        if (l1 >= 0 && l1 < nAtoms && nList[l1].size() > 1) {
+          for (auto nb = nList[l1].begin() + 1; nb != nList[l1].end(); ++nb) {
+            if (*nb < 0 || *nb >= nAtoms) {
+              continue;
+            }
+            const int end = ringOff[static_cast<std::size_t>(*nb) + 1];
+            for (int c = ringOff[static_cast<std::size_t>(*nb)]; c < end; c++) {
+              const int jring = ringCol[static_cast<std::size_t>(c)];
+              if (jring > iring) {
+                candidates.push_back(jring);
+              }
+            }
+          }
+        }
+        if (candidates.empty()) {
+          continue;
+        }
+        std::sort(candidates.begin(), candidates.end());
+        candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
+        first.assign(rings[iring].begin(), rings[iring].end());
+        bool hit = false;
+        for (int jring : candidates) {
+          second.assign(rings[jring].begin(), rings[jring].end());
+          if (ringSize == 4 && !ring::discardExtraTetragonBlocks(first, second, yCloud)) {
+            continue;
+          }
+          if (ring::hasCommonElements(first, second)) {
+            continue;
+          }
+          if (!ring::basalPrismConditions(nList, first, second)) {
+            continue;
+          }
+          pairs += 1;
+          hit = true;
+          // A partner may sit in another thread's share. Every store
+          // writes 1, so the marks do not depend on the order.
+          __atomic_store_n(&inPair[static_cast<std::size_t>(jring)], static_cast<char>(1),
+                           __ATOMIC_RELAXED);
+        }
+        if (hit) {
+          __atomic_store_n(&inPair[static_cast<std::size_t>(iring)], static_cast<char>(1),
+                           __ATOMIC_RELAXED);
+        }
+      }
+    }
+    nPerfectPrisms = static_cast<int>(pairs);
+    for (int iring = 0; iring < totalRingNum; iring++) {
+      if (inPair[static_cast<std::size_t>(iring)] == 0) {
+        continue;
+      }
+      if (ringType[iring] == ring::strucType::unclassified) {
+        ringType[iring] = ring::strucType::Prism;
+        listPrism.push_back(iring);
+      } else if (ringType[iring] == ring::strucType::deformedPrism) {
+        ringType[iring] = ring::strucType::mixedPrismRing;
+      }
+    }
     return listPrism;
   }
 
