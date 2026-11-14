@@ -57,6 +57,19 @@ rule all:
         "paper/tex/figures/interface.png",
         "paper/tex/figures/si_hydrate_xyzrender.png",
         "paper/tex/figures/sii_hydrate_xyzrender.png",
+        "paper/tex/figures/data/gate/front_macros.tex",
+
+
+GATE_CSVS = [
+    "paper/tex/figures/data/gate/pure-235.csv",
+    "paper/tex/figures/data/gate/pure-235-b.csv",
+    "paper/tex/figures/data/gate/pure-235-c.csv",
+    "paper/tex/figures/data/gate/pure-240-a.csv",
+    "paper/tex/figures/data/gate/pure-245.csv",
+    "paper/tex/figures/data/gate/pure-245-b.csv",
+    "paper/tex/figures/data/gate/pure-250.csv",
+    "paper/tex/figures/data/gate/pure-255.csv",
+]
 
 
 rule machine_records:
@@ -213,6 +226,26 @@ rule figure_pngs:
         "paper/tex/figures/interface.png",
     shell:
         "python3 paper/tex/figures/render_finish.py && python3 paper/tex/figures/rasterize_tikz.py"
+
+
+rule brine_gate_macros:
+    input:
+        script="input/brine/fit_velocity.py",
+        csvs=GATE_CSVS,
+    output:
+        "paper/tex/figures/data/gate/front_macros.tex",
+    shell:
+        "python3 input/brine/fit_velocity.py --macros {output} {input.csvs}"
+
+
+rule brine_gate_check:
+    input:
+        "paper/tex/figures/data/gate/front_macros.tex",
+        "paper/tex/brine_science.tex",
+        "input/brine/fit_velocity.py",
+        *GATE_CSVS,
+    shell:
+        "python3 input/brine/fit_velocity.py --check"
 
 
 rule shipped_campaign:

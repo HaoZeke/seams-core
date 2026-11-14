@@ -3,7 +3,13 @@
 % The 245 K block mean across both seeds excludes zero, so the
 % crossing with the 255 K block mean is quoted.
 % The 235 K seeds do not move that 247 K line.
-% 250 K seed 2501 is not in this run.
+% That two-temperature fit predates seed 2501 and excluded it.
+% Three 3 ns seeds at 235 K, one at 240 K, two at 245 K,
+% one at 250 K and one at 255 K, on eight cores.
+% The crossing is the zero of the weighted line through
+% every temperature's block mean. Seed 2501 is in that run.
+
+\input{figures/data/gate/front_macros.tex}
 
 \section{Salt at a Madrid-2019 freezing front}
 \label{sec:brine-science}
@@ -30,12 +36,21 @@ Two pure-water trajectories at $235\,\mathrm{K}$, two at
 $245\,\mathrm{K}$ and one at $255\,\mathrm{K}$ were each run for
 $3\,\mathrm{ns}$ on this cell.
 The second $235\,\mathrm{K}$ trajectory is seed 2352.
+Three pure-water trajectories at $235\,\mathrm{K}$, one at
+$240\,\mathrm{K}$, two at $245\,\mathrm{K}$, one at
+$250\,\mathrm{K}$ and one at $255\,\mathrm{K}$ were each run for
+$3\,\mathrm{ns}$ on this cell, on eight cores.
+The second $235\,\mathrm{K}$ trajectory is seed 2352 and the
+third is seed 2353.
+The $240\,\mathrm{K}$ trajectory is seed 2401.
 The second $245\,\mathrm{K}$ trajectory is seed 2452.
-Seed 2501 at $250\,\mathrm{K}$ is not in this run.
+Before seed 2501 had finished, that $250\,\mathrm{K}$ seed was not
+in the two-temperature run.
 Throughout, the crystal count is the number of cubic and hexagonal
 CHILL+ labels under the published rule on the
 $3.5\,\mathrm{\AA}$ cutoff graph; interfacial and clathrate labels are
 not crystal.
+Seed 2501 is in this eight-seed run.
 On the earlier $245\,\mathrm{K}$ seed the crystal count is $1222$
 at the start of production, $1108$ at $0.5\,\mathrm{ns}$ and $1257$
 at $3.0\,\mathrm{ns}$, and the ice thickness goes from
@@ -48,23 +63,48 @@ Seed 2351 goes from $1233$ to $1235$ to $1461$ crystals, and the
 thickness from $34.3\,\mathrm{\AA}$ to $40.9\,\mathrm{\AA}$.
 Seed 2352 goes from $1237$ to $1267$ to $1499$ crystals, and the
 thickness from $34.5\,\mathrm{\AA}$ to $42.1\,\mathrm{\AA}$.
+Seed 2353 goes from $1229$ to $1185$ to $1366$ crystals, and the
+thickness from $34.1\,\mathrm{\AA}$ to $38.9\,\mathrm{\AA}$.
+Seed 2401 goes from $1228$ to $1208$ to $1398$ crystals, and the
+thickness from $34.1\,\mathrm{\AA}$ to $40.0\,\mathrm{\AA}$.
+Seed 2501 goes from $1246$ to $1184$ to $1254$ crystals, and the
+thickness from $34.9\,\mathrm{\AA}$ to $35.8\,\mathrm{\AA}$.
 Table~\ref{tab:brine-front-v} gives the ordinary-least-squares
 velocity and the mean of the six $0.5\,\mathrm{ns}$ blocks.
 The block mean across the two $235\,\mathrm{K}$ seeds is
-$+1.32\pm 0.39\,\mathrm{\AA\,ns^{-1}}$.
+\GateMeanBlockTwo$\,\mathrm{\AA\,ns^{-1}}$.
 The block mean across the two $245\,\mathrm{K}$ seeds is
-$+0.65\pm 0.32\,\mathrm{\AA\,ns^{-1}}$.
+\GateMeanBlockTwoFourFive$\,\mathrm{\AA\,ns^{-1}}$.
 Both intervals exclude zero.
+The block mean across the three $235\,\mathrm{K}$ seeds is
+\GateMeanBlockThree$\,\mathrm{\AA\,ns^{-1}}$.
 The line through the $245\,\mathrm{K}$ mean and the
 $255\,\mathrm{K}$ block mean crosses zero at
-$247.0\pm 0.9\,\mathrm{K}$.
+$\GateHistZero\pm \GateHistErr\,\mathrm{K}$.
 That is the melting-point estimate from those two temperatures.
 The $235\,\mathrm{K}$ seeds do not move it.
-Seed 2501 is not in the estimate.
+That estimate predates the 2501 run and excluded it.
+Seed 2401, the only $240\,\mathrm{K}$ seed, has block velocity
+\GateBlockTwoFourZeroOne$\,\mathrm{\AA\,ns^{-1}}$.
+The melting point is the zero of a weighted straight line through
+the block mean at each temperature.
+The weight is the inverse square of that mean's standard error.
+Seeds 2351, 2352, 2353, 2401, both $245\,\mathrm{K}$ seeds, 2501
+and the $255\,\mathrm{K}$ seed enter.
+Seed 2501 is in this eight-seed run.
+The weighted zero is $\GateZeroTwo\pm \GateZeroErrTwo$, quoted as
+$\GateZeroOne\pm \GateZeroErrOne\,\mathrm{K}$.
+The seeds scatter more than those standard errors, by a factor
+\GateScale\ (\GateChi\ on \GateDof\ degrees of freedom), and
+\GateZeroErrOne\ includes that factor.
 The production segment of seed 2452, $1.5\times 10^{6}$ steps on
 eight threads, ran at $15.1\,\mathrm{ns\,day^{-1}}$.
 The production segment of seed 2352, the same step count on
 eight OpenMP threads, ran at $15.2\,\mathrm{ns\,day^{-1}}$.
+The production segment of seed 2353, the same step count on
+eight cores, ran at $14.7\,\mathrm{ns\,day^{-1}}$.
+The production segment of seed 2401, the same step count on
+eight cores, ran at $15.6\,\mathrm{ns\,day^{-1}}$.
 
 \begin{table}[t]
 \centering
@@ -76,20 +116,28 @@ and its standard error is the scatter of those windows.
 $\mathrm{d}N/\mathrm{d}t$ counts crystal labels per nanosecond.
 Velocities are $\mathrm{\AA\,ns^{-1}}$.
 The $245\,\mathrm{K}$ block mean in the text is the mean of the two
-seed block velocities, and $0.32$ is the standard error of that mean.
-The $235\,\mathrm{K}$ figure is the same average, and $0.39$ is the
-standard error of that mean.}
+seed block velocities, \GateMeanBlockTwoFourFive, and its second
+number is the standard error of that mean.
+The $235\,\mathrm{K}$ figure is the same average, \GateMeanBlockTwo,
+and its second number is the standard error of that mean.
+The $235\,\mathrm{K}$ figure is the mean of the three seed block
+velocities, \GateMeanBlockThree, and its second number is the
+standard error of that mean.
+The zero in the text pools every temperature in this table.
+The earlier row for seed 2501 was pending.}
 \label{tab:brine-front-v}
 \begin{tabular}{llrrr}
 \hline
 $T$ (K) & seed & $v_{\mathrm{OLS}}$ & block & $\mathrm{d}N/\mathrm{d}t$ \\
 \hline
-245 & earlier & $+0.68\pm 0.05$ & $+0.33\pm 0.46$ & $+48.3\pm 3.7$ \\
-245 & 2452 & $+0.54\pm 0.04$ & $+0.97\pm 0.48$ & $+36.7\pm 2.9$ \\
-255 & earlier & $-3.12\pm 0.05$ & $-2.61\pm 0.69$ & $-216.4\pm 3.3$ \\
-235 & 2351 & $+1.58\pm 0.04$ & $+0.93\pm 0.44$ & $+107.1\pm 2.0$ \\
-235 & 2352 & $+1.46\pm 0.03$ & $+1.71\pm 0.23$ & $+103.1\pm 1.5$ \\
-250 & 2501 & \multicolumn{3}{c}{pending} \\
+\GateTempTwoThreeFiveOne & \GateNameTwoThreeFiveOne & \GateOlsTwoThreeFiveOne & \GateBlockTwoThreeFiveOne & \GateDnTwoThreeFiveOne \\
+\GateTempTwoThreeFiveTwo & \GateNameTwoThreeFiveTwo & \GateOlsTwoThreeFiveTwo & \GateBlockTwoThreeFiveTwo & \GateDnTwoThreeFiveTwo \\
+\GateTempTwoThreeFiveThree & \GateNameTwoThreeFiveThree & \GateOlsTwoThreeFiveThree & \GateBlockTwoThreeFiveThree & \GateDnTwoThreeFiveThree \\
+\GateTempTwoFourZeroOne & \GateNameTwoFourZeroOne & \GateOlsTwoFourZeroOne & \GateBlockTwoFourZeroOne & \GateDnTwoFourZeroOne \\
+\GateTempEarlierTwoFourFive & \GateNameEarlierTwoFourFive & \GateOlsEarlierTwoFourFive & \GateBlockEarlierTwoFourFive & \GateDnEarlierTwoFourFive \\
+\GateTempTwoFourFiveTwo & \GateNameTwoFourFiveTwo & \GateOlsTwoFourFiveTwo & \GateBlockTwoFourFiveTwo & \GateDnTwoFourFiveTwo \\
+\GateTempTwoFiveZeroOne & \GateNameTwoFiveZeroOne & \GateOlsTwoFiveZeroOne & \GateBlockTwoFiveZeroOne & \GateDnTwoFiveZeroOne \\
+\GateTempEarlierTwoFiveFive & \GateNameEarlierTwoFiveFive & \GateOlsEarlierTwoFiveFive & \GateBlockEarlierTwoFiveFive & \GateDnEarlierTwoFiveFive \\
 \hline
 \end{tabular}
 \end{table}

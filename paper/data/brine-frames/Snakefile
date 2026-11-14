@@ -197,6 +197,36 @@ rule brine_front_pdf:
         "--xyz {params.t0} {params.tend} --replicas {input.replicas} --pdf {output}"
 
 
+# The eight pure-water gate CSVs write the front macros, and the check
+# fails when paper/tex/brine_science.tex and those CSVs disagree.
+rule brine_gate_macros:
+    input:
+        script="input/brine/fit_velocity.py",
+        csvs=[
+            "paper/tex/figures/data/gate/pure-235.csv",
+            "paper/tex/figures/data/gate/pure-235-b.csv",
+            "paper/tex/figures/data/gate/pure-235-c.csv",
+            "paper/tex/figures/data/gate/pure-240-a.csv",
+            "paper/tex/figures/data/gate/pure-245.csv",
+            "paper/tex/figures/data/gate/pure-245-b.csv",
+            "paper/tex/figures/data/gate/pure-250.csv",
+            "paper/tex/figures/data/gate/pure-255.csv",
+        ],
+    output:
+        "paper/tex/figures/data/gate/front_macros.tex",
+    shell:
+        "python3 input/brine/fit_velocity.py --macros {output} {input.csvs}"
+
+
+rule brine_gate_check:
+    input:
+        "paper/tex/figures/data/gate/front_macros.tex",
+        "paper/tex/brine_science.tex",
+        "input/brine/fit_velocity.py",
+    shell:
+        "python3 input/brine/fit_velocity.py --check"
+
+
 # Replica r0 at 240 K and 245 K, 0, 10, 20 and 40 pairs: the same table code
 # and columns as brine_replicas, on the frames of the warm brine_run tags.
 rule brine_warm:

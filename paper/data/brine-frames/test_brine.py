@@ -162,3 +162,15 @@ def test_finished_run_ignores_a_newer_manifest(tmp_path):
     os.utime(root / "paper" / "data" / "brine-frames" / "replicas.py", (later + 60, later + 60))
     out = dry_run(root, str(restarts.relative_to(root) / "end.restart"), "--rerun-triggers", "mtime")
     assert "rule brine_run:" not in out
+
+
+def test_gate_macros_match_the_csvs():
+    root = HERE.parents[2]
+    proc = subprocess.run(
+        [sys.executable, "input/brine/fit_velocity.py", "--check"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "byte-identical" in proc.stdout
