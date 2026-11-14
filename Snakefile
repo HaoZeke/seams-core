@@ -568,6 +568,10 @@ rule science_carry_paths:
 #       --config seeds=20261111-20261130 shard=0/20 window_ns=20
 #   snakemake -j1 data/committor-shards/pb-0-of-20.csv \
 #       --config seeds=20261111-20261130 shard=0/20 sizes=225,250,275
+# The sizes of one climb can run on separate VMs, one table each:
+#   snakemake -j1 data/committor-shards/shot-0-of-20.n250.w20000.csv \
+#       --config seeds=20261111-20261130 shard=0/20 sizes=250
+# and size_groups=225/250/275 reads those tables into the report.
 # science_committor_merge folds the shot shards into p_B(n) and n*,
 # taking each shot from its table with the longest window.
 _COMMITTOR_SEEDS = config.get("seeds", "20261111-20261130")
@@ -580,6 +584,11 @@ _COMMITTOR_SIZES = sorted(
 _COMMITTOR_SUFFIX = (
     ".n" + "-".join(str(n) for n in _COMMITTOR_SIZES) if _COMMITTOR_SIZES else ""
 )
+_COMMITTOR_GROUPS = [
+    ".n" + "-".join(str(n) for n in sorted({int(w) for w in group.replace("-", ",").split(",")}))
+    for group in str(config.get("size_groups", "")).split("/")
+    if group.strip(", -")
+] or [_COMMITTOR_SUFFIX]
 _COMMITTOR_FRAMES = f"data/science-frames/committor-climb-{_COMMITTOR_TAG}"
 _COMMITTOR_ENV = (
     "test -n \"$LMP\" || {{ echo \"LMP is unset\" >&2; exit 1; }}\n"
@@ -712,9 +721,9 @@ rule science_committor_pb:
     input:
         tables=sorted(
             {
-                f"data/committor-shards/shot-{_COMMITTOR_TAG}.w{_COMMITTOR_WINDOW_PS}.csv",
-                f"data/committor-shards/shot-{_COMMITTOR_TAG}{_COMMITTOR_SUFFIX}"
-                f".w{_COMMITTOR_WINDOW_PS}.csv",
+                f"data/committor-shards/shot-{_COMMITTOR_TAG}{suffix}"
+                f".w{_COMMITTOR_WINDOW_PS}.csv"
+                for suffix in ["", *_COMMITTOR_GROUPS]
             }
         ),
         script="scripts/committor_shoot.py",

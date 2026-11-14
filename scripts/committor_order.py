@@ -140,13 +140,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("climbs", nargs="+", type=Path)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--commit", default="")
+    parser.add_argument("--source-tree", default="", help="tree to cite; HEAD^{tree}")
     args = parser.parse_args()
-    commit = args.commit or cs.head_commit()
+    tree = args.source_tree or cs.source_tree()
     rows = [climb_order(d) for d in sorted(args.climbs) if (d / "frames.tsv").is_file()]
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("w", newline="") as handle:
-        handle.write(f"# commit {commit}\n")
+        handle.write(f"# source_tree {tree}\n")
         handle.write(f"# frames from {cs.fmt(EQUIL_PS)} ps; increments over "
                      f"{cs.fmt(STEP_PS)} ps; order parameter {cs.ORDER}\n")
         writer = csv.DictWriter(handle, fieldnames=fields(), lineterminator="\n")
