@@ -403,3 +403,4 @@ bench/local/
 *.bench.log
 
 docs/_build/
+sqq-src/

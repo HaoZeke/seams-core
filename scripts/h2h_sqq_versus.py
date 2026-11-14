@@ -759,6 +759,35 @@ def time_session(args):
     log.close()
 
 
+# ---------------------------------------------------------------- provenance
+
+def provenance(args):
+    """Every .py file of the installed sqq against the same path at the tag."""
+    import sqq
+    src = Path(args.sqq_src)
+    head = subprocess.run(["git", "-C", str(src), "rev-parse", f"{args.tag}^{{commit}}"],
+                          capture_output=True, text=True, check=True).stdout.strip()
+    site = Path(sqq.__file__).resolve().parent
+    files = sorted(site.rglob("*.py"))
+    differ = []
+    for path in files:
+        rel = path.relative_to(site.parent).as_posix()
+        shown = subprocess.run(["git", "-C", str(src), "show", f"{args.tag}:{rel}"],
+                               capture_output=True, check=False)
+        if shown.returncode != 0 or shown.stdout != path.read_bytes():
+            differ.append(rel)
+    lines = [
+        f"sqq {sqq.__version__} installed from PyPI",
+        f"github.com/pimooni/sqq tag {args.tag} commit {head}",
+        f"paper Pang and Sun, J. Phys. Chem. A 130 (41), 8187-8199 (2026), doi {SQQ_DOI}",
+        f"installed .py files {len(files)} identical to the tag {len(files) - len(differ)}",
+    ] + [f"differs {rel}" for rel in differ]
+    if head != SQQ_COMMIT:
+        lines.append(f"tag commit {head} is not the recorded {SQQ_COMMIT}")
+    Path(args.out).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print("\n".join(lines))
+
+
 # ---------------------------------------------------------------- summary
 
 def paired_ratio_ci(dseams, sqq, seed=BOOT_SEED, boot=BOOT):
@@ -861,6 +890,10 @@ def main():
     p.add_argument("--frames", nargs="+", default=list(FRAMES))
     p.add_argument("--operations", nargs="+", default=list(OPERATIONS))
     p.add_argument("--log", required=True)
+    p = sub.add_parser("provenance")
+    p.add_argument("--sqq-src", required=True, help="a clone of github.com/pimooni/sqq")
+    p.add_argument("--tag", default="v0.5.8")
+    p.add_argument("--out", default="benchmarks/h2h-sqq-provenance.txt")
     p = sub.add_parser("summarize")
     p.add_argument("--agree", default="benchmarks/h2h-sqq-agree.csv")
     p.add_argument("--logs", nargs="+", required=True)
@@ -870,6 +903,8 @@ def main():
         agree(args)
     elif args.cmd == "time":
         time_session(args)
+    elif args.cmd == "provenance":
+        provenance(args)
     else:
         summarize(args)
 

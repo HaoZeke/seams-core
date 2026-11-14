@@ -982,6 +982,16 @@ rule h2h_sqq_mw_liquid:
         "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_mw.py 16 48 --log {output}"
 
 
+rule h2h_sqq_provenance:
+    output:
+        "benchmarks/h2h-sqq-provenance.txt",
+    shell:
+        "test -d \"${{SQQ_SRC:-sqq-src}}\" || "
+        "git clone -q https://github.com/pimooni/sqq \"${{SQQ_SRC:-sqq-src}}\"; "
+        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_versus.py provenance "
+        "--sqq-src \"${{SQQ_SRC:-sqq-src}}\" --out {output}"
+
+
 rule h2h_sqq_agree:
     input:
         "scripts/h2h_sqq_versus.py",

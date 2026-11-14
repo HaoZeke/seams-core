@@ -1,0 +1,4 @@
+sqq 0.5.8 installed from PyPI
+github.com/pimooni/sqq tag v0.5.8 commit 17cf76f9a2fc18848321025674a0f4d4adfa26e8
+paper Pang and Sun, J. Phys. Chem. A 130 (41), 8187-8199 (2026), doi 10.1021/acs.jpca.6c05769
+installed .py files 128 identical to the tag 128
