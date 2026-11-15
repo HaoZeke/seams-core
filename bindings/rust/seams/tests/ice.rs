@@ -56,3 +56,52 @@ fn cubic_ice_through_the_c_api() {
     sys.chill_plus(3.5, seams_sys::SEAMS_GRAPH_CUTOFF, seams_sys::SEAMS_CHILL_PUBLISHED)
         .unwrap();
 }
+
+fn chordless_reference(path: &str) -> (usize, usize, Vec<i32>, Vec<i32>) {
+    let text = std::fs::read_to_string(path).unwrap();
+    let nums: Vec<i32> = text.split_whitespace().map(|s| s.parse().unwrap()).collect();
+    let (atoms, n, size) = (nums[0] as usize, nums[1] as usize, nums[2] as usize);
+    let rings = nums[3..3 + n * size].to_vec();
+    let per_atom = nums[3 + n * size..3 + n * size + atoms].to_vec();
+    (atoms, size, rings, per_atom)
+}
+
+#[test]
+fn chordless_six_cycles_of_cubic_ice() {
+    let (xyz, length) = diamond(2);
+    let mut sys = seams::System::new().unwrap();
+    sys.set_ortho(&xyz, length, length, length).unwrap();
+    let found = sys
+        .rings_chordless(3.5, 6, 0, seams_sys::SEAMS_GRAPH_CUTOFF)
+        .unwrap();
+    assert_eq!(found.count(), 128);
+    assert!(found.per_atom.iter().all(|n| *n == 12));
+    for cycle in found.cycles() {
+        assert!(cycle[1..].iter().all(|atom| *atom > cycle[0]));
+    }
+    assert_eq!(found.cycle(0), &found.rings[..6]);
+    let nb = sys.neighbours(3.5, 0, seams_sys::SEAMS_GRAPH_CUTOFF).unwrap();
+    assert_eq!(nb.chordless(4).unwrap().count(), 0);
+    assert!(nb.chordless(13).is_err());
+}
+
+#[test]
+fn chordless_matches_the_c_reference() {
+    let (Ok(path), Ok(traj)) = (
+        std::env::var("SEAMS_CHORDLESS_REF"),
+        std::env::var("SEAMS_CHORDLESS_TRAJ"),
+    ) else {
+        eprintln!("SEAMS_CHORDLESS_REF is not set");
+        return;
+    };
+    let (atoms, size, rings, per_atom) = chordless_reference(&path);
+    let mut sys = seams::System::new().unwrap();
+    sys.read(&traj, 1, 2).unwrap();
+    assert_eq!(sys.count() as usize, atoms);
+    let found = sys
+        .rings_chordless(3.5, size as i32, 0, seams_sys::SEAMS_GRAPH_CUTOFF)
+        .unwrap();
+    assert_eq!(found.size, size);
+    assert_eq!(found.rings, rings);
+    assert_eq!(found.per_atom, per_atom);
+}
