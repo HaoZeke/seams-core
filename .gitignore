@@ -3,6 +3,7 @@
 .venv-paper/
 .venv-sqq/
 .asv/
+__pycache__/
 benchmarks/paper-cells/.sitting-large.jsonl
 benchmarks/paper-cells/.sitting-agree/
 benchmarks/paper-cells/*.pdf
