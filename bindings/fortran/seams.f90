@@ -440,7 +440,7 @@ contains
     integer(c_int), allocatable, target, intent(out) :: rings(:, :)
     integer(c_int), allocatable, target, intent(out) :: per_atom(:)
     integer(c_int) :: code
-    integer(c_size_t) :: count
+    integer(c_size_t) :: count, total
     integer :: n
     count = 0
     n = seams_neighbours_count(nb)
@@ -455,8 +455,9 @@ contains
     if (code /= SEAMS_OK) return
     allocate(rings(size, count))
     if (count > 0) then
-      code = seams_rings_chordless(nb, int(size, c_int), c_loc(rings), &
-                                   int(size, c_size_t) * count, count, c_null_ptr, 0_c_size_t)
+      total = int(size, c_size_t) * count
+      code = seams_rings_chordless(nb, int(size, c_int), c_loc(rings), total, count, &
+                                   c_null_ptr, 0_c_size_t)
       rings = rings + 1
     end if
   end function
