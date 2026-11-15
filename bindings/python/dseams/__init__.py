@@ -8,6 +8,8 @@ Positions are Angstrom, C-contiguous, and are not copied on the way in.
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 
 from dseams import _core
@@ -58,6 +60,17 @@ class Frame(_core.Frame):
         pos = np.ascontiguousarray(positions, dtype=np.float64)
         super().set_frame(pos, _as_box(box))
 
+    def read(self, path, frame=1, type_filter=-1):
+        """Read one trajectory frame. Returns the frame."""
+        super().read(os.fspath(path), frame, type_filter)
+        return self
+
+
+def read(path, frame=1, type_filter=-1):
+    """One trajectory frame. ``type_filter`` -1 keeps every atom, 0 guesses
+    the oxygen species, and a positive value keeps that species."""
+    return Frame().read(path, frame, type_filter)
+
 
 def _chill_rule(rule):
     """paper is the four closest neighbours. ovito is the whole cutoff shell."""
@@ -105,6 +118,22 @@ def rings(positions, box, cutoff=3.5, max_depth=6):
     frame = Frame()
     frame.set_frame(pos, _as_box(box))
     return frame.rings(cutoff, max_depth)
+
+
+def rings_chordless(positions, box, size=6, cutoff=3.5, graph=CUTOFF):
+    """Chordless cycles of one size, 3 through 12.
+
+    A cycle is chordless when no bond joins two of its atoms that are not
+    next to each other on it. Returns an ``(n, size)`` array of 0-based atom
+    indices and the number of cycles through each atom. Each row starts at
+    its lowest index and runs towards the smaller of its two neighbours, and
+    the rows are sorted, so the result does not depend on the thread count.
+    ``Frame.rings_chordless`` takes a ``type`` as well.
+    """
+    pos = np.ascontiguousarray(positions, dtype=np.float64)
+    frame = Frame()
+    frame.set_frame(pos, _as_box(box))
+    return frame.rings_chordless(size, cutoff, 0, graph)
 
 
 def _reduced_cell(vectors):

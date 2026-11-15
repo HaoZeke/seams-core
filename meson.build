@@ -752,12 +752,14 @@ if get_option('with_python')
   dseams_env = environment()
   dseams_env.set('DSEAMS_BUILD', meson.project_build_root())
   dseams_env.set('DSEAMS_SRC', meson.project_source_root())
+  dseams_env.set('SEAMS_CHORDLESS_REF', chordless_ref_txt.full_path())
+  dseams_env.set('SEAMS_CHORDLESS_TRAJ', chordless_traj)
   test(
     'python_dseams',
     python3_dseams,
     args: [meson.project_source_root() / 'bindings/python/run_unittest.py'],
     env: dseams_env,
-    depends: python_deps,
+    depends: python_deps + [chordless_ref_txt],
     timeout: 180)
 endif
 

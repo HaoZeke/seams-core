@@ -83,6 +83,13 @@ NB_MODULE(_core, m) {
                                           static_cast<int>(pos.shape(0)), box9, nullptr,
                                           nullptr));
            })
+      .def("read",
+           [](Frame &frame, const std::string &path, int index, int type_filter) {
+             check(seams_system_read(frame.sys, path.c_str(), index, type_filter));
+           },
+           nb::arg("path"), nb::arg("frame") = 1, nb::arg("type_filter") = -1,
+           "Read one frame of a trajectory. type_filter < 0 keeps every atom, 0 "
+           "guesses the oxygen species, and > 0 keeps that species.")
       .def("count", [](const Frame &frame) { return seams_system_count(frame.sys); })
       .def("chill_plus",
            [](Frame &frame, double cutoff, int graph, int rule) {
@@ -153,6 +160,39 @@ NB_MODULE(_core, m) {
                  nb::ndarray<nb::numpy, int>(col, {static_cast<std::size_t>(nnz)}, oc));
            },
            nb::arg("cutoff") = 3.5, nb::arg("graph") = 0)
+      .def("rings_chordless",
+           [](Frame &frame, int size, double cutoff, int type, int graph) {
+             seams_neighbours *nb = nullptr;
+             check(seams_neighbours_build(frame.sys, cutoff, type, graph, &nb));
+             const int n = seams_neighbours_count(nb);
+             auto *per = new int[static_cast<std::size_t>(n > 0 ? n : 1)];
+             int *rows = nullptr;
+             std::size_t count = 0;
+             try {
+               check(seams_rings_chordless(nb, size, nullptr, 0, &count, per,
+                                           static_cast<std::size_t>(n)));
+               const std::size_t len = count * static_cast<std::size_t>(size);
+               rows = new int[len > 0 ? len : 1];
+               check(seams_rings_chordless(nb, size, rows, len, &count, nullptr, 0));
+             } catch (...) {
+               seams_neighbours_destroy(nb);
+               delete[] per;
+               delete[] rows;
+               throw;
+             }
+             seams_neighbours_destroy(nb);
+             nb::capsule orows(rows, [](void *p) noexcept { delete[] static_cast<int *>(p); });
+             nb::capsule oper(per, [](void *p) noexcept { delete[] static_cast<int *>(p); });
+             return nb::make_tuple(
+                 nb::ndarray<nb::numpy, int>(rows, {count, static_cast<std::size_t>(size)},
+                                             orows),
+                 nb::ndarray<nb::numpy, int>(per, {static_cast<std::size_t>(n)}, oper));
+           },
+           nb::arg("size") = 6, nb::arg("cutoff") = 3.5, nb::arg("type") = 0,
+           nb::arg("graph") = 0,
+           "Chordless cycles of one size, 3 through 12, as an (n, size) array of "
+           "0-based atom indices and the number of cycles through each atom. "
+           "Each row starts at its lowest index; the rows are sorted.")
       .def("rings", [](Frame &frame, double cutoff, int max_depth) {
         seams_rings *rings = nullptr;
         check(seams_rings_find(frame.sys, cutoff, 0, SEAMS_GRAPH_CUTOFF, max_depth, &rings));
