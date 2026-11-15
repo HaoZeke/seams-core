@@ -242,6 +242,21 @@ _chordless_env = environment()
 _chordless_env.set('SEAMS_TRAJ', meson.project_source_root() / 'input' / 'traj' / 'exampleTraj.lammpstrj')
 test('seams_rings_chordless', rings_chordless_test, timeout: 120, env: _chordless_env)
 
+# The binding tests compare their chordless cycles with this file: the
+# oxygens of the first exampleTraj frame, cutoff graph at 3.5, size 6.
+chordless_ref = executable(
+  'chordless_ref',
+  files('../tests/chordless_ref.c'),
+  link_with: seams_api_lib,
+  include_directories: include_directories('../include'),
+  c_args: ['-I' + meson.current_build_dir()])
+chordless_traj = meson.project_source_root() / 'input' / 'traj' / 'exampleTraj.lammpstrj'
+chordless_ref_txt = custom_target(
+  'chordless_ref_txt',
+  output: 'chordless_ref.txt',
+  command: [chordless_ref, chordless_traj, '1', '2', 'cutoff', '3.5', '0', '6', '@OUTPUT@'],
+  build_by_default: true)
+
 docs_ice_example = executable(
   'docs_ice_example',
   files('../docs/examples/ice.c'),
