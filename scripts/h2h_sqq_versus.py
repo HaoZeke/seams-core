@@ -148,12 +148,14 @@ def git_head():
 
 # ---------------------------------------------------------------- frames
 
+# Relative frame directories are taken from the checkout, the Snakemake
+# working directory, because asv runs each benchmark from a scratch directory.
 def mw_dir():
-    return Path(os.environ.get("MW215_DIR", "mw215-frames"))
+    return ROOT / os.environ.get("MW215_DIR", "mw215-frames")
 
 
 def tip4p2005_dir():
-    return Path(os.environ.get("TIP4P2005_DIR", "tip4p2005-frames"))
+    return ROOT / os.environ.get("TIP4P2005_DIR", "tip4p2005-frames")
 
 
 def wrapped(frame):
