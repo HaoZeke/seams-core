@@ -73,6 +73,38 @@ void equal_ints(const std::vector<int> &got, const std::vector<double> &want) {
   }
 }
 
+std::vector<int> read_ints(const std::string &path) {
+  FILE *file = std::fopen(path.c_str(), "r");
+  if (file == nullptr) {
+    throw std::runtime_error("cannot read " + path);
+  }
+  std::vector<int> values;
+  int value = 0;
+  while (std::fscanf(file, "%d", &value) == 1) {
+    values.push_back(value);
+  }
+  std::fclose(file);
+  return values;
+}
+
+// The chordless reference is atoms, n_rings, size, the rows, then the
+// per-atom counts.
+void equal_chordless(const seams::ChordlessCycles &got, const std::vector<int> &want) {
+  if (want.size() < 3) {
+    throw std::runtime_error("chordless reference is empty");
+  }
+  const std::size_t atoms = static_cast<std::size_t>(want[0]);
+  const std::size_t rows = static_cast<std::size_t>(want[1]);
+  const std::size_t size = static_cast<std::size_t>(want[2]);
+  if (got.size != static_cast<int>(size) || got.count() != rows ||
+      got.per_atom.size() != atoms || want.size() != 3 + rows * size + atoms ||
+      !std::equal(got.atoms.begin(), got.atoms.end(), want.begin() + 3) ||
+      !std::equal(got.per_atom.begin(), got.per_atom.end(),
+                  want.begin() + 3 + static_cast<std::ptrdiff_t>(rows * size))) {
+    throw std::runtime_error("chordless cycles differ from the C reference");
+  }
+}
+
 seams::System read_frame(const std::string &path, int type_filter) {
   seams::System sys;
   sys.read(path, 1, type_filter);
@@ -83,7 +115,7 @@ seams::System read_frame(const std::string &path, int type_filter) {
 
 int main(int argc, char **argv) {
   if (argc < 3) {
-    std::cerr << "usage: test_seams_hpp oracle source-root\n";
+    std::cerr << "usage: test_seams_hpp oracle source-root [chordless-reference]\n";
     return 2;
   }
   try {
@@ -194,6 +226,18 @@ int main(int argc, char **argv) {
       return 1;
     }
     close(mean(tri.steinhardt(3.5, 6, false).first), want.at("tri q6")[0]);
+    if (argc > 3) {
+      auto water = read_frame(root + "/input/traj/exampleTraj.lammpstrj", 2);
+      const auto cycles = water.rings_chordless(3.5, 6);
+      equal_chordless(cycles, read_ints(argv[3]));
+      if (cycles.count() > 0 && cycles.cycle(0).size() != 6) {
+        return 1;
+      }
+      const auto five = water.neighbours(3.5).chordless(5);
+      if (five.size != 5 || five.per_atom.size() != static_cast<std::size_t>(water.count())) {
+        return 1;
+      }
+    }
   } catch (const std::exception &ex) {
     std::cerr << ex.what() << "\n";
     return 1;

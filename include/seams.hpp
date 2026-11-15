@@ -33,6 +33,22 @@ inline void check(int status, const void *handle) {
   throw Error(status, text == nullptr ? std::string() : std::string(text));
 }
 
+// Chordless cycles of one size. atoms holds count() rows of size 0-based
+// atom indices, in the order seams_rings_chordless writes them.
+struct ChordlessCycles {
+  int size = 0;
+  std::vector<int> atoms;
+  std::vector<int> per_atom;
+
+  std::size_t count() const {
+    return size > 0 ? atoms.size() / static_cast<std::size_t>(size) : 0;
+  }
+  std::vector<int> cycle(std::size_t index) const {
+    const auto first = atoms.begin() + static_cast<std::ptrdiff_t>(index * static_cast<std::size_t>(size));
+    return std::vector<int>(first, first + size);
+  }
+};
+
 class Neighbours {
  public:
   explicit Neighbours(seams_neighbours *ptr) : ptr_(ptr) {}
@@ -54,6 +70,20 @@ class Neighbours {
     std::size_t count = 0;
     check(seams_neighbours_copy(ptr_, nullptr, 0, &n_offsets, nullptr, 0, &count), ptr_);
     return count;
+  }
+
+  ChordlessCycles chordless(int size) const {
+    ChordlessCycles out;
+    out.size = size;
+    out.per_atom.resize(static_cast<std::size_t>(seams_neighbours_count(ptr_)));
+    std::size_t count = 0;
+    check(seams_rings_chordless(ptr_, size, nullptr, 0, &count, out.per_atom.data(),
+                                out.per_atom.size()),
+          ptr_);
+    out.atoms.resize(count * static_cast<std::size_t>(size));
+    check(seams_rings_chordless(ptr_, size, out.atoms.data(), out.atoms.size(), &count, nullptr, 0),
+          ptr_);
+    return out;
   }
 
  private:
@@ -232,6 +262,17 @@ class System {
     std::size_t n_atoms = 0;
     check(seams_signature_cages(ptr_, cutoff, 0, graph, spec.c_str(), &n_cages, &n_atoms), ptr_);
     return {n_cages, n_atoms};
+  }
+
+  Neighbours neighbours(double cutoff, int type = 0, int graph = SEAMS_GRAPH_CUTOFF) {
+    seams_neighbours *out = nullptr;
+    check(seams_neighbours_build(ptr_, cutoff, type, graph, &out), ptr_);
+    return Neighbours(out);
+  }
+
+  ChordlessCycles rings_chordless(double cutoff, int size, int type = 0,
+                                  int graph = SEAMS_GRAPH_CUTOFF) {
+    return neighbours(cutoff, type, graph).chordless(size);
   }
 
   Neighbours knn(int k, double cutoff, bool mutual) {

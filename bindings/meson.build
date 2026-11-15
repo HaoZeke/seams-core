@@ -19,8 +19,8 @@ seams_hpp_test = executable(
 test(
   'seams_hpp_match',
   seams_hpp_test,
-  args: [binding_oracle.full_path(), meson.project_source_root()],
-  depends: [binding_oracle, seams_api_lib],
+  args: [binding_oracle.full_path(), meson.project_source_root(), chordless_ref_txt.full_path()],
+  depends: [binding_oracle, seams_api_lib, chordless_ref_txt],
   timeout: 180,
 )
 
