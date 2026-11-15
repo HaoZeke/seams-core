@@ -20,13 +20,14 @@ print(frame.chill_plus())
 print(frame.cages())
 #+end_src
 
-~Frame.chill_plus~ uses the cutoff neighbour list.
-~IceCounts(interClathrate=9, water=241)~.
+~pydseamslib~ 2.11.1 ~Frame.chill_plus~ takes no graph argument.
+~IceCounts(interClathrate=12, water=238)~.
 ~CageScore(n_ih=0, n_ic=0, n_water=250)~.
 
-~seams chill-plus~ on the same file uses the mutual four-neighbour list and prints ~clathrate 1 interClathrate 7 water 242~.
+~seams chill-plus~ on this tree defaults to the cutoff list and prints ~interClathrate 9 water 241~.
+~--graph mutual~ prints ~clathrate 1 interClathrate 7 water 242~.
 The cage score matches the CLI.
-The CHILL+ histogram does not match the CLI.
+The published package still has the earlier shell count, so its CHILL+ histogram does not match the CLI.
 
 * Cubic ice and an sI cage
 
@@ -42,10 +43,10 @@ A nanometre file uses ~0.265,0.315~.
 ~none~ turns the window off: every ring the neighbour list already accepted can be a face, and the cage bound is the face census alone.
 On sI, sII, the sI 2×2×2 cell and the sII 10×10×10 cell the default and ~none~ return the same cages.
 
+~pydseamslib~ 2.11.1 ~cages_by_signature~ takes the signature and not ~edge~.
+
 #+begin_src python
 found = frame.cages_by_signature("512")
-found = frame.cages_by_signature("512", edge="none")
-found = frame.cages_by_signature("512", edge="2.4,3.4")
 #+end_src
 
 #+begin_src lua

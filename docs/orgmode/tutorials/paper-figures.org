@@ -11,11 +11,14 @@ Python is ~pip install pydseamslib~.
 | cubic ice, CHILL+ | =mW_cubic.lammpstrj= frame 1, type 1 | ~chill_plus()~ | 4096 cubic |
 | cubic ice, cages | the same frame | ~cages()~ | ~n_ic~ 4096 |
 | sI 5^12 cages | =genice_sI.lammpstrj=, type 1 | ~cages_by_signature("512")~ | 2 cages, 40 atoms |
-| mixed frame | =exampleTraj.lammpstrj=, type 2 | cutoff CHILL+ versus cages | 9 interfacial clathrate, no complete cage |
+| mixed frame | =exampleTraj.lammpstrj=, type 2 | ~pydseamslib~ 2.11.1 CHILL+ versus cages | 12 interfacial clathrate, 238 water, no complete cage |
+
+This tree's CLI cutoff list on that dump is 9 interfacial clathrate and 241 water.
+The published package still reports the earlier shell count.
 
 The R and Julia fronts also report 4096 cubic on the first row.
-They call ~libseams_lang~ with the mutual four-neighbour list.
-On this lattice that list and the cutoff list agree.
+They call ~libseams_lang~. CHILL+ defaults to the cutoff list.
+On this lattice that list and the mutual four-neighbour list agree.
 
 The nucleation, nanotube, monolayer, and in-plane RDF figures need the figshare dumps.
 Point the same functions at those files.

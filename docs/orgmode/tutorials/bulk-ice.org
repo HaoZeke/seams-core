@@ -111,7 +111,7 @@ It is ice Ic only when it belongs to a double-diamond cage.
 Otherwise it is water.
 Partial ice-like order is water on that score.
 
-On this mixed frame the cutoff list labels 12 oxygens interfacial clathrate, and the mutual four-neighbour list labels one clathrate and seven interfacial clathrate.
+On this mixed frame the cutoff list labels 9 oxygens interfacial clathrate, and the mutual four-neighbour list labels one clathrate and seven interfacial clathrate.
 TUM finds no complete HC or DDC.
 A three-eclipsed star is not cage membership.
 
@@ -146,16 +146,16 @@ print(frame.chill_plus())
 print(frame.cages())
 #+end_src
 
-~Frame.chill_plus~ defaults to the cutoff list, as ~seams chill-plus~ does; ~frame.chill_plus(graph="mutual")~ is the mutual list.
-On this dump the default prints:
+~pydseamslib~ 2.11.1 ~Frame.chill_plus~ takes no arguments.
+On this dump it prints:
 
 #+begin_example
-IceCounts(interClathrate=9, water=241)
+IceCounts(interClathrate=12, water=238)
 CageScore(n_ih=0, n_ic=0, n_water=250)
 #+end_example
 
 The cage score matches the CLI.
-The CHILL+ histogram does not, because the neighbour lists differ.
+The CHILL+ histogram does not: this tree's cutoff list is 9 interfacial clathrate and 241 water, and that package still reports the earlier shell count.
 ~import pydseamslib~ is the same package.
 The Frame walkthrough is [[https://d-seams.github.io/PydSEAMSlib/][pydseams]].
 Lua is [[https://d-seams.github.io/yodaStruct/][require("dseams")]].

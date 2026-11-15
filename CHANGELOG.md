@@ -30,7 +30,7 @@ by [towncrier](https://towncrier.readthedocs.io/).
 
 ### Changed
 
-- CHILL and CHILL+ default to the mutual four-nearest graph. vesin still owns cutoff pairs; linkcell still owns k-nearest.
+- CHILL and CHILL+ default to the cutoff list. vesin still owns cutoff pairs; linkcell still owns k-nearest.
 - MPI ring analyses can reduce ring counts and per-atom ring types with `seams::domain::reduceRings`, which keeps each rank on its own domain and sends only owned atoms to the root instead of gathering every ring on every rank.
 - Release builds define NDEBUG, so the libstdc++ assertions that meson adds when b_ndebug is false no longer run in them. The closed-cage search on the sI 2x2x2 crystal takes 13.2 ms instead of 16.0 ms, with the same output.
 - The cutoff list now covers restricted triclinic boxes.

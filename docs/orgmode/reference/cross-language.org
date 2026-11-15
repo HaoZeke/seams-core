@@ -19,19 +19,22 @@ The package name the d-SEAMS paper should use is ~pydseamslib~.
 R is =bindings/r/dseams=.
 Julia is =bindings/julia/Dseams= and calls =libseams_lang= with =ccall=.
 
-Every front defaults to the cutoff neighbour list (~graph = "cutoff"~, pairs closer than ~cutoff~, 3.5 Å).
-~graph = "mutual"~ is the mutual four-nearest list with candidates inside ~cutoff + 1.5~, under the same name on every front.
+The CLI, R, Julia, and ~libseams_lang~ default to the cutoff neighbour list (~graph = "cutoff"~, pairs closer than ~cutoff~, 3.5 Å).
+~graph = "mutual"~ is the mutual four-nearest list with candidates inside ~cutoff + 1.5~.
 On this lattice the two lists label the same sites cubic.
 On the mixed TIP4P dump (=input/traj/exampleTraj.lammpstrj=, type 2) they do not:
 
 | front | mutual-list call |
 |-------+------------------|
 | CLI | =seams chill-plus FILE --type 2 --graph mutual= |
-| Python | =frame.chill_plus(graph="mutual")= |
+| ~libseams_lang~ | =seams_frame_chill_plus_rule(frame, 3.5, 2, "mutual", "chill+", ...)= |
 | R | =chill_plus(frame, graph = "mutual")= |
 | Julia | =chill_plus(frame; graph = "mutual")= |
 
-The cutoff list gives 9 interClathrate and 241 water.
+~pydseamslib~ 2.11.1 ~Frame.chill_plus~ takes no graph argument.
+On that dump it still reports 12 interClathrate and 238 water.
+
+The cutoff list on this tree gives 9 interClathrate and 241 water.
 The mutual list gives 1 clathrate, 7 interClathrate, and 242 water.
 
 A cage signature takes the same face-edge window on every front.
@@ -41,7 +44,7 @@ The default is ~2.65,3.15~ in the coordinate units of the file.
 | front | call |
 |-------+------|
 | CLI | =seams cages FILE --signature 512 --cage-edge none= |
-| Python | =frame.cages_by_signature("512", edge="none")= |
+| Python | =frame.cages_by_signature("512")= (~pydseamslib~ 2.11.1 takes no ~edge~) |
 | Lua | =dseams.cages_by_signature(frame, "512", {edge = "none"})= |
 | C | =seams_frame_signature_edge(frame, 3.5, 1, "cutoff", "512", "none", &n_cages, &n_atoms)= |
 
@@ -50,6 +53,7 @@ Set the window to the heavy-atom contact range of the model.
 Widen it for a compressed cell or a guest that stretches a cage.
 A nanometre file uses ~0.265,0.315~.
 
-=tests/chill_plus_fronts.py= (Meson test ~chill_plus_fronts_agree~) runs all four fronts on that dump with both lists.
-It checks the histograms on all four and the per-atom labels on Python, R, and Julia.
-The Python front needs a pydseamslib whose ~chill_plus~ takes ~graph~.
+=tests/chill_plus_fronts.py= (Meson test ~chill_plus_fronts_agree~) runs the CLI, ~libseams_lang~, R, and Julia on that dump with both lists.
+It checks the histograms and, where a front returns them, the per-atom labels.
+The Python column is ctypes against ~libseams_lang~.
+~pydseamslib~ 2.11.1 ~Frame.chill_plus~ takes no ~graph~.

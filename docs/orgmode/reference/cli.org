@@ -288,7 +288,7 @@ seams cages FILE --graph cutoff --signature 512 --cage-edge 2.4,3.4
 #+end_src
 
 The same string is ~SEAMS_CAGE_EDGE~.
-Python passes it as ~frame.cages_by_signature("512", edge="none")~.
+~pydseamslib~ 2.11.1 ~cages_by_signature~ does not take ~edge~. The call is ~frame.cages_by_signature("512")~.
 Lua passes it as ~dseams.cages_by_signature(frame, "512", {edge = "none"})~ with ~require("dseams")~.
 The C entry is ~seams_frame_signature_edge~; a null edge string is the default window.
 
