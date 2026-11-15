@@ -116,7 +116,7 @@ def cpus_allowed():
 
 
 def code_state():
-    """Commit, and whether the code the timings depend on matches it."""
+    """Commit, source tree, and whether the code the timings depend on matches it."""
     paths = ["scripts", "bench", "src", "include", "Snakefile", "meson.build",
              "benchmarks/benchmarks.py", "asv.conf.json"]
     try:
@@ -125,7 +125,16 @@ def code_state():
         clean = "clean" if not out.stdout.strip() else "modified"
     except Exception:
         clean = "unknown"
-    return f"{git_head()} code {clean}"
+    return f"{git_head()} code {clean} source_tree {source_tree()}"
+
+
+def source_tree():
+    try:
+        out = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD^{tree}"],
+                             capture_output=True, text=True, check=True)
+        return out.stdout.strip()
+    except Exception:
+        return "unknown"
 
 
 def git_head():
@@ -1113,17 +1122,26 @@ def summarize(args):
 
 
 def asv_session(args):
-    """Run the asv class in this session and keep its output, paths scrubbed."""
+    """Run the asv class in this session and keep its output, paths scrubbed.
+
+    asv runs under this interpreter, and --python=same names the environment
+    after its absolute path with each separator turned into an underscore.
+    The checkout's part of that name becomes <root>.
+    """
+    root_name = str(ROOT).replace(os.sep, "_")
     with open(args.log, "w", encoding="utf-8") as log:
         log.write(f"commit {code_state()}\n")
         log.write(f"cores {len(os.sched_getaffinity(0))} cpus {cpus_allowed()}\n")
-        cmd = ["asv", "run", "--python=same", "--machine", "anon", "--bench", args.bench]
-        log.write(" ".join(cmd) + "\n")
+        python = Path(sys.executable)
+        if python.is_relative_to(ROOT):
+            log.write(f"python {python.relative_to(ROOT).as_posix()}\n")
+        args_asv = ["run", "--python=same", "--machine", "anon", "--bench", args.bench]
+        log.write(" ".join(["asv"] + args_asv) + "\n")
         log.flush()
-        proc = subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, text=True)
+        proc = subprocess.Popen([sys.executable, "-m", "asv"] + args_asv, cwd=ROOT,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         for line in proc.stdout:
-            log.write(scrub(line.rstrip("\n")) + "\n")
+            log.write(scrub(line.rstrip("\n").replace(root_name, "_<root>")) + "\n")
             log.flush()
         if proc.wait() != 0:
             raise SystemExit(f"asv exited {proc.returncode}")

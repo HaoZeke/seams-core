@@ -272,9 +272,9 @@ Callgrind on one thread over the mw-liquid-4096 census, from coordinates to labe
 
 ```bash
 meson setup bbdir-release --buildtype=release -Doptimization=3 && meson compile -C bbdir-release -j4
-pip install sqq==0.5.8 MDAnalysis scipy snakemake asv
+python3 -m venv .venv-sqq && .venv-sqq/bin/python -m pip install sqq==0.5.8 MDAnalysis scipy snakemake asv
 git clone --branch v0.5.8 https://github.com/pimooni/sqq sqq-src
-export H2H_PYTHON=python3 MW215_DIR=mw215-frames TIP4P2005_DIR=tip4p2005-frames
+export H2H_PYTHON=.venv-sqq/bin/python MW215_DIR=mw215-frames TIP4P2005_DIR=tip4p2005-frames
 snakemake -j1 h2h_sqq_mw_liquid h2h_sqq_tip4p2005 h2h_sqq_provenance h2h_sqq_agree h2h_sqq_edge h2h_sqq_time h2h_sqq h2h_sqq_asv
 ```
 
@@ -283,4 +283,4 @@ snakemake -j1 h2h_sqq_mw_liquid h2h_sqq_tip4p2005 h2h_sqq_provenance h2h_sqq_agr
 - `meson compile` builds the census as `bbdir-release/bench/libseams_ring_ice.so`; `SEAMS_RING_ICE_LIB` overrides the path.
 - Run the rules with `-j1`: the timing rule pins CPU 0 and CPUs 0-7.
 - The session took 17 hours, most of it SQQ calls at 884736 molecules and the brute-force enumeration, which the agreement rule now runs on every frame.
-- `h2h_sqq_asv` runs `asv run --python=same --machine anon --bench H2HSqq` and keeps its output in `benchmarks/h2h-sqq-asv.txt`, after the commit, the clean-tree check and the CPU set. The asv class covers the same operations and thread counts with eight repeats, on every frame except the three at 884736, which would add about 5 hours of SQQ calls. It skips a configuration when `libseams.so`, the census library, sqq or a frame is missing, and runs `time_sqq` only for `rings` and `ice`. The tilted-cell check is `SqqTiltedBox`, so `--bench H2HSqq` selects only this class. `asv.conf.json` benchmarks `HEAD`, whichever branch is checked out.
+- `h2h_sqq_asv` runs `asv run --python=same --machine anon --bench H2HSqq` under `H2H_PYTHON` and keeps its output in `benchmarks/h2h-sqq-asv.txt`, after the commit, the clean-tree check, the source tree, the CPU set and the interpreter's path in the checkout. asv names the environment after the interpreter's absolute path; the log writes the checkout's part of that name as `<root>`. The asv class covers the same operations and thread counts with eight repeats, on every frame except the three at 884736, which would add about 5 hours of SQQ calls. It skips a configuration when `libseams.so`, the census library, sqq or a frame is missing, and runs `time_sqq` only for `rings` and `ice`. The tilted-cell check is `SqqTiltedBox`, so `--bench H2HSqq` selects only this class. `asv.conf.json` benchmarks `HEAD`, whichever branch is checked out.
