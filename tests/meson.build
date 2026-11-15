@@ -645,15 +645,18 @@ test('sqq_sh_triclinic', find_program('python3'),
 test('ring_carry', bench_ring_carry,
   args: ['800', '2'],
   timeout: 180)
+# These two compare eight-thread times, so they run alone.
 test('q6_mdapy', find_program('python3'),
   args: [files('test_q6_mdapy.py')],
   workdir: meson.project_source_root(),
-  timeout: 180)
+  timeout: 180,
+  is_parallel: false)
 test('ring_carry_fraction', find_program('python3'),
   args: [files('test_ring_carry_fraction.py'),
          meson.project_build_root() / 'tests' / 'bench_ring_carry'],
   workdir: meson.project_source_root(),
-  timeout: 300)
+  timeout: 300,
+  is_parallel: false)
 test('ovito_chill_atoms', find_program('python3'),
   args: [files('test_ovito_chill_atoms.py'),
          meson.project_build_root() / 'src' / 'libseams.so'],
