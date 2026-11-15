@@ -6,7 +6,6 @@ import importlib.util
 import os
 import re
 import shlex
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -35,8 +34,8 @@ def main():
     functions = re.findall(r"SEAMS_API\s+(?:const\s+char\s+\*|[\w\s\*]+?)\s*(seams_[A-Za-z0-9_]+)\s*\(", header)
     # The tour links an installed copy, so it reads the same headers and
     # library a consumer gets.
-    stage = build / "c-api-tour-destdir"
-    shutil.rmtree(stage, ignore_errors=True)
+    base = help_mod.scratch(build, "c-api-tour")
+    stage = base / "destdir"
     subprocess.check_call(
         ["meson", "install", "-C", str(build), "--no-rebuild", "--quiet", "--destdir", str(stage)]
     )
@@ -44,8 +43,7 @@ def main():
     headers = list(stage.rglob("seams_version.h"))
     if len(headers) != 1 or not (headers[0].parent / "seams.h").is_file():
         fail("install did not produce seams.h and seams_version.h together")
-    binary = build / "c-api-tour-work" / "c_api_tour"
-    binary.parent.mkdir(parents=True, exist_ok=True)
+    binary = base / "c_api_tour"
     compile_cmd = [
         *shlex.split(os.environ.get("CC", "cc")),
         *help_mod.consumer_flags(),

@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Install libseams and build examples/c against that install."""
 
+import atexit
 import os
 import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -59,6 +61,16 @@ def cmake_consumer_flags(cc, extra):
     return flags
 
 
+def scratch(build, prefix):
+    """A fresh directory under BUILD that is removed at exit. A --repeat copy
+    of the same test runs beside this one and must not share its install."""
+    parent = build / "install-stages"
+    parent.mkdir(exist_ok=True)
+    path = Path(tempfile.mkdtemp(prefix=prefix + "-", dir=parent))
+    atexit.register(shutil.rmtree, path, True)
+    return path
+
+
 def staged_libdir(stage):
     libs = list(stage.rglob("libseams.so"))
     if len(libs) != 1:
@@ -92,11 +104,10 @@ def check_resolved(binary, env, stage):
 def main():
     build = Path(sys.argv[1]).resolve()
     source = Path(sys.argv[2]).resolve()
-    stage = build / "capi-destdir"
-    work = build / "capi-work"
-    if stage.exists():
-        shutil.rmtree(stage)
-    work.mkdir(parents=True, exist_ok=True)
+    base = scratch(build, "capi")
+    stage = base / "destdir"
+    work = base / "work"
+    work.mkdir()
     run(["meson", "install", "-C", str(build), "--destdir", str(stage)])
 
     pc_files = list(stage.rglob("seams.pc"))
@@ -151,8 +162,6 @@ def main():
     installed = stage / Path(prefix).relative_to("/")
     cmake_flags = cmake_consumer_flags(cc, extra)
     cmake_build = work / "cmake"
-    if cmake_build.exists():
-        shutil.rmtree(cmake_build)
     run(
         [
             "cmake",
@@ -173,8 +182,6 @@ def main():
     run([str(cmake_bin), str(sample)], env=env)
 
     find_build = work / "cmake-find"
-    if find_build.exists():
-        shutil.rmtree(find_build)
     run(
         [
             "cmake",
