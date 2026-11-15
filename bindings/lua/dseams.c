@@ -434,6 +434,51 @@ static int nb_csr(lua_State *L) {
   return 3;
 }
 
+/* Rows are 0-based atom indices, as seams_rings_chordless writes them. */
+static int nb_chordless(lua_State *L) {
+  NeighbourBox *box = neighbour_box(L, 1);
+  int size = (int)luaL_checkinteger(L, 2);
+  int n = seams_neighbours_count(box->nb);
+  size_t count = 0;
+  size_t r;
+  int k;
+  int *per_atom = (int *)calloc(n > 0 ? (size_t)n : 1, sizeof(int));
+  int *rings = NULL;
+  seams_status status;
+  if (per_atom == NULL) {
+    return luaL_error(L, "out of memory");
+  }
+  status = seams_rings_chordless(box->nb, size, NULL, 0, &count, per_atom, (size_t)n);
+  if (status != SEAMS_OK) {
+    free(per_atom);
+    return raise_status(L, status);
+  }
+  rings = (int *)calloc(count > 0 ? count * (size_t)size : 1, sizeof(int));
+  if (rings == NULL) {
+    free(per_atom);
+    return luaL_error(L, "out of memory");
+  }
+  status = seams_rings_chordless(box->nb, size, rings, count * (size_t)size, &count, NULL, 0);
+  if (status != SEAMS_OK) {
+    free(per_atom);
+    free(rings);
+    return raise_status(L, status);
+  }
+  lua_createtable(L, (int)count, 0);
+  for (r = 0; r < count; r++) {
+    lua_createtable(L, size, 0);
+    for (k = 0; k < size; k++) {
+      lua_pushinteger(L, rings[r * (size_t)size + (size_t)k]);
+      lua_rawseti(L, -2, k + 1);
+    }
+    lua_rawseti(L, -2, (int)r + 1);
+  }
+  push_ints(L, per_atom, n);
+  free(per_atom);
+  free(rings);
+  return 2;
+}
+
 static int rings_count(lua_State *L) {
   RingsBox *box = rings_box(L, 1);
   lua_pushinteger(L, seams_rings_count(box->rings));
@@ -1046,6 +1091,7 @@ static const luaL_Reg system_methods[] = {
 static const luaL_Reg neighbour_methods[] = {
     {"count", nb_count},
     {"csr", nb_csr},
+    {"chordless", nb_chordless},
     {"close", nb_close},
     {"__gc", nb_close},
     {"__close", nb_close},

@@ -111,6 +111,8 @@ if get_option('with_tests') and lua_runners.length() > 0 and fennel_lua != ''
   lua_env = environment()
   lua_env.set('FENNEL_LUA', fennel_lua)
   lua_env.set('OMP_NUM_THREADS', '1')
+  lua_env.set('SEAMS_CHORDLESS_REF', chordless_ref_txt.full_path())
+  lua_env.set('SEAMS_CHORDLESS_TRAJ', chordless_traj)
   test(
     'lua_examples',
     find_program('python3'),
@@ -123,7 +125,7 @@ if get_option('with_tests') and lua_runners.length() > 0 and fennel_lua != ''
       seams_api_lib.full_path(),
     ] + lua_runners,
     env: lua_env,
-    depends: [oracle, ffi, seams_api_lib] + lua_mod_targets,
+    depends: [oracle, ffi, seams_api_lib, chordless_ref_txt] + lua_mod_targets,
     timeout: 600,
   )
 endif

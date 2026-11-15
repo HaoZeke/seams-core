@@ -265,6 +265,31 @@ dseams.getPrimitiveRings = function(cloud, depth)
   return dseams.ringNetwork(cloud, depth).vertices
 end
 
+-- Chordless cycles of one size, 3 through 12. Each ring holds 1-based atom
+-- positions, or atom ids when the cloud came with ids, starting at its
+-- lowest atom; the rings are sorted. per_atom counts the cycles through
+-- each atom.
+function dseams.rings_chordless(cloud, o)
+  o = opts(o)
+  local size = o.size or 6
+  local nb = cloud._sys:neighbours(o.cutoff or 3.5, o.type or 0, graph_of(o.graph))
+  local ok, rings, per_atom = pcall(nb.chordless, nb, size)
+  nb:close()
+  if not ok then
+    error(rings, 2)
+  end
+  local ids = cloud._ids
+  for _, ring in ipairs(rings) do
+    for k = 1, #ring do
+      local index = ring[k] + 1
+      ring[k] = ids and ids[index] or index
+    end
+  end
+  return {size = size, n = #rings, rings = rings, per_atom = per_atom}
+end
+
+dseams.chordlessCycles = dseams.rings_chordless
+
 function dseams.cages(cloud, o)
   o = opts(o)
   local graph = o.graph or "seeded"
@@ -400,6 +425,7 @@ dseams.SEEDED = core.SEEDED
 dseams.WATER_O = core.WATER_O
 dseams["chill-plus"] = dseams.chill_plus
 dseams["ring-network"] = dseams.ringNetwork
+dseams["rings-chordless"] = dseams.rings_chordless
 dseams["cages-by-signature"] = dseams.cages_by_signature
 dseams["running-cn"] = dseams.running_cn
 dseams["site-table"] = dseams.site_table
