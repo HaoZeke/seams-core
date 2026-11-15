@@ -17,13 +17,21 @@ src = Path(os.environ.get("DSEAMS_SRC", Path(__file__).resolve().parents[2]))
 # A conda python and the extension must share a stable ABI tag. A module
 # built for another interpreter is a skip, not a failed import.
 tag = sys.implementation.cache_tag  # cpython-312
-cores = [path for path in build.rglob("_core*.so") if tag in path.name]
+stage = build / "python-stage"
+# Install tests leave older copies under the build tree, and the stage
+# holds the previous run's copy. Keep the newest built module of each name.
+newest = {}
+for path in build.rglob("_core*.so"):
+    if tag in path.name and stage not in path.parents and (
+        path.name not in newest or path.stat().st_mtime > newest[path.name].stat().st_mtime
+    ):
+        newest[path.name] = path
+cores = list(newest.values())
 if not cores:
     built = [path.name for path in build.rglob("_core*.so")]
     print(f"dseams._core was not built for {tag}; found {built or 'nothing'}")
     sys.exit(77)
 
-stage = build / "python-stage"
 pkg = stage / "dseams"
 pkg.mkdir(parents=True, exist_ok=True)
 root = src / "bindings" / "python"
