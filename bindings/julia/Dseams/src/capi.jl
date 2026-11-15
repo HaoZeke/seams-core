@@ -12,9 +12,36 @@ Base.showerror(io::IO, err::SeamsError) = print(io, err.message)
 
 const _seams_dl = Ref{Ptr{Cvoid}}(C_NULL)
 
+# Chemfiles builds a process-lifetime hash table in a static constructor.
+# AddressSanitizer, loaded as a dependency of libseams, interposes
+# operator delete. If that constructor runs in the same dlopen, it frees
+# a pointer the runtime did not allocate. Opening chemfiles first finishes
+# the constructor under the C++ allocator.
+function _open_chemfiles_first(seams_lib::AbstractString)
+    folder = dirname(abspath(seams_lib))
+    names = (
+        joinpath(folder, "libseams-chemfiles.so.0.10"),
+        joinpath(folder, "..", "chemfiles-prefix", "lib", "libseams-chemfiles.so.0.10"),
+        "libseams-chemfiles.so.0.10",
+        "libchemfiles.so.0.10",
+        "libchemfiles.so",
+    )
+    flags = RTLD_NOW | RTLD_GLOBAL
+    for name in names
+        try
+            dlopen(name, flags)
+            return
+        catch
+        end
+    end
+    return
+end
+
 function _seams_so()
     if _seams_dl[] == C_NULL
-        _seams_dl[] = dlopen(get(ENV, "SEAMS_LIB", "libseams"))
+        lib = get(ENV, "SEAMS_LIB", "libseams")
+        _open_chemfiles_first(lib)
+        _seams_dl[] = dlopen(lib)
     end
     _seams_dl[]
 end

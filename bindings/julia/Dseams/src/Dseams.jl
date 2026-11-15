@@ -118,7 +118,9 @@ const _dl = Ref{Ptr{Cvoid}}(C_NULL)
 
 function _so()
     if _dl[] == C_NULL
-        _dl[] = dlopen(library_path())
+        path = library_path()
+        _open_chemfiles_first(path)
+        _dl[] = dlopen(path)
     end
     _dl[]
 end
