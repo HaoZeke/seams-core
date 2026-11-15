@@ -21,6 +21,9 @@ program test_seams
   real(c_double), target :: volume, cn, percolation
   integer(c_size_t) :: n_out, n_cages, n_atoms_sig
   type(c_ptr) :: cages, knn, fp
+  integer(c_int), allocatable :: cycles(:, :), per_atom(:), want(:, :), want_per(:)
+  character(len=1024) :: ref
+  integer :: nref, unit, ref_atoms, ref_rings, width
 
   fcc = reshape([0d0, 0d0, 0d0, 0.5d0, 0.5d0, 0d0, 0.5d0, 0d0, 0.5d0, 0d0, 0.5d0, 0.5d0], [3, 4])
   basis = reshape([0d0, 0d0, 0d0, 0.25d0, 0.25d0, 0.25d0], [3, 2])
@@ -71,6 +74,13 @@ program test_seams
   if (code /= SEAMS_OK) stop 10
   code = seams_neighbours_csr(nb, offsets, n_offsets, cols, nnz)
   if (code /= SEAMS_OK .or. nnz <= 0) stop 16
+  ! Every diamond site sits on twelve six-cycles.
+  code = chordless_cycles(nb, 6, cycles, per_atom)
+  if (code /= SEAMS_OK .or. size(cycles, 1) /= 6 .or. size(cycles, 2) /= 2 * n) stop 17
+  if (any(per_atom /= 12) .or. minval(cycles) < 1 .or. maxval(cycles) > n) stop 18
+  if (any(cycles(1, :) /= minval(cycles, dim=1))) stop 19
+  code = chordless_cycles(nb, 13, cycles, per_atom)
+  if (code == SEAMS_OK) stop 20
   call seams_neighbours_destroy(nb)
   code = seams_rings_find(sys, 3.5d0, 0, SEAMS_GRAPH_CUTOFF, 6, rings)
   if (code /= SEAMS_OK) stop 11
@@ -139,6 +149,24 @@ program test_seams
   if (code /= SEAMS_OK .or. seams_system_count(sys) <= 0) stop 64
   code = read_frame(sys, trim(root) // "/input/traj/genice_sH.lammpstrj", 1, 1)
   if (code /= SEAMS_OK .or. seams_system_count(sys) <= 0) stop 65
+  call get_environment_variable("SEAMS_CHORDLESS_REF", ref, nref)
+  if (nref > 0) then
+    open(newunit=unit, file=ref(1:nref), status="old", action="read")
+    read(unit, *) ref_atoms, ref_rings, width
+    allocate(want(width, ref_rings), want_per(ref_atoms))
+    read(unit, *) want
+    read(unit, *) want_per
+    close(unit)
+    code = read_frame(sys, trim(root) // "/input/traj/exampleTraj.lammpstrj", 1, 2)
+    if (code /= SEAMS_OK .or. seams_system_count(sys) /= ref_atoms) stop 70
+    code = seams_neighbours_build(sys, 3.5d0, 0, SEAMS_GRAPH_CUTOFF, nb)
+    if (code /= SEAMS_OK) stop 71
+    code = chordless_cycles(nb, width, cycles, per_atom)
+    if (code /= SEAMS_OK) stop 72
+    if (any(shape(cycles) /= shape(want)) .or. size(per_atom) /= ref_atoms) stop 73
+    if (any(cycles /= want + 1) .or. any(per_atom /= want_per)) stop 74
+    call seams_neighbours_destroy(nb)
+  end if
   call seams_system_destroy(sys)
   print *, "fortran ok"
 end program test_seams

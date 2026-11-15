@@ -109,6 +109,27 @@ module seams
       integer(c_int) :: seams_neighbours_csr
     end function
 
+    function seams_neighbours_count(nb) bind(C, name="seams_neighbours_count")
+      import :: c_ptr, c_int
+      type(c_ptr), value :: nb
+      integer(c_int) :: seams_neighbours_count
+    end function
+
+    ! rings and per_atom may be c_null_ptr. chordless_cycles below
+    ! allocates both and returns 1-based indices.
+    function seams_rings_chordless(nb, size, rings, rings_len, n_rings, per_atom, &
+                                   per_atom_len) bind(C, name="seams_rings_chordless")
+      import :: c_ptr, c_int, c_size_t
+      type(c_ptr), value :: nb
+      integer(c_int), value :: size
+      type(c_ptr), value :: rings
+      integer(c_size_t), value :: rings_len
+      integer(c_size_t), intent(out) :: n_rings
+      type(c_ptr), value :: per_atom
+      integer(c_size_t), value :: per_atom_len
+      integer(c_int) :: seams_rings_chordless
+    end function
+
     function seams_rings_find(sys, cutoff, typ, graph, max_depth, out) &
         bind(C, name="seams_rings_find")
       import :: c_ptr, c_int, c_double
@@ -406,6 +427,38 @@ contains
     character(kind=c_char), allocatable :: text(:)
     text = c_chars(path)
     code = seams_system_read(sys, text, int(frame, c_int), int(type_filter, c_int))
+  end function
+
+  ! Chordless cycles of one size, 3 through 12, on a graph from
+  ! seams_neighbours_build. rings(:, k) is cycle k as 1-based atom
+  ! indices, starting at its lowest atom and running towards the smaller
+  ! of that atom's two cycle neighbours; the cycles are sorted.
+  ! per_atom(i) counts the cycles through atom i.
+  function chordless_cycles(nb, size, rings, per_atom) result(code)
+    type(c_ptr), value :: nb
+    integer, intent(in) :: size
+    integer(c_int), allocatable, target, intent(out) :: rings(:, :)
+    integer(c_int), allocatable, target, intent(out) :: per_atom(:)
+    integer(c_int) :: code
+    integer(c_size_t) :: count
+    integer :: n
+    count = 0
+    n = seams_neighbours_count(nb)
+    allocate(per_atom(n))
+    if (n > 0) then
+      code = seams_rings_chordless(nb, int(size, c_int), c_null_ptr, 0_c_size_t, count, &
+                                   c_loc(per_atom), int(n, c_size_t))
+    else
+      code = seams_rings_chordless(nb, int(size, c_int), c_null_ptr, 0_c_size_t, count, &
+                                   c_null_ptr, 0_c_size_t)
+    end if
+    if (code /= SEAMS_OK) return
+    allocate(rings(size, count))
+    if (count > 0) then
+      code = seams_rings_chordless(nb, int(size, c_int), c_loc(rings), &
+                                   int(size, c_size_t) * count, count, c_null_ptr, 0_c_size_t)
+      rings = rings + 1
+    end if
   end function
 
   function signature_count(sys, spec, n_cages, n_atoms) result(code)
