@@ -865,7 +865,7 @@ void fillChordBits(const Graph &adjacency, ChordBits &out) {
 //! already cleared). A ring is the same one the pairing walk would emit:
 //! two shortest arms to an antipode, or an odd edge between one level, in
 //! the canonical orientation, kept by the same shortcut test.
-template <typename Graph, typename Out, bool PerAtom>
+template <typename Graph, typename Out, bool PerAtom, int ShellWords = 0>
 __attribute__((hot))
 void enumerateChordless(const Graph &adjacency, const DistOracle &oracle,
                         int src, int maxDepth, int minSize, bool legacy,
@@ -1117,19 +1117,60 @@ void enumerateChordless(const Graph &adjacency, const DistOracle &oracle,
           const std::uint64_t *walk = lc <= pc ? leftBits.data() : rightBits.data();
           const std::uint64_t *other = lc <= pc ? rightBits.data() : leftBits.data();
           const int otherN = lc <= pc ? pc : lc;
-          for (int w = 0; w < lwords; w++) {
-            std::uint64_t word = walk[w];
-            const int base = w << 6;
-            while (word != 0) {
-              const int ra = base + std::countr_zero(word);
-              word &= word - 1;
-              const std::uint64_t *ba =
-                  shellAdj.data() + static_cast<std::size_t>(ra) * static_cast<std::size_t>(lwords);
-              int cut = 0;
-              for (int k = 0; k < lwords; k++) {
-                cut += std::popcount(ba[k] & other[k]);
+          // ShellWords is chosen once per frame from the widest shell. A
+          // narrower frame never instantiates this arm, so its loop is the
+          // general one.
+          if constexpr (ShellWords == 3) {
+            if (lwords == 3) {
+              const std::uint64_t o0 = other[0];
+              const std::uint64_t o1 = other[1];
+              const std::uint64_t o2 = other[2];
+              for (int w = 0; w < 3; w++) {
+                std::uint64_t word = walk[w];
+                const int base = w << 6;
+                while (word != 0) {
+                  const int ra = base + std::countr_zero(word);
+                  word &= word - 1;
+                  const std::uint64_t *ba =
+                      shellAdj.data() + static_cast<std::size_t>(ra) * 3;
+                  const int cut = std::popcount(ba[0] & o0) + std::popcount(ba[1] & o1) +
+                                  std::popcount(ba[2] & o2);
+                  c5 += otherN - cut;
+                }
               }
-              c5 += otherN - cut;
+            } else {
+              for (int w = 0; w < lwords; w++) {
+                std::uint64_t word = walk[w];
+                const int base = w << 6;
+                while (word != 0) {
+                  const int ra = base + std::countr_zero(word);
+                  word &= word - 1;
+                  const std::uint64_t *ba = shellAdj.data() +
+                                            static_cast<std::size_t>(ra) *
+                                                static_cast<std::size_t>(lwords);
+                  int cut = 0;
+                  for (int k = 0; k < lwords; k++) {
+                    cut += std::popcount(ba[k] & other[k]);
+                  }
+                  c5 += otherN - cut;
+                }
+              }
+            }
+          } else {
+            for (int w = 0; w < lwords; w++) {
+              std::uint64_t word = walk[w];
+              const int base = w << 6;
+              while (word != 0) {
+                const int ra = base + std::countr_zero(word);
+                word &= word - 1;
+                const std::uint64_t *ba =
+                    shellAdj.data() + static_cast<std::size_t>(ra) * static_cast<std::size_t>(lwords);
+                int cut = 0;
+                for (int k = 0; k < lwords; k++) {
+                  cut += std::popcount(ba[k] & other[k]);
+                }
+                c5 += otherN - cut;
+              }
             }
           }
         }
@@ -1792,7 +1833,7 @@ countSparseShells(const Graph &adjacency, const DistOracle &oracle, int src,
 // Variant splits the one-thread copy from the sparse team copy. One
 // function with both call sites was compiled more slowly for the
 // one-thread search.
-template <typename Graph, typename Out, int Variant = 0>
+template <typename Graph, typename Out, int Variant = 0, int ShellWords = 0>
 void enumerateFromSource(const Graph &adjacency, const DistOracle &oracle,
                          int src, int maxDepth, int maxLvl, RingScratch &scr,
                          Out &out, const std::vector<char> *through = nullptr,
@@ -1841,10 +1882,11 @@ void enumerateFromSource(const Graph &adjacency, const DistOracle &oracle,
     // still consumes the paths, and rebuilds them without the cap.
     if (through == nullptr && nVertices <= 4096) {
       if (call.perAtom == nullptr) {
-        enumerateChordless<Graph, Out, false>(adjacency, oracle, src, maxDepth, minSize,
-                                              legacyPairs, scr.lvl, out, call.hist, nullptr, 0);
+        enumerateChordless<Graph, Out, false, ShellWords>(
+            adjacency, oracle, src, maxDepth, minSize, legacyPairs, scr.lvl, out, call.hist,
+            nullptr, 0);
       } else {
-        enumerateChordless<Graph, Out, true>(adjacency, oracle, src, maxDepth, minSize,
+        enumerateChordless<Graph, Out, true, ShellWords>(adjacency, oracle, src, maxDepth, minSize,
                                              legacyPairs, scr.lvl, out, call.hist, call.perAtom,
                                              call.perStride);
       }
@@ -2149,6 +2191,9 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
         static_cast<int>(uniq[static_cast<std::size_t>(i)].size());
   }
   int cap = forcedCap;
+  // One shell width for the whole frame. Three words is the dense crystal;
+  // a narrower frame keeps the general five-ring loop.
+  int shellWords = 0;
   if (cap < 0) {
     int maxDeg = 0;
     for (int i = 0; i < nVertices; i++) {
@@ -2156,6 +2201,7 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
     }
     // Ice and the other sparse frames never enter the cap pass.
     cap = maxDeg > 16 ? kPathCap : 0;
+    shellWords = (maxDeg + 63) >> 6;
   }
   const RingCall call{hist, cap, perAtom, perStride};
   adjacency.cols.resize(adjacency.first[nVertices]);
@@ -2330,8 +2376,14 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
 #pragma omp for schedule(guided)
       for (int k = 0; k < nFrom; k++) {
         auto &pool = perSource[static_cast<std::size_t>(k)];
-        enumerateFromSource(adjacency, oracle, from[k], maxDepth, maxLvl,
-                            scratch, pool, nullptr, legacy, minSize, local);
+        if (shellWords == 3) {
+          enumerateFromSource<PackedRows, RingPool, 0, 3>(
+              adjacency, oracle, from[k], maxDepth, maxLvl, scratch, pool, nullptr, legacy,
+              minSize, local);
+        } else {
+          enumerateFromSource(adjacency, oracle, from[k], maxDepth, maxLvl, scratch, pool,
+                              nullptr, legacy, minSize, local);
+        }
         pool.publish();
       }
       if (perAtom != nullptr) {
@@ -2390,8 +2442,14 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
   RingScratch scratch;
   RingPool gathered;
   for (const int src : from) {
-    enumerateFromSource(adjacency, oracle, src, maxDepth, maxLvl, scratch,
-                        gathered, nullptr, legacy, minSize, call);
+    if (shellWords == 3) {
+      enumerateFromSource<PackedRows, RingPool, 0, 3>(
+          adjacency, oracle, src, maxDepth, maxLvl, scratch, gathered, nullptr, legacy, minSize,
+          call);
+    } else {
+      enumerateFromSource(adjacency, oracle, src, maxDepth, maxLvl, scratch, gathered, nullptr,
+                          legacy, minSize, call);
+    }
   }
   rings.resize(gathered.n);
   for (std::size_t i = 0; i < gathered.n; i++) {
