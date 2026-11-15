@@ -222,6 +222,7 @@ by [towncrier](https://towncrier.readthedocs.io/).
 - Require readcon-db 0.1.7 so static consumers receive only the archive and shared consumers receive the runtime search path.
 - SOAP now fills every l through lMax. classifyBonds reuses a Ylm buffer. Fingerprint builds one hop graph per atom.
 - The 2D RDF histogram, `nearestUnlike`, and `shellSeparation` trust the fractional wrap only below half the narrowest face separation of a tilted cell. Half an edge or half a bound span let a pair inside the cutoff wrap to a longer image and drop out, and let the RDF grid put a pair two cells apart.
+- The AMX INT8 product behind `ozaki-ii-amx` is checked against exact row, weighted-row and column checksums of its inputs, and recomputed with VNNI or scalar code when one disagrees. On a KVM guest that corrupted AMX tiles while separate processes used AMX at once, `ozaki` failed in 62 of 1200 concurrent runs and now passes all of them.
 - The C API builds q4 and q6 from one cutoff shell and does not fill an atom-index map on that path.
 - The Fortran methods that size a buffer and then fill it (`rdf`, `running_cn`, `density`, `brine_profile`, the fingerprint keys and the neighbour columns) pass the capacity in its own variable. They passed one variable as both the by-value capacity and the `intent(out)` length, which leaves the capacity undefined on entry.
 - The PLUMED q6 derivative is expressed per nanometre. A 0.001 angstrom step matched an independent difference to 3.99e-11 on a shifted eight-molecule cell.

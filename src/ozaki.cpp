@@ -589,12 +589,9 @@ bool int8GemmVnni(int m, int n, int k, const signed char *A, int lda,
   return true;
 }
 
-__attribute__((target("amx-tile,amx-int8"))) bool int8GemmAmx(
+__attribute__((target("amx-tile,amx-int8"))) bool int8GemmAmxTiles(
     int m, int n, int k, const signed char *A, int lda, const signed char *B,
     int ldb, int *C, int ldc) {
-  if (!amxAvailable()) {
-    return false;
-  }
   const int mp = (m + 15) & ~15;
   const int np = (n + 15) & ~15;
   const int kp = (k + 63) & ~63;
@@ -681,6 +678,89 @@ __attribute__((target("amx-tile,amx-int8"))) bool int8GemmAmx(
       }
   _tile_release();
   std::free(raw);
+  return true;
+}
+
+// Integer products are exact, so the row sums, the column sums and a
+// column-weighted row sum of P = A B must equal the same sums formed from
+// A and B (Huang and Abraham, IEEE Trans. Comput. C-33, 518 (1984)).
+bool int8ProductChecks(int m, int n, int k, const signed char *A, int lda,
+                       const signed char *B, int ldb, const int *P) {
+  std::vector<__int128> bRow(static_cast<std::size_t>(k), 0);
+  std::vector<__int128> bRowW(static_cast<std::size_t>(k), 0);
+  std::vector<__int128> aCol(static_cast<std::size_t>(k), 0);
+  for (int t = 0; t < k; t++) {
+    for (int j = 0; j < n; j++) {
+      const __int128 b = B[t * ldb + j];
+      bRow[static_cast<std::size_t>(t)] += b;
+      bRowW[static_cast<std::size_t>(t)] += b * (j + 1);
+    }
+    for (int i = 0; i < m; i++) {
+      aCol[static_cast<std::size_t>(t)] += A[i * lda + t];
+    }
+  }
+  for (int i = 0; i < m; i++) {
+    __int128 want = 0;
+    __int128 wantW = 0;
+    for (int t = 0; t < k; t++) {
+      const __int128 a = A[i * lda + t];
+      want += a * bRow[static_cast<std::size_t>(t)];
+      wantW += a * bRowW[static_cast<std::size_t>(t)];
+    }
+    __int128 got = 0;
+    __int128 gotW = 0;
+    for (int j = 0; j < n; j++) {
+      const __int128 p = P[static_cast<std::size_t>(i) * static_cast<std::size_t>(n) + static_cast<std::size_t>(j)];
+      got += p;
+      gotW += p * (j + 1);
+    }
+    if (got != want || gotW != wantW) {
+      return false;
+    }
+  }
+  for (int j = 0; j < n; j++) {
+    __int128 want = 0;
+    for (int t = 0; t < k; t++) {
+      want += aCol[static_cast<std::size_t>(t)] * B[t * ldb + j];
+    }
+    __int128 got = 0;
+    for (int i = 0; i < m; i++) {
+      got += P[static_cast<std::size_t>(i) * static_cast<std::size_t>(n) + static_cast<std::size_t>(j)];
+    }
+    if (got != want) {
+      return false;
+    }
+  }
+  return true;
+}
+
+void int8GemmScalar(int m, int n, int k, const signed char *A, int lda,
+                    const signed char *B, int ldb, int *C, int ldc);
+
+// This KVM guest also corrupts AMX tiles when separate single-threaded
+// processes use AMX at the same time (62 of 1200 runs with 8 concurrent
+// processes, 0 of 1200 run one at a time), so every AMX product is
+// checked and recomputed off AMX when a checksum disagrees.
+bool int8GemmAmx(int m, int n, int k, const signed char *A, int lda,
+                 const signed char *B, int ldb, int *C, int ldc) {
+  if (!amxAvailable()) {
+    return false;
+  }
+  std::vector<int> P(static_cast<std::size_t>(m) * static_cast<std::size_t>(n), 0);
+  if (!int8GemmAmxTiles(m, n, k, A, lda, B, ldb, P.data(), n)) {
+    return false;
+  }
+  if (!int8ProductChecks(m, n, k, A, lda, B, ldb, P.data())) {
+    std::fill(P.begin(), P.end(), 0);
+    if (!int8GemmVnni(m, n, k, A, lda, B, ldb, P.data(), n)) {
+      int8GemmScalar(m, n, k, A, lda, B, ldb, P.data(), n);
+    }
+  }
+  for (int i = 0; i < m; i++) {
+    for (int j = 0; j < n; j++) {
+      C[i * ldc + j] += P[static_cast<std::size_t>(i) * static_cast<std::size_t>(n) + static_cast<std::size_t>(j)];
+    }
+  }
   return true;
 }
 
