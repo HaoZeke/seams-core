@@ -49,6 +49,12 @@ endif
 
 fs = import('fs')
 fennel_lua = ''
+if get_option('fennel_lua') != ''
+  if not fs.exists(get_option('fennel_lua'))
+    error('fennel_lua does not exist: ' + get_option('fennel_lua'))
+  endif
+  fennel_lua = get_option('fennel_lua')
+endif
 foreach candidate : ['/usr/local/share/fennel.lua', '/usr/share/lua/5.4/fennel.lua']
   if fennel_lua == '' and fs.exists(candidate)
     fennel_lua = candidate
