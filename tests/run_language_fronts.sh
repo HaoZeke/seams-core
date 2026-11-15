@@ -9,6 +9,13 @@ lib=$build/src
 lang=$build/bindings
 missing=0
 
+# The binding tests compare their chordless cycles with this C result.
+if [ -f "$lib/chordless_ref.txt" ]; then
+  SEAMS_CHORDLESS_REF=$lib/chordless_ref.txt
+  SEAMS_CHORDLESS_TRAJ=$root/input/traj/exampleTraj.lammpstrj
+  export SEAMS_CHORDLESS_REF SEAMS_CHORDLESS_TRAJ
+fi
+
 note_missing() {
   echo "language front skipped: $1" >&2
   missing=1

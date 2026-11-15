@@ -160,6 +160,9 @@ if get_option('with_cli') and get_option('with_tests') and not get_option('b_san
   if _front_py.found()
     _front_env.set('DSEAMS_PYTHON', _front_py.full_path())
   endif
+  if _julia_wrap != ''
+    _front_env.prepend('PATH', _julia_wrap)
+  endif
   test(
     'language_fronts',
     find_program('sh', required: true),
@@ -168,7 +171,7 @@ if get_option('with_cli') and get_option('with_tests') and not get_option('b_san
       meson.project_build_root(),
     ],
     env: _front_env,
-    depends: [seams_lang, ydslib, seams_api_lib, binding_oracle],
+    depends: [seams_lang, ydslib, seams_api_lib, binding_oracle, chordless_ref_txt],
     timeout: 600,
   )
   test(

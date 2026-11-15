@@ -118,6 +118,37 @@ function seams_neighbours_knn(sys::System; k::Integer=4, cutoff::Real=3.5, mutua
     return Int(nnz[])
 end
 
+"""
+    seams_rings_chordless(sys; size=6, cutoff=3.5, type=0, graph=0) -> (rings, per_atom)
+
+Chordless cycles of one size, 3 through 12, on the graph that
+`seams_neighbours_build` makes (`graph` 0 is the cutoff list, 1 the mutual
+four nearest). `rings` has one cycle per row as 0-based atom indices, in the
+order `seams_rings_chordless` writes them. `per_atom` counts the cycles
+through each atom.
+"""
+function seams_rings_chordless(sys::System; size::Integer=6, cutoff::Real=3.5, type::Integer=0, graph::Integer=0)
+    out = Ref{Ptr{Cvoid}}(C_NULL)
+    _seams_check(ccall(_seams_sym(:seams_neighbours_build), Cint,
+                       (Ptr{Cvoid}, Cdouble, Cint, Cint, Ptr{Ptr{Cvoid}}),
+                       sys.ptr, cutoff, type, graph, out), sys.ptr)
+    try
+        n = Int(ccall(_seams_sym(:seams_neighbours_count), Cint, (Ptr{Cvoid},), out[]))
+        per_atom = zeros(Int32, n)
+        count = Ref{Csize_t}(0)
+        _seams_check(ccall(_seams_sym(:seams_rings_chordless), Cint,
+                           (Ptr{Cvoid}, Cint, Ptr{Int32}, Csize_t, Ptr{Csize_t}, Ptr{Int32}, Csize_t),
+                           out[], size, C_NULL, 0, count, per_atom, n), out[])
+        flat = Vector{Int32}(undef, count[] * size)
+        _seams_check(ccall(_seams_sym(:seams_rings_chordless), Cint,
+                           (Ptr{Cvoid}, Cint, Ptr{Int32}, Csize_t, Ptr{Csize_t}, Ptr{Int32}, Csize_t),
+                           out[], size, flat, length(flat), count, C_NULL, 0), out[])
+        return permutedims(reshape(flat, Int(size), Int(count[]))), per_atom
+    finally
+        ccall(_seams_sym(:seams_neighbours_destroy), Cvoid, (Ptr{Cvoid},), out[])
+    end
+end
+
 function seams_rdf(sys::System; rmax::Real=6.0, bins::Integer=8)
     n_out = Ref{Csize_t}(0)
     volume = Ref{Float64}(0.0)

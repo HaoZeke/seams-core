@@ -10,11 +10,11 @@ module Dseams
 
 using Libdl
 
-export Frame, nop, nframes, read_frame, chill_plus, cages, primitive_rings, steinhardt, signature_cages, symmetry, jump_tau90, q4_q6
+export Frame, nop, nframes, read_frame, chill_plus, cages, primitive_rings, rings_chordless, steinhardt, signature_cages, symmetry, jump_tau90, q4_q6
 export System, seams_system_count, seams_system_read, seams_chill, seams_steinhardt, seams_cages, seams_signature_cages
 export seams_neighbours_knn, seams_rdf, seams_running_cn, seams_coordination, seams_hbonds
 export seams_density_axis, seams_fingerprint, seams_contact_pairs, seams_domains, seams_prisms
-export seams_monolayer, seams_rings_vertices, seams_site_table
+export seams_monolayer, seams_rings_vertices, seams_rings_chordless, seams_site_table
 
 const ICE_NAMES = (
     "cubic",
@@ -164,6 +164,53 @@ function primitive_rings(frame::Frame; cutoff::Real = 3.5, type::Integer = 0, gr
     )
     _check(code)
     Dict(size => Int(counts[size + 1]) for size in 3:max_depth if counts[size + 1] != 0)
+end
+
+"""
+    rings_chordless(frame; size = 6, cutoff = 3.5, type = 0, graph = "cutoff")
+
+Chordless cycles of one size, 3 through 12. A cycle is chordless when no
+bond joins two of its atoms that are not next to each other on it.
+`cycles` is a `size × n` matrix, one cycle per column, of 1-based atom
+indices. Each column starts at its lowest atom and runs towards the smaller
+of that atom's two cycle neighbours, and the columns are sorted, so the
+result does not depend on the thread count. `per_atom` counts the cycles
+through each atom. `graph = "mutual"` keeps the mutual four nearest
+neighbours inside `cutoff + 1.5`. A `type` above zero bonds that type only.
+"""
+function rings_chordless(frame::Frame; size::Integer = 6, cutoff::Real = 3.5, type::Integer = 0, graph::AbstractString = "cutoff")
+    per = zeros(Cint, nop(frame))
+    count = Ref{Cint}(0)
+    _check(ccall(
+        dlsym(_so(), :seams_frame_chordless),
+        Cint,
+        (Ptr{Cvoid}, Cdouble, Cint, Cstring, Cint, Ptr{Cint}, Cint, Ptr{Cint}, Ptr{Cint}),
+        frame.ptr,
+        cutoff,
+        type,
+        graph,
+        size,
+        C_NULL,
+        0,
+        count,
+        per,
+    ))
+    flat = Vector{Cint}(undef, count[] * size)
+    _check(ccall(
+        dlsym(_so(), :seams_frame_chordless),
+        Cint,
+        (Ptr{Cvoid}, Cdouble, Cint, Cstring, Cint, Ptr{Cint}, Cint, Ptr{Cint}, Ptr{Cint}),
+        frame.ptr,
+        cutoff,
+        type,
+        graph,
+        size,
+        flat,
+        length(flat),
+        count,
+        C_NULL,
+    ))
+    (cycles = reshape(flat .+ Cint(1), Int(size), Int(count[])), per_atom = per)
 end
 
 function steinhardt(frame::Frame, order_l::Integer; cutoff::Real = 3.5, type::Integer = 0, graph::Union{Nothing,AbstractString} = nothing)
