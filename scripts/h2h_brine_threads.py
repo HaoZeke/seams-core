@@ -26,7 +26,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 FRAME = ROOT / "input" / "brine" / "work" / "nacl-n50000-m1.0" / "dump.lammpstrj"
 LIB = ROOT / "bbdir" / "src" / "libyodaLib.so"
-PY = Path("/tmp/brine-venv/bin/python")
+# The worker interpreter must import mdapy, OVITO, and freud.
+PY = Path(os.environ.get("BRINE_PYTHON", sys.executable))
+LABELS = ROOT / "bbdir" / "brine-labels"
 CUTOFF = 3.5
 WARMUP = 1
 REPEATS = 6
@@ -256,7 +258,8 @@ def worker_dseams(threads):
     reported = int(lib.lc_num_threads())
     if reported != threads:
         raise SystemExit(f"linkcell threads {reported} != {threads}")
-    out = Path(f"/tmp/brine-labels-dseams-{threads}.npy")
+    LABELS.mkdir(parents=True, exist_ok=True)
+    out = LABELS / f"dseams-{threads}.npy"
     np.save(out, chill_labels)
     emit("d-SEAMS", "2.13.0", threads, reported, [
         {"operation": "chill+", "samples": chill, "labels": str(out)},
@@ -287,7 +290,8 @@ def worker_mdapy(threads):
 
     chill, labels = time_calls(run_chill)
     neigh, pairs = time_calls(run_neigh)
-    out = Path(f"/tmp/brine-labels-mdapy-{threads}.npy")
+    LABELS.mkdir(parents=True, exist_ok=True)
+    out = LABELS / f"mdapy-{threads}.npy"
     np.save(out, labels.astype(np.int32))
     emit("mdapy", mdapy.__version__, threads, reported, [
         {"operation": "chill+", "samples": chill, "labels": str(out)},
@@ -323,7 +327,8 @@ def worker_ovito(threads):
         return np.asarray(pipe.compute().particles["Structure Type"]).copy()
 
     chill, labels = time_calls(run_chill)
-    out = Path(f"/tmp/brine-labels-ovito-{threads}.npy")
+    LABELS.mkdir(parents=True, exist_ok=True)
+    out = LABELS / f"ovito-{threads}.npy"
     np.save(out, labels.astype(np.int32))
     emit("OVITO", ".".join(str(v) for v in tuple(ovito.version)[:3]), threads, threads, [
         {"operation": "chill+", "samples": chill, "labels": str(out)},
