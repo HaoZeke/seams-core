@@ -104,11 +104,15 @@ program lang_tasks
   allocate(labels(nop))
   counts = 0
   status = seams_frame_chill_plus(frame, 3.5d0, -1, graph, labels, counts)
-  if (status /= 0) call bail(frame)
+  if (status /= 0) then
+    deallocate(labels)
+    call bail(frame)
+  end if
   write(line, '(A,1X,I0,1X,A,7(1X,I0),1X,A,9(1X,I0))') &
     "pairs", pairs, "rings", (rings(i), i = 1, 7), "chill", (counts(i), i = 1, 9)
   write(*, '(A)') trim(line)
   call seams_frame_free(frame)
+  deallocate(labels)
 
 contains
 
