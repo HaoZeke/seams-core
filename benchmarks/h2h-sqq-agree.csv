@@ -55,6 +55,30 @@ mw-liquid-110592,110592,ice label (merged),2509,50121,62148,,,0.561957,CHILL+ re
 mw-liquid-110592,110592,"ice label, SQQ rule on d-SEAMS primitive 6-rings",49462,50121,109800,,,0.992839,rule reproduced 110592/110592 from the reference graph; each mismatch has a primitive and a chordless six-ring count that differ on the molecule or a neighbour: 792/792
 mw-liquid-110592,110592,chordless 6-rings,123915,123917,123915,0,2,0.999984,"d-SEAMS-only 0, reference chordless 0; SQQ-only 2, reference chordless 0; every primitive 6-ring inside: True; reference enumeration 123915, equal to d-SEAMS True, to SQQ False"
 mw-liquid-110592,110592,"ice label, SQQ rule on d-SEAMS chordless 6-rings",50120,50121,110591,,,0.999991,rule reproduced 110592/110592 from the reference graph; mismatches on or next to an edge SQQ lacks: 1/1
+Ic-884736,884736,O-O edges,1769472,1769472,1769472,0,0,1.000000,reference KD tree 1769472 edges; nearest pair 7.500e-01 A from the cutoff
+Ic-884736,884736,4-rings,0,0,0,0,0,1.000000,"d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0"
+Ic-884736,884736,5-rings,0,0,0,0,0,1.000000,"d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0"
+Ic-884736,884736,6-rings,1769472,1769472,1769472,0,0,1.000000,"d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0"
+Ic-884736,884736,ice label (merged),884736,884736,884736,,,1.000000,CHILL+ reproduced 884736/884736 by scipy; SQQ rule reproduced 884736/884736 from the reference graph; mismatches 0
+Ic-884736,884736,"ice label, SQQ rule on d-SEAMS primitive 6-rings",884736,884736,884736,,,1.000000,rule reproduced 884736/884736 from the reference graph; each mismatch has a primitive and a chordless six-ring count that differ on the molecule or a neighbour: 0/0
+Ic-884736,884736,chordless 6-rings,1769472,1769472,1769472,0,0,1.000000,"d-SEAMS-only 0, reference chordless 0; SQQ-only 0, reference chordless 0; every primitive 6-ring inside: True; reference enumeration 1769472, equal to d-SEAMS True, to SQQ True"
+Ic-884736,884736,"ice label, SQQ rule on d-SEAMS chordless 6-rings",884736,884736,884736,,,1.000000,rule reproduced 884736/884736 from the reference graph; mismatches on or next to an edge SQQ lacks: 0/0
+Ih-884736,884736,O-O edges,1769472,1769472,1769472,0,0,1.000000,reference KD tree 1769472 edges; nearest pair 7.500e-01 A from the cutoff
+Ih-884736,884736,4-rings,0,0,0,0,0,1.000000,"d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0"
+Ih-884736,884736,5-rings,0,0,0,0,0,1.000000,"d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0"
+Ih-884736,884736,6-rings,1769472,1769472,1769472,0,0,1.000000,"d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0"
+Ih-884736,884736,ice label (merged),884736,884736,884736,,,1.000000,CHILL+ reproduced 884736/884736 by scipy; SQQ rule reproduced 884736/884736 from the reference graph; mismatches 0
+Ih-884736,884736,"ice label, SQQ rule on d-SEAMS primitive 6-rings",884736,884736,884736,,,1.000000,rule reproduced 884736/884736 from the reference graph; each mismatch has a primitive and a chordless six-ring count that differ on the molecule or a neighbour: 0/0
+Ih-884736,884736,chordless 6-rings,1769472,1769472,1769472,0,0,1.000000,"d-SEAMS-only 0, reference chordless 0; SQQ-only 0, reference chordless 0; every primitive 6-ring inside: True; reference enumeration 1769472, equal to d-SEAMS True, to SQQ True"
+Ih-884736,884736,"ice label, SQQ rule on d-SEAMS chordless 6-rings",884736,884736,884736,,,1.000000,rule reproduced 884736/884736 from the reference graph; mismatches on or next to an edge SQQ lacks: 0/0
+mw-liquid-884736,884736,O-O edges,2075074,2075073,2075073,1,0,1.000000,reference KD tree 2075074 edges; nearest pair 6.300e-07 A from the cutoff
+mw-liquid-884736,884736,4-rings,273457,273454,273454,3,0,0.999989,"d-SEAMS-only 3, reference shortest-path 3; SQQ-only 0, reference shortest-path 0"
+mw-liquid-884736,884736,5-rings,692145,692147,692144,1,3,0.999994,"d-SEAMS-only 1, reference shortest-path 1; SQQ-only 3, reference shortest-path 0"
+mw-liquid-884736,884736,6-rings,680918,680918,680918,0,0,1.000000,"d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0"
+mw-liquid-884736,884736,ice label (merged),19055,398483,498791,,,0.563774,CHILL+ reproduced 884736/884736 by scipy; SQQ rule reproduced 884736/884736 from the reference graph; mismatches 385945
+mw-liquid-884736,884736,"ice label, SQQ rule on d-SEAMS primitive 6-rings",393112,398483,878476,,,0.992924,rule reproduced 884736/884736 from the reference graph; each mismatch has a primitive and a chordless six-ring count that differ on the molecule or a neighbour: 6260/6260
+mw-liquid-884736,884736,chordless 6-rings,992073,992075,992072,1,3,0.999996,"d-SEAMS-only 1, reference chordless 1; SQQ-only 3, reference chordless 0; every primitive 6-ring inside: True; reference enumeration 992073, equal to d-SEAMS True, to SQQ False"
+mw-liquid-884736,884736,"ice label, SQQ rule on d-SEAMS chordless 6-rings",398483,398483,884736,,,1.000000,rule reproduced 884736/884736 from the reference graph; mismatches on or next to an edge SQQ lacks: 0/0
 tip4p-o-250,250,O-O edges,509,509,509,0,0,1.000000,reference KD tree 509 edges; nearest pair 1.122e-03 A from the cutoff
 tip4p-o-250,250,4-rings,273,273,273,0,0,1.000000,"d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0"
 tip4p-o-250,250,5-rings,34,34,34,0,0,1.000000,"d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0"
