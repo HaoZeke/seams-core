@@ -216,16 +216,18 @@ def run_julia(build, fixture):
 def run_r(build, fixture):
     script = binding_helpers().rscript()
     r_cmd = str(Path(script).with_name("R"))
-    dest = build / "docs-r-lib"
+    # Its own library, installed on every run: docs_api_r installs into
+    # docs-r-lib at the same time, and R CMD INSTALL locks the library.
+    dest = build / "docs-examples-r-lib"
     dest.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env["DSEAMS_ROOT"] = str(ROOT)
     env["SEAMS_INCLUDE"] = str(ROOT / "bindings/cxx")
     env["SEAMS_LIBDIR"] = str(build / "bindings")
     env["LD_LIBRARY_PATH"] = library_path(build)
-    env["R_LIBS_USER"] = str(dest)
-    if not (dest / "dseams").is_dir():
-        run([r_cmd, "CMD", "INSTALL", "-l", str(dest), str(ROOT / "bindings/r/dseams")], env=env)
+    user = env.get("R_LIBS_USER", "")
+    env["R_LIBS_USER"] = os.pathsep.join(p for p in (str(dest), user) if p)
+    run([r_cmd, "CMD", "INSTALL", "-l", str(dest), str(ROOT / "bindings/r/dseams")], env=env)
     run([script, str(ROOT / "docs/examples/minimal_r.R"), fixture], env=env)
 
 
