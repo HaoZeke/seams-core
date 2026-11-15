@@ -1,0 +1,32 @@
+# source_tree b5655e840dd6958cc6406dde662c4ef6c472bfe3
+# command python3 scripts/committor_shoot.py --extend-shots data/committor-shards/shot-0-of-20.n250.csv --out data/committor-shards/shot-0-of-20.n250.w20000.csv --frames data/science-frames/committor-climb-0-of-20 --window-ps 20000
+# source data/committor-shards/shot-0-of-20.n250.csv source_tree b5655e840dd6958cc6406dde662c4ef6c472bfe3
+# shard 0/20
+# order n_chill_core
+# rule nucleated when n_chill_core passes 300 and stays at or above 300 for 1000 ps; a passage cut short by the end of the run is 'not nucleated, extend' until 40000 ps
+# basin A the 95th percentile of n_chill_core over the climb's last 2000 ps before it first reaches 100, from 1000 ps; basin B n_chill_core at or above 400 for 200 ps; liquid_2ns_ref is a reference only
+# a shot runs to its first basin: uncommitted at or below basin A, committed at or above 400 for 200 ps; check every 10 ps; unresolved, with no fate, at the end of the window; t_hit_ps is the entry into the basin, the start of the held stay for basin B
+# extension: an unresolved shot continues from the restart its last segment wrote; without one, its first segment is replayed with the same seed, deck and launcher and must give every thermo line of its log and the traced sizes
+# window_ps 20000
+# launcher mpirun -np 8 lmp
+seed,shoot_n,shot,fate,t_end_ps,nmax_end,n_chill_ext_end,n_q6solid_end,wall_s,t_hit_ps,start_core,extension,replay_s
+20261111,250,0,committed,11180,414,1787,1042,1040.3,10980,297,,
+20261111,250,1,committed,6900,435,1767,1119,654.6,6700,297,,
+20261111,250,2,committed,12720,419,1891,1073,1170.6,12520,297,,
+20261111,250,3,committed,11500,418,1739,1081,1054.0,11300,297,,
+20261111,250,4,committed,4790,595,1895,1030,437.0,4590,297,,
+20261111,250,5,committed,10610,578,1752,988,1001.2,10410,297,,
+20261111,250,6,committed,8630,409,1809,1086,740.2,8430,297,,
+20261111,250,7,committed,15800,408,1890,1124,1411.2,15600,297,,
+20261111,250,8,committed,7950,575,1794,1068,706.1,7750,297,,
+20261111,250,9,committed,5750,444,1732,1055,502.4,5550,297,,
+20261111,250,10,committed,9880,561,1774,911,819.3,9680,297,,
+20261111,250,11,committed,7070,474,1818,719,574.0,6870,297,,
+20261111,250,12,unresolved,20000,351,1819,1064,1617.5,,297,,
+20261111,250,13,committed,8540,480,1748,956,694.4,8340,297,,
+20261111,250,14,committed,5340,517,1800,965,435.2,5140,297,,
+20261111,250,15,committed,5780,443,1796,943,481.1,5580,297,,
+20261111,250,16,committed,11960,420,1728,622,999.9,11760,297,,
+20261111,250,17,committed,10710,411,1779,1018,885.1,10510,297,,
+20261111,250,18,committed,13900,579,1752,894,1133.5,13700,297,,
+20261111,250,19,committed,9050,432,1826,1088,740.2,8850,297,,
