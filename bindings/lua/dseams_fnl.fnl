@@ -12,6 +12,7 @@
  :chill dseams.chill
  :rings dseams.rings
  :ring-network dseams.ringNetwork
+ :rings-chordless dseams.rings_chordless
  :steinhardt dseams.steinhardtQl
  :q4q6 dseams.q4q6
  :cages dseams.cages
