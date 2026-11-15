@@ -189,6 +189,13 @@ if get_option('with_cli') and get_option('with_tests') and not get_option('b_san
   if _snippet_fc != ''
     _front_env.set('FC', _snippet_fc)
   endif
+  if _asan_wrap
+    _front_env.set('REAL_CC', _real_cc)
+    _front_env.set('REAL_CXX', _real_cxx)
+    if _real_fc != ''
+      _front_env.set('REAL_FC', _real_fc)
+    endif
+  endif
   if _snippet_omp.length() > 0
     _front_env.set('SEAMS_OPENMP_LINK', ' '.join(_snippet_omp))
   endif

@@ -48,7 +48,7 @@ run_python() {
   if command -v g++ >/dev/null 2>&1; then
     stdcxx=$(g++ -print-file-name=libstdc++.so.6)
     case "$stdcxx" in
-      /*) runtime=$(dirname "$stdcxx") ;;
+      /*) runtime=${stdcxx%/*} ;;
     esac
   fi
   front_ld=${runtime:+$runtime:}$lang:$lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
@@ -64,7 +64,7 @@ run_python() {
   libm=$(LD_LIBRARY_PATH=$front_ld ldd "$lang/libseams_lang.so" 2>/dev/null | awk '/libm\.so/{print $3; exit}')
   extra=""
   if [ -n "$libm" ]; then
-    extra=$(dirname "$libm"):$(dirname "$interp"):
+    extra=${libm%/*}:${interp%/*}:
   fi
   SEAMS_LANG_LIB=$lang/libseams_lang.so \
     "$interp" --library-path "${extra}${front_ld}" \
@@ -99,7 +99,7 @@ if [ -n "${FC:-}" ] && [ -n "${CXX:-}" ]; then
   gfort_so=$("$FC" -print-file-name=libgfortran.so)
   gfort_link="-lgfortran"
   case "$gfort_so" in
-    /*) gfort_dir=$(dirname "$gfort_so")
+    /*) gfort_dir=${gfort_so%/*}
         gfort_link="-L${gfort_dir} -lgfortran -Wl,-rpath,${gfort_dir}" ;;
   esac
   # shellcheck disable=SC2086
@@ -131,7 +131,7 @@ fi
 if ! command -v julia >/dev/null 2>&1 && [ -d "${HOME}/.local/julia" ]; then
   for candidate in "${HOME}/.local/julia"/julia-*/bin/julia; do
     if [ -x "$candidate" ]; then
-      PATH=$(dirname "$candidate"):$PATH
+      PATH=${candidate%/*}:$PATH
       break
     fi
   done

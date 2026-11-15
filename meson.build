@@ -219,6 +219,21 @@ if not get_option('with_fortran').disabled()
     _snippet_fc = meson.get_compiler('fortran').cmd_array()[0]
   endif
 endif
+# AddressSanitizer is preloaded so Python can host libseams. That preload
+# makes the compiler driver and cc1 fail LeakSanitizer. The wrappers drop
+# it and exec the compiler meson used to build the library.
+_asan_wrap = get_option('b_sanitize').contains('address')
+_real_cc = _snippet_cc
+_real_cxx = _snippet_cxx
+_real_fc = _snippet_fc
+if _asan_wrap
+  _asan_bin = meson.project_source_root() / 'scripts' / 'asan-path'
+  _snippet_cc = _asan_bin / 'cc'
+  _snippet_cxx = _asan_bin / 'c++'
+  if _real_fc != ''
+    _snippet_fc = _asan_bin / 'gfortran'
+  endif
+endif
 _snippet_omp = []
 if openmp_found
   if cpp_id == 'nvidia' or cpp_id == 'nvidia_hpc' or cpp_id == 'pgi'
@@ -237,6 +252,13 @@ _snippet_env.set('CC', _snippet_cc)
 _snippet_env.set('CXX', _snippet_cxx)
 if _snippet_fc != ''
   _snippet_env.set('FC', _snippet_fc)
+endif
+if _asan_wrap
+  _snippet_env.set('REAL_CC', _real_cc)
+  _snippet_env.set('REAL_CXX', _real_cxx)
+  if _real_fc != ''
+    _snippet_env.set('REAL_FC', _real_fc)
+  endif
 endif
 if _snippet_omp.length() > 0
   _snippet_env.set('SEAMS_OPENMP_LINK', ' '.join(_snippet_omp))
@@ -1023,6 +1045,13 @@ if get_option('with_cli')
   if _snippet_fc != ''
     tutorial_env.set('FC', _snippet_fc)
   endif
+  if _asan_wrap
+    tutorial_env.set('REAL_CC', _real_cc)
+    tutorial_env.set('REAL_CXX', _real_cxx)
+    if _real_fc != ''
+      tutorial_env.set('REAL_FC', _real_fc)
+    endif
+  endif
   if _snippet_omp.length() > 0
     tutorial_env.set('SEAMS_OPENMP_LINK', ' '.join(_snippet_omp))
   endif
@@ -1639,6 +1668,13 @@ if get_option('with_cli')
   binding_env.set('CXX', _snippet_cxx)
   if _snippet_fc != ''
     binding_env.set('FC', _snippet_fc)
+  endif
+  if _asan_wrap
+    binding_env.set('REAL_CC', _real_cc)
+    binding_env.set('REAL_CXX', _real_cxx)
+    if _real_fc != ''
+      binding_env.set('REAL_FC', _real_fc)
+    endif
   endif
   if _snippet_omp.length() > 0
     binding_env.set('SEAMS_OPENMP_LINK', ' '.join(_snippet_omp))
