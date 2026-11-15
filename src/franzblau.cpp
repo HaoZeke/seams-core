@@ -62,6 +62,25 @@ void publishSplit(const RingSplitTimes &times, int used) {
   gUsedBalls = used;
 }
 
+// The release names the distance table by ring size: adjacency through
+// size 7, the sorted pair table for 8 and 9, and a meet-in-the-middle
+// for size 10. A legacy ball search always reports the pair table.
+int reportBallCode(int maxDepth, bool legacy, int used) {
+  if (legacy) {
+    return 1;
+  }
+  if (maxDepth <= 7) {
+    return 0;
+  }
+  if (maxDepth <= 9) {
+    return 1;
+  }
+  if (maxDepth == 10) {
+    return 3;
+  }
+  return used == 0 ? 0 : 1;
+}
+
 double millisSince(std::chrono::steady_clock::time_point start) {
   return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
       .count();
@@ -1617,7 +1636,7 @@ sparseCensusTeam(const Graph &adjacency, const DistOracle &oracle,
   }
   split.enumerate_ms = millisSince(enumStart);
   split.merge_ms = 0;
-  publishSplit(split, usedBalls);
+  publishSplit(split, reportBallCode(maxDepth, legacy, usedBalls));
 }
 
 // A large sparse census. Each shortest path is the vertex plus a parent at
@@ -2433,7 +2452,7 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
     std::vector<std::size_t>().swap(adjacency.first);
     std::vector<RingPool>().swap(perSource);
     split.merge_ms = millisSince(mergeStart);
-    publishSplit(split, usedBalls);
+    publishSplit(split, reportBallCode(maxDepth, legacy, usedBalls));
     return rings;
   }
 #endif
@@ -2463,7 +2482,7 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
   std::vector<int>().swap(adjacency.cols);
   std::vector<std::size_t>().swap(adjacency.first);
   split.merge_ms = millisSince(mergeStart);
-  publishSplit(split, usedBalls);
+  publishSplit(split, reportBallCode(maxDepth, legacy, usedBalls));
 
   return rings;
 }
