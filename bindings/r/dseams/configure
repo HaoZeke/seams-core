@@ -29,8 +29,22 @@ if [ ! -f "${SEAMS_INCLUDE}/seams_lang.h" ]; then
   echo "seams_lang.h is not in ${SEAMS_INCLUDE}" >&2
   exit 1
 fi
-SEAMS_H_DIR="${DSEAMS_ROOT}/include"
-SEAMS_SO_DIR="${DSEAMS_ROOT}/build/src"
+# libseams.so and the generated seams_version.h sit in src next to the
+# bindings directory of the same meson build.
+if [ -z "${SEAMS_H_DIR:-}" ]; then
+  SEAMS_H_DIR="$(cd "${SEAMS_INCLUDE}/../../include" 2>/dev/null && pwd)"
+fi
+if [ -z "${SEAMS_SO_DIR:-}" ]; then
+  SEAMS_SO_DIR="$(cd "${SEAMS_LIBDIR}/../src" 2>/dev/null && pwd)"
+fi
+if [ ! -f "${SEAMS_H_DIR}/seams.h" ]; then
+  echo "seams.h is not in ${SEAMS_H_DIR}; set SEAMS_H_DIR" >&2
+  exit 1
+fi
+if [ ! -f "${SEAMS_SO_DIR}/seams_version.h" ]; then
+  echo "seams_version.h is not in ${SEAMS_SO_DIR}; set SEAMS_SO_DIR to the src directory of the build" >&2
+  exit 1
+fi
 cat > src/Makevars << EOF
 PKG_CFLAGS = -I${SEAMS_H_DIR} -I${SEAMS_SO_DIR}
 PKG_CXXFLAGS = -I${SEAMS_INCLUDE}
