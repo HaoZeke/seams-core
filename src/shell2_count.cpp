@@ -140,6 +140,7 @@ struct alignas(64) RingScratch {
 struct ChordBits {
   int n = 0;
   int stride = 0;
+  bool undirected = false;
   std::vector<std::uint64_t> bits;
   std::vector<std::uint64_t> near;
 };
@@ -271,6 +272,25 @@ void fillChordBits(const Graph &adjacency, ChordBits &out) {
           out.bits.data() + static_cast<std::size_t>(v) * static_cast<std::size_t>(stride);
       for (int w = 0; w < stride; w++) {
         dst[w] |= row[w];
+      }
+    }
+  }
+  out.undirected = true;
+  for (int u = 0; u < nVertices && out.undirected; u++) {
+    const std::uint64_t *row =
+        out.bits.data() + static_cast<std::size_t>(u) * static_cast<std::size_t>(stride);
+    for (const int v : adjacency[static_cast<std::size_t>(u)]) {
+      if (v < 0 || v >= nVertices) {
+        continue;
+      }
+      const std::uint64_t *back =
+          out.bits.data() + static_cast<std::size_t>(v) * static_cast<std::size_t>(stride);
+      const bool reverse = ((back[static_cast<unsigned>(u) >> 6] >>
+                             (static_cast<unsigned>(u) & 63u)) &
+                            1ull) != 0ull;
+      if (!reverse) {
+        out.undirected = false;
+        break;
       }
     }
   }
@@ -848,10 +868,37 @@ void enumerateChordlessPlain(const Graph &adjacency, const DistOracle &oracle,
                 }
                 for (int slot = 0; slot < static_cast<int>(usedD.size()); slot++) {
                   const int d = usedD[static_cast<std::size_t>(slot)];
-                  if (d == b || adjacent(p, d) || within2(b, d)) {
+                  // The same far vertex, or one next to this near vertex,
+                  // fails every arm of the run. Test that before the arms.
+                  if (within2(b, d) || d == b || adjacent(p, d)) {
                     continue;
                   }
                   const auto &cs = bucket[static_cast<std::size_t>(slot)];
+                  // A reverse edge puts a on b's neighbour row, so c == a and
+                  // an a-c edge are already within two steps of b. The arms
+                  // and the far neighbours then multiply. A one-way edge keeps
+                  // the per-arm tests.
+                  if (store.undirected) {
+                    int na = 0;
+                    for (std::size_t k = i0; k < i1; k++) {
+                      if (!within2(lefts[k].first, d)) {
+                        na++;
+                      }
+                    }
+                    if (na == 0) {
+                      continue;
+                    }
+                    int nc = 0;
+                    for (const int c : cs) {
+                      if (!within2(b, c)) {
+                        nc++;
+                      }
+                    }
+                    if (record7) {
+                      c7 += na * nc;
+                    }
+                    continue;
+                  }
                   for (std::size_t k = i0; k < i1; k++) {
                     const int a = lefts[k].first;
                     if (within2(a, d)) {
