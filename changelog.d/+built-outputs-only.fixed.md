@@ -1,0 +1,1 @@
+`python_dseams`, `openmm_reporter`, `insitu_observe` and `plumed_driver` load the module and libraries the build produced, not a copy found by searching the build tree. Each stages its Python package in its own directory and replaces files by rename, so a concurrent run no longer reads a staged install that another test is deleting or a module that is being overwritten.

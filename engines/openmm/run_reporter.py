@@ -15,7 +15,9 @@ if importlib.util.find_spec("openmm") is None:
 
 build = Path(os.environ.get("DSEAMS_BUILD", "build"))
 src = Path(os.environ.get("DSEAMS_SRC", Path(__file__).resolve().parents[2]))
-cores = list(build.rglob("_core*.so"))
+# Built outputs only: the staged installs in the build tree hold copies that
+# other tests delete and recreate.
+cores = list(build.glob("_core*.so"))
 if not cores and os.environ.get("DSEAMS_WITH_PYTHON") == "0":
     print("this build has -Dwith_python=false, so there is no dseams._core")
     sys.exit(77)
@@ -23,19 +25,29 @@ if not cores:
     print("openmm is installed but dseams._core was not built")
     sys.exit(1)
 
-stage = build / "python-stage"
+stage = build / "python-stage-openmm"
 pkg = stage / "dseams"
 pkg.mkdir(parents=True, exist_ok=True)
 root = src / "bindings" / "python"
+
+
+def place(source, dest):
+    # A concurrent run may have dest mapped. Copying over it in place
+    # crashes that run; a rename leaves its inode alone.
+    part = dest.with_name(f".{dest.name}.{os.getpid()}")
+    shutil.copy(source, part)
+    os.replace(part, dest)
+
+
 for name in ("__init__.py", "__main__.py"):
-    shutil.copy(root / "dseams" / name, pkg / name)
-shutil.copy(root / "frames.py", pkg / "frames.py")
+    place(root / "dseams" / name, pkg / name)
+place(root / "frames.py", pkg / "frames.py")
 for so in cores:
     dest = pkg / so.name
     if so.resolve() != dest.resolve():
-        shutil.copy(so, dest)
+        place(so, dest)
 
-libs = list(build.rglob("libseams_lang.so"))
+libs = [lib for lib in [build / "bindings" / "libseams_lang.so"] if lib.is_file()]
 if not libs:
     print("openmm is installed but libseams_lang.so was not built")
     sys.exit(1)

@@ -252,6 +252,7 @@ by [towncrier](https://towncrier.readthedocs.io/).
 - `dump_index_eintr`, `dump_index_eio` and `dump_fstat_keeps_atoms` each write their dump under a directory of their own. The three run one driver in parallel and shared a fixed temporary directory, so one test's cleanup could remove the other's file and abort it with `filesystem error: cannot remove`.
 - `openmm_reporter` skips in a build configured with `-Dwith_python=false`, which has no `dseams._core` to load.
 - `plumed_driver` runs PLUMED in a scratch directory under the build tree, not beside the deck in the source tree, so two build trees no longer share its colvar.
+- `python_dseams`, `openmm_reporter`, `insitu_observe` and `plumed_driver` load the module and libraries the build produced, not a copy found by searching the build tree. Each stages its Python package in its own directory and replaces files by rename, so a concurrent run no longer reads a staged install that another test is deleting or a module that is being overwritten.
 - `seams_rings_find` classifies prisms from the neighbour index instead of
   an all-pairs scan, and the ice Ih stacking-plane pass runs across
   threads. Ring lists and labels on the 4096- and 32768-molecule cells

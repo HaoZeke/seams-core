@@ -13,7 +13,7 @@ if shutil.which("plumed") is None:
     sys.exit(77)
 
 build = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("build")
-plugins = list(build.rglob("libSeamsPlumed.so"))
+plugins = [lib for lib in [build / "engines" / "libSeamsPlumed.so"] if lib.is_file()]
 if not plugins:
     print("plumed is installed but libSeamsPlumed.so was not built")
     sys.exit(1)

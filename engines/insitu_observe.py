@@ -14,7 +14,7 @@ except ImportError:
 root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(root / "adapters" / "python"))
 build = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "build"
-libs = list(build.rglob("libseams_lang.so"))
+libs = [lib for lib in [build / "bindings" / "libseams_lang.so"] if lib.is_file()]
 if not libs:
     print("libseams_lang.so was not built")
     sys.exit(77)
