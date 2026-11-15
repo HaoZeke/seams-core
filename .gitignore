@@ -1,12 +1,15 @@
 # Additions
 .pixi/
 .venv-paper/
+.venv-sqq/
+.asv/
 benchmarks/paper-cells/.sitting-large.jsonl
 benchmarks/paper-cells/.sitting-agree/
 benchmarks/paper-cells/*.pdf
 benchmarks/paper-cells/.liquid-work/
 benchmarks/*.png
 mw215-frames/
+tip4p2005-frames/
 /result
 /.ccls-cache/
 shellBuild/
