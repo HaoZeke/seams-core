@@ -86,6 +86,13 @@ extern "C" SEXP _dseams_cages_(SEXP ptr, SEXP cutoff, SEXP type, SEXP k, SEXP gr
     return cpp11::as_sexp(cages_(cpp11::as_cpp<cpp11::decay_t<SEXP>>(ptr), cpp11::as_cpp<cpp11::decay_t<double>>(cutoff), cpp11::as_cpp<cpp11::decay_t<int>>(type), cpp11::as_cpp<cpp11::decay_t<int>>(k), cpp11::as_cpp<cpp11::decay_t<std::string>>(graph)));
   END_CPP11
 }
+// dseams.cpp
+cpp11::integers rings_chordless_(SEXP ptr, double cutoff, int type, std::string graph, int size);
+extern "C" SEXP _dseams_rings_chordless_(SEXP ptr, SEXP cutoff, SEXP type, SEXP graph, SEXP size) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rings_chordless_(cpp11::as_cpp<cpp11::decay_t<SEXP>>(ptr), cpp11::as_cpp<cpp11::decay_t<double>>(cutoff), cpp11::as_cpp<cpp11::decay_t<int>>(type), cpp11::as_cpp<cpp11::decay_t<std::string>>(graph), cpp11::as_cpp<cpp11::decay_t<int>>(size)));
+  END_CPP11
+}
 
 extern "C" SEXP seams_r_system(void);
 extern "C" SEXP seams_r_read(SEXP, SEXP, SEXP, SEXP);
@@ -107,6 +114,7 @@ extern "C" SEXP seams_r_prisms(SEXP, SEXP);
 extern "C" SEXP seams_r_monolayer(SEXP, SEXP, SEXP, SEXP);
 extern "C" SEXP seams_r_vertices(SEXP, SEXP, SEXP, SEXP);
 extern "C" SEXP seams_r_site(SEXP, SEXP);
+extern "C" SEXP seams_r_chordless(SEXP, SEXP, SEXP, SEXP, SEXP);
 
 extern "C" {
 static const R_CallMethodDef CallEntries[] = {
@@ -118,6 +126,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_dseams_q4_q6_",      (DL_FUNC) &_dseams_q4_q6_,      3},
     {"_dseams_read_frame_", (DL_FUNC) &_dseams_read_frame_, 3},
     {"_dseams_rings_",      (DL_FUNC) &_dseams_rings_,      5},
+    {"_dseams_rings_chordless_", (DL_FUNC) &_dseams_rings_chordless_, 5},
     {"_dseams_signature_cages_", (DL_FUNC) &_dseams_signature_cages_, 5},
     {"_dseams_jump_tau90_", (DL_FUNC) &_dseams_jump_tau90_, 5},
     {"_dseams_steinhardt_", (DL_FUNC) &_dseams_steinhardt_, 5},
@@ -142,6 +151,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_dseams_seams_r_monolayer", (DL_FUNC) &seams_r_monolayer, 4},
     {"_dseams_seams_r_vertices", (DL_FUNC) &seams_r_vertices, 4},
     {"_dseams_seams_r_site", (DL_FUNC) &seams_r_site, 2},
+    {"_dseams_seams_r_chordless", (DL_FUNC) &seams_r_chordless, 5},
     {NULL, NULL, 0}
 };
 }

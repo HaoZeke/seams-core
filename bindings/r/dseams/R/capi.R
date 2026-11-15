@@ -102,3 +102,8 @@ seams_rings_vertices <- function(sys, cutoff = 3.5, max_depth = 6L, index = 0L) 
 seams_site_table <- function(sys, spec) {
   .Call(`_dseams_seams_r_site`, sys, spec)
 }
+
+#' @export
+seams_rings_chordless <- function(sys, cutoff = 3.5, size = 6L, type = 0L, graph = 0L) {
+  .Call(`_dseams_seams_r_chordless`, sys, cutoff, as.integer(type), as.integer(graph), as.integer(size))
+}

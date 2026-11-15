@@ -215,3 +215,32 @@ q4_q6.dseams_frame <- function(frame, cutoff = 3.5, type = 0L) {
   class(out) <- c("dseams_q4_q6", "data.frame")
   out
 }
+
+#' Chordless cycles of one size.
+#'
+#' A cycle is chordless when no bond joins two of its atoms that are not
+#' next to each other on it. Every primitive ring is chordless; a
+#' chordless cycle need not be primitive.
+#'
+#' @param frame A `dseams_frame`.
+#' @param size Cycle length, from 3 through 12.
+#' @param cutoff Neighbour cutoff in angstrom. For the mutual graph this is
+#'   only the cell-size hint (`cutoff + 1.5`).
+#' @param type LAMMPS type. 0 bonds every atom of the frame.
+#' @param graph `"cutoff"` or `"mutual"`.
+#' @return An integer matrix with one row per cycle and `size` columns of
+#'   1-based atom rows, so `positions(frame)[ring, ]` holds one cycle. Each
+#'   row starts at its smallest atom and rows are sorted. The `per_atom`
+#'   attribute counts the cycles through each atom.
+#' @export
+rings_chordless <- function(frame, size = 6L, cutoff = 3.5, type = 0L,
+                            graph = "cutoff") {
+  UseMethod("rings_chordless")
+}
+
+#' @export
+rings_chordless.dseams_frame <- function(frame, size = 6L, cutoff = 3.5,
+                                         type = 0L, graph = "cutoff") {
+  rings_chordless_(frame$ptr, cutoff, as.integer(type), as.character(graph),
+                   as.integer(size))
+}

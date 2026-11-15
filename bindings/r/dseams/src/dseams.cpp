@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <vector>
 
 #include <cpp11.hpp>
@@ -260,4 +261,34 @@ cpp11::integers symmetry_(SEXP ptr, double shell_rmsd) {
     labels[i] = raw[static_cast<std::size_t>(i)];
   }
   return labels;
+}
+
+[[cpp11::register]]
+cpp11::integers rings_chordless_(SEXP ptr, double cutoff, int type,
+                                 std::string graph, int size) {
+  seams_frame *frame = need(ptr);
+  const int n = seams_frame_nop(frame);
+  std::vector<int> per(static_cast<std::size_t>(std::max(n, 0)));
+  int count = 0;
+  if (seams_frame_chordless(frame, cutoff, type, graph.c_str(), size, nullptr, 0,
+                            &count, per.data()) != 0) {
+    cpp11::stop("%s", seams_last_error());
+  }
+  std::vector<int> flat(static_cast<std::size_t>(count) *
+                        static_cast<std::size_t>(std::max(size, 0)));
+  if (count > 0 &&
+      seams_frame_chordless(frame, cutoff, type, graph.c_str(), size, flat.data(),
+                            static_cast<int>(flat.size()), &count, nullptr) != 0) {
+    cpp11::stop("%s", seams_last_error());
+  }
+  cpp11::writable::integers rings(static_cast<R_xlen_t>(flat.size()));
+  for (int r = 0; r < count; ++r) {
+    for (int k = 0; k < size; ++k) {
+      rings[static_cast<R_xlen_t>(r) + static_cast<R_xlen_t>(k) * count] =
+          flat[static_cast<std::size_t>(r) * size + k] + 1;
+    }
+  }
+  rings.attr("dim") = cpp11::writable::integers({count, size});
+  rings.attr("per_atom") = cpp11::writable::integers(per.begin(), per.end());
+  return rings;
 }

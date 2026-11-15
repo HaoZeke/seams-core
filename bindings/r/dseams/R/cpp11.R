@@ -48,3 +48,7 @@ signature_cages_ <- function(ptr, cutoff, type, graph, spec) {
 symmetry_ <- function(ptr, shell_rmsd) {
   .Call(`_dseams_symmetry_`, ptr, shell_rmsd)
 }
+
+rings_chordless_ <- function(ptr, cutoff, type, graph, size) {
+  .Call(`_dseams_rings_chordless_`, ptr, cutoff, type, graph, size)
+}

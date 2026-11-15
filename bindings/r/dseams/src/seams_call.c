@@ -349,3 +349,46 @@ SEXP seams_r_site(SEXP ext, SEXP spec) {
   UNPROTECT(1);
   return kinds;
 }
+
+SEXP seams_r_chordless(SEXP ext, SEXP cutoff, SEXP type, SEXP graph, SEXP size) {
+  seams_system *sys = sys_of(ext);
+  const int n = seams_system_count(sys);
+  const int len = Rf_asInteger(size);
+  seams_neighbours *nb = NULL;
+  if (seams_neighbours_build(sys, Rf_asReal(cutoff), Rf_asInteger(type), Rf_asInteger(graph), &nb) !=
+      SEAMS_OK) {
+    die(sys);
+  }
+  SEXP per_atom = PROTECT(allocVector(INTSXP, n));
+  size_t count = 0;
+  int code = seams_rings_chordless(nb, len, NULL, 0, &count, INTEGER(per_atom), (size_t)n);
+  int *flat = NULL;
+  if (code == SEAMS_OK && count > 0) {
+    flat = (int *)R_alloc(count * (size_t)len, sizeof(int));
+    code = seams_rings_chordless(nb, len, flat, count * (size_t)len, &count, NULL, 0);
+  }
+  char saved[512];
+  if (code != SEAMS_OK) {
+    copy_error(nb, saved, sizeof(saved));
+  }
+  seams_neighbours_destroy(nb);
+  if (code != SEAMS_OK) {
+    error("%s", saved);
+  }
+  SEXP rings = PROTECT(allocMatrix(INTSXP, (int)count, len));
+  int *out = INTEGER(rings);
+  for (size_t r = 0; r < count; ++r) {
+    for (int k = 0; k < len; ++k) {
+      out[r + (size_t)k * count] = flat[r * (size_t)len + (size_t)k];
+    }
+  }
+  SEXP res = PROTECT(allocVector(VECSXP, 2));
+  SET_VECTOR_ELT(res, 0, rings);
+  SET_VECTOR_ELT(res, 1, per_atom);
+  SEXP names = PROTECT(allocVector(STRSXP, 2));
+  SET_STRING_ELT(names, 0, mkChar("rings"));
+  SET_STRING_ELT(names, 1, mkChar("per_atom"));
+  setAttrib(res, R_NamesSymbol, names);
+  UNPROTECT(4);
+  return res;
+}
