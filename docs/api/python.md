@@ -12,6 +12,7 @@ sizes, symmetry, hist, fraction = dseams.rings(positions, box)
 per_atom, (n_hex, n_cubic, n_water, n_both) = dseams.cages(positions, box)
 n_cages, n_atoms = dseams.signature_cages(positions, box, spec="512")
 shell = dseams.symmetry(positions, box)
+cycles, per_atom = dseams.rings_chordless(positions, box, size=6)
 ```
 
 `dseams.cages` is the six-ring ice score from `frames.cages`: a per-atom code
@@ -19,6 +20,19 @@ and the hexagonal, cubic, water, and both counts. `dseams.signature_cages`
 counts closed polyhedra whose ring census matches `spec` and returns
 `(n_cages, n_atoms)`. `dseams.symmetry` is the shell label: 0 ice Ih, 1 ice
 Ic, 2 stacking-disordered, and -1 otherwise.
+
+`dseams.rings_chordless` lists the chordless cycles of one size, 3 through
+12. A cycle is chordless when no bond joins two of its atoms that are not next
+to each other on it; every primitive ring is chordless, and a chordless cycle
+need not be primitive. The call returns an `(n, size)` int32 array of 0-based
+atom indices and the number of cycles through each atom. The rows are the rows
+of `seams_rings_chordless`: each starts at its lowest index and runs towards
+the smaller of that atom's two cycle neighbours, and the rows are sorted.
+`size`, `cutoff` (angstrom), and `graph` (`dseams.CUTOFF` or `dseams.MUTUAL`)
+are keywords. `dseams.read(path, frame=1, type_filter=-1)` returns a `Frame`
+read from a trajectory, and `Frame.rings_chordless(size=6, cutoff=3.5, type=0,
+graph=CUTOFF)` gives the same rows for that frame. `type=0` bonds every atom
+of a frame with more than one species.
 
 `box` is three lengths or nine LAMMPS numbers. `dseams.PUBLISHED` (`"paper"`)
 averages q_lm over the four closest neighbours. `dseams.OVITO` (`"ovito"`)
@@ -63,12 +77,12 @@ The ctypes fallback calls those two and also `seams_system_read`,
 
 ```{literalinclude} ../../../bindings/python/tests/test_dseams.py
 :language: python
-:lines: 41-74,80-93
+:lines: 57-90,94-151
 ```
 
 ```{literalinclude} ../../../tests/test_frames_abi.py
 :language: python
-:lines: 50-57
+:lines: 50-62
 ```
 
 <!-- API_SYMBOLS_BEGIN -->
@@ -205,6 +219,16 @@ Units: coordinates and cutoff in angstrom; q4 and q6 are dimensionless
 
 Example: `docs/examples/minimal_py.py`
 
+### read
+
+Purpose: Read one trajectory frame into a Frame.
+
+Parameters: path; frame; type_filter
+
+Units: frame index is dimensionless, 1-based; coordinates are angstrom
+
+Example: `docs/examples/minimal_py.py`
+
 ### rings
 
 Purpose: Primitive-ring sizes, symmetry, histogram, and fraction.
@@ -212,6 +236,16 @@ Purpose: Primitive-ring sizes, symmetry, histogram, and fraction.
 Parameters: positions; box; cutoff; max_depth
 
 Units: coordinates and cutoff in angstrom; max_depth is a dimensionless ring size
+
+Example: `docs/examples/minimal_py.py`
+
+### rings_chordless
+
+Purpose: Chordless cycles of one size as 0-based rows.
+
+Parameters: positions; box; size; cutoff; graph, or a Frame with size; cutoff; type; graph
+
+Units: coordinates and cutoff in angstrom; rows and per-atom counts are dimensionless
 
 Example: `docs/examples/minimal_py.py`
 

@@ -10,6 +10,7 @@ let (labels, counts) = sys.chill_plus(3.5, seams_sys::SEAMS_GRAPH_CUTOFF, seams_
 let (q4, q6) = sys.q4q6(3.5)?;
 let degree = sys.neighbour_degree(3.5)?;
 let (six, fraction) = sys.six_ring_fraction(3.5)?;
+let cycles = sys.rings_chordless(3.5, 6, 0, seams_sys::SEAMS_GRAPH_CUTOFF)?;
 ```
 
 `set_frame` takes the nine-number cell, including a non-zero tilt.
@@ -29,8 +30,8 @@ and the triclinic sH dump.
 safe wrapper. `meson test docs_api_rust` runs that test.
 `docs/examples/minimal_rust.rs` reads the
 GenIce sI cell and calls `System::set_ortho`, `count`, `neighbour_degree`,
-`q4q6`, `chill_plus`, and `six_ring_fraction`. `meson test docs_examples`
-runs it.
+`q4q6`, `chill_plus`, `six_ring_fraction`, and `rings_chordless`.
+`meson test docs_examples` runs it.
 
 ```{literalinclude} ../../../docs/examples/minimal_rust.rs
 :language: rust
@@ -43,9 +44,35 @@ runs it.
 :lines: 25-57
 ```
 
+`System::neighbours(cutoff, atom_type, graph)` builds a cutoff or mutual
+list, and `Neighbours::chordless(size)` lists its chordless cycles of one
+size, 3 through 12: cycles with no bond between two of their atoms that are
+not next to each other on the cycle. `System::rings_chordless(cutoff, size,
+atom_type, graph)` does both. The result is a `Chordless`: `size`, `rings`
+with one cycle of 0-based indices after another, and `per_atom`, the cycles
+through each atom. `count` is the number of cycles, `cycle(i)` borrows one,
+and `cycles` iterates over them. The rows are those of
+`seams_rings_chordless`. The ice test compares them with the rows
+`chordless_ref` writes from the C API when `SEAMS_CHORDLESS_REF` is set.
+
+```{literalinclude} ../../../bindings/rust/seams/tests/ice.rs
+:language: rust
+:lines: 60-107
+```
+
 <!-- API_SYMBOLS_BEGIN -->
 
 ## Symbol reference
+
+### Chordless
+
+Purpose: Chordless cycles of one size and the count through each atom.
+
+Parameters: size; rings; per_atom
+
+Units: dimensionless 0-based indices and counts
+
+Example: `docs/examples/minimal_rust.rs`
 
 ### Error
 
@@ -77,6 +104,16 @@ Units: cutoff in angstrom; graph and rule are dimensionless codes
 
 Example: `docs/examples/minimal_rust.rs`
 
+### chordless
+
+Purpose: Chordless cycles of one size on a neighbour list.
+
+Parameters: size
+
+Units: size is a dimensionless cycle length
+
+Example: `docs/examples/minimal_rust.rs`
+
 ### count
 
 Purpose: Number of points in the system.
@@ -87,6 +124,26 @@ Units: dimensionless count
 
 Example: `docs/examples/minimal_rust.rs`
 
+### cycle
+
+Purpose: Borrow one chordless cycle.
+
+Parameters: index
+
+Units: dimensionless 0-based indices
+
+Example: `docs/examples/minimal_rust.rs`
+
+### cycles
+
+Purpose: Iterate over the chordless cycles.
+
+Parameters: self
+
+Units: dimensionless 0-based indices
+
+Example: `docs/examples/minimal_rust.rs`
+
 ### neighbour_degree
 
 Purpose: Degree of each atom on the cutoff graph.
@@ -94,6 +151,16 @@ Purpose: Degree of each atom on the cutoff graph.
 Parameters: cutoff
 
 Units: cutoff in angstrom; degrees are dimensionless
+
+Example: `docs/examples/minimal_rust.rs`
+
+### neighbours
+
+Purpose: Build a cutoff or mutual neighbour list.
+
+Parameters: cutoff; atom_type; graph
+
+Units: cutoff in angstrom; atom_type and graph are dimensionless codes
 
 Example: `docs/examples/minimal_rust.rs`
 
@@ -124,6 +191,16 @@ Purpose: Local q4 and q6 on the cutoff shell.
 Parameters: cutoff
 
 Units: cutoff in angstrom; q4 and q6 are dimensionless
+
+Example: `docs/examples/minimal_rust.rs`
+
+### rings_chordless
+
+Purpose: Build the list and return its chordless cycles.
+
+Parameters: cutoff; size; atom_type; graph
+
+Units: cutoff in angstrom; indices and counts are dimensionless
 
 Example: `docs/examples/minimal_rust.rs`
 

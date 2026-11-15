@@ -11,7 +11,7 @@ numbers: `ox, oy, oz, lx, ly, lz, xy, xz, yz`.
 `docs/examples/minimal_cpp.cpp` reads the
 GenIce sI cell with `seams_frame_read`, then calls
 `seams_frame_neighbours`, `seams_frame_steinhardt`,
-`seams_frame_chill_plus`, and `seams_frame_rings`.
+`seams_frame_chill_plus`, `seams_frame_rings`, and `seams_frame_chordless`.
 `meson test docs_examples` runs it.
 
 ```{literalinclude} ../../../docs/examples/minimal_cpp.cpp
@@ -47,6 +47,32 @@ It calls `seams_set_num_threads`, `seams_chill_plus`, and `seams_q4q6`.
 
 ```{literalinclude} ../../../docs/examples/ice.cpp
 :language: cpp
+```
+
+## Chordless cycles
+
+A cycle is chordless when no bond joins two of its atoms that are not next to
+each other on it. Every primitive ring is chordless; a chordless cycle need not
+be primitive. `seams::Neighbours::chordless(size)` and
+`seams::System::rings_chordless(cutoff, size, type, graph)` in
+`include/seams.hpp` return a `seams::ChordlessCycles`: `size`, `atoms` with
+`count()` rows of `size` 0-based indices, and `per_atom`, the number of cycles
+through each atom. `cycle(i)` copies one row. `System::neighbours(cutoff, type,
+graph)` builds the list once for several sizes. The rows are those of
+`seams_rings_chordless`: each starts at its lowest index and the rows are
+sorted.
+
+`seams_frame_chordless(frame, cutoff, type, graph, size, rings, rings_len,
+n_rings, per_atom)` is the same call on a `seams_frame`. `graph` is
+`"cutoff"` (or `NULL`) or `"mutual"`; `rings` may be `NULL` to count only, and
+a short buffer returns 1 after `n_rings` and `per_atom` are written. After
+`seams_frame_select` the cycles use the selected atoms only, with indices
+over the whole frame. `seams_hpp_match` and `seams_lang_frames` compare these
+with the rows `chordless_ref` writes from the C API.
+
+```{literalinclude} ../../../tests/test_seams_hpp.cpp
+:language: cpp
+:lines: 229-240
 ```
 
 ```{literalinclude} ../../../bindings/cxx/test_lang.cpp
@@ -125,6 +151,16 @@ Purpose: Run CHILL+ and primitive rings on one neighbour list.
 Parameters: frame; cutoff; type; graph; max_ring; skin; labels; counts9; ring_counts; ring_counts_len; times
 
 Units: cutoff in angstrom; coordinates in angstrom; skin in angstrom; phase times in seconds
+
+Example: `docs/examples/minimal_cpp.cpp`
+
+### seams_frame_chordless
+
+Purpose: Chordless cycles of one size on a frame.
+
+Parameters: frame; cutoff; type; graph; size; rings; rings_len; n_rings; per_atom
+
+Units: cutoff in angstrom; size and indices are dimensionless, indices 0-based
 
 Example: `docs/examples/minimal_cpp.cpp`
 

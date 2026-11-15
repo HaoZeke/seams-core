@@ -3,12 +3,14 @@
 d-SEAMS 2.14.0. The R package is `bindings/r/dseams`. It calls
 `libseams_lang` through cpp11. The exported frames are `read_frame`,
 `nframes`, `positions`, `chill_plus`, `cages`, `primitive_rings`,
-`signature_cages`, `symmetry`, `steinhardt`, `q4_q6`, and `jump_tau90`.
+`signature_cages`, `symmetry`, `steinhardt`, `q4_q6`, `jump_tau90`, and
+`rings_chordless`.
 `print` on a frame dispatches to `print.dseams_frame`.
 The methods are `positions.dseams_frame`, `chill_plus.dseams_frame`,
 `cages.dseams_frame`, `primitive_rings.dseams_frame`,
 `signature_cages.dseams_frame`, `symmetry.dseams_frame`,
-`steinhardt.dseams_frame`, and `q4_q6.dseams_frame`.
+`steinhardt.dseams_frame`, `q4_q6.dseams_frame`, and
+`rings_chordless.dseams_frame`.
 
 Build the library, then install the package against it:
 
@@ -18,11 +20,17 @@ meson compile -C build
 DSEAMS_ROOT=$PWD R CMD INSTALL bindings/r/dseams
 ```
 
-CI runs the testthat file when `Rscript` is on `PATH` and
-`DSEAMS_ROOT` points at this tree. The meson target is `language_fronts`
-(`tests/run_language_fronts.sh`). A missing R skips that front.
+`configure` looks for `libseams_lang` under `build`, `bbdir`, `bbdir-py`, and
+`build-eng`. For another build directory set `SEAMS_LIBDIR` to its
+`bindings` directory; `libseams` and `seams_version.h` are then taken from the
+`src` directory next to it.
+
+`meson test r_testthat` installs the package from the build tree into
+`r-test-lib` and runs the testthat file. CI runs the same file when `Rscript`
+is on `PATH` and `DSEAMS_ROOT` points at this tree.
 `docs/examples/minimal_r.R` reads the GenIce sI
-cell and calls `steinhardt`, `chill_plus`, and `primitive_rings`.
+cell and calls `steinhardt`, `chill_plus`, `primitive_rings`, and
+`rings_chordless`.
 `meson test docs_examples` runs it.
 
 ```{literalinclude} ../../../docs/examples/minimal_r.R
@@ -44,6 +52,22 @@ DSEAMS_ROOT=$PWD meson test -C build language_fronts --print-errorlogs
 ```{literalinclude} ../../../bindings/r/dseams/tests/testthat/test-ice.R
 :language: r
 :lines: 9-36,77-91
+```
+
+`rings_chordless(frame, size = 6L, cutoff = 3.5, type = 0L, graph = "cutoff")`
+lists the chordless cycles of one size, 3 through 12: cycles with no bond
+between two of their atoms that are not next to each other on the cycle. It
+returns an integer matrix with one row per cycle and `size` columns of 1-based
+atom rows, so `positions(frame)[ring, ]` holds the coordinates of one cycle.
+Each row starts at its smallest atom and the rows are sorted. The `per_atom`
+attribute counts the cycles through each atom. `seams_rings_chordless(sys,
+cutoff, size, type, graph)` takes a `seams_system_new` handle and returns
+`list(rings, per_atom)` with the 0-based rows of the C call. `r_testthat`
+compares both with the rows `chordless_ref` writes from the C API.
+
+```{literalinclude} ../../../bindings/r/dseams/tests/testthat/test-ice.R
+:language: r
+:lines: 93-132
 ```
 
 <!-- API_SYMBOLS_BEGIN -->
@@ -190,6 +214,26 @@ Units: frame index is dimensionless; coordinates are angstrom
 
 Example: `docs/examples/minimal_r.R`
 
+### rings_chordless
+
+Purpose: Chordless cycles of one size, one 1-based row per cycle.
+
+Parameters: frame; size; cutoff; type; graph
+
+Units: cutoff in angstrom; indices and counts are dimensionless
+
+Example: `docs/examples/minimal_r.R`
+
+### rings_chordless.dseams_frame
+
+Purpose: Chordless cycles for a frame object.
+
+Parameters: frame; size; cutoff; type; graph
+
+Units: cutoff in angstrom; per_atom counts are dimensionless
+
+Example: `docs/examples/minimal_r.R`
+
 ### signature_cages
 
 Purpose: Closed cages for a dump path.
@@ -249,6 +293,7 @@ Parameters: frame
 Units: dimensionless label codes
 
 Example: `docs/examples/minimal_r.R`
+
 ### seams_system_new
 
 Purpose: Call into libseams through the C shim.
@@ -448,5 +493,4 @@ Parameters: see include/seams.h
 Units: angstrom where a length is involved; otherwise dimensionless
 
 Example: `docs/examples/r_api.R`
-
 <!-- API_SYMBOLS_END -->

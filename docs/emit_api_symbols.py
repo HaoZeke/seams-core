@@ -190,6 +190,7 @@ def cxx_rows():
     add("seams_frame_chill_plus", "Write one CHILL+ label per atom.", "frame; cutoff; type; graph; labels; counts9", cut)
     add("seams_frame_chill_plus_rule", "Write CHILL+ labels for a named rule.", "frame; cutoff; type; graph; rule; labels; counts9", cut + "; rule is text")
     add("seams_frame_chill_rings", "Run CHILL+ and primitive rings on one neighbour list.", "frame; cutoff; type; graph; max_ring; skin; labels; counts9; ring_counts; ring_counts_len; times", cut + "; skin in angstrom; phase times in seconds")
+    add("seams_frame_chordless", "Chordless cycles of one size on a frame.", "frame; cutoff; type; graph; size; rings; rings_len; n_rings; per_atom", "cutoff in angstrom; size and indices are dimensionless, indices 0-based")
     add("seams_frame_free", "Free a language-binding frame.", "frame", "handle")
     add("seams_frame_from_arrays", "Build a frame from coordinates and a cell.", "xyz; n; box9; types; ids", "coordinates and box lengths in angstrom")
     add("seams_frame_from_species", "Build a frame and keep molecule ids.", "xyz; n; box9; types; ids; mols", "coordinates and box lengths in angstrom")
@@ -244,7 +245,9 @@ def other_rows():
             ("neighbours", "Cutoff or mutual neighbour list as CSR.", "positions; box; cutoff; graph", ang),
             ("num_threads", "OpenMP width the next call will use.", "none", "dimensionless thread count"),
             ("q4q6", "Local q4 and q6 on the cutoff shell.", "positions; box; cutoff", ang + "; q4 and q6 are dimensionless"),
+            ("read", "Read one trajectory frame into a Frame.", "path; frame; type_filter", "frame index is dimensionless, 1-based; coordinates are angstrom"),
             ("rings", "Primitive-ring sizes, symmetry, histogram, and fraction.", "positions; box; cutoff; max_depth", ang + "; max_depth is a dimensionless ring size"),
+            ("rings_chordless", "Chordless cycles of one size as 0-based rows.", "positions; box; size; cutoff; graph, or a Frame with size; cutoff; type; graph", ang + "; rows and per-atom counts are dimensionless"),
             ("set_frame", "Store one cell on a Frame.", "frame; positions; box", ang),
             ("set_num_threads", "Set the OpenMP width for the next call.", "n", "dimensionless thread count; 0 restores the library default"),
             ("signature_cages", "Count closed cages matching a ring-census spec.", "positions; box; spec", ang + "; spec is text such as 512"),
@@ -253,13 +256,19 @@ def other_rows():
         ],
         "rust": [
             ("Error", "Status code and message from a failed call.", "code; message", "code is dimensionless; message is text"),
+            ("Chordless", "Chordless cycles of one size and the count through each atom.", "size; rings; per_atom", "dimensionless 0-based indices and counts"),
             ("System", "Owned frame handle.", "none", "handle"),
+            ("chordless", "Chordless cycles of one size on a neighbour list.", "size", "size is a dimensionless cycle length"),
             ("chill_plus", "CHILL+ labels and nine population counts.", "cutoff; graph; rule", "cutoff in angstrom; graph and rule are dimensionless codes"),
             ("count", "Number of points in the system.", "self", "dimensionless count"),
+            ("cycle", "Borrow one chordless cycle.", "index", "dimensionless 0-based indices"),
+            ("cycles", "Iterate over the chordless cycles.", "self", "dimensionless 0-based indices"),
             ("neighbour_degree", "Degree of each atom on the cutoff graph.", "cutoff", "cutoff in angstrom; degrees are dimensionless"),
+            ("neighbours", "Build a cutoff or mutual neighbour list.", "cutoff; atom_type; graph", "cutoff in angstrom; atom_type and graph are dimensionless codes"),
             ("new", "Allocate an empty System.", "none", "handle"),
             ("num_threads", "OpenMP width the next call will use.", "none", "dimensionless thread count"),
             ("q4q6", "Local q4 and q6 on the cutoff shell.", "cutoff", "cutoff in angstrom; q4 and q6 are dimensionless"),
+            ("rings_chordless", "Build the list and return its chordless cycles.", "cutoff; size; atom_type; graph", "cutoff in angstrom; indices and counts are dimensionless"),
             ("set_frame", "Store points and a nine-number cell.", "xyz; box9", "coordinates and box lengths in angstrom"),
             ("set_num_threads", "Set the OpenMP width for the next call.", "n", "dimensionless thread count"),
             ("set_ortho", "Store points in an orthorhombic cell at the origin.", "xyz; lx; ly; lz", "coordinates and edge lengths in angstrom"),
@@ -273,13 +282,16 @@ def other_rows():
             ("SEAMS_GRAPH_MUTUAL", "Mutual four-nearest neighbour graph.", "none", "dimensionless code"),
             ("SEAMS_LABEL_CUBIC", "CHILL+ cubic-ice label. Fortran arrays of labels are 1-based, so clathrate is counts(5).", "none", "dimensionless code 0"),
             ("SEAMS_OK", "The call succeeded.", "none", "dimensionless status code"),
+            ("chordless_cycles", "Allocate and fill the chordless cycles of one size, 1-based.", "nb; size; rings; per_atom", "dimensionless indices and counts"),
             ("seams_chill_plus", "Write one CHILL+ label per atom.", "sys; cutoff; type; graph; rule; labels; counts", "cutoff in angstrom; counts are dimensionless"),
             ("seams_get_num_threads", "Report the OpenMP width the next call will use.", "none", "dimensionless thread count"),
             ("seams_last_error", "Return the thread-local error detail.", "none", "text"),
             ("seams_neighbours_build", "Build a cutoff or mutual neighbour list.", "sys; cutoff; type; graph; out", "cutoff in angstrom"),
+            ("seams_neighbours_count", "Number of atoms in a neighbour list.", "nb", "dimensionless count"),
             ("seams_neighbours_csr", "Return the neighbour list as CSR.", "nb; offsets; n_offsets; cols; nnz", "dimensionless indices"),
             ("seams_neighbours_destroy", "Free a neighbour-list handle.", "nb", "handle"),
             ("seams_q4q6", "Write local q4 and q6.", "sys; cutoff; type; q4; q6", "cutoff in angstrom; q4 and q6 are dimensionless"),
+            ("seams_rings_chordless", "Write the chordless cycles of one size.", "nb; size; rings; rings_len; n_rings; per_atom; per_atom_len", "dimensionless indices, 0-based, and counts"),
             ("seams_rings_destroy", "Free a ring-set handle.", "rings", "handle"),
             ("seams_rings_find", "Find primitive rings up to a maximum size.", "sys; cutoff; type; graph; max_depth; out", "cutoff in angstrom; max_depth is a dimensionless ring size"),
             ("seams_rings_fraction", "Fraction of atoms on a ring of one size.", "rings; size; fraction", "dimensionless fraction"),
@@ -301,6 +313,7 @@ def other_rows():
             ("primitive_rings", "Histogram of primitive rings.", "frame; cutoff; max_ring", "cutoff in angstrom; bin k is a dimensionless ring count"),
             ("q4_q6", "Local q4 and q6.", "frame; cutoff", "cutoff in angstrom; q4 and q6 are dimensionless"),
             ("read_frame", "Read one frame from a dump.", "path; frame; type", "frame index is dimensionless; coordinates are angstrom"),
+            ("rings_chordless", "Chordless cycles of one size, one 1-based column per cycle.", "frame; size; cutoff; type; graph", "cutoff in angstrom; indices and counts are dimensionless"),
             ("signature_cages", "Closed cages matching a ring-census spec.", "frame; cutoff; spec", "cutoff in angstrom; spec is text"),
             ("steinhardt", "Mean local Steinhardt q_l.", "frame; cutoff; order_l", "cutoff in angstrom; ql is dimensionless"),
             ("symmetry", "Shell label for Ih, Ic, or stacking disorder.", "frame", "labels are dimensionless codes"),
@@ -320,6 +333,8 @@ def other_rows():
             ("q4_q6", "Local q4 and q6 for a dump path.", "path; frame; cutoff", "cutoff in angstrom; q4 and q6 are dimensionless"),
             ("q4_q6.dseams_frame", "Local q4 and q6 for a frame object.", "frame; cutoff", "cutoff in angstrom; q4 and q6 are dimensionless"),
             ("read_frame", "Read one frame from a dump.", "path; frame; type", "frame index is dimensionless; coordinates are angstrom"),
+            ("rings_chordless", "Chordless cycles of one size, one 1-based row per cycle.", "frame; size; cutoff; type; graph", "cutoff in angstrom; indices and counts are dimensionless"),
+            ("rings_chordless.dseams_frame", "Chordless cycles for a frame object.", "frame; size; cutoff; type; graph", "cutoff in angstrom; per_atom counts are dimensionless"),
             ("signature_cages", "Closed cages for a dump path.", "path; frame; spec", "spec is text; cutoff used by the call is in angstrom"),
             ("signature_cages.dseams_frame", "Closed cages for a frame object.", "frame; spec", "spec is text"),
             ("steinhardt", "Mean local q_l for a dump path.", "path; frame; order_l", "order parameter is dimensionless"),

@@ -60,6 +60,12 @@ fn main() {
     let (six, _fraction) = system.six_ring_fraction(3.5).expect("rings");
     assert_eq!(counts[4], 46);
     assert_eq!(six, 54);
+    let pentagons = system
+        .rings_chordless(3.5, 5, 0, seams_sys::SEAMS_GRAPH_CUTOFF)
+        .expect("chordless");
+    assert_eq!(pentagons.count(), 48);
+    assert_eq!(pentagons.per_atom.iter().sum::<i32>(), 5 * 48);
+    assert_eq!(pentagons.cycle(0)[0], 0);
     assert!(mean > 0.5);
     println!("rust example ok {} q6 {:.3}", version(), mean);
 }

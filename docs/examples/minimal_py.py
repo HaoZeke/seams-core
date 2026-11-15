@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read the GenIce sI cell, then neighbours, q6, CHILL+, and rings."""
+"""Read the GenIce sI cell, then neighbours, chordless cycles, q6, CHILL+, and rings."""
 
 import ctypes
 import os
@@ -68,6 +68,16 @@ def main():
     lib.seams_neighbours_build.restype = ctypes.c_int
     lib.seams_neighbours_count.argtypes = [ctypes.c_void_p]
     lib.seams_neighbours_count.restype = ctypes.c_int
+    lib.seams_rings_chordless.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.c_size_t,
+    ]
+    lib.seams_rings_chordless.restype = ctypes.c_int
     lib.seams_q4q6.argtypes = [
         ctypes.c_void_p,
         ctypes.c_double,
@@ -119,6 +129,15 @@ def main():
         raise SystemExit("neighbours")
     if lib.seams_neighbours_count(nb) != 46:
         raise SystemExit("neighbour rows")
+    n_five = ctypes.c_size_t()
+    per_atom = (ctypes.c_int * n)()
+    if lib.seams_rings_chordless(nb, 5, None, 0, ctypes.byref(n_five), per_atom, n) != 0:
+        raise SystemExit("chordless count")
+    five = (ctypes.c_int * (5 * n_five.value))()
+    if lib.seams_rings_chordless(nb, 5, five, len(five), ctypes.byref(n_five), None, 0) != 0:
+        raise SystemExit("chordless")
+    if n_five.value != 48 or sum(per_atom) != 5 * 48 or five[0] != 0:
+        raise SystemExit("chordless result")
     lib.seams_neighbours_destroy(nb)
     q4 = (ctypes.c_double * n)()
     q6 = (ctypes.c_double * n)()

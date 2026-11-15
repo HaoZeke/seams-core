@@ -35,6 +35,11 @@ def via_dseams(xyz, edge):
         raise SystemExit("dseams counts")
     if float(np.mean(q6)) <= 0.3:
         raise SystemExit("dseams q6")
+    shifts = np.array([(i, j, k) for i in range(2) for j in range(2) for k in range(2)])
+    big = (pos[None, :, :] + edge * shifts[:, None, :]).reshape(-1, 3)
+    rings, per_atom = dseams.rings_chordless(big, 2 * box, size=6)
+    if rings.shape != (128, 6) or not np.all(per_atom == 12):
+        raise SystemExit("dseams chordless")
     print("python api ok dseams", dseams.version())
 
 
