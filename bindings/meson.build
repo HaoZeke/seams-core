@@ -117,6 +117,28 @@ if get_option('with_cli') and get_option('with_tests') and not get_option('b_san
     depends: [seams_exe, seams_lang],
     timeout: 600,
   )
+  if _rscript.found()
+    r_env = environment()
+    r_env.prepend('PATH', _fs.parent(_rscript.full_path()))
+    if _r_libs != ''
+      r_env.set('R_LIBS_USER', _r_libs)
+    endif
+    r_env.set('SEAMS_BIN', seams_exe.full_path())
+    r_env.set('SEAMS_CHORDLESS_REF', chordless_ref_txt.full_path())
+    r_env.set('SEAMS_CHORDLESS_TRAJ', chordless_traj)
+    test(
+      'r_testthat',
+      find_program('python3', required: true),
+      args: [
+        meson.project_source_root() / 'tests' / 'run_r_testthat.py',
+        meson.project_source_root(),
+        meson.project_build_root(),
+      ],
+      env: r_env,
+      depends: [seams_exe, seams_lang, seams_api_lib, chordless_ref_txt],
+      timeout: 600,
+    )
+  endif
   test(
     'chill_plus_ctypes',
     find_program('python3', required: true),

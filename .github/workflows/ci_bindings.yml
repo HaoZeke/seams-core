@@ -37,7 +37,7 @@ jobs:
           sudo cmake --install "$RUNNER_TEMP/chemfiles-build"
           sudo ldconfig
       - run: pixi run meson setup bbdir-py -Dwith_python=false -Dwith_tests=true -Dwith_cli=true
-      - run: pixi run ninja -C bbdir-py bindings/libseams_lang.so bindings/test_seams_lang
+      - run: pixi run ninja -C bbdir-py bindings/libseams_lang.so bindings/test_seams_lang src/chordless_ref.txt
       - run: pixi run meson test -C bbdir-py seams_lang_fixtures chill_plus_ctypes symmetry_ctypes frames_abi --print-errorlogs
       - name: Install R
         run: |
@@ -58,6 +58,8 @@ jobs:
         run: |
           export R_LIBS_USER="${R_LIBS_USER:-$HOME/R/library}"
           export DSEAMS_ROOT="$PWD"
+          export SEAMS_CHORDLESS_REF="$PWD/bbdir-py/src/chordless_ref.txt"
+          export SEAMS_CHORDLESS_TRAJ="$PWD/input/traj/exampleTraj.lammpstrj"
           export LD_LIBRARY_PATH="$PWD/bbdir-py/bindings:$PWD/bbdir-py/src:${LD_LIBRARY_PATH:-}"
           Rscript -e 'testthat::test_file("bindings/r/dseams/tests/testthat/test-ice.R", stop_on_failure=TRUE)'
       - name: Install Julia
