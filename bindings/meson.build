@@ -175,8 +175,12 @@ if get_option('with_cli') and get_option('with_tests') and not get_option('b_san
     'frames_abi',
     find_program('python3', required: true),
     args: [meson.project_source_root() / 'tests' / 'test_frames_abi.py'],
-    env: {'SEAMS_LANG_LIB': seams_lang.full_path()},
-    depends: [seams_lang],
+    env: {
+      'SEAMS_LANG_LIB': seams_lang.full_path(),
+      'SEAMS_CHORDLESS_REF': chordless_ref_txt.full_path(),
+      'SEAMS_CHORDLESS_TRAJ': chordless_traj,
+    },
+    depends: [seams_lang, chordless_ref_txt],
     timeout: 120,
   )
   test(

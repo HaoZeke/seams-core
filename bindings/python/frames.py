@@ -1,5 +1,5 @@
 # Copyright (c) d-SEAMS developers
-"""Rings, cages, signature cages, and the shell symmetry label.
+"""Rings, chordless cycles, cages, signature cages, and the shell symmetry label.
 
 Set ``SEAMS_LANG_LIB`` to the built ``libseams_lang``.
 """
@@ -20,6 +20,22 @@ def _library():
         ctypes.POINTER(ctypes.c_double),
         ctypes.c_int,
         ctypes.POINTER(ctypes.c_double),
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.c_int),
+    ]
+    lib.seams_frame_read.restype = ctypes.c_void_p
+    lib.seams_frame_read.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int]
+    lib.seams_frame_nop.restype = ctypes.c_int
+    lib.seams_frame_nop.argtypes = [ctypes.c_void_p]
+    lib.seams_frame_chordless.restype = ctypes.c_int
+    lib.seams_frame_chordless.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_double,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.c_int,
         ctypes.POINTER(ctypes.c_int),
         ctypes.POINTER(ctypes.c_int),
     ]
@@ -63,6 +79,14 @@ def _frame(lib, positions, box):
     return frame, n
 
 
+def _read(lib, path, frame, type_filter):
+    handle = lib.seams_frame_read(os.fsencode(path), frame, type_filter)
+    if not handle:
+        err = lib.seams_last_error()
+        raise RuntimeError(err.decode() if err else f"cannot read {path}")
+    return handle, lib.seams_frame_nop(ctypes.c_void_p(handle))
+
+
 def _check(lib, code):
     if code != 0:
         err = lib.seams_last_error()
@@ -88,6 +112,42 @@ def rings(positions, box, cutoff=3.5, max_depth=6, graph="cutoff"):
         lib.seams_frame_free(ctypes.c_void_p(frame))
     _check(lib, code)
     return counts
+
+
+def rings_chordless(source, box=None, size=6, cutoff=3.5, graph="cutoff", type=0,
+                    frame=1, type_filter=0):
+    """Chordless cycles of one size, 3 through 12.
+
+    ``source`` is a trajectory path, read at ``frame`` with ``type_filter``
+    (0 guesses the oxygen species, -1 keeps every atom), or positions with
+    ``box``. Returns an ``(n, size)`` array of 0-based atom indices and the
+    number of cycles through each atom. Each row starts at its lowest index
+    and runs towards the smaller of its two neighbours; the rows are sorted,
+    so they equal ``seams_rings_chordless`` on the same frame.
+    """
+    lib = _library()
+    if isinstance(source, (str, bytes, os.PathLike)):
+        handle, n = _read(lib, source, frame, type_filter)
+    elif box is None:
+        raise ValueError("positions need a box")
+    else:
+        handle, n = _frame(lib, source, box)
+    per = np.zeros(max(n, 1), dtype=np.int32)
+    count = ctypes.c_int()
+    try:
+        code = lib.seams_frame_chordless(
+            ctypes.c_void_p(handle), cutoff, type, graph.encode(), size, None, 0,
+            ctypes.byref(count), per.ctypes.data_as(ctypes.POINTER(ctypes.c_int)))
+        rows = np.zeros((count.value if code == 0 else 0, size), dtype=np.int32)
+        if code == 0 and rows.size:
+            code = lib.seams_frame_chordless(
+                ctypes.c_void_p(handle), cutoff, type, graph.encode(), size,
+                rows.ctypes.data_as(ctypes.POINTER(ctypes.c_int)), rows.size,
+                ctypes.byref(count), None)
+    finally:
+        lib.seams_frame_free(ctypes.c_void_p(handle))
+    _check(lib, code)
+    return rows, per[:n]
 
 
 def cages(positions, box, cutoff=3.5, graph="seeded", k=4):
