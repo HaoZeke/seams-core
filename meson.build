@@ -106,6 +106,16 @@ endif
 m_dep = cppc.find_library('m', required: false)
 _deps += m_dep
 
+# R dlopens the sanitized library, so libasan initialises late. Its
+# InitTlsSize calls a missing dlsym result. This preload answers that
+# lookup. It is not instrumented.
+asan_tls = shared_library(
+  'asan_tls',
+  'scripts/asan_tls.c',
+  override_options: ['b_sanitize=none'],
+  dependencies: [cppc.find_library('dl', required: false)],
+  install: false)
+
 # The wheel build falls back to the Eigen subproject. Its headers are
 # not this project's sources, so -Werror=sign-conversion stays on our
 # code and does not fire inside Eigen.
@@ -432,6 +442,7 @@ else
     # set refetches the source, since the patch step runs only on a fetch.
     _chem_patch_ids = []
     foreach _patch : ['chemfiles-0.10.4-mmcif.patch', 'chemfiles-0.10.4-mol2.patch',
+                      'chemfiles-0.10.4-frame-visit.patch',
                       'chemfiles-0.10.4-zlib-apple.sh', 'chemfiles-0.10.4-fmt-libcxx.sh']
       _chem_patch_ids += [_patch + ' ' + fs.hash(meson.project_source_root() / 'cmake' / 'patches' / _patch, 'sha256')]
     endforeach

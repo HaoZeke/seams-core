@@ -6,12 +6,22 @@ case $0 in
   *) _wrap_dir=. ;;
 esac
 here=$(CDPATH= cd -- "$_wrap_dir" && pwd)
-unset LD_PRELOAD
+# libasan itself must not be preloaded: R dies in readRDS of the base
+# package. A tiny dlsym shim is preloaded instead so the late init of
+# libasan, pulled in by libseams, can find the glibc TLS helper.
+case ${LD_PRELOAD:-} in
+  *libasan*) unset LD_PRELOAD ;;
+esac
 case ":${ASAN_OPTIONS:-}:" in
   *verify_asan_link_order*) ;;
   *) ASAN_OPTIONS="verify_asan_link_order=0${ASAN_OPTIONS:+:$ASAN_OPTIONS}" ;;
 esac
 export ASAN_OPTIONS
+_tls=$here/../../build-san/libasan_tls.so
+if [ -f "$_tls" ]; then
+  LD_PRELOAD=$_tls${LD_PRELOAD:+:$LD_PRELOAD}
+  export LD_PRELOAD
+fi
 found=
 old_ifs=$IFS
 IFS=:
