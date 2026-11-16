@@ -1242,20 +1242,26 @@ class LiteratureSitting:
     libraries into the asv process.
     """
 
-    params = []
-    for _code, _ops in (
-        ("d-SEAMS", ("neighbours", "q4", "q6", "chill_plus", "rings")),
-        ("freud", ("neighbours", "q4", "q6")),
-        ("OVITO", ("neighbours", "chill_plus", "rings")),
-        ("mdapy", ("neighbours", "q4", "q6", "chill_plus", "rings")),
-        ("pyscal3", ("neighbours", "q4", "q6")),
-        ("vesin", ("neighbours",)),
-    ):
-        for _op in _ops:
-            params.append((_code, _op, 8))
-    param_names = ["code", "operation", "threads"]
+    # asv takes params as one list per axis and times their product. The
+    # cells are pairs, so code and operation share one "code:operation" axis.
+    params = [
+        [
+            f"{code}:{op}"
+            for code, ops in (
+                ("d-SEAMS", ("neighbours", "q4", "q6", "chill_plus", "rings")),
+                ("freud", ("neighbours", "q4", "q6")),
+                ("OVITO", ("neighbours", "chill_plus", "rings")),
+                ("mdapy", ("neighbours", "q4", "q6", "chill_plus", "rings")),
+                ("pyscal3", ("neighbours", "q4", "q6")),
+                ("vesin", ("neighbours",)),
+            )
+            for op in ops
+        ],
+        [8],
+    ]
+    param_names = ["cell", "threads"]
 
-    def setup(self, code, operation, threads):
+    def setup(self, cell, threads):
         self._script = ROOT / "scripts" / "lit_one_sitting.py"
         self._python = os.environ.get("LIT_PYTHON", sys.executable)
         lib = Path(os.environ.get(
@@ -1264,7 +1270,8 @@ class LiteratureSitting:
             raise RuntimeError("release libyodaLib.so or lit_one_sitting.py is missing")
         self._lib = lib
 
-    def time_one(self, code, operation, threads):
+    def time_one(self, cell, threads):
+        code, operation = cell.split(":")
         env = os.environ.copy()
         env["LIT_ALLOW_SHORT"] = "1"
         env["LIT_N"] = "1"
