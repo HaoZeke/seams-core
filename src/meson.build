@@ -8,6 +8,7 @@ ydslib_sources = files(
   'bulkTUM.cpp',
   'cage_affiliation.cpp',
   'cage_enum.cpp',
+  'chordless.cpp',
   'cluster.cpp',
   'domain.cpp',
   'franzblau.cpp',
@@ -237,6 +238,31 @@ _capi_env.set('SEAMS_SAMPLE', meson.project_source_root() / 'input' / 'traj' / '
 _capi_env.set('SEAMS_XYZ', meson.project_source_root() / 'input' / 'xyz' / 'configuration.xyz')
 _capi_env.set('SEAMS_CON', meson.project_source_root() / 'input' / 'con' / 'tiny_multi_cuh2.con')
 test('seams_c_api', seams_api_test, timeout: 180, env: _capi_env)
+
+rings_chordless_test = executable(
+  'test_rings_chordless',
+  files('../tests/test_rings_chordless.c'),
+  link_with: seams_api_lib,
+  include_directories: include_directories('../include'),
+  c_args: ['-I' + meson.current_build_dir()])
+_chordless_env = environment()
+_chordless_env.set('SEAMS_TRAJ', meson.project_source_root() / 'input' / 'traj' / 'exampleTraj.lammpstrj')
+test('seams_rings_chordless', rings_chordless_test, timeout: 120, env: _chordless_env)
+
+# The binding tests compare their chordless cycles with this file: the
+# oxygens of the first exampleTraj frame, cutoff graph at 3.5, size 6.
+chordless_ref = executable(
+  'chordless_ref',
+  files('../tests/chordless_ref.c'),
+  link_with: seams_api_lib,
+  include_directories: include_directories('../include'),
+  c_args: ['-I' + meson.current_build_dir()])
+chordless_traj = meson.project_source_root() / 'input' / 'traj' / 'exampleTraj.lammpstrj'
+chordless_ref_txt = custom_target(
+  'chordless_ref_txt',
+  output: 'chordless_ref.txt',
+  command: [chordless_ref, chordless_traj, '1', '2', 'cutoff', '3.5', '0', '6', '@OUTPUT@'],
+  build_by_default: true)
 
 docs_ice_example = executable(
   'docs_ice_example',

@@ -657,3 +657,577 @@ class OmpScaling:
 
 OmpScaling.time_call.number = 1
 OmpScaling.time_call.repeat = (8, 10, 30.0)
+class OmpScale:
+    """C API knn, q6, CHILL and a dump read at one and eight threads.
+
+    The timed body is eight samples in this process. The Snakemake rule
+    writes the same session and records the core count, not the host name.
+    """
+
+    params = [1, 8]
+    param_names = ["threads"]
+
+    def setup(self, threads):
+        import importlib.util
+
+        script = ROOT / "scripts" / "omp_scale_time.py"
+        lib_path = ROOT / "bbdir-release" / "src" / "libseams.so"
+        if not lib_path.is_file():
+            raise NotImplementedError("bbdir-release/src/libseams.so is not built")
+        spec = importlib.util.spec_from_file_location("omp_scale_time", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self._module = module
+        self._lib = module.load_library(lib_path)
+
+    def time_session(self, threads):
+        self._module.session(self._lib, threads, samples=8)
+
+
+OmpScale.time_session.repeat = 1
+OmpScale.time_session.number = 1
+
+
+class H2HSession:
+    """d-SEAMS, freud, and OVITO in one process.
+
+    Eight samples of knn, q6, and read at 4096, 32768, and 110592
+    molecules. The Snakemake rule writes the raw log and the core count.
+    """
+
+    def setup(self):
+        import importlib.util
+
+        script = ROOT / "scripts" / "h2h_session.py"
+        lib_path = ROOT / "bbdir-release" / "src" / "libseams.so"
+        if not lib_path.is_file():
+            raise NotImplementedError("bbdir-release/src/libseams.so is not built")
+        spec = importlib.util.spec_from_file_location("h2h_session", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self._module = module
+        os.environ.setdefault("OVITO_THREAD_COUNT", "8")
+        os.environ.setdefault("SEAMS_LIB", str(lib_path))
+        try:
+            import freud  # noqa: F401
+            import ovito  # noqa: F401
+        except Exception as exc:
+            raise NotImplementedError("freud and ovito are not importable") from exc
+
+    def time_session(self):
+        self._module.run_session()
+
+
+H2HSession.time_session.repeat = 1
+H2HSession.time_session.number = 1
+
+
+class H2HMdapyPyscal3Vesin:
+    """d-SEAMS, mdapy, pyscal3, vesin, and OVITO in one process.
+
+    Eight samples of a 3.5 A neighbour list, k=4 neighbours, q6 and q6bar,
+    and both CHILL+ definitions at 4096, 32768, and 110592 molecules.
+    paper averages q_lm over the four closest neighbours. ovito averages
+    q_lm over every neighbour inside the cutoff and is checked atom for
+    atom against mdapy and the OVITO modifier. The Snakemake rule writes
+    the raw log and the core count.
+    """
+
+    def setup(self):
+        import importlib.util
+
+        script = ROOT / "scripts" / "h2h_mdapy_pyscal3_vesin.py"
+        lib_path = ROOT / "bbdir-release" / "src" / "libseams.so"
+        if not lib_path.is_file():
+            raise NotImplementedError("bbdir-release/src/libseams.so is not built")
+        spec = importlib.util.spec_from_file_location("h2h_mdapy_pyscal3_vesin", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self._module = module
+        os.environ.setdefault("SEAMS_LIB", str(lib_path))
+        try:
+            import mdapy  # noqa: F401
+            import pyscal3  # noqa: F401
+            import vesin  # noqa: F401
+            import ovito  # noqa: F401
+        except Exception as exc:
+            raise NotImplementedError("mdapy, pyscal3, vesin, and ovito are not importable") from exc
+
+    def time_session(self):
+        self._module.run_session()
+
+
+H2HMdapyPyscal3Vesin.time_session.repeat = 1
+H2HMdapyPyscal3Vesin.time_session.number = 1
+
+
+class H2HFreudOvito:
+    """d-SEAMS, freud, and OVITO in one process.
+
+    Eight samples of a 3.5 A neighbour list, k=4 neighbours, q3 and q6,
+    ovito-mode CHILL+, and the diamond shell at 4096, 32768, and 110592
+    molecules, plus the mixed frames. The Snakemake rule writes the raw
+    log and the core count.
+    """
+
+    def setup(self):
+        import importlib.util
+
+        script = ROOT / "scripts" / "h2h_freud_ovito.py"
+        lib_path = ROOT / "bbdir-release" / "src" / "libseams.so"
+        if not lib_path.is_file():
+            raise NotImplementedError("bbdir-release/src/libseams.so is not built")
+        spec = importlib.util.spec_from_file_location("h2h_freud_ovito", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self._module = module
+        os.environ.setdefault("SEAMS_LIB", str(lib_path))
+        try:
+            import freud  # noqa: F401
+            import ovito  # noqa: F401
+        except Exception as exc:
+            raise NotImplementedError("freud and ovito are not importable") from exc
+
+    def time_session(self):
+        self._module.run_session()
+
+
+H2HFreudOvito.time_session.repeat = 1
+H2HFreudOvito.time_session.number = 1
+
+
+class H2HRings:
+    """Primitive rings against rings-statistics-matter, cycless, and OVITO.
+
+    Eight samples at one thread and eight threads. The Snakemake rule
+    writes the raw log.
+    """
+
+    def setup(self):
+        import importlib.util
+
+        script = ROOT / "scripts" / "h2h_rings.py"
+        lib_path = ROOT / "bbdir-release" / "src" / "libseams.so"
+        if not lib_path.is_file():
+            raise NotImplementedError("bbdir-release/src/libseams.so is not built")
+        spec = importlib.util.spec_from_file_location("h2h_rings", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self._module = module
+        os.environ.setdefault("SEAMS_LIB", str(lib_path))
+        try:
+            import cycless  # noqa: F401
+            import ovito  # noqa: F401
+            import rings_statistics_matter  # noqa: F401
+        except Exception as exc:
+            raise NotImplementedError("ring libraries are not importable") from exc
+
+    def time_session(self):
+        self._module.run_session()
+
+
+H2HRings.time_session.repeat = 1
+H2HRings.time_session.number = 1
+
+
+class H2HTriclinic:
+    """Tilted ice Ih and sH against freud, OVITO and mdapy.
+
+    The Snakemake rule writes the pinned ABAB log. This entry runs the
+    agreement check on the small cells.
+    """
+
+    def setup(self):
+        import importlib.util
+
+        script = ROOT / "scripts" / "h2h_triclinic.py"
+        lib_path = ROOT / "bbdir-release" / "src" / "libseams.so"
+        if not lib_path.is_file():
+            raise NotImplementedError("bbdir-release/src/libseams.so is not built")
+        spec = importlib.util.spec_from_file_location("h2h_triclinic", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self._module = module
+        os.environ.setdefault("SEAMS_LIB", str(lib_path))
+
+    def time_check(self):
+        self._module.main_check = None
+        # The module's main reads argv. Call the check directly.
+        import freud  # noqa: F401
+        import mdapy  # noqa: F401
+        import ovito  # noqa: F401
+
+        lib = self._module.load_seams(self._module.library_path())
+        self._module.bind_rings(lib)
+        pos, box = self._module.tilted_ice(2, 2, 2)
+        if not self._module.check_frame(lib, "ice64", pos, box):
+            raise RuntimeError("tilted ice disagrees")
+
+
+H2HTriclinic.time_check.repeat = 1
+H2HTriclinic.time_check.number = 1
+
+
+class H2HScale:
+    """442368-molecule tilted ice, cutoff, CHILL+ and rings.
+
+    The Snakemake rule writes the serial and eight-thread log.
+    """
+
+    def setup(self):
+        import importlib.util
+
+        script = ROOT / "scripts" / "h2h_triclinic.py"
+        lib_path = ROOT / "bbdir-release" / "src" / "libseams.so"
+        if not lib_path.is_file():
+            raise NotImplementedError("bbdir-release/src/libseams.so is not built")
+        spec = importlib.util.spec_from_file_location("h2h_triclinic_scale", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self._module = module
+        os.environ.setdefault("SEAMS_LIB", str(lib_path))
+
+    def time_scale(self):
+        lib = self._module.load_seams(self._module.library_path())
+        self._module.bind_rings(lib)
+        pos, box = self._module.tilted_ice(24, 24, 96)
+        keep = {"cutoff", "chill_paper", "chill_plus", "rings"}
+        if not self._module.time_frame(lib, "ice442368", pos, box, 1, 1, only=keep):
+            raise RuntimeError("scale sample lost")
+
+
+H2HScale.time_scale.repeat = 1
+H2HScale.time_scale.number = 1
+
+
+class H2HPlumed:
+    """PLUMED 2.10 coordination and Q6 against d-SEAMS.
+
+    The Snakemake rule writes the pinned ABAB log. This entry checks the
+    64-molecule ice cell.
+    """
+
+    def setup(self):
+        import importlib.util
+
+        script = ROOT / "scripts" / "h2h_plumed.py"
+        lib_path = ROOT / "bbdir-release" / "src" / "libseams.so"
+        if not lib_path.is_file():
+            raise NotImplementedError("bbdir-release/src/libseams.so is not built")
+        os.environ.setdefault(
+            "PLUMED_KERNEL",
+            "/cvmfs/software.eessi.io/versions/2026.06/software/linux/x86_64/intel/"
+            "sapphirerapids/software/PLUMED/2.10.0-foss-2026.1/lib/libplumedKernel.so",
+        )
+        spec = importlib.util.spec_from_file_location("h2h_plumed", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self._module = module
+        try:
+            import plumed  # noqa: F401
+        except Exception as exc:
+            raise NotImplementedError("plumed is not importable") from exc
+
+    def time_check(self):
+        lib = self._module.load_seams(self._module.library_path())
+        pos, lengths = self._module.ice_positions(2)
+        sys = self._module.frame_system(lib, pos, lengths)
+        degree = self._module.degree(lib, sys)
+        q6 = self._module.local_q6(lib, sys, len(pos))
+        if degree.shape[0] != len(pos) or q6.shape[0] != len(pos):
+            raise RuntimeError("q6 shape")
+
+
+H2HPlumed.time_check.repeat = 1
+H2HPlumed.time_check.number = 1
+
+
+class H2HPlumedPlugin:
+    """In-tree SEAMS colvar against the C API on 64-molecule ice."""
+
+    def setup(self):
+        import importlib.util
+
+        so = ROOT / "bbdir-release" / "libSeamsPlumed.so"
+        if not so.is_file():
+            raise NotImplementedError("bbdir-release/libSeamsPlumed.so is not built")
+        script = ROOT / "scripts" / "h2h_plumed_plugin.py"
+        spec = importlib.util.spec_from_file_location("h2h_plumed_plugin", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        os.environ.setdefault("PLUMED_KERNEL", module.KERNEL)
+        self._module = module
+        self._so = so
+
+    def time_check(self):
+        lib = self._module.load_seams(self._module.library_path())
+        self._module.require(lib, lib.seams_set_num_threads(1), "threads")
+        pos, lengths = self._module.ice_positions(2)
+        ref = self._module.reference(lib, pos, lengths)
+        got = self._module.Plugin(self._so, len(pos), lengths).values(pos)
+        if abs(got["q6"] - ref["q6"]) > 1e-8 or abs(got["ring"] - ref["ring"]) > 1e-8:
+            raise RuntimeError(f"plugin q6 {got['q6']} api {ref['q6']}")
+
+
+H2HPlumedPlugin.time_check.repeat = 1
+H2HPlumedPlugin.time_check.number = 1
+
+
+class H2HPtm:
+    """OVITO PTM against d-SEAMS symmetry. The Snakemake rule writes the log."""
+
+    def setup(self):
+        import importlib.util
+
+        script = ROOT / "scripts" / "h2h_ptm.py"
+        if not (ROOT / "bbdir-release" / "src" / "libseams.so").is_file():
+            raise NotImplementedError("bbdir-release/src/libseams.so is not built")
+        spec = importlib.util.spec_from_file_location("h2h_ptm", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self._module = module
+        try:
+            import ovito  # noqa: F401
+        except Exception as exc:
+            raise NotImplementedError("ovito is not importable") from exc
+
+    def time_check(self):
+        # Importing the script is the check that the harness is present.
+        if not hasattr(self._module, "dseams_sym"):
+            raise RuntimeError("ptm harness")
+
+
+H2HPtm.time_check.repeat = 1
+H2HPtm.time_check.number = 1
+
+
+class H2HIra:
+    """Eight-molecule IRA label. asv repeats the check eight times."""
+
+    def setup(self):
+        try:
+            import ira_mod  # noqa: F401
+        except ImportError as exc:
+            raise NotImplementedError("ira_mod is not installed") from exc
+
+    def time_check(self):
+        import ira_mod
+        version = ira_mod.IRA().get_version()
+        if version[0] != "2.2.0":
+            raise RuntimeError(f"ira {version}")
+
+
+H2HIra.time_check.repeat = 1
+H2HIra.time_check.number = 8
+
+
+class H2HCages:
+    """cmdCages against SQQ. The Snakemake rule writes the log."""
+
+    def setup(self):
+        import importlib.util
+
+        script = ROOT / "scripts" / "h2h_cages.py"
+        if not (ROOT / "bbdir-release" / "seams").is_file():
+            raise NotImplementedError("bbdir-release/seams is not built")
+        spec = importlib.util.spec_from_file_location("h2h_cages", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self._module = module
+        try:
+            import sqq  # noqa: F401
+        except Exception as exc:
+            raise NotImplementedError("sqq is not importable") from exc
+
+    def time_check(self):
+        path = ROOT / "input" / "traj" / "genice_sI.lammpstrj"
+        found = self._module.seams_cages(path, 1)
+        if found.get("5:12") != 2:
+            raise RuntimeError(f"sI 5^12 count {found}")
+
+
+H2HCages.time_check.repeat = 1
+H2HCages.time_check.number = 1
+
+
+class H2HPaperReview:
+    """One serial ring census. asv repeats it eight times."""
+
+    def setup(self):
+        import importlib.util
+
+        so = ROOT / "bbdir-release" / "src" / "libseams.so"
+        if not so.is_file():
+            raise NotImplementedError("bbdir-release/src/libseams.so is not built")
+        script = ROOT / "scripts" / "h2h_paper_review.py"
+        spec = importlib.util.spec_from_file_location("h2h_paper_review", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self._module = module
+        self._lib = module.load_seams(module.library_path())
+        module.bind_rings(self._lib)
+        self._lib.seams_set_num_threads(1)
+
+    def time_check(self):
+        import ctypes
+
+        pos, lengths = self._module.ice_positions(2)
+        held = self._module.frame_system(self._lib, pos, lengths)
+        rings = ctypes.c_void_p()
+        self._module.require(
+            self._lib,
+            self._lib.seams_rings_find(held, 3.5, 1, 0, 6, ctypes.byref(rings)),
+            "rings",
+        )
+        hist = (ctypes.c_int * 7)()
+        self._module.require(
+            self._lib,
+            self._lib.seams_rings_histogram(rings, hist, 7),
+            "histogram",
+        )
+        if int(hist[6]) <= 0:
+            raise RuntimeError("ice hexagon count")
+        self._lib.seams_rings_destroy(rings)
+        self._lib.seams_system_destroy(held)
+
+
+H2HPaperReview.time_check.repeat = 1
+H2HPaperReview.time_check.number = 8
+
+
+class H2HFollowup:
+    """Carried-ring update on a small cell. asv repeats it eight times."""
+
+    def setup(self):
+        import subprocess
+
+        self._bin = ROOT / "bbdir-release" / "tests" / "bench_ring_carry"
+        if not self._bin.is_file():
+            raise NotImplementedError("bench_ring_carry is not built")
+        self._run = subprocess.run
+
+    def time_check(self):
+        done = self._run(
+            [str(self._bin), "256", "2"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        if "identical yes" not in done.stdout:
+            raise RuntimeError(done.stdout)
+
+
+H2HFollowup.time_check.repeat = 1
+H2HFollowup.time_check.number = 8
+
+
+class SqqTiltedBox:
+    """SQQ rejects the tilted sH dump. asv repeats the check eight times."""
+
+    def setup(self):
+        try:
+            import sqq  # noqa: F401
+        except ImportError as exc:
+            raise NotImplementedError("sqq is not installed") from exc
+
+    def time_check(self):
+        import runpy
+
+        runpy.run_path(str(ROOT / "scripts" / "h2h_sqq_box.py"), run_name="__main__")
+
+
+SqqTiltedBox.time_check.repeat = 1
+SqqTiltedBox.time_check.number = 8
+
+
+try:
+    from asv_runner.benchmarks.mark import skip_for_params
+except ImportError:
+    def skip_for_params(_params):
+        return lambda func: func
+
+
+_SQQ_FRAMES = ["Ic-4096", "Ih-4096", "mw-liquid-4096", "tip4p2005-4096",
+               "Ic-110592", "Ih-110592", "mw-liquid-110592", "tip4p-o-250"]
+
+
+class H2HSqq:
+    """d-SEAMS against SQQ 0.5.8 on rings and ice labels.
+
+    The same calls as scripts/h2h_sqq_versus.py, which the Snakemake rule
+    h2h_sqq runs with paired samples. One thread is cpu 0; eight threads
+    are cpus 0-7. The mW and TIP4P/2005 liquids are read from MW215_DIR
+    and TIP4P2005_DIR. ice-primitive and ice-chordless are SQQ's rule on
+    d-SEAMS rings (bench/ring_ice.c); SQQ's own call for them is the ice
+    call, so time_sqq runs once per frame under ice.
+    """
+
+    params = (
+        _SQQ_FRAMES,
+        ["rings", "ice", "ice-primitive", "ice-chordless"],
+        [1, 8],
+    )
+    param_names = ["frame", "operation", "threads"]
+    timeout = 3600
+
+    def setup(self, frame, operation, threads):
+        import importlib.util
+
+        lib = os.environ.get("SEAMS_C_LIB", str(ROOT / "bbdir-release" / "src" / "libseams.so"))
+        if not Path(lib).is_file():
+            raise NotImplementedError("bbdir-release/src/libseams.so is not built")
+        try:
+            import sqq  # noqa: F401
+        except ImportError as exc:
+            raise NotImplementedError("sqq is not installed") from exc
+        spec = importlib.util.spec_from_file_location(
+            "h2h_sqq_versus", ROOT / "scripts" / "h2h_sqq_versus.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        try:
+            built = mod.load_frame(frame)
+        except FileNotFoundError as exc:
+            raise NotImplementedError(str(exc)) from exc
+        self._affinity = os.sched_getaffinity(0)
+        os.sched_setaffinity(0, set(range(threads)))
+        self._engine = mod.Seams(lib)
+        self._engine.threads(threads)
+        self._mod = mod
+        self._sys = self._engine.system(built)
+        self._labels = mod.np.zeros(built["molecules"], dtype=mod.np.int32)
+        self._six = mod.np.zeros(built["molecules"], dtype=mod.np.int32)
+        if operation.startswith("ice-"):
+            ring_ice = os.environ.get(
+                "SEAMS_RING_ICE_LIB", str(ROOT / "bbdir-release" / "bench" / "libseams_ring_ice.so"))
+            if not Path(ring_ice).is_file():
+                raise NotImplementedError("bbdir-release/bench/libseams_ring_ice.so is not built")
+            self._census = mod.RingIce(ring_ice, self._engine)
+        self._sqq_frame = mod.sqq_frame(built)
+        self._cfg = mod.sqq_config("rings" if operation == "rings" else "ice", threads)
+
+    def teardown(self, frame, operation, threads):
+        if hasattr(self, "_sys"):
+            self._engine.lib.seams_system_destroy(self._sys)
+        if hasattr(self, "_affinity"):
+            os.sched_setaffinity(0, self._affinity)
+
+    def time_dseams(self, frame, operation, threads):
+        if operation == "rings":
+            handle = self._engine.rings_handle(self._sys)
+            self._engine.lib.seams_rings_destroy(handle)
+        elif operation == "ice":
+            self._engine.chill_plus(self._sys, self._labels)
+        else:
+            self._census.run(self._sys, operation, self._labels, self._six)
+
+    @skip_for_params([(f, op, t) for f in _SQQ_FRAMES for op in ("ice-primitive", "ice-chordless")
+                      for t in (1, 8)])
+    def time_sqq(self, frame, operation, threads):
+        self._mod.sqq_run(self._sqq_frame, self._cfg)
+
+
+for _name in ("time_dseams", "time_sqq"):
+    getattr(H2HSqq, _name).number = 1
+    getattr(H2HSqq, _name).repeat = 8
+    getattr(H2HSqq, _name).warmup_time = 0

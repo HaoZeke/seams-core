@@ -89,3 +89,44 @@ test_that("cubic ice is 4096 cubic and 4096 double-diamond", {
   expect_true(is.na(tau) || is.finite(tau))
   expect_equal(nrow(steinhardt(frame, order_l = 6L, graph = "cutoff")), 4096L)
 })
+
+chordless_reference <- function(path) {
+  raw <- scan(path, what = integer(), quiet = TRUE)
+  atoms <- raw[[1]]
+  n <- raw[[2]]
+  size <- raw[[3]]
+  body <- raw[-(1:3)]
+  rows <- matrix(body[seq_len(n * size)], nrow = n, ncol = size, byrow = TRUE)
+  list(atoms = atoms, size = size, rings = rows,
+       per_atom = body[n * size + seq_len(atoms)])
+}
+
+test_that("rings_chordless matches the C reference", {
+  ref_path <- Sys.getenv("SEAMS_CHORDLESS_REF", unset = "")
+  traj <- Sys.getenv("SEAMS_CHORDLESS_TRAJ", unset = "")
+  skip_if(ref_path == "" || !file.exists(ref_path), "SEAMS_CHORDLESS_REF is not set")
+  ref <- chordless_reference(ref_path)
+  frame <- read_frame(traj, frame = 1L, type = 2L)
+  got <- rings_chordless(frame, size = ref$size, cutoff = 3.5, type = 0L)
+  expect_identical(dim(got), dim(ref$rings))
+  expect_identical(unname(got[, , drop = FALSE]) - 1L, ref$rings)
+  expect_identical(attr(got, "per_atom"), ref$per_atom)
+  expect_identical(positions(frame)[got[1, ], , drop = FALSE],
+                   positions(frame)[ref$rings[1, ] + 1L, , drop = FALSE])
+  sys <- seams_system_new()
+  seams_system_read(sys, traj, frame = 1L, type = 2L)
+  raw <- seams_rings_chordless(sys, cutoff = 3.5, size = ref$size)
+  expect_identical(raw$rings, ref$rings)
+  expect_identical(raw$per_atom, ref$per_atom)
+})
+
+test_that("cubic ice has twelve chordless six-cycles through each atom", {
+  skip_if(!file.exists(cubic))
+  frame <- read_frame(cubic, type = 1L)
+  got <- rings_chordless(frame, size = 6L)
+  expect_equal(nrow(got), 8192L)
+  expect_true(all(attr(got, "per_atom") == 12L))
+  expect_true(all(got[, 1] < apply(got[, -1], 1, min)))
+  expect_equal(nrow(rings_chordless(frame, size = 4L)), 0L)
+  expect_error(rings_chordless(frame, size = 13L))
+})

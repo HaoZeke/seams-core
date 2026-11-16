@@ -1,4 +1,5 @@
-# Read the GenIce sI cell: neighbours via steinhardt, then q6, CHILL+, rings.
+# Read the GenIce sI cell: neighbours via steinhardt, then q6, CHILL+, rings,
+# and chordless five-cycles.
 using Dseams
 using Statistics
 
@@ -13,4 +14,7 @@ ice = chill_plus(frame)
 rings = primitive_rings(frame; graph = "cutoff")
 @assert rings[5] == 48
 @assert rings[6] == 54
+pentagons = rings_chordless(frame; size = 5)
+@assert size(pentagons.cycles) == (5, 48)
+@assert sum(pentagons.per_atom) == 5 * 48
 println("julia example ok")

@@ -43,6 +43,8 @@ option('with_chemfiles', type: 'feature', value: 'auto',
   description: 'Trajectory I/O via chemfiles (on when the library is found or can be fetched)')
 option('with_linkcell', type: 'feature', value: 'auto', description: 'Periodic linked-cell neighbour search')
 option('with_minimage', type: 'feature', value: 'auto', description: 'Euclidean minimum-image geometry')
+option('fennel_lua', type: 'string', value: '',
+  description: 'Path to fennel.lua for the Fennel examples. Empty searches the system locations')
 option('julia_wrap', type: 'string', value: '',
   description: 'Directory to prepend to PATH so the Julia front is found')
 option('r_libs_user', type: 'string', value: '',

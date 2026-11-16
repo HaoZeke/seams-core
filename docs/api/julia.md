@@ -5,7 +5,8 @@
 `meson test docs_api_julia` runs `docs/examples/julia_api.jl` with
 `SEAMS_LANG_LIB` pointed at `libseams_lang`.
 `docs/examples/minimal_julia.jl` reads the
-GenIce sI cell and calls `steinhardt`, `chill_plus`, and `primitive_rings`.
+GenIce sI cell and calls `steinhardt`, `chill_plus`, `primitive_rings`, and
+`rings_chordless`.
 `meson test docs_examples` runs it.
 
 `docs/examples/core_counts.jl` checks Ice Ih (128 hexagonal, 256
@@ -24,18 +25,28 @@ six-rings) and sII (136 clathrate, 144 five-rings, 16 six-rings).
 :language: julia
 ```
 
-`Frame`, `nop`, `read_frame`, `nframes`, `chill_plus`, `cages`, `primitive_rings`, `signature_cages`, `symmetry`, `q4_q6`, `jump_tau90`, and `steinhardt` are the exported `Dseams` calls. `steinhardt` with no `graph` uses the cutoff shell. `Seams` exports `System`, `version`, `set_num_threads`, `num_threads`, `set_ortho!`, `chill_plus`, `q4q6`, and `six_rings` over `libseams`.
+`Frame`, `nop`, `read_frame`, `nframes`, `chill_plus`, `cages`, `primitive_rings`, `signature_cages`, `symmetry`, `q4_q6`, `jump_tau90`, `steinhardt`, and `rings_chordless` are the exported `Dseams` calls. `steinhardt` with no `graph` uses the cutoff shell. `Seams` exports `System`, `version`, `set_num_threads`, `num_threads`, `set_ortho!`, `chill_plus`, `q4q6`, and `six_rings` over `libseams`.
+
+`rings_chordless(frame; size = 6, cutoff = 3.5, type = 0, graph = "cutoff")`
+lists the chordless cycles of one size, 3 through 12: cycles with no bond
+between two of their atoms that are not next to each other on the cycle. It
+returns a named tuple. `cycles` is a `size` by `n` matrix with one cycle per
+column of 1-based atom indices, and `per_atom` counts the cycles through each atom. Each column starts at its
+smallest atom and the columns are sorted. `seams_rings_chordless(sys; size,
+cutoff, type, graph)` over a `libseams` `System` keeps the C layout: an `n` by
+`size` matrix of 0-based rows, one cycle per row, and the per-atom counts.
+Both tests compare these with the rows `chordless_ref` writes from the C API.
 
 `bindings/julia/Dseams/test/runtests.jl` and `bindings/julia/Seams/test/runtests.jl` are the tests `language_fronts` runs.
 
 ```{literalinclude} ../../../bindings/julia/Dseams/test/runtests.jl
 :language: julia
-:lines: 14-37,57-67
+:lines: 14-37,57-67,71-99
 ```
 
 ```{literalinclude} ../../../bindings/julia/Seams/test/runtests.jl
 :language: julia
-:lines: 19-36
+:lines: 19-36,40-68
 ```
 
 <!-- API_SYMBOLS_BEGIN -->
@@ -410,6 +421,16 @@ Units: frame index is dimensionless; coordinates are angstrom
 
 Example: `docs/examples/minimal_julia.jl`
 
+### rings_chordless
+
+Purpose: Chordless cycles of one size, one 1-based column per cycle.
+
+Parameters: frame; size; cutoff; type; graph
+
+Units: cutoff in angstrom; indices and counts are dimensionless
+
+Example: `docs/examples/minimal_julia.jl`
+
 ### signature_cages
 
 Purpose: Closed cages matching a ring-census spec.
@@ -457,6 +478,206 @@ Errors: Error() with the text of seams_last_error when the status is not zero.
 Units: labels are dimensionless codes
 
 Example: `docs/examples/minimal_julia.jl`
+
+### System
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
+
+### seams_system_count
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
+
+### seams_system_read
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
+
+### seams_chill
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
+
+### seams_steinhardt
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
+
+### seams_cages
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
+
+### seams_signature_cages
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
+
+### seams_neighbours_knn
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
+
+### seams_rdf
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
+
+### seams_running_cn
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
+
+### seams_coordination
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
+
+### seams_hbonds
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
+
+### seams_density_axis
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
+
+### seams_fingerprint
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
+
+### seams_contact_pairs
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
+
+### seams_domains
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
+
+### seams_prisms
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
+
+### seams_monolayer
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
+
+### seams_rings_vertices
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
+
+### seams_site_table
+
+Purpose: Call into libseams through ccall.
+
+Parameters: see include/seams.h
+
+Units: angstrom where a length is involved; otherwise dimensionless
+
+Example: `docs/examples/julia_api.jl`
 <!-- API_SYMBOLS_END -->
 
 

@@ -57,8 +57,8 @@ The sI signature prints `rustcall sig 2 40`.
 safe wrapper. `meson test docs_api_rust` runs that test.
 `docs/examples/minimal_rust.rs` reads the
 GenIce sI cell and calls `System::set_ortho`, `count`, `neighbour_degree`,
-`q4q6`, `chill_plus`, and `six_ring_fraction`. `meson test docs_examples`
-runs it.
+`q4q6`, `chill_plus`, `six_ring_fraction`, and `rings_chordless`.
+`meson test docs_examples` runs it.
 
 ```{literalinclude} ../../../docs/examples/minimal_rust.rs
 :language: rust
@@ -410,6 +410,16 @@ Ownership: Returned Vec and String values are owned by the caller. Handles retur
 Errors: Error.code is the seams_status. Error.message is seams_handle_error when the call had a handle, otherwise seams_last_error.
 
 Units: cutoff in angstrom; degrees are dimensionless
+
+Example: `docs/examples/minimal_rust.rs`
+
+### neighbours
+
+Purpose: Build a cutoff or mutual neighbour list.
+
+Parameters: cutoff; atom_type; graph
+
+Units: cutoff in angstrom; atom_type and graph are dimensionless codes
 
 Example: `docs/examples/minimal_rust.rs`
 

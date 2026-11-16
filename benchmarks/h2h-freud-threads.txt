@@ -1,0 +1,16 @@
+molecules=110592 threads=1 pairs=442368 checksum=8222705064348099955 csr_median_ms=7.9679 rows_median_ms=24.7171 csr_samples=15.9988,7.9960,7.8277,7.8782,7.9679,7.9901,7.9547,7.9125 rows_samples=52.7276,26.0625,24.7223,24.6160,24.6686,24.5671,24.7171,24.5924
+kind=vesin molecules=110592 threads=1 pairs=442368 warmup=1 n=8 median_ms=96.3574 min_ms=96.2476 commit=ef38adb99d5f8236b9d6dcae0d701421fcafed99 samples_ms=96.2476,96.2578,96.3433,96.3558,96.3590,96.8655,96.9269,101.2499
+kind=freud molecules=110592 threads=1 pairs=442368 warmup=1 n=8 median_ms=196.0325 min_ms=193.5708 commit=ef38adb99d5f8236b9d6dcae0d701421fcafed99 samples_ms=193.5708,193.6891,193.9514,194.4170,197.6479,197.8293,198.4406,202.2351
+kind=matscipy molecules=110592 threads=1 pairs=absent warmup=1 n=8 median_ms= commit=ef38adb99d5f8236b9d6dcae0d701421fcafed99
+molecules=110592 threads=2 pairs=442368 checksum=8222705064348099955 csr_median_ms=6.2117 rows_median_ms=9.2391 csr_samples=11.0025,6.1984,6.2117,6.1656,6.1627,6.2747,6.1688,6.3890 rows_samples=11.2019,8.7475,9.2761,9.2391,9.1495,9.1860,9.2384,9.2512
+kind=vesin molecules=110592 threads=2 pairs=442368 warmup=1 n=8 median_ms=49.7509 min_ms=49.5135 commit=ef38adb99d5f8236b9d6dcae0d701421fcafed99 samples_ms=49.5135,49.5470,49.5690,49.7284,49.7733,49.9259,50.0251,51.9476
+kind=freud molecules=110592 threads=2 pairs=442368 warmup=1 n=8 median_ms=196.0731 min_ms=193.5656 commit=ef38adb99d5f8236b9d6dcae0d701421fcafed99 samples_ms=193.5656,194.0098,194.0921,194.6163,197.5299,197.7504,198.2087,204.8644
+kind=matscipy molecules=110592 threads=2 pairs=absent warmup=1 n=8 median_ms= commit=ef38adb99d5f8236b9d6dcae0d701421fcafed99
+molecules=110592 threads=4 pairs=442368 checksum=8222705064348099955 csr_median_ms=4.6936 rows_median_ms=7.1726 csr_samples=7.5544,4.7354,4.6153,4.6936,4.6847,4.5647,4.3975,4.9524 rows_samples=10.8933,7.3246,7.5234,7.0052,7.1726,6.7287,6.9709,7.0022
+kind=vesin molecules=110592 threads=4 pairs=442368 warmup=1 n=8 median_ms=29.2919 min_ms=28.7544 commit=ef38adb99d5f8236b9d6dcae0d701421fcafed99 samples_ms=28.7544,28.8130,29.1582,29.2175,29.3663,29.5240,29.5554,31.3464
+kind=freud molecules=110592 threads=4 pairs=442368 warmup=1 n=8 median_ms=195.7914 min_ms=193.5629 commit=ef38adb99d5f8236b9d6dcae0d701421fcafed99 samples_ms=193.5629,193.7751,193.7900,193.9870,197.5958,198.2697,198.6443,201.6225
+kind=matscipy molecules=110592 threads=4 pairs=absent warmup=1 n=8 median_ms= commit=ef38adb99d5f8236b9d6dcae0d701421fcafed99
+molecules=110592 threads=8 pairs=442368 checksum=8222705064348099955 csr_median_ms=4.8053 rows_median_ms=6.0019 csr_samples=7.3435,4.6622,4.5888,5.1092,4.6390,4.7641,4.8255,4.8053 rows_samples=12.6247,6.8257,6.1416,6.0019,5.9251,5.4993,5.4179,5.4252
+kind=vesin molecules=110592 threads=8 pairs=442368 warmup=1 n=8 median_ms=20.1255 min_ms=19.0524 commit=ef38adb99d5f8236b9d6dcae0d701421fcafed99 samples_ms=19.0524,19.6412,19.8971,20.0659,20.1851,20.2919,20.4814,21.5445
+kind=freud molecules=110592 threads=8 pairs=442368 warmup=1 n=8 median_ms=195.6689 min_ms=193.4557 commit=ef38adb99d5f8236b9d6dcae0d701421fcafed99 samples_ms=193.4557,193.6006,193.6252,193.6686,197.6692,198.0187,198.2301,204.6640
+kind=matscipy molecules=110592 threads=8 pairs=absent warmup=1 n=8 median_ms= commit=ef38adb99d5f8236b9d6dcae0d701421fcafed99

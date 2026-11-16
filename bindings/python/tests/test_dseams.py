@@ -2,6 +2,7 @@
 """The C API, reached through nanobind, on one cubic cell."""
 
 import math
+import os
 import unittest
 
 import numpy as np
@@ -35,6 +36,21 @@ def diamond(nrep=2):
     return np.asarray(points, dtype=np.float64), length
 
 
+def chordless_reference():
+    """Rows and per-atom counts from chordless_ref, or None outside meson."""
+    path = os.environ.get("SEAMS_CHORDLESS_REF")
+    traj = os.environ.get("SEAMS_CHORDLESS_TRAJ")
+    if not path or not traj:
+        return None
+    with open(path, encoding="ascii") as handle:
+        values = np.array(handle.read().split(), dtype=np.int64)
+    n, count, size = (int(v) for v in values[:3])
+    rows = values[3 : 3 + count * size].reshape(count, size)
+    per = values[3 + count * size :]
+    assert per.shape == (n,)
+    return traj, size, rows, per
+
+
 class ApiTest(unittest.TestCase):
     def test_both_rules_and_order(self):
         pos, length = diamond()
@@ -55,11 +71,19 @@ class ApiTest(unittest.TestCase):
         self.assertGreater(int(fhist[6]), 0)
         self.assertEqual(fsym.shape, fsizes.shape)
         self.assertGreater(ffrac, 0.5)
-        for rule in (PUBLISHED, OVITO):
+        for rule in (PUBLISHED, OVITO, "paper", "ovito"):
             labels, counts = dseams.chill_plus(pos, (length, length, length), rule=rule)
             self.assertEqual(labels.shape, (pos.shape[0],))
             self.assertTrue(np.all(labels == 0))
             self.assertEqual(int(counts[0]), pos.shape[0])
+        dseams.set_num_threads(1)
+        paper1, _ = dseams.chill_plus(pos, (length, length, length), rule="paper")
+        ovito1, _ = dseams.chill_plus(pos, (length, length, length), rule="ovito")
+        dseams.set_num_threads(8)
+        paper8, _ = dseams.chill_plus(pos, (length, length, length), rule="paper")
+        ovito8, _ = dseams.chill_plus(pos, (length, length, length), rule="ovito")
+        self.assertTrue(np.array_equal(paper1, paper8))
+        self.assertTrue(np.array_equal(ovito1, ovito8))
         q4, q6 = dseams.q4q6(pos, (length, length, length))
         self.assertGreater(float(q6.mean()), 0.3)
         self.assertTrue(np.all(np.isfinite(q4)))
@@ -72,6 +96,39 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(int(np.sum(sizes == 6)), int(hist[6]))
         self.assertGreater(fraction, 0.5)
         self.assertEqual(sym.shape, sizes.shape)
+
+    def test_rings_chordless_diamond(self):
+        pos, length = diamond()
+        rows, per = dseams.rings_chordless(pos, (length, length, length), size=6)
+        # Every diamond atom sits on twelve six-rings and no shorter cycle.
+        self.assertEqual(rows.shape, (pos.shape[0] * 12 // 6, 6))
+        self.assertTrue(np.all(per == 12))
+        self.assertTrue(np.all(rows[:, 0] == rows.min(axis=1)))
+        self.assertTrue(np.all(rows[:, 1] < rows[:, -1]))
+        flat = [tuple(r) for r in rows.tolist()]
+        self.assertEqual(flat, sorted(flat))
+        four, per4 = dseams.rings_chordless(pos, (length, length, length), size=4)
+        self.assertEqual(four.shape, (0, 4))
+        self.assertTrue(np.all(per4 == 0))
+        with self.assertRaises(RuntimeError):
+            dseams.rings_chordless(pos, (length, length, length), size=13)
+
+    def test_rings_chordless_matches_c(self):
+        ref = chordless_reference()
+        if ref is None:
+            self.skipTest("SEAMS_CHORDLESS_REF is not set")
+        traj, size, rows, per = ref
+        frame = dseams.read(traj, frame=1, type_filter=2)
+        self.assertEqual(frame.count(), per.shape[0])
+        dseams.set_num_threads(1)
+        got_rows, got_per = frame.rings_chordless(size, 3.5)
+        dseams.set_num_threads(4)
+        again, _ = frame.rings_chordless(size=size, cutoff=3.5, type=0, graph=CUTOFF)
+        dseams.set_num_threads(0)
+        self.assertGreater(rows.shape[0], 0)
+        self.assertTrue(np.array_equal(got_rows, rows))
+        self.assertTrue(np.array_equal(got_per, per))
+        self.assertTrue(np.array_equal(again, rows))
 
     def test_ase_and_mdanalysis(self):
         pos, length = diamond()

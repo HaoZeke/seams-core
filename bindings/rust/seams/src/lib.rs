@@ -105,6 +105,82 @@ impl Neighbours {
         )?;
         Ok(nnz)
     }
+
+    /// Chordless cycles of one size, from 3 through 12, as
+    /// seams_rings_chordless writes them: 0-based atom indices, each cycle
+    /// starting at its lowest index, cycles sorted.
+    pub fn chordless(&self, size: i32) -> Result<Chordless, Error> {
+        let handle = self.ptr as *const c_void;
+        let atoms = unsafe { ffi::seams_neighbours_count(self.ptr) };
+        if atoms < 0 {
+            return Err(Error {
+                code: ffi::SEAMS_ERR_ARG,
+                message: message_of(handle),
+            });
+        }
+        let mut per_atom = vec![0; atoms as usize];
+        let mut n_rings = 0usize;
+        check(
+            unsafe {
+                ffi::seams_rings_chordless(
+                    self.ptr,
+                    size,
+                    std::ptr::null_mut(),
+                    0,
+                    &mut n_rings,
+                    per_atom.as_mut_ptr(),
+                    per_atom.len(),
+                )
+            },
+            handle,
+        )?;
+        let width = size.max(0) as usize;
+        let mut rings = vec![0; n_rings * width];
+        if n_rings > 0 {
+            check(
+                unsafe {
+                    ffi::seams_rings_chordless(
+                        self.ptr,
+                        size,
+                        rings.as_mut_ptr(),
+                        rings.len(),
+                        &mut n_rings,
+                        std::ptr::null_mut(),
+                        0,
+                    )
+                },
+                handle,
+            )?;
+        }
+        Ok(Chordless {
+            size: width,
+            rings,
+            per_atom,
+        })
+    }
+}
+
+/// Chordless cycles of one size. rings holds size indices per cycle, row
+/// after row; per_atom counts the cycles through each atom.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Chordless {
+    pub size: usize,
+    pub rings: Vec<i32>,
+    pub per_atom: Vec<i32>,
+}
+
+impl Chordless {
+    pub fn count(&self) -> usize {
+        self.rings.len() / self.size.max(1)
+    }
+
+    pub fn cycle(&self, index: usize) -> &[i32] {
+        &self.rings[index * self.size..(index + 1) * self.size]
+    }
+
+    pub fn cycles(&self) -> std::slice::ChunksExact<'_, i32> {
+        self.rings.chunks_exact(self.size.max(1))
+    }
 }
 
 pub struct Rings {
@@ -427,6 +503,27 @@ impl System {
             ffi::seams_neighbours_destroy(nb);
         }
         Ok(degree)
+    }
+
+    /// Cutoff or mutual neighbour list. atom_type > 0 bonds that type;
+    /// 0 bonds every atom of a frame with more than one species.
+    pub fn neighbours(&mut self, cutoff: f64, atom_type: i32, graph: i32) -> Result<Neighbours, Error> {
+        let mut out = std::ptr::null_mut();
+        check(
+            unsafe { ffi::seams_neighbours_build(self.ptr, cutoff, atom_type, graph, &mut out) },
+            self.handle(),
+        )?;
+        Ok(Neighbours { ptr: out })
+    }
+
+    pub fn rings_chordless(
+        &mut self,
+        cutoff: f64,
+        size: i32,
+        atom_type: i32,
+        graph: i32,
+    ) -> Result<Chordless, Error> {
+        self.neighbours(cutoff, atom_type, graph)?.chordless(size)
     }
 
     pub fn knn(&mut self, k: i32, cutoff: f64, mutual: bool) -> Result<Neighbours, Error> {

@@ -17,6 +17,12 @@ module Seams
 using Libdl
 
 export System, version, set_num_threads, num_threads, set_ortho!, chill_plus, q4q6, six_rings
+export seams_system_count, seams_system_read, seams_chill, seams_steinhardt, seams_cages, seams_signature_cages
+export seams_neighbours_knn, seams_rdf, seams_running_cn, seams_coordination, seams_hbonds
+export seams_density_axis, seams_fingerprint, seams_contact_pairs, seams_domains, seams_prisms
+export seams_monolayer, seams_rings_vertices, seams_rings_chordless, seams_site_table
+
+include(joinpath(@__DIR__, "..", "..", "capi.jl"))
 
 const PUBLISHED = 0
 const OVITO = 1

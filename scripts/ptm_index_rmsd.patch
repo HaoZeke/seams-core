@@ -1,0 +1,20 @@
+diff --git a/ptm_index.cpp b/ptm_index.cpp
+index ef89d51..b62055b 100644
+--- a/ptm_index.cpp
++++ b/ptm_index.cpp
+@@ -257,8 +257,14 @@ static void output_data(ptm::result_t *res, ptm::atomicenv_t* env,
+ 	const double (*ref_template)[3] = NULL;
+ 	int best_template_index = ptm_remap_template(	ref->type, output_conventional_orientation, 0,
+ 							NULL, res->q, NULL, res->mapping, &ref_template);
+-	if (best_template_index < 0)
++	if (best_template_index < 0) {
++		// The structure type is already set. Remap can fail on an
++		// ideal lattice whose quaternion sits on a zone boundary, and
++		// the caller still needs the RMSD for its cutoff.
++		if (p_rmsd != NULL)
++			*p_rmsd = res->rmsd;
+ 		return;
++	}
+ 
+ 	if (p_best_template_index != NULL)
+ 		*p_best_template_index = best_template_index;

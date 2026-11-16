@@ -445,6 +445,21 @@ rule hop_stride_crossover:
         "--reps 8 --warmup 1 > {output}"
 
 
+rule ice_ic_rings:
+    input:
+        "bbdir-release/tests/bench_rings_h2h",
+        "scripts/ice_ic_session.py",
+        "scripts/gen_ice_ic.py",
+    output:
+        "benchmarks/h2h-ice-ic-rings.csv",
+    shell:
+        "PY=\"${{H2H_PYTHON:-python3}}\"; "
+        "taskset -c 0-7 env "
+        "QT_QPA_PLATFORM=offscreen "
+        "OMP_PROC_BIND=close OMP_PLACES=cores OMP_WAIT_POLICY=PASSIVE "
+        "\"$PY\" scripts/ice_ic_session.py --python \"$PY\" --csv {output}"
+
+
 rule rings_one_thread:
     input:
         "bbdir-release/tests/bench_rings_h2h",
@@ -826,6 +841,335 @@ rule paper_cells:
         "benchmarks/paper-cells/tab-lit.csv",
     shell:
         "python3 scripts/paper_cells_join.py benchmarks/paper-cells"
+
+
+# One process, eight samples, d-SEAMS, mdapy, pyscal3, vesin, and OVITO.
+# CHILL+ is timed as paper (four closest) and ovito (every neighbour inside 3.5 A).
+# Core count, no host name.
+rule h2h_summary:
+    output:
+        "benchmarks/h2h-summary.csv",
+    shell:
+        "export LJOS_SEAT=\"${{LJOS_SEAT:-dseams-paper}}\"; "
+        "PY=\"${{H2H_PYTHON:-python3}}\"; "
+        "\"$PY\" scripts/h2h_summary.py --csv {output}"
+
+
+rule h2h_mdapy_pyscal3_vesin:
+    output:
+        "benchmarks/h2h-mdapy-pyscal3-vesin.txt",
+    shell:
+        "LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu "
+        "python3 scripts/h2h_mdapy_pyscal3_vesin.py > {output}"
+
+
+# One process, eight samples, d-SEAMS, freud 3.6, and OVITO 3.17.
+# Ice cells and the mixed frames. Core count, no host name.
+rule h2h_freud_ovito:
+    output:
+        "benchmarks/h2h-freud-ovito.txt",
+    shell:
+        "LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu "
+        "python3 scripts/h2h_freud_ovito.py > {output}"
+
+
+# Primitive rings, eight samples, one and eight threads.
+# Ice Ih, the mixed frames, and one sII cell.
+rule h2h_triclinic:
+    output:
+        "benchmarks/h2h-triclinic.txt",
+    shell:
+        "LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu "
+        "taskset -c 0 env OMP_NUM_THREADS=1 OMP_PROC_BIND=close OMP_PLACES=cores "
+        "OMP_WAIT_POLICY=PASSIVE python3 scripts/h2h_triclinic.py time 1 > {output}.1 && "
+        "taskset -c 0-7 env OMP_NUM_THREADS=8 OMP_PROC_BIND=close OMP_PLACES=cores "
+        "OMP_WAIT_POLICY=PASSIVE python3 scripts/h2h_triclinic.py time 8 >> {output}.1 && "
+        "mv {output}.1 {output}"
+
+
+rule h2h_scale:
+    output:
+        "benchmarks/h2h-scale.txt",
+    shell:
+        "LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu "
+        "taskset -c 0 env OMP_NUM_THREADS=1 OMP_PROC_BIND=close OMP_PLACES=cores "
+        "OMP_WAIT_POLICY=PASSIVE python3 scripts/h2h_triclinic.py scale 1 > {output}.1 && "
+        "taskset -c 0-7 env OMP_NUM_THREADS=8 OMP_PROC_BIND=close OMP_PLACES=cores "
+        "OMP_WAIT_POLICY=PASSIVE python3 scripts/h2h_triclinic.py scale 8 >> {output}.1 && "
+        "mv {output}.1 {output}"
+
+
+rule h2h_plumed:
+    output:
+        "benchmarks/h2h-plumed.txt",
+    shell:
+        "PLUMED_KERNEL=/cvmfs/software.eessi.io/versions/2026.06/software/linux/x86_64/intel/sapphirerapids/software/PLUMED/2.10.0-foss-2026.1/lib/libplumedKernel.so "
+        "LD_LIBRARY_PATH=/cvmfs/software.eessi.io/versions/2026.06/software/linux/x86_64/intel/sapphirerapids/software/PLUMED/2.10.0-foss-2026.1/lib:/usr/lib/x86_64-linux-gnu:bbdir-release/src "
+        "taskset -c 0 env OMP_NUM_THREADS=1 OMP_PROC_BIND=close OMP_PLACES=cores "
+        "OMP_WAIT_POLICY=PASSIVE python3 scripts/h2h_plumed.py 1 > {output}.1 && "
+        "taskset -c 0-7 env OMP_NUM_THREADS=8 OMP_PROC_BIND=close OMP_PLACES=cores "
+        "OMP_WAIT_POLICY=PASSIVE python3 scripts/h2h_plumed.py 8 >> {output}.1 && "
+        "mv {output}.1 {output}"
+
+
+rule h2h_plumed_plugin:
+    output:
+        "benchmarks/h2h-plumed-plugin.txt",
+    shell:
+        "PLUMED_PREFIX=/cvmfs/software.eessi.io/versions/2026.06/software/linux/x86_64/intel/sapphirerapids/software/PLUMED/2.10.0-foss-2026.1 && "
+        "g++ -shared -fPIC -O2 -std=c++17 -Iengines -Iinclude -Ibbdir-release/src -I$$PLUMED_PREFIX/include "
+        "engines/plumed/SeamsColvar.cpp -Lbbdir-release/src -lseams -L$$PLUMED_PREFIX/lib -lplumedKernel "
+        "-Wl,-rpath,'$$ORIGIN/src' -Wl,-rpath,$$PLUMED_PREFIX/lib -o bbdir-release/libSeamsPlumed.so && "
+        "PLUMED_KERNEL=$$PLUMED_PREFIX/lib/libplumedKernel.so "
+        "LD_LIBRARY_PATH=bbdir-release/src:$$PLUMED_PREFIX/lib:/usr/lib/x86_64-linux-gnu "
+        "taskset -c 0 env OMP_NUM_THREADS=1 OMP_PROC_BIND=close OMP_PLACES=cores "
+        "OMP_WAIT_POLICY=PASSIVE python3 scripts/h2h_plumed_plugin.py bbdir-release/libSeamsPlumed.so 1 > {output}.1 && "
+        "taskset -c 0-7 env OMP_NUM_THREADS=8 OMP_PROC_BIND=close OMP_PLACES=cores "
+        "OMP_WAIT_POLICY=PASSIVE python3 scripts/h2h_plumed_plugin.py bbdir-release/libSeamsPlumed.so 8 >> {output}.1 && "
+        "mv {output}.1 {output}"
+
+
+rule h2h_ptm:
+    output:
+        "benchmarks/h2h-ptm.txt",
+    shell:
+        "LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:bbdir-release/src "
+        "taskset -c 0 env OMP_NUM_THREADS=1 OMP_PROC_BIND=close OMP_PLACES=cores "
+        "OMP_WAIT_POLICY=PASSIVE QT_QPA_PLATFORM=offscreen "
+        "python3 scripts/h2h_ptm.py 1 > {output}.1 && "
+        "taskset -c 0-7 env OMP_NUM_THREADS=8 OMP_PROC_BIND=close OMP_PLACES=cores "
+        "OMP_WAIT_POLICY=PASSIVE QT_QPA_PLATFORM=offscreen "
+        "python3 scripts/h2h_ptm.py 8 >> {output}.1 && "
+        "mv {output}.1 {output}"
+
+
+rule h2h_carry_fraction:
+    input:
+        "bbdir-release/tests/bench_ring_carry",
+        "scripts/h2h_carry_fraction.py",
+    output:
+        "benchmarks/h2h-carry-fraction.csv",
+    shell:
+        "taskset -c 0-7 env "
+        "OMP_PROC_BIND=close OMP_PLACES=cores OMP_WAIT_POLICY=PASSIVE "
+        "python3 scripts/h2h_carry_fraction.py {input[0]} --csv {output}"
+
+
+rule h2h_carry_crossover:
+    output:
+        "benchmarks/h2h-carry-crossover.txt",
+    shell:
+        "taskset -c 0-7 env OMP_PROC_BIND=close OMP_PLACES=cores "
+        "OMP_WAIT_POLICY=PASSIVE "
+        "python3 scripts/h2h_carry_log.py > {output}"
+
+
+rule h2h_ira_scale:
+    output:
+        "benchmarks/h2h-ira-scale.csv",
+    shell:
+        "LD_LIBRARY_PATH=bbdir-release/src "
+        "taskset -c 2 "
+        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_ira_scale.py"
+
+
+rule h2h_freud_threads:
+    output:
+        "benchmarks/h2h-freud-threads.txt",
+    shell:
+        "NEIGH_PYTHON=\"${{H2H_PYTHON:-python3}}\" "
+        "NEIGH_BENCH=bbdir-release/tests/bench_cutoff_list "
+        "\"${{H2H_PYTHON:-python3}}\" scripts/bench_neighbours_threads.py "
+        "--reps 8 --molecules 110592 --out {output}"
+
+
+rule h2h_sqq_sh_ortho:
+    output:
+        "benchmarks/h2h-sqq-sh-ortho.txt",
+    shell:
+        "taskset -c 0-7 env "
+        "H2H_SERIAL_CORE=\"${{H2H_SERIAL_CORE:-0}}\" "
+        "LD_LIBRARY_PATH=bbdir-release/src "
+        "OMP_PROC_BIND=close OMP_PLACES=cores OMP_WAIT_POLICY=PASSIVE "
+        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_sh_ortho.py > {output}"
+
+
+# d-SEAMS against SQQ 0.5.8 (pimooni/sqq, tag v0.5.8) on rings and ice
+# labels. benchmarks/h2h-sqq.md reads the outputs. The mW and TIP4P/2005
+# liquids need `lmp` on PATH; the frames stay under MW215_DIR and
+# TIP4P2005_DIR. Run with -j1: the timing rules pin cpu 0 and cpus 0-7
+# and must not share them.
+rule h2h_sqq_mw_liquid:
+    input:
+        "input/mw215/in.equilibrate",
+        "input/mw215/mW.sw",
+        "input/mw215/regenerate.py",
+        "scripts/h2h_sqq_mw.py",
+    output:
+        "benchmarks/h2h-sqq-mw.txt",
+    shell:
+        "OMP_NUM_THREADS=1 MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
+        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_mw.py 16 48 96 --threads-from 96 "
+        "--threads 8 --log {output}"
+
+
+rule h2h_sqq_tip4p2005:
+    input:
+        "input/tip4p2005/in.bulk",
+        "input/tip4p2005/regenerate.py",
+        "input/hop/regenerate_tip4p.py",
+        "input/brine/regenerate.py",
+    output:
+        "benchmarks/h2h-sqq-tip4p2005.txt",
+    shell:
+        "TIP4P2005_DIR=\"${{TIP4P2005_DIR:-tip4p2005-frames}}\" "
+        "\"${{H2H_PYTHON:-python3}}\" input/tip4p2005/regenerate.py --threads 8 --log {output}"
+
+
+rule h2h_sqq_provenance:
+    output:
+        "benchmarks/h2h-sqq-provenance.txt",
+    shell:
+        "test -d \"${{SQQ_SRC:-sqq-src}}\" || "
+        "git clone -q https://github.com/pimooni/sqq \"${{SQQ_SRC:-sqq-src}}\"; "
+        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_versus.py provenance "
+        "--sqq-src \"${{SQQ_SRC:-sqq-src}}\" --out {output}"
+
+
+rule h2h_sqq_agree:
+    input:
+        "scripts/h2h_sqq_versus.py",
+        "scripts/gen_ideal_ice.py",
+        "benchmarks/h2h-sqq-mw.txt",
+        "benchmarks/h2h-sqq-tip4p2005.txt",
+        "bbdir-release/src/libseams.so",
+        "bbdir-release/bench/libseams_ring_ice.so",
+    output:
+        "benchmarks/h2h-sqq-agree.csv",
+        "benchmarks/h2h-sqq-agree.txt",
+    shell:
+        "OMP_NUM_THREADS=1 MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
+        "TIP4P2005_DIR=\"${{TIP4P2005_DIR:-tip4p2005-frames}}\" "
+        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_versus.py agree "
+        "--out {output[0]} --log {output[1]}"
+
+
+rule h2h_sqq_edge:
+    input:
+        "scripts/h2h_sqq_versus.py",
+        "scripts/h2h_sqq_edge.py",
+        "benchmarks/h2h-sqq-mw.txt",
+        "benchmarks/h2h-sqq-tip4p2005.txt",
+        "bbdir-release/src/libseams.so",
+        "bbdir-release/bench/libseams_ring_ice.so",
+    output:
+        "benchmarks/h2h-sqq-edge.txt",
+    shell:
+        "OMP_NUM_THREADS=1 MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
+        "TIP4P2005_DIR=\"${{TIP4P2005_DIR:-tip4p2005-frames}}\" "
+        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_edge.py --log {output}"
+
+
+rule h2h_sqq_time:
+    input:
+        "scripts/h2h_sqq_versus.py",
+        "benchmarks/h2h-sqq-agree.txt",
+        "bbdir-release/src/libseams.so",
+        "bbdir-release/bench/libseams_ring_ice.so",
+    output:
+        "benchmarks/h2h-sqq-time-1.txt",
+        "benchmarks/h2h-sqq-time-8.txt",
+    shell:
+        "for t in 1 8; do "
+        "env OMP_NUM_THREADS=$t OMP_WAIT_POLICY=PASSIVE OPENBLAS_NUM_THREADS=$t "
+        "MKL_NUM_THREADS=$t MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
+        "TIP4P2005_DIR=\"${{TIP4P2005_DIR:-tip4p2005-frames}}\" "
+        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_versus.py time --threads $t --n 8 "
+        "--log benchmarks/h2h-sqq-time-$t.txt || exit 1; done"
+
+
+rule h2h_sqq:
+    input:
+        "benchmarks/h2h-sqq-agree.csv",
+        "benchmarks/h2h-sqq-time-1.txt",
+        "benchmarks/h2h-sqq-time-8.txt",
+    output:
+        "benchmarks/h2h-sqq.csv",
+    shell:
+        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_versus.py summarize "
+        "--agree {input[0]} --logs {input[1]} {input[2]} --out {output}"
+
+
+rule h2h_sqq_asv:
+    input:
+        "scripts/h2h_sqq_versus.py",
+        "benchmarks/benchmarks.py",
+        "benchmarks/h2h-sqq.csv",
+        "bbdir-release/src/libseams.so",
+        "bbdir-release/bench/libseams_ring_ice.so",
+    output:
+        "benchmarks/h2h-sqq-asv.txt",
+    shell:
+        "MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
+        "TIP4P2005_DIR=\"${{TIP4P2005_DIR:-tip4p2005-frames}}\" "
+        "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_versus.py asv --log {output}"
+
+
+rule h2h_followup:
+    output:
+        "benchmarks/h2h-followup.txt",
+    shell:
+        "taskset -c 0-7 env "
+        "LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:bbdir-release/src "
+        "QT_QPA_PLATFORM=offscreen "
+        "OMP_PROC_BIND=close OMP_PLACES=cores OMP_WAIT_POLICY=PASSIVE "
+        "python3 scripts/h2h_followup.py > {output}"
+
+
+rule h2h_paper_review:
+    output:
+        "benchmarks/h2h-paper-review.txt",
+    shell:
+        "taskset -c 0-7 env "
+        "LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:bbdir-release/src "
+        "QT_QPA_PLATFORM=offscreen "
+        "OMP_PROC_BIND=close OMP_PLACES=cores OMP_WAIT_POLICY=PASSIVE "
+        "python3 scripts/h2h_paper_review.py > {output}"
+
+
+rule h2h_cages:
+    output:
+        "benchmarks/h2h-cages.txt",
+    shell:
+        "LD_LIBRARY_PATH=bbdir-release/src "
+        "taskset -c 0 env OMP_NUM_THREADS=1 python3 scripts/h2h_cages.py 1 > {output}.1 && "
+        "taskset -c 0-7 env OMP_NUM_THREADS=8 python3 scripts/h2h_cages.py 8 >> {output}.1 && "
+        "mv {output}.1 {output}"
+
+
+rule h2h_rings:
+    output:
+        "benchmarks/h2h-rings.txt",
+    shell:
+        "LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu "
+        "python3 scripts/h2h_rings.py > {output}"
+
+
+# One process, eight samples, d-SEAMS, freud, and OVITO. Core count, no host name.
+rule h2h_session:
+    output:
+        "benchmarks/h2h-session.txt",
+    shell:
+        "OVITO_THREAD_COUNT=8 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu "
+        "python3 scripts/h2h_session.py > {output}"
+
+
+# One process, eight samples. The record names the core count.
+rule omp_scale_time:
+    output:
+        "benchmarks/omp-scale.txt",
+    shell:
+        "python3 scripts/omp_scale_time.py > {output}"
 
 
 rule growth_curve:

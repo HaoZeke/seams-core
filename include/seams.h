@@ -99,7 +99,13 @@ typedef enum seams_ring_symmetry {
   SEAMS_RING_OTHER = 11
 } seams_ring_symmetry;
 
-/** Published edges are inclusive. OVITO edges are open. */
+/**
+ * CHILL+ definition.
+ * PUBLISHED averages q_lm over the four closest neighbours (Nguyen and
+ * Molinero, equation 1) and uses inclusive edges.
+ * OVITO averages q_lm over every neighbour inside the cutoff, the Chill+
+ * modifier's 3.5 A shell, with that modifier's open edges.
+ */
 typedef enum seams_chill_rule {
   SEAMS_CHILL_PUBLISHED = 0,
   SEAMS_CHILL_OVITO = 1
@@ -471,8 +477,10 @@ SEAMS_API seams_status seams_chill(seams_system *sys, double cutoff, int type,
 /**
  * @brief CHILL+ labels.
  *
- * rule selects the published Nguyen and Molinero table or the OVITO
- * Chill+ modifier. counts9, when non-NULL, receives nine population
+ * rule selects the q_lm shell. SEAMS_CHILL_PUBLISHED, the default, is
+ * Nguyen and Molinero equation 1: the four closest neighbours. 
+ * SEAMS_CHILL_OVITO is every neighbour inside the cutoff, which is the
+ * OVITO Chill+ modifier. counts9, when non-NULL, receives nine population
  * counts. labels has one entry per atom in the frame; the length is
  * the frame count.
  *
@@ -643,6 +651,37 @@ SEAMS_API seams_status seams_rings_labels(const seams_rings *rings, int *sizes,
  */
 SEAMS_API seams_status seams_rings_vertices(const seams_rings *rings, int index,
                                             int *atoms, size_t cap, size_t *n_out);
+
+/**
+ * @brief Chordless cycles of one size.
+ *
+ * A cycle is chordless when no edge of the graph joins two of its
+ * vertices that are not next to each other on the cycle. Every primitive
+ * ring is chordless; a chordless cycle need not be primitive. Each cycle
+ * is written once as size atom indices: it starts at its lowest index
+ * and runs towards the smaller of that atom's two cycle neighbours.
+ * Cycles are sorted lexicographically, so the list does not depend on
+ * the thread count.
+ * @param nb Graph from seams_neighbours_build().
+ * @param size Cycle length, from 3 through 12.
+ * @param rings Caller buffer of size times the cycle count ints, or
+ *        NULL to skip the list.
+ * @param rings_len Length of rings in ints. Ignored when rings is NULL.
+ * @param n_rings Receives the cycle count. Required when rings is not
+ *        NULL.
+ * @param per_atom Caller buffer of one int per atom, or NULL. Receives
+ *        the number of cycles through each atom.
+ * @param per_atom_len Length of per_atom. Ignored when per_atom is NULL.
+ * @return SEAMS_OK, or SEAMS_ERR_NULL, SEAMS_ERR_RANGE, SEAMS_ERR_NOMEM,
+ *         SEAMS_ERR_INTERNAL. rings, n_rings and per_atom may not all be
+ *         NULL. A short rings buffer returns SEAMS_ERR_RANGE after
+ *         n_rings and per_atom are written.
+ * Ownership: the caller owns rings and per_atom.
+ * Thread safety: exclusive use of nb.
+ */
+SEAMS_API seams_status seams_rings_chordless(const seams_neighbours *nb, int size, int *rings,
+                                             size_t rings_len, size_t *n_rings,
+                                             int *per_atom, size_t per_atom_len);
 
 /**
  * @brief Fraction of atoms that sit on a ring.

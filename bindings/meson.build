@@ -8,6 +8,22 @@ binding_oracle = executable(
   build_rpath: meson.project_build_root() / 'src',
 )
 
+seams_hpp_test = executable(
+  'test_seams_hpp',
+  files('../tests/test_seams_hpp.cpp'),
+  link_with: seams_api_lib,
+  include_directories: include_directories('../include'),
+  cpp_args: ['-I' + meson.project_build_root() / 'src'],
+)
+
+test(
+  'seams_hpp_match',
+  seams_hpp_test,
+  args: [binding_oracle.full_path(), meson.project_source_root(), chordless_ref_txt.full_path()],
+  depends: [binding_oracle, seams_api_lib, chordless_ref_txt],
+  timeout: 180,
+)
+
 seams_lang = shared_library(
   'seams_lang',
   files('cxx/seams_lang.cpp'),
@@ -101,6 +117,28 @@ if get_option('with_cli') and get_option('with_tests') and not get_option('b_san
     depends: [seams_exe, seams_lang],
     timeout: 600,
   )
+  if _rscript.found()
+    r_env = environment()
+    r_env.prepend('PATH', _fs.parent(_rscript.full_path()))
+    if _r_libs != ''
+      r_env.set('R_LIBS_USER', _r_libs)
+    endif
+    r_env.set('SEAMS_BIN', seams_exe.full_path())
+    r_env.set('SEAMS_CHORDLESS_REF', chordless_ref_txt.full_path())
+    r_env.set('SEAMS_CHORDLESS_TRAJ', chordless_traj)
+    test(
+      'r_testthat',
+      find_program('python3', required: true),
+      args: [
+        meson.project_source_root() / 'tests' / 'run_r_testthat.py',
+        meson.project_source_root(),
+        meson.project_build_root(),
+      ],
+      env: r_env,
+      depends: [seams_exe, seams_lang, seams_api_lib, chordless_ref_txt],
+      timeout: 600,
+    )
+  endif
   test(
     'chill_plus_ctypes',
     find_program('python3', required: true),
@@ -144,6 +182,9 @@ if get_option('with_cli') and get_option('with_tests') and not get_option('b_san
   if _front_py.found()
     _front_env.set('DSEAMS_PYTHON', _front_py.full_path())
   endif
+  if _julia_wrap != ''
+    _front_env.prepend('PATH', _julia_wrap)
+  endif
   test(
     'language_fronts',
     find_program('sh', required: true),
@@ -152,15 +193,19 @@ if get_option('with_cli') and get_option('with_tests') and not get_option('b_san
       meson.project_build_root(),
     ],
     env: _front_env,
-    depends: [seams_lang, ydslib, binding_oracle],
+    depends: [seams_lang, ydslib, seams_api_lib, binding_oracle, chordless_ref_txt],
     timeout: 600,
   )
   test(
     'frames_abi',
     find_program('python3', required: true),
     args: [meson.project_source_root() / 'tests' / 'test_frames_abi.py'],
-    env: {'SEAMS_LANG_LIB': seams_lang.full_path()},
-    depends: [seams_lang],
+    env: {
+      'SEAMS_LANG_LIB': seams_lang.full_path(),
+      'SEAMS_CHORDLESS_REF': chordless_ref_txt.full_path(),
+      'SEAMS_CHORDLESS_TRAJ': chordless_traj,
+    },
+    depends: [seams_lang, chordless_ref_txt],
     timeout: 120,
   )
   _parity_env = environment()

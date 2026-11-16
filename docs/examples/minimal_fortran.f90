@@ -1,4 +1,5 @@
-! Read the GenIce sI cell, then neighbours, q6, CHILL+, and rings.
+! Read the GenIce sI cell, then neighbours, chordless five-cycles, q6, CHILL+,
+! and rings.
 program minimal_fortran
   use, intrinsic :: iso_c_binding
   use seams
@@ -7,6 +8,7 @@ program minimal_fortran
   real(c_double) :: xyz(3 * kmax), q4(kmax), q6(kmax), lx, ly, lz, mean
   integer(c_int) :: labels(kmax), counts(9), hist(0:12), n, code, i
   integer(c_int) :: n_offsets, nnz
+  integer(c_int), allocatable :: five(:, :), per_atom(:)
   type(c_ptr) :: sys, nb, rings, offsets, cols
   character(len=512) :: path
   integer :: argc
@@ -23,6 +25,10 @@ program minimal_fortran
   if (seams_neighbours_build(sys, 3.5d0, 0, SEAMS_GRAPH_CUTOFF, nb) /= SEAMS_OK) stop 5
   code = seams_neighbours_csr(nb, offsets, n_offsets, cols, nnz)
   if (code /= SEAMS_OK .or. nnz < 150) stop 7
+  if (seams_neighbours_count(nb) /= 46) stop 15
+  if (chordless_cycles(nb, 5, five, per_atom) /= SEAMS_OK) stop 16
+  if (size(five, 1) /= 5 .or. size(five, 2) /= 48) stop 17
+  if (sum(per_atom) /= 5 * 48 .or. five(1, 1) /= 1) stop 18
   call seams_neighbours_destroy(nb)
   if (seams_q4q6(sys, 3.5d0, 0, q4, q6) /= SEAMS_OK) stop 8
   mean = 0.0d0

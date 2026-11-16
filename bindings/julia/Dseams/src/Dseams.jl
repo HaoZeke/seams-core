@@ -18,7 +18,7 @@ Path of the committed Ice Ih dump, `input/traj/ice1h.lammpstrj`.
 ice_ih_path() = normpath(joinpath(@__DIR__, "..", "..", "..", "..", "input", "traj", "ice1h.lammpstrj"))
 
 
-export Frame, nop, nframes, read_frame, neighbour_pairs, chill_plus, cages, primitive_rings, steinhardt, signature_cages, symmetry, jump_tau90, q4_q6
+export Frame, nop, nframes, read_frame, neighbour_pairs, chill_plus, cages, primitive_rings, rings_chordless, steinhardt, signature_cages, symmetry, jump_tau90, q4_q6
 
 const ICE_NAMES = (
     "cubic",
@@ -275,6 +275,52 @@ function primitive_rings(frame::Frame; cutoff::Real = 3.5, type::Integer = 0, gr
 end
 
 """
+    rings_chordless(frame; size = 6, cutoff = 3.5, type = 0, graph = "cutoff")
+
+Chordless cycles of one size, 3 through 12. A cycle is chordless when no
+bond joins two of its atoms that are not next to each other on it.
+`cycles` is a `size × n` matrix, one cycle per column, of 1-based atom
+indices. Each column starts at its lowest atom and runs towards the smaller
+of that atom's two cycle neighbours, and the columns are sorted, so the
+result does not depend on the thread count. `per_atom` counts the cycles
+through each atom. `graph = "mutual"` keeps the mutual four nearest
+neighbours inside `cutoff + 1.5`. A `type` above zero bonds that type only.
+"""
+function rings_chordless(frame::Frame; size::Integer = 6, cutoff::Real = 3.5, type::Integer = 0, graph::AbstractString = "cutoff")
+    per = zeros(Cint, nop(frame))
+    count = Ref{Cint}(0)
+    _check(ccall(
+        dlsym(_so(), :seams_frame_chordless),
+        Cint,
+        (Ptr{Cvoid}, Cdouble, Cint, Cstring, Cint, Ptr{Cint}, Cint, Ptr{Cint}, Ptr{Cint}),
+        frame.ptr,
+        cutoff,
+        type,
+        graph,
+        size,
+        C_NULL,
+        0,
+        count,
+        per,
+    ))
+    flat = Vector{Cint}(undef, count[] * size)
+    _check(ccall(
+        dlsym(_so(), :seams_frame_chordless),
+        Cint,
+        (Ptr{Cvoid}, Cdouble, Cint, Cstring, Cint, Ptr{Cint}, Cint, Ptr{Cint}, Ptr{Cint}),
+        frame.ptr,
+        cutoff,
+        type,
+        graph,
+        size,
+        flat,
+        length(flat),
+        count,
+        C_NULL,
+    ))
+    (cycles = reshape(flat .+ Cint(1), Int(size), Int(count[])), per_atom = per)
+end
+
     steinhardt(frame, order_l; cutoff=3.5, type=0, graph=nothing)
 
 Local Steinhardt parameter and the Lechner-Dellago average.
@@ -451,5 +497,7 @@ function q4_q6(frame::Frame; cutoff::Real = 3.5, type::Integer = 0)
     _check(code)
     (q4 = q4, q6 = q6, q4bar = q4bar, q6bar = q6bar)
 end
+
+include(joinpath(@__DIR__, "..", "..", "capi.jl"))
 
 end

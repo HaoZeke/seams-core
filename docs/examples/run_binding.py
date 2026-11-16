@@ -134,6 +134,7 @@ def install_r_package(build):
 def run_r(build):
     script, env = install_r_package(build)
     subprocess.check_call([script, str(ROOT / "docs/examples/r_api.R")], env=env)
+    subprocess.check_call([script, str(ROOT / "docs/examples/r_capi.R")], env=env)
 
 
 def julia_bin():

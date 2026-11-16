@@ -1,0 +1,9 @@
+LAMMPS (22 Jul 2025 - Update 4)
+deck input/tip4p2005/in.bulk seed 2005 temp 300.00 K nmelt 10000 nequil 50000 step 2 fs threads 8
+start grid 4096 molecules box 49.7185 A
+thermo step 56000 temp 301.98 density 0.9987
+thermo step 57000 temp 302.48 density 0.9956
+thermo step 58000 temp 301.35 density 0.9917
+thermo step 59000 temp 300.55 density 0.9934
+thermo step 60000 temp 302.07 density 0.9982
+tip4p2005-4096 oxygens 4096 sha256 4d019021b620137831ccc95e71f9ba24380258aa6296381263da3bc547f25de4

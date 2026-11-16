@@ -57,6 +57,37 @@ rule table and labels =input/traj/genice_sI.lammpstrj=.
 local rings = dseams.ringNetwork(cloud, 8)
 #+end_src
 
+* Chordless cycles
+
+~dseams.rings_chordless(cloud, {size = 6, cutoff = 3.5, type = 0, graph = "cutoff"})~
+lists the chordless cycles of one size, 3 through 12: cycles with no
+bond between two of their atoms that are not next to each other on the
+cycle. Every primitive ring is chordless; a chordless cycle need not be
+primitive. The result has ~size~, ~n~, ~rings~ (one table per cycle),
+and ~per_atom~, the number of cycles through each atom. A ring holds
+1-based positions, or atom ids when the cloud was read with ids, and
+starts at its lowest atom; the rings are sorted. ~dseams.chordlessCycles~
+is the same function and Fennel spells it ~dseams.rings-chordless~. The
+neighbour handle's ~chordless(size)~ keeps the 0-based rows of
+~seams_rings_chordless~.
+=examples/lua/rings_chordless.lua= counts the 48 five-cycles and 54
+six-cycles of the sI cell, and =examples/fennel/rings_chordless.fnl=
+counts the six-cycles of the oxygen frame.
+
+#+begin_src lua
+# excerpt: examples/lua/rings_chordless.lua
+local five = dseams.rings_chordless(cloud, {size = 5, cutoff = 3.5})
+#+end_src
+
+#+begin_src fennel
+# excerpt: examples/fennel/rings_chordless.fnl
+(local six (dseams.rings-chordless cloud {:size 6 :cutoff 3.5}))
+#+end_src
+
+~tests/lua_fixtures.lua~ compares both layers with the rows
+~chordless_ref~ writes from the C API, and ~tests/lua_ffi.lua~ checks
+the raw FFI call.
+
 * Fennel: the interface and the rings tutorial
 
 The basal interface is =examples/fennel/interface.fnl=. The published

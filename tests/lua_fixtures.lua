@@ -134,3 +134,38 @@ guest:close()
 io.write(string.format("si sig %d %d\n", signed.n_cages, signed.n_atoms))
 
 extra("ih", dseams.read(frame, {all = true}))
+
+-- chordless_ref writes atoms, n_rings, size, the 0-based rows, then the
+-- per-atom counts. Both the module and the raw neighbour handle must
+-- give those numbers.
+local ref_path = os.getenv("SEAMS_CHORDLESS_REF")
+if ref_path ~= nil and ref_path ~= "" then
+  local handle = assert(io.open(ref_path, "r"))
+  local values = {}
+  for token in handle:read("*a"):gmatch("%-?%d+") do
+    values[#values + 1] = tonumber(token)
+  end
+  handle:close()
+  local atoms, count, width = values[1], values[2], values[3]
+  local water = dseams.read(root .. "/input/traj/exampleTraj.lammpstrj", {type = 2})
+  local found = dseams.rings_chordless(water, {size = width, cutoff = 3.5, graph = "cutoff"})
+  local nb = water._sys:neighbours(3.5, 0, dseams.CUTOFF)
+  local raw, raw_per = nb:chordless(width)
+  nb:close()
+  assert(found.n == count and #raw == count, "chordless count differs from the C reference")
+  assert(#found.per_atom == atoms and #raw_per == atoms, "chordless per-atom length")
+  for r = 1, count do
+    for k = 1, width do
+      local want = values[3 + (r - 1) * width + k]
+      assert(raw[r][k] == want, "raw chordless row differs from the C reference")
+      assert(found.rings[r][k] == want + 1, "chordless row differs from the C reference")
+    end
+  end
+  for i = 1, atoms do
+    local want = values[3 + count * width + i]
+    assert(found.per_atom[i] == want and raw_per[i] == want, "chordless per-atom differs")
+  end
+  assert(not pcall(dseams.rings_chordless, water, {size = 13}), "size 13 must fail")
+  water:close()
+  io.write(string.format("tip chordless %d\n", count))
+end

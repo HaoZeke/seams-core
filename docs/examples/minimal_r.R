@@ -1,4 +1,5 @@
-# Read the GenIce sI cell, then the cutoff shell, q6, CHILL+, and rings.
+# Read the GenIce sI cell, then the cutoff shell, q6, CHILL+, rings, and
+# chordless five-cycles.
 path <- commandArgs(trailingOnly = TRUE)[1]
 stopifnot(nzchar(path))
 library(dseams)
@@ -12,4 +13,7 @@ rings <- primitive_rings(frame, graph = "cutoff")
 six <- rings$n[rings$size == 6L]
 five <- rings$n[rings$size == 5L]
 stopifnot(five == 48L, six == 54L)
+pentagons <- rings_chordless(frame, size = 5L)
+stopifnot(nrow(pentagons) == 48L, ncol(pentagons) == 5L)
+stopifnot(sum(attr(pentagons, "per_atom")) == 5L * 48L)
 cat("r example ok\n")

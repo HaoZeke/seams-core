@@ -1,12 +1,16 @@
 # Additions
 .pixi/
 .venv-paper/
+.venv-sqq/
+.asv/
+__pycache__/
 benchmarks/paper-cells/.sitting-large.jsonl
 benchmarks/paper-cells/.sitting-agree/
 benchmarks/paper-cells/*.pdf
 benchmarks/paper-cells/.liquid-work/
 benchmarks/*.png
 mw215-frames/
+tip4p2005-frames/
 /result
 /.ccls-cache/
 shellBuild/
@@ -421,3 +425,4 @@ bench/local/
 
 docs/_build/
 __pycache__/
+sqq-src/

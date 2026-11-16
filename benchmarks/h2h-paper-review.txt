@@ -1,0 +1,39 @@
+cores 8 affinity 8
+samples 8
+recorded rings OVITO faster at 136, 4096, 110592: 865 ms vs 511 ms
+recorded library cages 282 ms vs command 213 ms
+frame cages molecules 69632
+robust op sII69632 cages threads 1 molecules 69632 library_median 252.6892 library_min 249.5304 command_median 323.7633 command_min 316.7289 affinity 1 WIN cages 4096
+robust op sII69632 cages threads 8 molecules 69632 library_median 83.7976 library_min 79.3819 command_median 165.0487 command_min 155.4923 affinity 8 WIN cages 4096
+ovito 3.17.2
+robust op sII136 rings threads 1 molecules 136 dseams_median 0.3145 dseams_min 0.2722 ovito_median 0.7873 ovito_min 0.7271 affinity 1 WIN
+robust op ice4096 rings threads 1 molecules 4096 dseams_median 4.5613 dseams_min 4.4157 ovito_median 16.9840 ovito_min 16.0961 affinity 1 WIN
+check ice4096 symmetry molecules 4096 agree 4096 of 4096 hex/hex=4096
+robust op ice4096 symmetry threads 1 molecules 4096 dseams_median 0.7592 dseams_min 0.7432 diamond_median 4.9741 diamond_min 4.8723 affinity 1 WIN
+robust op ice110592 rings threads 1 molecules 110592 dseams_median 128.6384 dseams_min 126.1567 ovito_median 628.0916 ovito_min 584.8785 affinity 1 WIN
+check ice110592 symmetry molecules 110592 agree 110592 of 110592 hex/hex=110592
+robust op ice110592 symmetry threads 1 molecules 110592 dseams_median 22.6479 dseams_min 22.0897 diamond_median 143.5580 diamond_min 140.6126 affinity 1 WIN
+robust op sII136 rings threads 8 molecules 136 dseams_median 0.3232 dseams_min 0.3011 ovito_median 0.9432 ovito_min 0.8137 affinity 8 WIN
+robust op ice4096 rings threads 8 molecules 4096 dseams_median 2.6005 dseams_min 2.2693 ovito_median 17.3833 ovito_min 16.4007 affinity 8 WIN
+check ice4096 symmetry molecules 4096 agree 4096 of 4096 hex/hex=4096
+robust op ice4096 symmetry threads 8 molecules 4096 dseams_median 1.0849 dseams_min 0.6543 diamond_median 5.1157 diamond_min 4.9346 affinity 8 WIN
+robust op ice110592 rings threads 8 molecules 110592 dseams_median 45.4611 dseams_min 43.7794 ovito_median 606.4035 ovito_min 574.1589 affinity 8 WIN
+check ice110592 symmetry molecules 110592 agree 110592 of 110592 hex/hex=110592
+robust op ice110592 symmetry threads 8 molecules 110592 dseams_median 10.4022 dseams_min 7.8436 diamond_median 145.3556 diamond_min 143.2839 affinity 8 WIN
+chill_plus thresholds published staggered<=-0.35 eclipsed -0.8..0.25
+chill_plus ovito mode uses the open edges and every neighbour inside 3.5 A
+check Ih512 chill_ovito_vs_modifier mismatches 0 of 512
+matrix Ih512 paper_vs_ovito_rule hexagonal/hexagonal=512
+matrix Ih512 ovito_rule_vs_modifier hexagonal/hexagonal=512
+check Ic512 chill_ovito_vs_modifier mismatches 0 of 512
+matrix Ic512 paper_vs_ovito_rule cubic/cubic=512
+matrix Ic512 ovito_rule_vs_modifier cubic/cubic=512
+check interface chill_ovito_vs_modifier mismatches 0 of 512
+matrix interface paper_vs_ovito_rule clathrate/clathrate=1 clathrate/water=1 cubic/cubic=1 hexagonal/hexagonal=138 hexagonal/interfacial=3 interclathrate/clathrate=4 interclathrate/interclathrate=6 interclathrate/water=4 interfacial/hexagonal=1 interfacial/interfacial=44 water/clathrate=1 water/interclathrate=6 water/water=302
+matrix interface ovito_rule_vs_modifier clathrate/clathrate=6 cubic/cubic=1 hexagonal/hexagonal=139 interclathrate/interclathrate=12 interfacial/interfacial=47 water/water=307
+check stacking chill_ovito_vs_modifier mismatches 0 of 512
+matrix stacking paper_vs_ovito_rule cubic/cubic=128 hexagonal/hexagonal=320 water/water=64
+matrix stacking ovito_rule_vs_modifier cubic/cubic=128 hexagonal/hexagonal=320 water/water=64
+check melted chill_ovito_vs_modifier mismatches 0 of 512
+matrix melted paper_vs_ovito_rule clathrate/interclathrate=1 hexagonal/hexagonal=364 hexagonal/interfacial=5 interclathrate/water=4 interfacial/hexagonal=1 interfacial/interfacial=19 interfacial/water=4 water/interclathrate=2 water/water=112
+matrix melted ovito_rule_vs_modifier hexagonal/hexagonal=365 interclathrate/interclathrate=3 interfacial/interfacial=24 water/water=120

@@ -93,8 +93,26 @@ int seams_frame_rings(seams_frame *frame, double cutoff, int type,
                       const char *graph, int max_depth, int *counts,
                       int counts_len);
 
-/** Replace coordinates of a frame built by seams_frame_from_arrays.
- * n must be the atom count already stored. The box is nine LAMMPS numbers. @ingroup lang_frame */
+/* Chordless cycles of one size, from 3 through 12. A cycle is chordless
+ * when no bond joins two of its atoms that are not next to each other on
+ * it. graph is "cutoff" (NULL or "") or "mutual", the same graphs the C
+ * API's neighbour list builds: type > 0 bonds that type, and type <= 0
+ * bonds every atom of a frame with more than one species.
+ * Each cycle is size atom indices, 0-based over the whole frame. It
+ * starts at its lowest index and runs towards the smaller of that atom's
+ * two cycle neighbours, and the cycles are sorted, so the rows equal the
+ * C API's chordless rows on the same frame. rings may be NULL to count
+ * only; otherwise n_rings is required and rings_len is its length in
+ * ints. per_atom is NULL or seams_frame_nop ints, the number of cycles
+ * through each atom. After seams_frame_select the cycles use the
+ * selected atoms only. A short rings buffer returns 1 after n_rings and
+ * per_atom are written. */
+int seams_frame_chordless(seams_frame *frame, double cutoff, int type,
+                          const char *graph, int size, int *rings,
+                          int rings_len, int *n_rings, int *per_atom);
+
+/* Replace coordinates of a frame built by seams_frame_from_arrays.
+ * n must be the atom count already stored. The box is nine LAMMPS numbers. */
 int seams_frame_set_positions(seams_frame *frame, const double *xyz, int n,
                              const double *box9);
 

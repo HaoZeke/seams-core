@@ -16,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PY = os.environ.get("NEIGH_PYTHON", sys.executable)
 BENCH = os.environ.get(
-    "NEIGH_BENCH", str(ROOT / "build-release/tests/bench_cutoff_list"))
+    "NEIGH_BENCH", str(ROOT / "bbdir-release/tests/bench_cutoff_list"))
 SIZES = (10648, 110592, 884736)
 THREADS = (1, 2, 4, 8)
 
@@ -57,8 +57,13 @@ elif kind == "freud":
         neigh = aq.query(pts, dict(r_max=cutoff, exclude_ii=True)).toNeighborList()
         return len(neigh.point_indices)
 elif kind == "matscipy":
-    from ase import Atoms
-    from matscipy.neighbours import neighbour_list
+    try:
+        from ase import Atoms
+        from matscipy.neighbours import neighbour_list
+    except ImportError:
+        print(f"kind=matscipy molecules={molecules} threads={threads} "
+              f"pairs=absent warmup=1 n={reps} median_ms= commit={os.environ.get('SEAMS_COMMIT', '')}")
+        raise SystemExit(0)
     atoms = Atoms(positions=pts, cell=[L, L, L], pbc=True)
     def once():
         i, j = neighbour_list("ij", atoms, cutoff)
@@ -66,17 +71,19 @@ elif kind == "matscipy":
 else:
     raise SystemExit("unknown kind")
 
-for _ in range(2):
-    pairs = once()
+pairs = once()
 samples = []
 for _ in range(reps):
     t0 = time.perf_counter()
     pairs = once()
     samples.append((time.perf_counter() - t0) * 1e3)
 samples.sort()
-med = samples[len(samples) // 2]
+mid = len(samples) // 2
+med = 0.5 * (samples[mid - 1] + samples[mid])
+commit = os.environ.get("SEAMS_COMMIT", "")
 print(f"kind={kind} molecules={molecules} threads={threads} pairs={pairs} "
-      f"median_ms={med:.4f} samples_ms={','.join(f'{s:.4f}' for s in samples)}")
+      f"warmup=1 n={reps} median_ms={med:.4f} min_ms={samples[0]:.4f} "
+      f"commit={commit} samples_ms={','.join(f'{s:.4f}' for s in samples)}")
 """
 
 
@@ -93,13 +100,18 @@ def run(cmd, env, cores):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--reps", type=int, default=8)
+    parser.add_argument("--molecules", type=int, action="append")
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
+    sizes = tuple(args.molecules) if args.molecules else SIZES
     lines = []
-    for molecules in SIZES:
+    for molecules in sizes:
         for threads in THREADS:
             cores = "0" if threads == 1 else f"0-{threads - 1}"
             env = os.environ.copy()
+            env["SEAMS_COMMIT"] = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+            ).strip()
             env.update({
                 "OMP_NUM_THREADS": str(threads),
                 "OMP_DYNAMIC": "FALSE",

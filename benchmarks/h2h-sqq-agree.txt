@@ -1,0 +1,418 @@
+d-SEAMS 2.14.0 commit 46c308ee6cadc0b7d2231ddc5c48902923fc9b14 code clean
+SQQ 0.5.8 commit 17cf76f9a2fc18848321025674a0f4d4adfa26e8 doi 10.1021/acs.jpca.6c05769 engine py
+cutoff_A 3.5 cores 8 cpus 0-7
+frame Ic-4096 molecules 4096 edges_A 50.806824 50.806824 50.806824 source scripts/gen_ideal_ice.py
+graph Ic-4096 reference 8192 d-SEAMS 8192 SQQ 8192 d-SEAMS^ref 0 SQQ^ref 0 closest_pair_to_cutoff_A 7.500e-01
+rings Ic-4096 d-SEAMS 3-rings 0 (SQQ does not search size 3)
+rings Ic-4096 size 4 d-SEAMS 0 SQQ 0 both 0 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings Ic-4096 size 5 d-SEAMS 0 SQQ 0 both 0 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings Ic-4096 size 6 d-SEAMS 8192 SQQ 8192 both 8192 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings Ic-4096 reference check of 200 shared rings: 0 fail
+ice Ic-4096 SQQ labels sizes [6] == sizes [4,5,6]: True
+ice Ic-4096 SQQ rule re-derived from the reference graph and SQQ chordless 6-rings: 4096/4096 equal
+ice Ic-4096 chordless 6-rings 8192 primitive 6-rings 8192; SQQ rule on primitive 6-rings changes 0 labels
+ice Ic-4096 CHILL+ re-derived with scipy Y_3m: 4096/4096 equal
+ice Ic-4096 CHILL+ counts cubic=4096 hexagonal=0 water=0 interfacial=0 clathrate=0 interClathrate=0
+ice Ic-4096 SQQ counts ice=4096 interfacial=0 liquid=0
+ice Ic-4096 confusion (CHILL+ label, SQQ label): cubic/ice 4096
+ice Ic-4096 merged agreement 4096/4096
+ice Ic-4096 disagreements by rule clause (CHILL+ label | SQQ label | CHILL+ clause | SQQ clause): count
+ice Ic-4096 global Steinhardt Q6 over 8192 bonds 0.6285; minimum-image xy span of the oxygens 49.22 by 49.22 A
+ice Ic-4096 reference triangles 0 d-SEAMS 3-rings 0
+ice Ic-4096 CHILL+ ice: 4096 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 4096; on a 3/4/5-ring 0; median primitive six-rings 12
+ice Ic-4096 SQQ ice: 4096 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 4096; on a 3/4/5-ring 0; median primitive six-rings 12
+ice Ic-4096 CHILL+ interfacial: 0 molecules
+ice Ic-4096 SQQ interfacial: 0 molecules
+ice Ic-4096 ice-primitive: six-rings 8192 equal to seams_rings_find size 6: True
+ice Ic-4096 ice-primitive: SQQ rule re-derived on the reference graph and these rings 4096/4096 labels, 4096/4096 six-ring counts; against SQQ 4096/4096; each mismatch has a primitive and a chordless six-ring count that differ on the molecule or a neighbour: 0/0
+ice Ic-4096 ice-primitive counts ice=4096 interfacial=0 liquid=0
+rings Ic-4096 chordless 6-rings reference enumeration 8192, equal to d-SEAMS True, to SQQ True
+bytes Ic-4096 chordless 6-rings sha256: library rows c53bd0e37d30967a; SQQ rows c53bd0e37d30967a equal True; brute-force rows c53bd0e37d30967a equal True; library labels cfaa55173a710093; brute-force labels cfaa55173a710093 equal True; brute-force six-ring counts equal True; SQQ labels cfaa55173a710093 equal True
+rings Ic-4096 chordless 6-rings d-SEAMS 8192 SQQ ice stage 8192 both 8192; d-SEAMS-only 0 (reference chordless 0, on an edge SQQ lacks 0); SQQ-only 0 (reference chordless 0, on an edge SQQ lacks 0); primitive inside 8192/8192
+ice Ic-4096 ice-chordless: SQQ rule re-derived on the reference graph and these rings 4096/4096 labels, 4096/4096 six-ring counts; against SQQ 4096/4096; mismatches on or next to an edge SQQ lacks: 0/0
+ice Ic-4096 ice-chordless counts ice=4096 interfacial=0 liquid=0
+frame Ih-4096 molecules 4096 edges_A 35.925850 62.225397 58.666667 source scripts/gen_ideal_ice.py
+graph Ih-4096 reference 8192 d-SEAMS 8192 SQQ 8192 d-SEAMS^ref 0 SQQ^ref 0 closest_pair_to_cutoff_A 7.500e-01
+rings Ih-4096 d-SEAMS 3-rings 0 (SQQ does not search size 3)
+rings Ih-4096 size 4 d-SEAMS 0 SQQ 0 both 0 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings Ih-4096 size 5 d-SEAMS 0 SQQ 0 both 0 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings Ih-4096 size 6 d-SEAMS 8192 SQQ 8192 both 8192 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings Ih-4096 reference check of 200 shared rings: 0 fail
+ice Ih-4096 SQQ labels sizes [6] == sizes [4,5,6]: True
+ice Ih-4096 SQQ rule re-derived from the reference graph and SQQ chordless 6-rings: 4096/4096 equal
+ice Ih-4096 chordless 6-rings 8192 primitive 6-rings 8192; SQQ rule on primitive 6-rings changes 0 labels
+ice Ih-4096 CHILL+ re-derived with scipy Y_3m: 4096/4096 equal
+ice Ih-4096 CHILL+ counts cubic=0 hexagonal=4096 water=0 interfacial=0 clathrate=0 interClathrate=0
+ice Ih-4096 SQQ counts ice=4096 interfacial=0 liquid=0
+ice Ih-4096 confusion (CHILL+ label, SQQ label): hexagonal/ice 4096
+ice Ih-4096 merged agreement 4096/4096
+ice Ih-4096 disagreements by rule clause (CHILL+ label | SQQ label | CHILL+ clause | SQQ clause): count
+ice Ih-4096 global Steinhardt Q6 over 8192 bonds 0.5303; minimum-image xy span of the oxygens 33.68 by 59.63 A
+ice Ih-4096 reference triangles 0 d-SEAMS 3-rings 0
+ice Ih-4096 CHILL+ ice: 4096 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 4096; on a 3/4/5-ring 0; median primitive six-rings 12
+ice Ih-4096 SQQ ice: 4096 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 4096; on a 3/4/5-ring 0; median primitive six-rings 12
+ice Ih-4096 CHILL+ interfacial: 0 molecules
+ice Ih-4096 SQQ interfacial: 0 molecules
+ice Ih-4096 ice-primitive: six-rings 8192 equal to seams_rings_find size 6: True
+ice Ih-4096 ice-primitive: SQQ rule re-derived on the reference graph and these rings 4096/4096 labels, 4096/4096 six-ring counts; against SQQ 4096/4096; each mismatch has a primitive and a chordless six-ring count that differ on the molecule or a neighbour: 0/0
+ice Ih-4096 ice-primitive counts ice=4096 interfacial=0 liquid=0
+rings Ih-4096 chordless 6-rings reference enumeration 8192, equal to d-SEAMS True, to SQQ True
+bytes Ih-4096 chordless 6-rings sha256: library rows 9453b61dc7eb521f; SQQ rows 9453b61dc7eb521f equal True; brute-force rows 9453b61dc7eb521f equal True; library labels cfaa55173a710093; brute-force labels cfaa55173a710093 equal True; brute-force six-ring counts equal True; SQQ labels cfaa55173a710093 equal True
+rings Ih-4096 chordless 6-rings d-SEAMS 8192 SQQ ice stage 8192 both 8192; d-SEAMS-only 0 (reference chordless 0, on an edge SQQ lacks 0); SQQ-only 0 (reference chordless 0, on an edge SQQ lacks 0); primitive inside 8192/8192
+ice Ih-4096 ice-chordless: SQQ rule re-derived on the reference graph and these rings 4096/4096 labels, 4096/4096 six-ring counts; against SQQ 4096/4096; mismatches on or next to an edge SQQ lacks: 0/0
+ice Ih-4096 ice-chordless counts ice=4096 interfacial=0 liquid=0
+frame mw-liquid-4096 molecules 4096 edges_A 49.882553 49.882553 49.882553 source mw-liquid-4096.lammpstrj sha256 1b18b513dbb7f447f13fabff9d1ca5b2aaa1b280a9f12ea0a2fd5f74c2e16f73
+graph mw-liquid-4096 reference 9579 d-SEAMS 9579 SQQ 9579 d-SEAMS^ref 0 SQQ^ref 0 closest_pair_to_cutoff_A 1.254e-06
+rings mw-liquid-4096 d-SEAMS 3-rings 880 (SQQ does not search size 3)
+rings mw-liquid-4096 size 4 d-SEAMS 1315 SQQ 1315 both 1315 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings mw-liquid-4096 size 5 d-SEAMS 3190 SQQ 3190 both 3190 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings mw-liquid-4096 size 6 d-SEAMS 3207 SQQ 3207 both 3207 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings mw-liquid-4096 reference check of 600 shared rings: 0 fail
+ice mw-liquid-4096 SQQ labels sizes [6] == sizes [4,5,6]: True
+ice mw-liquid-4096 SQQ rule re-derived from the reference graph and SQQ chordless 6-rings: 4096/4096 equal
+ice mw-liquid-4096 chordless 6-rings 4592 primitive 6-rings 3207; SQQ rule on primitive 6-rings changes 25 labels
+ice mw-liquid-4096 CHILL+ re-derived with scipy Y_3m: 4096/4096 equal
+ice mw-liquid-4096 CHILL+ counts cubic=3 hexagonal=8 water=3843 interfacial=70 clathrate=20 interClathrate=152
+ice mw-liquid-4096 SQQ counts ice=192 interfacial=1659 liquid=2245
+ice mw-liquid-4096 confusion (CHILL+ label, SQQ label): clathrate/interfacial 20; cubic/ice 1; cubic/interfacial 2; hexagonal/ice 1; hexagonal/interfacial 7; interClathrate/ice 12; interClathrate/interfacial 139; interClathrate/liquid 1; interfacial/ice 16; interfacial/interfacial 54; water/ice 162; water/interfacial 1437; water/liquid 2244
+ice mw-liquid-4096 merged agreement 2301/4096
+ice mw-liquid-4096 disagreements by rule clause (CHILL+ label | SQQ label | CHILL+ clause | SQQ clause): count
+  water | interfacial | 0 staggered 1 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 278
+  water | interfacial | 1 staggered 1 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 270
+  water | interfacial | 0 staggered 2 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 267
+  water | interfacial | 1 staggered 0 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 153
+  water | interfacial | 1 staggered 2 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 149
+  water | interfacial | 0 staggered 0 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 121
+  interClathrate | interfacial | 0 staggered 3 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 98
+  water | interfacial | 2 staggered 1 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 91
+  water | interfacial | 2 staggered 0 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 65
+  water | ice | 1 staggered 1 eclipsed | two+ six-rings, neighbours 4-coordinated: 36
+  interClathrate | interfacial | 1 staggered 3 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 33
+  water | ice | 0 staggered 1 eclipsed | two+ six-rings, neighbours 4-coordinated: 27
+  remaining 207 in smaller groups of the same clauses
+ice mw-liquid-4096 global Steinhardt Q6 over 9579 bonds 0.0097; minimum-image xy span of the oxygens 49.87 by 49.81 A
+ice mw-liquid-4096 reference triangles 880 d-SEAMS 3-rings 880
+ice mw-liquid-4096 CHILL+ ice: 11 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 0; on a 3/4/5-ring 10; median primitive six-rings 6
+ice mw-liquid-4096 SQQ ice: 192 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 0; on a 3/4/5-ring 182; median primitive six-rings 5
+ice mw-liquid-4096 CHILL+ interfacial: 70 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 0; on a 3/4/5-ring 69; median primitive six-rings 6
+ice mw-liquid-4096 SQQ interfacial: 1659 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 0; on a 3/4/5-ring 1655; median primitive six-rings 5
+  example mw-liquid-4096 molecule 0 CHILL+ water SQQ interfacial degree 4 six-rings 5 neighbour degrees [4, 4, 4, 5] c_ij -0.660 -0.591 -0.607 -0.299
+  example mw-liquid-4096 molecule 2 CHILL+ water SQQ interfacial degree 4 six-rings 2 neighbour degrees [4, 5, 5, 5] c_ij -0.245 0.307 0.102 -0.434
+  example mw-liquid-4096 molecule 4 CHILL+ water SQQ interfacial degree 4 six-rings 5 neighbour degrees [4, 4, 4, 5] c_ij -0.401 -0.480 -0.542 -0.726
+  example mw-liquid-4096 molecule 5 CHILL+ water SQQ interfacial degree 4 six-rings 7 neighbour degrees [4, 4, 5, 5] c_ij -0.680 -0.671 -0.582 -0.247
+  example mw-liquid-4096 molecule 7 CHILL+ water SQQ interfacial degree 4 six-rings 4 neighbour degrees [4, 4, 4, 5] c_ij -0.644 -0.083 0.046 -0.491
+ice mw-liquid-4096 ice-primitive: six-rings 3207 equal to seams_rings_find size 6: True
+ice mw-liquid-4096 ice-primitive: SQQ rule re-derived on the reference graph and these rings 4096/4096 labels, 4096/4096 six-ring counts; against SQQ 4071/4096; each mismatch has a primitive and a chordless six-ring count that differ on the molecule or a neighbour: 25/25
+ice mw-liquid-4096 ice-primitive counts ice=191 interfacial=1636 liquid=2269
+rings mw-liquid-4096 chordless 6-rings reference enumeration 4592, equal to d-SEAMS True, to SQQ True
+bytes mw-liquid-4096 chordless 6-rings sha256: library rows a440c18ffc3c0dc7; SQQ rows a440c18ffc3c0dc7 equal True; brute-force rows a440c18ffc3c0dc7 equal True; library labels 6f1cc34df9994b43; brute-force labels 6f1cc34df9994b43 equal True; brute-force six-ring counts equal True; SQQ labels 6f1cc34df9994b43 equal True
+rings mw-liquid-4096 chordless 6-rings d-SEAMS 4592 SQQ ice stage 4592 both 4592; d-SEAMS-only 0 (reference chordless 0, on an edge SQQ lacks 0); SQQ-only 0 (reference chordless 0, on an edge SQQ lacks 0); primitive inside 3207/3207
+ice mw-liquid-4096 ice-chordless: SQQ rule re-derived on the reference graph and these rings 4096/4096 labels, 4096/4096 six-ring counts; against SQQ 4096/4096; mismatches on or next to an edge SQQ lacks: 0/0
+ice mw-liquid-4096 ice-chordless counts ice=192 interfacial=1659 liquid=2245
+frame tip4p2005-4096 molecules 4096 edges_A 49.698049 49.698049 49.698049 source tip4p2005-4096.lammpstrj sha256 4d019021b620137831ccc95e71f9ba24380258aa6296381263da3bc547f25de4 committed
+graph tip4p2005-4096 reference 10495 d-SEAMS 10495 SQQ 10495 d-SEAMS^ref 0 SQQ^ref 0 closest_pair_to_cutoff_A 6.199e-05
+rings tip4p2005-4096 d-SEAMS 3-rings 2559 (SQQ does not search size 3)
+rings tip4p2005-4096 size 4 d-SEAMS 1758 SQQ 1758 both 1758 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings tip4p2005-4096 size 5 d-SEAMS 2763 SQQ 2763 both 2763 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings tip4p2005-4096 size 6 d-SEAMS 2485 SQQ 2485 both 2485 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings tip4p2005-4096 reference check of 600 shared rings: 0 fail
+ice tip4p2005-4096 SQQ labels sizes [6] == sizes [4,5,6]: True
+ice tip4p2005-4096 SQQ rule re-derived from the reference graph and SQQ chordless 6-rings: 4096/4096 equal
+ice tip4p2005-4096 chordless 6-rings 4045 primitive 6-rings 2485; SQQ rule on primitive 6-rings changes 54 labels
+ice tip4p2005-4096 CHILL+ re-derived with scipy Y_3m: 4096/4096 equal
+ice tip4p2005-4096 CHILL+ counts cubic=0 hexagonal=2 water=3878 interfacial=2 clathrate=40 interClathrate=174
+ice tip4p2005-4096 SQQ counts ice=15 interfacial=1114 liquid=2967
+ice tip4p2005-4096 confusion (CHILL+ label, SQQ label): clathrate/interfacial 40; hexagonal/interfacial 2; interClathrate/ice 2; interClathrate/interfacial 167; interClathrate/liquid 5; interfacial/interfacial 2; water/ice 13; water/interfacial 903; water/liquid 2962
+ice tip4p2005-4096 merged agreement 2969/4096
+ice tip4p2005-4096 disagreements by rule clause (CHILL+ label | SQQ label | CHILL+ clause | SQQ clause): count
+  water | interfacial | 0 staggered 2 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 290
+  water | interfacial | 0 staggered 1 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 250
+  interClathrate | interfacial | 0 staggered 3 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 133
+  water | interfacial | 0 staggered 0 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 94
+  water | interfacial | 1 staggered 1 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 89
+  water | interfacial | 1 staggered 2 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 73
+  clathrate | interfacial | 0 staggered 4 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 37
+  water | interfacial | 1 staggered 0 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 33
+  interClathrate | interfacial | 1 staggered 3 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 22
+  water | interfacial | 0 staggered 2 eclipsed | one six-ring: 20
+  water | interfacial | 0 staggered 1 eclipsed | one six-ring: 17
+  water | interfacial | 2 staggered 1 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 17
+  remaining 52 in smaller groups of the same clauses
+ice tip4p2005-4096 global Steinhardt Q6 over 10495 bonds 0.0121; minimum-image xy span of the oxygens 49.68 by 49.69 A
+ice tip4p2005-4096 reference triangles 2559 d-SEAMS 3-rings 2559
+ice tip4p2005-4096 CHILL+ ice: 2 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 0; on a 3/4/5-ring 2; median primitive six-rings 4
+ice tip4p2005-4096 SQQ ice: 15 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 0; on a 3/4/5-ring 14; median primitive six-rings 4
+ice tip4p2005-4096 CHILL+ interfacial: 2 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 0; on a 3/4/5-ring 2; median primitive six-rings 5
+ice tip4p2005-4096 SQQ interfacial: 1114 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 0; on a 3/4/5-ring 1106; median primitive six-rings 3
+  example tip4p2005-4096 molecule 0 CHILL+ water SQQ interfacial degree 4 six-rings 2 neighbour degrees [5, 5, 6, 6] c_ij -0.203 -0.190 -0.418 -0.412
+  example tip4p2005-4096 molecule 1 CHILL+ water SQQ interfacial degree 4 six-rings 3 neighbour degrees [3, 4, 4, 4] c_ij -0.590 -0.551 -0.685 -0.457
+  example tip4p2005-4096 molecule 2 CHILL+ water SQQ interfacial degree 4 six-rings 4 neighbour degrees [4, 5, 5, 6] c_ij 0.372 -0.235 -0.327 -0.636
+  example tip4p2005-4096 molecule 3 CHILL+ water SQQ interfacial degree 4 six-rings 6 neighbour degrees [3, 4, 4, 6] c_ij -0.489 -0.640 -0.281 -0.100
+  example tip4p2005-4096 molecule 6 CHILL+ water SQQ interfacial degree 4 six-rings 3 neighbour degrees [5, 5, 5, 6] c_ij -0.667 -0.096 -0.608 -0.057
+ice tip4p2005-4096 ice-primitive: six-rings 2485 equal to seams_rings_find size 6: True
+ice tip4p2005-4096 ice-primitive: SQQ rule re-derived on the reference graph and these rings 4096/4096 labels, 4096/4096 six-ring counts; against SQQ 4042/4096; each mismatch has a primitive and a chordless six-ring count that differ on the molecule or a neighbour: 54/54
+ice tip4p2005-4096 ice-primitive counts ice=15 interfacial=1060 liquid=3021
+rings tip4p2005-4096 chordless 6-rings reference enumeration 4045, equal to d-SEAMS True, to SQQ True
+bytes tip4p2005-4096 chordless 6-rings sha256: library rows a18c48cac14ff5ee; SQQ rows a18c48cac14ff5ee equal True; brute-force rows a18c48cac14ff5ee equal True; library labels 4271d28ca4589470; brute-force labels 4271d28ca4589470 equal True; brute-force six-ring counts equal True; SQQ labels 4271d28ca4589470 equal True
+rings tip4p2005-4096 chordless 6-rings d-SEAMS 4045 SQQ ice stage 4045 both 4045; d-SEAMS-only 0 (reference chordless 0, on an edge SQQ lacks 0); SQQ-only 0 (reference chordless 0, on an edge SQQ lacks 0); primitive inside 2485/2485
+ice tip4p2005-4096 ice-chordless: SQQ rule re-derived on the reference graph and these rings 4096/4096 labels, 4096/4096 six-ring counts; against SQQ 4096/4096; mismatches on or next to an edge SQQ lacks: 0/0
+ice tip4p2005-4096 ice-chordless counts ice=15 interfacial=1114 liquid=2967
+frame Ic-110592 molecules 110592 edges_A 152.420471 152.420471 152.420471 source scripts/gen_ideal_ice.py
+graph Ic-110592 reference 221184 d-SEAMS 221184 SQQ 221184 d-SEAMS^ref 0 SQQ^ref 0 closest_pair_to_cutoff_A 7.500e-01
+rings Ic-110592 d-SEAMS 3-rings 0 (SQQ does not search size 3)
+rings Ic-110592 size 4 d-SEAMS 0 SQQ 0 both 0 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings Ic-110592 size 5 d-SEAMS 0 SQQ 0 both 0 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings Ic-110592 size 6 d-SEAMS 221184 SQQ 221184 both 221184 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings Ic-110592 reference check of 200 shared rings: 0 fail
+ice Ic-110592 SQQ labels sizes [6] == sizes [4,5,6]: True
+ice Ic-110592 SQQ rule re-derived from the reference graph and SQQ chordless 6-rings: 110592/110592 equal
+ice Ic-110592 chordless 6-rings 221184 primitive 6-rings 221184; SQQ rule on primitive 6-rings changes 0 labels
+ice Ic-110592 CHILL+ re-derived with scipy Y_3m: 110592/110592 equal
+ice Ic-110592 CHILL+ counts cubic=110592 hexagonal=0 water=0 interfacial=0 clathrate=0 interClathrate=0
+ice Ic-110592 SQQ counts ice=110592 interfacial=0 liquid=0
+ice Ic-110592 confusion (CHILL+ label, SQQ label): cubic/ice 110592
+ice Ic-110592 merged agreement 110592/110592
+ice Ic-110592 disagreements by rule clause (CHILL+ label | SQQ label | CHILL+ clause | SQQ clause): count
+ice Ic-110592 global Steinhardt Q6 over 221184 bonds 0.6285; minimum-image xy span of the oxygens 150.83 by 150.83 A
+ice Ic-110592 reference triangles 0 d-SEAMS 3-rings 0
+ice Ic-110592 CHILL+ ice: 110592 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 110592; on a 3/4/5-ring 0; median primitive six-rings 12
+ice Ic-110592 SQQ ice: 110592 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 110592; on a 3/4/5-ring 0; median primitive six-rings 12
+ice Ic-110592 CHILL+ interfacial: 0 molecules
+ice Ic-110592 SQQ interfacial: 0 molecules
+ice Ic-110592 ice-primitive: six-rings 221184 equal to seams_rings_find size 6: True
+ice Ic-110592 ice-primitive: SQQ rule re-derived on the reference graph and these rings 110592/110592 labels, 110592/110592 six-ring counts; against SQQ 110592/110592; each mismatch has a primitive and a chordless six-ring count that differ on the molecule or a neighbour: 0/0
+ice Ic-110592 ice-primitive counts ice=110592 interfacial=0 liquid=0
+rings Ic-110592 chordless 6-rings reference enumeration 221184, equal to d-SEAMS True, to SQQ True
+bytes Ic-110592 chordless 6-rings sha256: library rows f8cc8e27e1c32135; SQQ rows f8cc8e27e1c32135 equal True; brute-force rows f8cc8e27e1c32135 equal True; library labels cbe4e5aaf531c7d0; brute-force labels cbe4e5aaf531c7d0 equal True; brute-force six-ring counts equal True; SQQ labels cbe4e5aaf531c7d0 equal True
+rings Ic-110592 chordless 6-rings d-SEAMS 221184 SQQ ice stage 221184 both 221184; d-SEAMS-only 0 (reference chordless 0, on an edge SQQ lacks 0); SQQ-only 0 (reference chordless 0, on an edge SQQ lacks 0); primitive inside 221184/221184
+ice Ic-110592 ice-chordless: SQQ rule re-derived on the reference graph and these rings 110592/110592 labels, 110592/110592 six-ring counts; against SQQ 110592/110592; mismatches on or next to an edge SQQ lacks: 0/0
+ice Ic-110592 ice-chordless counts ice=110592 interfacial=0 liquid=0
+frame Ih-110592 molecules 110592 edges_A 107.777549 186.676190 176.000000 source scripts/gen_ideal_ice.py
+graph Ih-110592 reference 221184 d-SEAMS 221184 SQQ 221184 d-SEAMS^ref 0 SQQ^ref 0 closest_pair_to_cutoff_A 7.500e-01
+rings Ih-110592 d-SEAMS 3-rings 0 (SQQ does not search size 3)
+rings Ih-110592 size 4 d-SEAMS 0 SQQ 0 both 0 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings Ih-110592 size 5 d-SEAMS 0 SQQ 0 both 0 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings Ih-110592 size 6 d-SEAMS 221184 SQQ 221184 both 221184 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings Ih-110592 reference check of 200 shared rings: 0 fail
+ice Ih-110592 SQQ labels sizes [6] == sizes [4,5,6]: True
+ice Ih-110592 SQQ rule re-derived from the reference graph and SQQ chordless 6-rings: 110592/110592 equal
+ice Ih-110592 chordless 6-rings 221184 primitive 6-rings 221184; SQQ rule on primitive 6-rings changes 0 labels
+ice Ih-110592 CHILL+ re-derived with scipy Y_3m: 110592/110592 equal
+ice Ih-110592 CHILL+ counts cubic=0 hexagonal=110592 water=0 interfacial=0 clathrate=0 interClathrate=0
+ice Ih-110592 SQQ counts ice=110592 interfacial=0 liquid=0
+ice Ih-110592 confusion (CHILL+ label, SQQ label): hexagonal/ice 110592
+ice Ih-110592 merged agreement 110592/110592
+ice Ih-110592 disagreements by rule clause (CHILL+ label | SQQ label | CHILL+ clause | SQQ clause): count
+ice Ih-110592 global Steinhardt Q6 over 221184 bonds 0.5303; minimum-image xy span of the oxygens 105.53 by 184.08 A
+ice Ih-110592 reference triangles 0 d-SEAMS 3-rings 0
+ice Ih-110592 CHILL+ ice: 110592 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 110592; on a 3/4/5-ring 0; median primitive six-rings 12
+ice Ih-110592 SQQ ice: 110592 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 110592; on a 3/4/5-ring 0; median primitive six-rings 12
+ice Ih-110592 CHILL+ interfacial: 0 molecules
+ice Ih-110592 SQQ interfacial: 0 molecules
+ice Ih-110592 ice-primitive: six-rings 221184 equal to seams_rings_find size 6: True
+ice Ih-110592 ice-primitive: SQQ rule re-derived on the reference graph and these rings 110592/110592 labels, 110592/110592 six-ring counts; against SQQ 110592/110592; each mismatch has a primitive and a chordless six-ring count that differ on the molecule or a neighbour: 0/0
+ice Ih-110592 ice-primitive counts ice=110592 interfacial=0 liquid=0
+rings Ih-110592 chordless 6-rings reference enumeration 221184, equal to d-SEAMS True, to SQQ True
+bytes Ih-110592 chordless 6-rings sha256: library rows cf943148da58aa4b; SQQ rows cf943148da58aa4b equal True; brute-force rows cf943148da58aa4b equal True; library labels cbe4e5aaf531c7d0; brute-force labels cbe4e5aaf531c7d0 equal True; brute-force six-ring counts equal True; SQQ labels cbe4e5aaf531c7d0 equal True
+rings Ih-110592 chordless 6-rings d-SEAMS 221184 SQQ ice stage 221184 both 221184; d-SEAMS-only 0 (reference chordless 0, on an edge SQQ lacks 0); SQQ-only 0 (reference chordless 0, on an edge SQQ lacks 0); primitive inside 221184/221184
+ice Ih-110592 ice-chordless: SQQ rule re-derived on the reference graph and these rings 110592/110592 labels, 110592/110592 six-ring counts; against SQQ 110592/110592; mismatches on or next to an edge SQQ lacks: 0/0
+ice Ih-110592 ice-chordless counts ice=110592 interfacial=0 liquid=0
+frame mw-liquid-110592 molecules 110592 edges_A 149.647658 149.647658 149.647658 source mw-liquid-110592.lammpstrj sha256 a576324b104d3344582e6485d31a86d198ae8d4672e246fb4b6a9fc2cbb27fe0
+graph mw-liquid-110592 reference 259187 d-SEAMS 259187 SQQ 259186 d-SEAMS^ref 0 SQQ^ref 1 closest_pair_to_cutoff_A 1.227e-06
+rings mw-liquid-110592 d-SEAMS 3-rings 25266 (SQQ does not search size 3)
+rings mw-liquid-110592 size 4 d-SEAMS 34097 SQQ 34098 both 34097 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 1, reference shortest-path 0
+rings mw-liquid-110592 size 5 d-SEAMS 86218 SQQ 86217 both 86217 d-SEAMS-only 1, reference shortest-path 1; SQQ-only 0, reference shortest-path 0
+rings mw-liquid-110592 size 6 d-SEAMS 85092 SQQ 85094 both 85092 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 2, reference shortest-path 0
+rings mw-liquid-110592 reference check of 600 shared rings: 0 fail
+ice mw-liquid-110592 SQQ labels sizes [6] == sizes [4,5,6]: True
+ice mw-liquid-110592 SQQ rule re-derived from the reference graph and SQQ chordless 6-rings: 110591/110592 equal
+ice mw-liquid-110592 chordless 6-rings 123917 primitive 6-rings 85092; SQQ rule on primitive 6-rings changes 792 labels
+ice mw-liquid-110592 CHILL+ re-derived with scipy Y_3m: 110592/110592 equal
+ice mw-liquid-110592 CHILL+ counts cubic=114 hexagonal=378 water=103111 interfacial=2017 clathrate=552 interClathrate=4420
+ice mw-liquid-110592 SQQ counts ice=5379 interfacial=44742 liquid=60471
+ice mw-liquid-110592 confusion (CHILL+ label, SQQ label): clathrate/ice 30; clathrate/interfacial 510; clathrate/liquid 12; cubic/ice 44; cubic/interfacial 70; hexagonal/ice 103; hexagonal/interfacial 275; interClathrate/ice 327; interClathrate/interfacial 4060; interClathrate/liquid 33; interfacial/ice 487; interfacial/interfacial 1530; water/ice 4388; water/interfacial 38297; water/liquid 60426
+ice mw-liquid-110592 merged agreement 62148/110592
+ice mw-liquid-110592 disagreements by rule clause (CHILL+ label | SQQ label | CHILL+ clause | SQQ clause): count
+  water | interfacial | 0 staggered 1 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 7595
+  water | interfacial | 0 staggered 2 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 7250
+  water | interfacial | 1 staggered 1 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 7014
+  water | interfacial | 1 staggered 2 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 4180
+  water | interfacial | 1 staggered 0 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 4081
+  water | interfacial | 0 staggered 0 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 3202
+  interClathrate | interfacial | 0 staggered 3 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 3047
+  water | interfacial | 2 staggered 1 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 2028
+  water | interfacial | 2 staggered 0 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 1906
+  water | ice | 1 staggered 1 eclipsed | two+ six-rings, neighbours 4-coordinated: 938
+  interClathrate | interfacial | 1 staggered 3 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 841
+  water | ice | 0 staggered 1 eclipsed | two+ six-rings, neighbours 4-coordinated: 632
+  remaining 5730 in smaller groups of the same clauses
+ice mw-liquid-110592 global Steinhardt Q6 over 259187 bonds 0.0016; minimum-image xy span of the oxygens 149.65 by 149.65 A
+ice mw-liquid-110592 reference triangles 25266 d-SEAMS 3-rings 25266
+ice mw-liquid-110592 CHILL+ ice: 492 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 3; on a 3/4/5-ring 468; median primitive six-rings 7
+ice mw-liquid-110592 SQQ ice: 5379 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 13; on a 3/4/5-ring 5181; median primitive six-rings 5
+ice mw-liquid-110592 CHILL+ interfacial: 2017 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 7; on a 3/4/5-ring 1952; median primitive six-rings 6
+ice mw-liquid-110592 SQQ interfacial: 44742 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 17; on a 3/4/5-ring 44611; median primitive six-rings 4
+  example mw-liquid-110592 molecule 1 CHILL+ water SQQ interfacial degree 4 six-rings 7 neighbour degrees [4, 5, 5, 5] c_ij -0.804 -0.482 -0.776 -0.911
+  example mw-liquid-110592 molecule 5 CHILL+ interClathrate SQQ interfacial degree 4 six-rings 3 neighbour degrees [4, 4, 5, 6] c_ij -0.068 -0.788 -0.286 -0.273
+  example mw-liquid-110592 molecule 6 CHILL+ water SQQ interfacial degree 4 six-rings 10 neighbour degrees [4, 4, 4, 5] c_ij -0.242 -0.476 -0.723 -0.957
+  example mw-liquid-110592 molecule 9 CHILL+ water SQQ interfacial degree 4 six-rings 5 neighbour degrees [4, 4, 5, 5] c_ij -0.373 -0.296 -0.743 -0.545
+  example mw-liquid-110592 molecule 10 CHILL+ water SQQ interfacial degree 4 six-rings 10 neighbour degrees [4, 4, 5, 6] c_ij -0.207 -0.849 -0.337 -0.557
+ice mw-liquid-110592 ice-primitive: six-rings 85092 equal to seams_rings_find size 6: True
+ice mw-liquid-110592 ice-primitive: SQQ rule re-derived on the reference graph and these rings 110592/110592 labels, 110592/110592 six-ring counts; against SQQ 109800/110592; each mismatch has a primitive and a chordless six-ring count that differ on the molecule or a neighbour: 792/792
+ice mw-liquid-110592 ice-primitive counts ice=5233 interfacial=44229 liquid=61130
+rings mw-liquid-110592 chordless 6-rings reference enumeration 123915, equal to d-SEAMS True, to SQQ False
+bytes mw-liquid-110592 chordless 6-rings sha256: library rows b9d8ebee47443b3a; SQQ rows 6c8dafabd98c67a0 equal False; brute-force rows b9d8ebee47443b3a equal True; library labels d7c550d1f93c59a4; brute-force labels d7c550d1f93c59a4 equal True; brute-force six-ring counts equal True; SQQ labels 150b471ace51aea3 equal False
+rings mw-liquid-110592 chordless 6-rings d-SEAMS 123915 SQQ ice stage 123917 both 123915; d-SEAMS-only 0 (reference chordless 0, on an edge SQQ lacks 0); SQQ-only 2 (reference chordless 0, on an edge SQQ lacks 2); primitive inside 85092/85092
+ice mw-liquid-110592 ice-chordless: SQQ rule re-derived on the reference graph and these rings 110592/110592 labels, 110592/110592 six-ring counts; against SQQ 110591/110592; mismatches on or next to an edge SQQ lacks: 1/1
+ice mw-liquid-110592 ice-chordless counts ice=5379 interfacial=44741 liquid=60472
+frame Ic-884736 molecules 884736 edges_A 304.840942 304.840942 304.840942 source scripts/gen_ideal_ice.py
+graph Ic-884736 reference 1769472 d-SEAMS 1769472 SQQ 1769472 d-SEAMS^ref 0 SQQ^ref 0 closest_pair_to_cutoff_A 7.500e-01
+rings Ic-884736 d-SEAMS 3-rings 0 (SQQ does not search size 3)
+rings Ic-884736 size 4 d-SEAMS 0 SQQ 0 both 0 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings Ic-884736 size 5 d-SEAMS 0 SQQ 0 both 0 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings Ic-884736 size 6 d-SEAMS 1769472 SQQ 1769472 both 1769472 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings Ic-884736 reference check of 200 shared rings: 0 fail
+ice Ic-884736 SQQ labels sizes [6] == sizes [4,5,6]: True
+ice Ic-884736 SQQ rule re-derived from the reference graph and SQQ chordless 6-rings: 884736/884736 equal
+ice Ic-884736 chordless 6-rings 1769472 primitive 6-rings 1769472; SQQ rule on primitive 6-rings changes 0 labels
+ice Ic-884736 CHILL+ re-derived with scipy Y_3m: 884736/884736 equal
+ice Ic-884736 CHILL+ counts cubic=884736 hexagonal=0 water=0 interfacial=0 clathrate=0 interClathrate=0
+ice Ic-884736 SQQ counts ice=884736 interfacial=0 liquid=0
+ice Ic-884736 confusion (CHILL+ label, SQQ label): cubic/ice 884736
+ice Ic-884736 merged agreement 884736/884736
+ice Ic-884736 disagreements by rule clause (CHILL+ label | SQQ label | CHILL+ clause | SQQ clause): count
+ice Ic-884736 global Steinhardt Q6 over 1769472 bonds 0.6285; minimum-image xy span of the oxygens 303.25 by 303.25 A
+ice Ic-884736 reference triangles 0 d-SEAMS 3-rings 0
+ice Ic-884736 CHILL+ ice: 884736 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 884736; on a 3/4/5-ring 0; median primitive six-rings 12
+ice Ic-884736 SQQ ice: 884736 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 884736; on a 3/4/5-ring 0; median primitive six-rings 12
+ice Ic-884736 CHILL+ interfacial: 0 molecules
+ice Ic-884736 SQQ interfacial: 0 molecules
+ice Ic-884736 ice-primitive: six-rings 1769472 equal to seams_rings_find size 6: True
+ice Ic-884736 ice-primitive: SQQ rule re-derived on the reference graph and these rings 884736/884736 labels, 884736/884736 six-ring counts; against SQQ 884736/884736; each mismatch has a primitive and a chordless six-ring count that differ on the molecule or a neighbour: 0/0
+ice Ic-884736 ice-primitive counts ice=884736 interfacial=0 liquid=0
+rings Ic-884736 chordless 6-rings reference enumeration 1769472, equal to d-SEAMS True, to SQQ True
+bytes Ic-884736 chordless 6-rings sha256: library rows 8fa9b217d7bf0bc8; SQQ rows 8fa9b217d7bf0bc8 equal True; brute-force rows 8fa9b217d7bf0bc8 equal True; library labels c8962405d4d4d288; brute-force labels c8962405d4d4d288 equal True; brute-force six-ring counts equal True; SQQ labels c8962405d4d4d288 equal True
+rings Ic-884736 chordless 6-rings d-SEAMS 1769472 SQQ ice stage 1769472 both 1769472; d-SEAMS-only 0 (reference chordless 0, on an edge SQQ lacks 0); SQQ-only 0 (reference chordless 0, on an edge SQQ lacks 0); primitive inside 1769472/1769472
+ice Ic-884736 ice-chordless: SQQ rule re-derived on the reference graph and these rings 884736/884736 labels, 884736/884736 six-ring counts; against SQQ 884736/884736; mismatches on or next to an edge SQQ lacks: 0/0
+ice Ic-884736 ice-chordless counts ice=884736 interfacial=0 liquid=0
+frame Ih-884736 molecules 884736 edges_A 215.555097 373.352380 352.000000 source scripts/gen_ideal_ice.py
+graph Ih-884736 reference 1769472 d-SEAMS 1769472 SQQ 1769472 d-SEAMS^ref 0 SQQ^ref 0 closest_pair_to_cutoff_A 7.500e-01
+rings Ih-884736 d-SEAMS 3-rings 0 (SQQ does not search size 3)
+rings Ih-884736 size 4 d-SEAMS 0 SQQ 0 both 0 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings Ih-884736 size 5 d-SEAMS 0 SQQ 0 both 0 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings Ih-884736 size 6 d-SEAMS 1769472 SQQ 1769472 both 1769472 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings Ih-884736 reference check of 200 shared rings: 0 fail
+ice Ih-884736 SQQ labels sizes [6] == sizes [4,5,6]: True
+ice Ih-884736 SQQ rule re-derived from the reference graph and SQQ chordless 6-rings: 884736/884736 equal
+ice Ih-884736 chordless 6-rings 1769472 primitive 6-rings 1769472; SQQ rule on primitive 6-rings changes 0 labels
+ice Ih-884736 CHILL+ re-derived with scipy Y_3m: 884736/884736 equal
+ice Ih-884736 CHILL+ counts cubic=0 hexagonal=884736 water=0 interfacial=0 clathrate=0 interClathrate=0
+ice Ih-884736 SQQ counts ice=884736 interfacial=0 liquid=0
+ice Ih-884736 confusion (CHILL+ label, SQQ label): hexagonal/ice 884736
+ice Ih-884736 merged agreement 884736/884736
+ice Ih-884736 disagreements by rule clause (CHILL+ label | SQQ label | CHILL+ clause | SQQ clause): count
+ice Ih-884736 global Steinhardt Q6 over 1769472 bonds 0.5303; minimum-image xy span of the oxygens 213.31 by 372.06 A
+ice Ih-884736 reference triangles 0 d-SEAMS 3-rings 0
+ice Ih-884736 CHILL+ ice: 884736 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 884736; on a 3/4/5-ring 0; median primitive six-rings 12
+ice Ih-884736 SQQ ice: 884736 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 884736; on a 3/4/5-ring 0; median primitive six-rings 12
+ice Ih-884736 CHILL+ interfacial: 0 molecules
+ice Ih-884736 SQQ interfacial: 0 molecules
+ice Ih-884736 ice-primitive: six-rings 1769472 equal to seams_rings_find size 6: True
+ice Ih-884736 ice-primitive: SQQ rule re-derived on the reference graph and these rings 884736/884736 labels, 884736/884736 six-ring counts; against SQQ 884736/884736; each mismatch has a primitive and a chordless six-ring count that differ on the molecule or a neighbour: 0/0
+ice Ih-884736 ice-primitive counts ice=884736 interfacial=0 liquid=0
+rings Ih-884736 chordless 6-rings reference enumeration 1769472, equal to d-SEAMS True, to SQQ True
+bytes Ih-884736 chordless 6-rings sha256: library rows 10d87ff842bdeeab; SQQ rows 10d87ff842bdeeab equal True; brute-force rows 10d87ff842bdeeab equal True; library labels c8962405d4d4d288; brute-force labels c8962405d4d4d288 equal True; brute-force six-ring counts equal True; SQQ labels c8962405d4d4d288 equal True
+rings Ih-884736 chordless 6-rings d-SEAMS 1769472 SQQ ice stage 1769472 both 1769472; d-SEAMS-only 0 (reference chordless 0, on an edge SQQ lacks 0); SQQ-only 0 (reference chordless 0, on an edge SQQ lacks 0); primitive inside 1769472/1769472
+ice Ih-884736 ice-chordless: SQQ rule re-derived on the reference graph and these rings 884736/884736 labels, 884736/884736 six-ring counts; against SQQ 884736/884736; mismatches on or next to an edge SQQ lacks: 0/0
+ice Ih-884736 ice-chordless counts ice=884736 interfacial=0 liquid=0
+frame mw-liquid-884736 molecules 884736 edges_A 299.295316 299.295316 299.295316 source mw-liquid-884736.lammpstrj sha256 f7fecdf2046d005911fd210a925a87c79a90d970c594e487f8d8c2ea61b8266b
+graph mw-liquid-884736 reference 2075074 d-SEAMS 2075074 SQQ 2075073 d-SEAMS^ref 0 SQQ^ref 1 closest_pair_to_cutoff_A 6.300e-07
+rings mw-liquid-884736 d-SEAMS 3-rings 203459 (SQQ does not search size 3)
+rings mw-liquid-884736 size 4 d-SEAMS 273457 SQQ 273454 both 273454 d-SEAMS-only 3, reference shortest-path 3; SQQ-only 0, reference shortest-path 0
+rings mw-liquid-884736 size 5 d-SEAMS 692145 SQQ 692147 both 692144 d-SEAMS-only 1, reference shortest-path 1; SQQ-only 3, reference shortest-path 0
+rings mw-liquid-884736 size 6 d-SEAMS 680918 SQQ 680918 both 680918 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings mw-liquid-884736 reference check of 600 shared rings: 0 fail
+ice mw-liquid-884736 SQQ labels sizes [6] == sizes [4,5,6]: True
+ice mw-liquid-884736 SQQ rule re-derived from the reference graph and SQQ chordless 6-rings: 884736/884736 equal
+ice mw-liquid-884736 chordless 6-rings 992075 primitive 6-rings 680918; SQQ rule on primitive 6-rings changes 6260 labels
+ice mw-liquid-884736 CHILL+ re-derived with scipy Y_3m: 884736/884736 equal
+ice mw-liquid-884736 CHILL+ counts cubic=740 hexagonal=3210 water=826537 interfacial=15105 clathrate=4454 interClathrate=34690
+ice mw-liquid-884736 SQQ counts ice=40357 interfacial=358126 liquid=486253
+ice mw-liquid-884736 confusion (CHILL+ label, SQQ label): clathrate/ice 189; clathrate/interfacial 4163; clathrate/liquid 102; cubic/ice 271; cubic/interfacial 469; hexagonal/ice 732; hexagonal/interfacial 2478; interClathrate/ice 2271; interClathrate/interfacial 32180; interClathrate/liquid 239; interfacial/ice 3568; interfacial/interfacial 11536; interfacial/liquid 1; water/ice 33326; water/interfacial 307300; water/liquid 485911
+ice mw-liquid-884736 merged agreement 498791/884736
+ice mw-liquid-884736 disagreements by rule clause (CHILL+ label | SQQ label | CHILL+ clause | SQQ clause): count
+  water | interfacial | 0 staggered 1 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 61747
+  water | interfacial | 0 staggered 2 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 57215
+  water | interfacial | 1 staggered 1 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 56561
+  water | interfacial | 1 staggered 2 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 33687
+  water | interfacial | 1 staggered 0 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 32813
+  water | interfacial | 0 staggered 0 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 25507
+  interClathrate | interfacial | 0 staggered 3 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 23930
+  water | interfacial | 2 staggered 1 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 16225
+  water | interfacial | 2 staggered 0 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 15017
+  water | ice | 1 staggered 1 eclipsed | two+ six-rings, neighbours 4-coordinated: 7125
+  interClathrate | interfacial | 1 staggered 3 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 6895
+  water | ice | 0 staggered 1 eclipsed | two+ six-rings, neighbours 4-coordinated: 4844
+  remaining 44379 in smaller groups of the same clauses
+ice mw-liquid-884736 global Steinhardt Q6 over 2075074 bonds 0.0004; minimum-image xy span of the oxygens 299.29 by 299.29 A
+ice mw-liquid-884736 reference triangles 203459 d-SEAMS 3-rings 203459
+ice mw-liquid-884736 CHILL+ ice: 3950 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 24; on a 3/4/5-ring 3697; median primitive six-rings 7
+ice mw-liquid-884736 SQQ ice: 40357 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 106; on a 3/4/5-ring 38789; median primitive six-rings 5
+ice mw-liquid-884736 CHILL+ interfacial: 15105 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 49; on a 3/4/5-ring 14521; median primitive six-rings 6
+ice mw-liquid-884736 SQQ interfacial: 358126 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 145; on a 3/4/5-ring 356946; median primitive six-rings 4
+  example mw-liquid-884736 molecule 2 CHILL+ water SQQ interfacial degree 4 six-rings 7 neighbour degrees [4, 4, 4, 5] c_ij -0.266 -0.624 -0.426 -0.440
+  example mw-liquid-884736 molecule 3 CHILL+ interClathrate SQQ ice degree 4 six-rings 4 neighbour degrees [4, 4, 4, 4] c_ij -0.255 -0.830 -0.144 -0.206
+  example mw-liquid-884736 molecule 4 CHILL+ water SQQ interfacial degree 4 six-rings 4 neighbour degrees [4, 4, 5, 5] c_ij -0.627 -0.346 -0.564 0.811
+  example mw-liquid-884736 molecule 6 CHILL+ water SQQ interfacial degree 4 six-rings 9 neighbour degrees [4, 4, 4, 5] c_ij -0.923 -0.614 -0.329 -0.684
+  example mw-liquid-884736 molecule 7 CHILL+ water SQQ interfacial degree 4 six-rings 4 neighbour degrees [5, 5, 5, 5] c_ij 0.389 -0.501 -0.549 -0.461
+ice mw-liquid-884736 ice-primitive: six-rings 680918 equal to seams_rings_find size 6: True
+ice mw-liquid-884736 ice-primitive: SQQ rule re-derived on the reference graph and these rings 884736/884736 labels, 884736/884736 six-ring counts; against SQQ 878476/884736; each mismatch has a primitive and a chordless six-ring count that differ on the molecule or a neighbour: 6260/6260
+ice mw-liquid-884736 ice-primitive counts ice=39373 interfacial=353739 liquid=491624
+rings mw-liquid-884736 chordless 6-rings reference enumeration 992073, equal to d-SEAMS True, to SQQ False
+bytes mw-liquid-884736 chordless 6-rings sha256: library rows b4dd7f93c25c45e8; SQQ rows ecea350c878eab00 equal False; brute-force rows b4dd7f93c25c45e8 equal True; library labels 251fd0d4accda38b; brute-force labels 251fd0d4accda38b equal True; brute-force six-ring counts equal True; SQQ labels 251fd0d4accda38b equal True
+rings mw-liquid-884736 chordless 6-rings d-SEAMS 992073 SQQ ice stage 992075 both 992072; d-SEAMS-only 1 (reference chordless 1, on an edge SQQ lacks 1); SQQ-only 3 (reference chordless 0, on an edge SQQ lacks 3); primitive inside 680918/680918
+ice mw-liquid-884736 ice-chordless: SQQ rule re-derived on the reference graph and these rings 884736/884736 labels, 884736/884736 six-ring counts; against SQQ 884736/884736; mismatches on or next to an edge SQQ lacks: 0/0
+ice mw-liquid-884736 ice-chordless counts ice=40357 interfacial=358126 liquid=486253
+frame tip4p-o-250 molecules 250 edges_A 40.000000 40.000000 180.202657 source input/traj/exampleTraj.lammpstrj type 2
+graph tip4p-o-250 reference 509 d-SEAMS 509 SQQ 509 d-SEAMS^ref 0 SQQ^ref 0 closest_pair_to_cutoff_A 1.122e-03
+rings tip4p-o-250 d-SEAMS 3-rings 37 (SQQ does not search size 3)
+rings tip4p-o-250 size 4 d-SEAMS 273 SQQ 273 both 273 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings tip4p-o-250 size 5 d-SEAMS 34 SQQ 34 both 34 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings tip4p-o-250 size 6 d-SEAMS 167 SQQ 167 both 167 d-SEAMS-only 0, reference shortest-path 0; SQQ-only 0, reference shortest-path 0
+rings tip4p-o-250 reference check of 401 shared rings: 0 fail
+ice tip4p-o-250 SQQ labels sizes [6] == sizes [4,5,6]: True
+ice tip4p-o-250 SQQ rule re-derived from the reference graph and SQQ chordless 6-rings: 250/250 equal
+ice tip4p-o-250 chordless 6-rings 203 primitive 6-rings 167; SQQ rule on primitive 6-rings changes 16 labels
+ice tip4p-o-250 CHILL+ re-derived with scipy Y_3m: 250/250 equal
+ice tip4p-o-250 CHILL+ counts cubic=0 hexagonal=0 water=241 interfacial=0 clathrate=0 interClathrate=9
+ice tip4p-o-250 SQQ counts ice=129 interfacial=77 liquid=44
+ice tip4p-o-250 confusion (CHILL+ label, SQQ label): interClathrate/interfacial 9; water/ice 129; water/interfacial 68; water/liquid 44
+ice tip4p-o-250 merged agreement 44/250
+ice tip4p-o-250 disagreements by rule clause (CHILL+ label | SQQ label | CHILL+ clause | SQQ clause): count
+  water | ice | 0 staggered 2 eclipsed | two+ six-rings, neighbours 4-coordinated: 80
+  water | ice | 0 staggered 1 eclipsed | two+ six-rings, neighbours 4-coordinated: 44
+  water | interfacial | 0 staggered 2 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 41
+  water | interfacial | 0 staggered 1 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 17
+  interClathrate | interfacial | 0 staggered 3 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 9
+  water | interfacial | 0 staggered 0 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 9
+  water | ice | 0 staggered 0 eclipsed | two+ six-rings, neighbours 4-coordinated: 5
+  water | interfacial | 1 staggered 2 eclipsed | two+ six-rings, a neighbour not 4-coordinated: 1
+ice tip4p-o-250 global Steinhardt Q6 over 509 bonds 0.2234; minimum-image xy span of the oxygens 4.93 by 5.00 A
+ice tip4p-o-250 reference triangles 37 d-SEAMS 3-rings 37
+ice tip4p-o-250 CHILL+ ice: 0 molecules
+ice tip4p-o-250 SQQ ice: 129 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 0; on a 3/4/5-ring 129; median primitive six-rings 6
+ice tip4p-o-250 CHILL+ interfacial: 0 molecules
+ice tip4p-o-250 SQQ interfacial: 77 molecules; bulk ice-I ring signature (12 six-rings, no 3/4/5-ring) 0; on a 3/4/5-ring 77; median primitive six-rings 3
+  example tip4p-o-250 molecule 1 CHILL+ water SQQ ice degree 4 six-rings 6 neighbour degrees [4, 4, 4, 4] c_ij 0.852 0.028 -0.070 0.648
+  example tip4p-o-250 molecule 2 CHILL+ water SQQ interfacial degree 4 six-rings 5 neighbour degrees [4, 4, 4, 5] c_ij -0.406 0.481 -0.318 0.667
+  example tip4p-o-250 molecule 3 CHILL+ water SQQ ice degree 4 six-rings 4 neighbour degrees [4, 4, 4, 4] c_ij -0.418 0.892 0.673 0.123
+  example tip4p-o-250 molecule 5 CHILL+ water SQQ ice degree 4 six-rings 4 neighbour degrees [4, 4, 4, 4] c_ij -0.242 0.799 0.618 0.121
+  example tip4p-o-250 molecule 6 CHILL+ water SQQ ice degree 4 six-rings 6 neighbour degrees [4, 4, 4, 4] c_ij -0.202 0.243 0.418 0.664
+ice tip4p-o-250 ice-primitive: six-rings 167 equal to seams_rings_find size 6: True
+ice tip4p-o-250 ice-primitive: SQQ rule re-derived on the reference graph and these rings 250/250 labels, 250/250 six-ring counts; against SQQ 234/250; each mismatch has a primitive and a chordless six-ring count that differ on the molecule or a neighbour: 16/16
+ice tip4p-o-250 ice-primitive counts ice=128 interfacial=62 liquid=60
+rings tip4p-o-250 chordless 6-rings reference enumeration 203, equal to d-SEAMS True, to SQQ True
+bytes tip4p-o-250 chordless 6-rings sha256: library rows 771cf06f0be29719; SQQ rows 771cf06f0be29719 equal True; brute-force rows 771cf06f0be29719 equal True; library labels 39a4b1ef33e2380e; brute-force labels 39a4b1ef33e2380e equal True; brute-force six-ring counts equal True; SQQ labels 39a4b1ef33e2380e equal True
+rings tip4p-o-250 chordless 6-rings d-SEAMS 203 SQQ ice stage 203 both 203; d-SEAMS-only 0 (reference chordless 0, on an edge SQQ lacks 0); SQQ-only 0 (reference chordless 0, on an edge SQQ lacks 0); primitive inside 167/167
+ice tip4p-o-250 ice-chordless: SQQ rule re-derived on the reference graph and these rings 250/250 labels, 250/250 six-ring counts; against SQQ 250/250; mismatches on or next to an edge SQQ lacks: 0/0
+ice tip4p-o-250 ice-chordless counts ice=129 interfacial=77 liquid=44

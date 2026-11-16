@@ -1,0 +1,37 @@
+d-SEAMS 2.14.0 commit 46c308ee6cadc0b7d2231ddc5c48902923fc9b14 code clean
+SQQ 0.5.8 commit 17cf76f9a2fc18848321025674a0f4d4adfa26e8; MDAnalysis 2.11.0
+cutoff 3.5 A; SQQ asks self_capped_distance for pairs within 0.35 + 1e-7 nm and keeps a pair when its float64 distance <= 0.35 nm
+frame Ic-4096 edges reference 8192 d-SEAMS 8192 SQQ 8192 differing 0
+frame Ih-4096 edges reference 8192 d-SEAMS 8192 SQQ 8192 differing 0
+frame mw-liquid-4096 edges reference 9579 d-SEAMS 9579 SQQ 9579 differing 0
+frame tip4p2005-4096 edges reference 10495 d-SEAMS 10495 SQQ 10495 differing 0
+frame Ic-110592 edges reference 221184 d-SEAMS 221184 SQQ 221184 differing 0
+frame Ih-110592 edges reference 221184 d-SEAMS 221184 SQQ 221184 differing 0
+frame mw-liquid-110592 edges reference 259187 d-SEAMS 259187 SQQ 259186 differing 1
+edge mw-liquid-110592 21148-30374 reference True d-SEAMS True SQQ False; float64 3.499998773 A (cutoff - d = 1.227e-06); float32 3.500004292 A; self_capped_distance does not return it
+ice mw-liquid-110592 molecule 21148 SQQ interfacial; SQQ rule on the reference graph liquid (degree 5), on SQQ's graph interfacial (degree 4); next to 21148-30374
+ice mw-liquid-110592 SQQ rule on SQQ's own graph reproduces 110592/110592 SQQ labels
+chordless mw-liquid-110592 SQQ only [414, 2917, 11936, 18660, 21148, 30374] contains 21148-30374; chordless only in SQQ's graph; in the reference graph 21148-30374 is a chord of it
+chordless mw-liquid-110592 SQQ only [414, 4879, 11936, 18660, 21148, 30374] contains 21148-30374; chordless only in SQQ's graph; in the reference graph 21148-30374 is a chord of it
+ice mw-liquid-110592 molecule 21148 SQQ rule on d-SEAMS chordless 6-rings liquid, SQQ interfacial; SQQ rule on the reference graph liquid; next to 21148-30374
+ring mw-liquid-110592 size 4 SQQ only [2917, 4879, 21148, 30374] contains 21148-30374; a chordless cycle of SQQ's graph; in the reference graph 21148-30374 is a chord of it
+ring mw-liquid-110592 size 5 d-SEAMS only [414, 11936, 18660, 21148, 30374] contains 21148-30374; shortest-path ring of the reference graph
+ring mw-liquid-110592 size 6 SQQ only [414, 2917, 11936, 18660, 21148, 30374] contains 21148-30374; a chordless cycle of SQQ's graph; in the reference graph 21148-30374 is a chord of it
+ring mw-liquid-110592 size 6 SQQ only [414, 4879, 11936, 18660, 21148, 30374] contains 21148-30374; a chordless cycle of SQQ's graph; in the reference graph 21148-30374 is a chord of it
+frame Ic-884736 edges reference 1769472 d-SEAMS 1769472 SQQ 1769472 differing 0
+frame Ih-884736 edges reference 1769472 d-SEAMS 1769472 SQQ 1769472 differing 0
+frame mw-liquid-884736 edges reference 2075074 d-SEAMS 2075074 SQQ 2075073 differing 1
+edge mw-liquid-884736 577713-605742 reference True d-SEAMS True SQQ False; float64 3.499991286 A (cutoff - d = 8.714e-06); float32 3.499984264 A; self_capped_distance does not return it
+ice mw-liquid-884736 SQQ rule on SQQ's own graph reproduces 884736/884736 SQQ labels
+chordless mw-liquid-884736 d-SEAMS only [532114, 577713, 596332, 605742, 615151, 633872] contains 577713-605742; chordless in the reference graph
+chordless mw-liquid-884736 SQQ only [513961, 577713, 605742, 614092, 614668, 642416] contains 577713-605742; chordless only in SQQ's graph; in the reference graph 577713-605742 is a chord of it
+chordless mw-liquid-884736 SQQ only [513961, 577713, 605742, 614668, 615151, 642416] contains 577713-605742; chordless only in SQQ's graph; in the reference graph 577713-605742 is a chord of it
+chordless mw-liquid-884736 SQQ only [532114, 577713, 605742, 615151, 633003, 642416] contains 577713-605742; chordless only in SQQ's graph; in the reference graph 577713-605742 is a chord of it
+ring mw-liquid-884736 size 4 d-SEAMS only [513961, 577713, 605742, 642416] contains 577713-605742; shortest-path ring of the reference graph
+ring mw-liquid-884736 size 4 d-SEAMS only [577713, 605742, 614092, 614668] contains 577713-605742; shortest-path ring of the reference graph
+ring mw-liquid-884736 size 4 d-SEAMS only [577713, 605742, 614668, 615151] contains 577713-605742; shortest-path ring of the reference graph
+ring mw-liquid-884736 size 5 d-SEAMS only [532114, 577713, 605742, 615151, 642416] contains 577713-605742; shortest-path ring of the reference graph
+ring mw-liquid-884736 size 5 SQQ only [513961, 577713, 605742, 633003, 642416] contains 577713-605742; a chordless cycle of SQQ's graph; in the reference graph 577713-605742 is a chord of it
+ring mw-liquid-884736 size 5 SQQ only [577713, 605742, 614092, 614668, 633003] contains 577713-605742; a chordless cycle of SQQ's graph; in the reference graph 577713-605742 is a chord of it
+ring mw-liquid-884736 size 5 SQQ only [577713, 605742, 614668, 615151, 633003] contains 577713-605742; a chordless cycle of SQQ's graph; in the reference graph 577713-605742 is a chord of it
+frame tip4p-o-250 edges reference 509 d-SEAMS 509 SQQ 509 differing 0

@@ -408,6 +408,13 @@ executable('bench_rings_incremental', 'bench_rings_incremental.cpp',
   include_directories: _incdirs,
   build_rpath: '$ORIGIN/../src')
 
+bench_ring_carry = executable('bench_ring_carry', 'bench_ring_carry.cpp',
+  dependencies: [yds_dep],
+  cpp_args: _args,
+  link_args: _test_link_args,
+  include_directories: _incdirs,
+  build_rpath: '$ORIGIN/../src')
+
 executable('bench_ring_ic', 'bench_ring_ic.cpp',
   dependencies: [yds_dep],
   cpp_args: _args,
@@ -631,6 +638,35 @@ test('option_names', find_program('python3'),
          meson.project_build_root()],
   workdir: meson.project_source_root(),
   timeout: 60)
+test('cycless_pentagon', find_program('python3'),
+  args: [files('test_cycless_pentagon.py'),
+         meson.project_build_root() / 'src' / 'libseams.so'],
+  workdir: meson.project_source_root(),
+  timeout: 120)
+test('sqq_sh_triclinic', find_program('python3'),
+  args: [files('test_sqq_sh.py')],
+  workdir: meson.project_source_root(),
+  timeout: 60)
+test('ring_carry', bench_ring_carry,
+  args: ['800', '2'],
+  timeout: 180)
+# These two compare eight-thread times, so they run alone.
+test('q6_mdapy', find_program('python3'),
+  args: [files('test_q6_mdapy.py')],
+  workdir: meson.project_source_root(),
+  timeout: 180,
+  is_parallel: false)
+test('ring_carry_fraction', find_program('python3'),
+  args: [files('test_ring_carry_fraction.py'),
+         meson.project_build_root() / 'tests' / 'bench_ring_carry'],
+  workdir: meson.project_source_root(),
+  timeout: 300,
+  is_parallel: false)
+test('ovito_chill_atoms', find_program('python3'),
+  args: [files('test_ovito_chill_atoms.py'),
+         meson.project_build_root() / 'src' / 'libseams.so'],
+  workdir: meson.project_source_root(),
+  timeout: 180)
 test('ovito_ring_counts', find_program('python3'),
   args: [files('test_ovito_ring_counts.py'),
          meson.project_build_root() / 'tests' / 'bench_ring_ic'],
@@ -649,6 +685,29 @@ test('mw215_frame', find_program('python3'),
   args: [files('test_mw215_deck.py'), 'frame'],
   workdir: meson.project_source_root(),
   timeout: 600)
+
+test('omp_threads',
+  executable('test_omp_threads', 'test_omp_threads.cpp',
+    dependencies: [yds_dep, catch2_dep],
+    link_with: seams_api_lib,
+    cpp_args: _args + ['-I' + meson.project_build_root() / 'src'],
+    link_args: _test_link_args,
+    include_directories: [_incdirs, include_directories('../include')],
+    build_rpath: _test_rpath),
+  env: _test_env,
+  timeout: 120)
+
+test('chill_mixed',
+  executable('test_chill_mixed', 'test_chill_mixed.cpp',
+    dependencies: [yds_dep, catch2_dep],
+    link_with: seams_api_lib,
+    cpp_args: _args + ['-I' + meson.project_build_root() / 'src'],
+    link_args: _test_link_args,
+    include_directories: [_incdirs, include_directories('../include')],
+    build_rpath: _test_rpath),
+  workdir: meson.project_source_root(),
+  env: _test_env,
+  timeout: 120)
 
 dump_faults = shared_module('dump_faults', 'dump_faults_preload.c', name_prefix: 'lib')
 dump_fault_driver = executable('dump_fault_driver', 'dump_fault_driver.cpp',

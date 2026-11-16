@@ -66,3 +66,39 @@ end
     tau = jump_tau90(frame, frame, 1.0)
     @test isnan(tau) || isfinite(tau)
 end
+
+
+# chordless_ref output: atoms, n_rings, size, the 0-based rows, then the
+# per-atom counts. Rows come back one cycle per row.
+function chordless_reference(path)
+    values = parse.(Int, split(read(path, String)))
+    atoms, count, width = values[1:3]
+    rows = permutedims(reshape(values[4:3+count*width], width, count))
+    per = values[4+count*width:end]
+    @test length(per) == atoms
+    return rows, per, width
+end
+
+@testset "chordless cycles match the C reference" begin
+    ref = get(ENV, "SEAMS_CHORDLESS_REF", "")
+    if isempty(ref)
+        @test_skip "SEAMS_CHORDLESS_REF is not set"
+    else
+        rows, per, width = chordless_reference(ref)
+        @test size(rows, 1) > 0
+        frame = read_frame(tip; type = 2)
+        found = rings_chordless(frame; size = width)
+        @test found.cycles == permutedims(rows) .+ 1
+        @test found.per_atom == per
+        sys = seams_system_read(System(), tip, 1, 2)
+        raw, raw_per = seams_rings_chordless(sys; size = width)
+        @test raw == rows
+        @test raw_per == per
+        @test_throws ErrorException rings_chordless(frame; size = 13)
+    end
+end
+
+@testset "seams.h matches the C++ path" begin
+    include(joinpath(@__DIR__, "..", "..", "cpp_match.jl"))
+    check_seams_against_cpp()
+end
