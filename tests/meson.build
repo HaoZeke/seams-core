@@ -45,6 +45,7 @@ test_sources = {
   'cage_canon': 'test_cage_canon.cpp',
   'topo_fingerprint': 'test_topo_fingerprint.cpp',
   'fingerprint_edges': 'test_fingerprint_edges.cpp',
+  'fingerprint_fast': 'test_fingerprint_fast.cpp',
   'ion_env': 'test_ion_env.cpp',
   'brine_front': 'test_brine_front.cpp',
   'guest_occupancy': 'test_guest_occupancy.cpp',
