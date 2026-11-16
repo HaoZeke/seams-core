@@ -871,29 +871,23 @@ void enumerateChordlessPlain(const Graph &adjacency, const DistOracle &oracle,
             // test that does not look at the near vertex. The hits are a
             // plain total: one add per source, not one atomic per ring.
             if constexpr (ShellWords != 3) {
-              // Test each neighbour of the far vertex in place. Staging the
-              // ones that clear the near vertex into a side vector is slower
-              // than repeating that test.
-              thread_local std::vector<int> slotOf;
-              thread_local std::vector<int> usedD;
-              thread_local std::vector<std::vector<int>> bucket;
-              if (static_cast<int>(slotOf.size()) != nVertices) {
-                slotOf.assign(static_cast<std::size_t>(nVertices), -1);
-              }
-              usedD.clear();
-              for (const auto &right : rights) {
-                const int d = right.second;
-                int slot = slotOf[static_cast<std::size_t>(d)];
-                if (slot < 0) {
-                  slot = static_cast<int>(usedD.size());
-                  slotOf[static_cast<std::size_t>(d)] = slot;
-                  if (slot == static_cast<int>(bucket.size())) {
-                    bucket.emplace_back();
-                  }
-                  bucket[static_cast<std::size_t>(slot)].clear();
-                  usedD.push_back(d);
+              // Kept right arms are still grouped by the far vertex, so the
+              // group is a run. Copying each run into its own vector costs
+              // more than reading the run in place.
+              thread_local std::vector<int> runD;
+              thread_local std::vector<int> runAt;
+              runD.clear();
+              runAt.clear();
+              runAt.push_back(0);
+              for (std::size_t j = 0; j < rights.size();) {
+                const int d = rights[j].second;
+                std::size_t j1 = j + 1;
+                while (j1 < rights.size() && rights[j1].second == d) {
+                  ++j1;
                 }
-                bucket[static_cast<std::size_t>(slot)].push_back(right.first);
+                runD.push_back(d);
+                runAt.push_back(static_cast<int>(j1));
+                j = j1;
               }
               const bool record7 = 7 < static_cast<int>(hist->size());
               for (std::size_t i0 = 0; i0 < lefts.size();) {
@@ -902,14 +896,15 @@ void enumerateChordlessPlain(const Graph &adjacency, const DistOracle &oracle,
                 while (i1 < lefts.size() && lefts[i1].second == b) {
                   ++i1;
                 }
-                for (int slot = 0; slot < static_cast<int>(usedD.size()); slot++) {
-                  const int d = usedD[static_cast<std::size_t>(slot)];
+                for (int slot = 0; slot < static_cast<int>(runD.size()); slot++) {
+                  const int d = runD[static_cast<std::size_t>(slot)];
                   // The same far vertex, or one next to this near vertex,
                   // fails every arm of the run. Test that before the arms.
                   if (within2(b, d) || d == b || adjacent(p, d)) {
                     continue;
                   }
-                  const auto &cs = bucket[static_cast<std::size_t>(slot)];
+                  const int c0 = runAt[static_cast<std::size_t>(slot)];
+                  const int c1 = runAt[static_cast<std::size_t>(slot) + 1];
                   // A reverse edge puts a on b's neighbour row, so c == a and
                   // an a-c edge are already within two steps of b. The arms
                   // and the far neighbours then multiply. A one-way edge keeps
@@ -925,8 +920,8 @@ void enumerateChordlessPlain(const Graph &adjacency, const DistOracle &oracle,
                       continue;
                     }
                     int nc = 0;
-                    for (const int c : cs) {
-                      if (!within2(b, c)) {
+                    for (int j = c0; j < c1; j++) {
+                      if (!within2(b, rights[static_cast<std::size_t>(j)].first)) {
                         nc++;
                       }
                     }
@@ -940,7 +935,8 @@ void enumerateChordlessPlain(const Graph &adjacency, const DistOracle &oracle,
                     if (within2(a, d)) {
                       continue;
                     }
-                    for (const int c : cs) {
+                    for (int j = c0; j < c1; j++) {
+                      const int c = rights[static_cast<std::size_t>(j)].first;
                       if (c == a || adjacent(a, c) || within2(b, c)) {
                         continue;
                       }
@@ -951,9 +947,6 @@ void enumerateChordlessPlain(const Graph &adjacency, const DistOracle &oracle,
                   }
                 }
                 i0 = i1;
-              }
-              for (const int d : usedD) {
-                slotOf[static_cast<std::size_t>(d)] = -1;
               }
             } else {
               byD.clear();
