@@ -869,9 +869,30 @@ def self_test() -> None:
     else:
         raise SystemExit("shard 5/4 was accepted")
     paper = ROOT / "data"
-    for name in ("committor-table.csv", "committor-summary.csv"):
-        if (paper / name).read_text() != PENDING:
-            raise SystemExit(f"{name} is not the pending header")
+    shard_dir = paper / "committor-shards"
+    shots = merge_shot_dir(shard_dir) if shard_dir.is_dir() else []
+    if not shots:
+        for name in ("committor-table.csv", "committor-summary.csv"):
+            if (paper / name).read_text() != PENDING:
+                raise SystemExit(f"{name} is not the pending header")
+    else:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            table = Path(tmp) / "table.csv"
+            summary = Path(tmp) / "summary.csv"
+            write_merged(table, summary, shots, "check", "$LMP", shard_dir)
+
+            def fate_rows(path: Path) -> list[list[str]]:
+                body = [line for line in path.read_text().splitlines()
+                        if line and not line.startswith("#")]
+                # The last column is the tree that wrote the file.
+                return [line.split(",")[:-1] for line in body[1:]]
+
+            if fate_rows(paper / "committor-table.csv") != fate_rows(table):
+                raise SystemExit(f"committor-table.csv does not match the shard fates {fate_rows(table)}")
+            if fate_rows(paper / "committor-summary.csv") != fate_rows(summary):
+                raise SystemExit(
+                    f"committor-summary.csv does not match the shard fates {fate_rows(summary)}")
     fixture = ROOT / "data" / "committor-merge-fixture"
     banner = "# synthetic test fixture: hand-constructed, not simulation output"
     for name in ("shot-0-of-3.csv", "shot-1-of-3.csv"):

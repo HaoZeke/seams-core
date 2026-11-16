@@ -1,1 +1,8 @@
-pending: 4096-molecule p_B(n)
+# source_tree 75a623b07ece2151310c61f83d3bf25e08cab9e1
+# command $LMP -in input/nucleation/in.homogeneous -var n 16 --seeds 20261111-20261130
+# shards present [0, 1, 2, 3] of 20; missing [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]; nucleation_none [1, 2, 3]
+shoot_n,p_B,committed,resolved,source_tree
+50,0.000000,0,20,75a623b07ece2151310c61f83d3bf25e08cab9e1
+75,0.000000,0,20,75a623b07ece2151310c61f83d3bf25e08cab9e1
+275,1.000000,20,20,75a623b07ece2151310c61f83d3bf25e08cab9e1
+300,1.000000,20,20,75a623b07ece2151310c61f83d3bf25e08cab9e1
