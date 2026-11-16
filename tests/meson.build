@@ -782,7 +782,12 @@ test('chill_mixed',
   env: _test_env,
   timeout: 120)
 
-dump_faults = shared_module('dump_faults', 'dump_faults_preload.c', name_prefix: 'lib')
+# dyld inserts only dylibs, and meson links a shared_module as a bundle there.
+if host_machine.system() == 'darwin'
+  dump_faults = shared_library('dump_faults', 'dump_faults_preload.c')
+else
+  dump_faults = shared_module('dump_faults', 'dump_faults_preload.c', name_prefix: 'lib')
+endif
 dump_fault_driver = executable('dump_fault_driver', 'dump_fault_driver.cpp',
   dependencies: [yds_dep],
   include_directories: _incdirs,
