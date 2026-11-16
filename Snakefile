@@ -756,6 +756,24 @@ rule omp_scaling:
         "python3 scripts/omp_scaling.py --out bench/omp-scaling --repeats 10 {params.before}"
 
 
+# Ice Ic at 1000, 10648 and 110592 molecules, serial and 8 threads, n=30.
+# One process per code. Other processes are stopped for the sample.
+# LIT_PYTHON is the interpreter that imports freud, OVITO, mdapy, pyscal3 and vesin.
+rule literature_sitting:
+    input:
+        "scripts/lit_one_sitting.py",
+        "scripts/paper_stats.py",
+        "scripts/release_build.py",
+        "bbdir-release/src/libyodaLib.so",
+        "bbdir-release/src/libseams.so",
+        "bbdir-release/bindings/libseams_lang.so",
+    output:
+        "benchmarks/literature/h2h-lit.csv",
+        "benchmarks/literature/raw-lit.txt",
+    shell:
+        "\"${{LIT_PYTHON:-python3}}\" scripts/lit_one_sitting.py --out benchmarks/literature"
+
+
 # One command per table. Each file is a selection of sitting.csv.
 rule paper_tables:
     input:

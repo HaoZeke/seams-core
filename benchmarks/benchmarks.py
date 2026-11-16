@@ -1231,3 +1231,58 @@ for _name in ("time_dseams", "time_sqq"):
     getattr(H2HSqq, _name).number = 1
     getattr(H2HSqq, _name).repeat = 8
     getattr(H2HSqq, _name).warmup_time = 0
+
+
+class LiteratureSitting:
+    """One ice-Ic sample at the literature-sitting boundary.
+
+    The timed body is one subprocess, the same worker as
+    scripts/lit_one_sitting.py. The Snakemake rule literature_sitting
+    writes the n=30 table. This class does not import the rival
+    libraries into the asv process.
+    """
+
+    params = []
+    for _code, _ops in (
+        ("d-SEAMS", ("neighbours", "q4", "q6", "chill_plus", "rings")),
+        ("freud", ("neighbours", "q6")),
+        ("OVITO", ("neighbours", "chill_plus", "rings")),
+        ("mdapy", ("q6", "chill_plus")),
+        ("pyscal3", ("q6",)),
+        ("vesin", ("neighbours",)),
+    ):
+        for _op in _ops:
+            params.append((_code, _op, 8))
+    param_names = ["code", "operation", "threads"]
+
+    def setup(self, code, operation, threads):
+        self._script = ROOT / "scripts" / "lit_one_sitting.py"
+        self._python = os.environ.get("LIT_PYTHON", sys.executable)
+        lib = Path(os.environ.get(
+            "SEAMS_CORE_LIB", str(ROOT / "bbdir-release" / "src" / "libyodaLib.so")))
+        if not lib.is_file() or not self._script.is_file():
+            raise RuntimeError("release libyodaLib.so or lit_one_sitting.py is missing")
+        self._lib = lib
+
+    def time_one(self, code, operation, threads):
+        env = os.environ.copy()
+        env["LIT_ALLOW_SHORT"] = "1"
+        env["LIT_N"] = "1"
+        env["LIT_WARMUP"] = "0"
+        cmd = [
+            self._python, str(self._script),
+            "--out", str(ROOT / "bbdir" / "lit-asv"),
+            "--lib", str(self._lib),
+            "--repeats", "1", "--warmup", "0",
+            "--sizes", "110592",
+        ]
+        # The full plan is the Snakemake rule. asv times one cell by
+        # running that cell's code in its own process through the same
+        # driver, restricted with LIT_ONLY.
+        env["LIT_ONLY"] = f"{code},{operation},{threads}"
+        subprocess.run(cmd, cwd=ROOT, env=env, check=True)
+
+
+LiteratureSitting.time_one.number = 1
+LiteratureSitting.time_one.repeat = 1
+LiteratureSitting.time_one.warmup_time = 0

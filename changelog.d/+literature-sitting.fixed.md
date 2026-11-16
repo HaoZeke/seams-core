@@ -1,0 +1,1 @@
+The literature sitting times neighbours, q4, q6, CHILL+ and rings on ice Ic with one code running at a time. Rival thread pools are stopped between samples, OpenBLAS stays at one thread, and d-SEAMS uses the flat C API and an active OpenMP wait, so an 8-thread sample matches the OpenMP scaling table instead of the 50-70 ms collapse from a shared spin window.

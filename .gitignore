@@ -426,3 +426,4 @@ bench/local/
 docs/_build/
 __pycache__/
 sqq-src/
+benchmarks/literature/frames/
