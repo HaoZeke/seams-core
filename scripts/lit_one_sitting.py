@@ -51,6 +51,7 @@ REPEATS = 30
 SIZES = (1000, 10648, 110592)
 WIDTHS = (1, 8)
 PHASE = "Ic"
+DEFAULT_CSV = ROOT / "benchmarks" / "literature" / "h2h-lit.csv"
 
 # code -> operations it actually implements. A missing operation is not a
 # skipped test; it is not part of the plan.
@@ -807,6 +808,10 @@ def main() -> int:
     parser.add_argument("--repeats", type=int, default=int(os.environ.get("LIT_N", str(REPEATS))))
     parser.add_argument("--warmup", type=int, default=int(os.environ.get("LIT_WARMUP", str(WARMUP))))
     parser.add_argument("--sizes", default=",".join(str(s) for s in SIZES))
+    parser.add_argument(
+        "--handoff", type=Path,
+        default=Path(os.environ.get("LIT_HANDOFF", str(DEFAULT_CSV))),
+        help="second copy of h2h-lit.csv; skipped when it is the --out table itself")
     args = parser.parse_args()
     if args.repeats < REPEATS and os.environ.get("LIT_ALLOW_SHORT") != "1":
         parser.error(f"--repeats must be at least {REPEATS}")
@@ -1044,8 +1049,9 @@ def main() -> int:
         if not ok and row["operation"] != "rings":
             failures.append(
                 f"{row['code']} {row['operation']} {row['molecules']} t{row['threads']}: {note}")
-    handoff = Path("/cursor/stores/bot/handoff-dseams/h2h-lit-v93.csv")
-    if handoff.parent.is_dir() and os.access(handoff.parent, os.W_OK):
+    handoff = args.handoff.resolve()
+    if handoff != out_csv.resolve():
+        handoff.parent.mkdir(parents=True, exist_ok=True)
         handoff.write_text(out_csv.read_text(encoding="utf-8"), encoding="utf-8")
         print(f"wrote {handoff}", flush=True)
     print(f"wrote {out_csv}", flush=True)
