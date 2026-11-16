@@ -579,11 +579,18 @@ int classify_chill(seams_frame *frame, double cutoff, int type,
     // kernel handles an orthorhombic cell and a restricted triclinic cell.
     // The CSR route covers the same cells when that kernel declines, and
     // every other graph keeps the neighbour list the caller asked for.
+    // OVITO cutoff CHILL+ reads the same CSR when every atom id is unique,
+    // so that cloud indices name the neighbours of the id rows.
+    const bool ovitoCutoff =
+        plus && which == "cutoff" && !published &&
+        chill::chillPlusRule(ruleText) == chill::ChillPlusRule::Ovito &&
+        frame->cloud.idIndexMap.size() ==
+            static_cast<std::size_t>(frame->cloud.nop);
     bool publishedCutoff = false;
     if (plus && which == "cutoff" && published &&
         chill::chillPlusPublishedCutoff(frame->cloud, cutoff, typ)) {
       publishedCutoff = true;
-    } else if (plus && which == "cutoff" && published) {
+    } else if ((plus && which == "cutoff" && published) || ovitoCutoff) {
       std::vector<int> subset;
       const std::vector<int> *sub = nullptr;
       if (typ > 0) {
@@ -598,7 +605,11 @@ int classify_chill(seams_frame *frame, double cutoff, int type,
       std::vector<int> offsets;
       std::vector<int> cols;
       if (nneigh::orthoFullCsr(frame->cloud, sub, cutoff, offsets, cols, false)) {
-        chill::chillPlusFromCsr(frame->cloud, offsets, cols);
+        if (ovitoCutoff) {
+          chill::chillPlusOvitoFromCsr(frame->cloud, offsets, cols);
+        } else {
+          chill::chillPlusFromCsr(frame->cloud, offsets, cols);
+        }
         write_ice_labels(frame, type, labels, counts9);
         return 0;
       }

@@ -29,6 +29,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -100,6 +101,37 @@ Cloud diamond(int nrep) {
     }
   }
   return cloud;
+}
+
+// The cutoff CSR kernel against applyChillPlus on the id rows of that
+// CSR and on the rows neighListO builds: every label, and every bond in
+// the same order with the same correlation bits.
+void requireOvitoCsrMatchesRows(const Cloud &cloud) {
+  std::vector<int> offsets;
+  std::vector<int> cols;
+  REQUIRE(nneigh::orthoFullCsr(cloud, nullptr, 3.5, offsets, cols, false));
+  std::vector<int> indexToID(static_cast<std::size_t>(cloud.nop));
+  for (int i = 0; i < cloud.nop; ++i) {
+    indexToID[static_cast<std::size_t>(i)] = cloud.pts[static_cast<std::size_t>(i)].atomID;
+  }
+  auto byCsr = cloud;
+  chill::chillPlusOvitoFromCsr(byCsr, offsets, cols);
+  for (const auto &rows : {nneigh::idRowsFromCsr(cloud, indexToID, offsets, cols),
+                           nneigh::neighListO(3.5, cloud, 1)}) {
+    auto byRows = cloud;
+    chill::applyChillPlus(byRows, rows, chill::ChillPlusRule::Ovito, false);
+    for (int i = 0; i < cloud.nop; ++i) {
+      const auto &a = byCsr.pts[static_cast<std::size_t>(i)];
+      const auto &b = byRows.pts[static_cast<std::size_t>(i)];
+      INFO("atom " << i);
+      REQUIRE(a.iceType == b.iceType);
+      REQUIRE(a.c_ij.size() == b.c_ij.size());
+      for (std::size_t k = 0; k < a.c_ij.size(); ++k) {
+        REQUIRE(std::memcmp(&a.c_ij[k].c_value, &b.c_ij[k].c_value, sizeof(double)) == 0);
+        REQUIRE(a.c_ij[k].classifier == b.c_ij[k].classifier);
+      }
+    }
+  }
 }
 
 int labelAt(const Cloud &cloud, int i) {
@@ -937,4 +969,30 @@ TEST_CASE("liquid CHILL+ keeps the published four-nearest q3", "[chill][rule]") 
     moved = std::max(moved, std::abs(left[i] - right[i]));
   }
   REQUIRE(moved > 0.1);
+}
+
+TEST_CASE("the ovito-chill+ cutoff CSR kernel gives the row-path labels and bonds",
+          "[chill][rule]") {
+  requireOvitoCsrMatchesRows(readXyz("chill-def/liquid-four-nearest.txt").cloud);
+  for (const double sigma : {0.0, 0.2, 0.45}) {
+    auto cloud = diamond(6);
+    std::mt19937 rng(17);
+    std::normal_distribution<double> noise(0.0, sigma);
+    for (auto &p : cloud.pts) {
+      if (sigma > 0.0) {
+        p.x += noise(rng);
+        p.y += noise(rng);
+        p.z += noise(rng);
+      }
+    }
+    INFO("sigma " << sigma);
+    requireOvitoCsrMatchesRows(cloud);
+  }
+  for (int frame = 1; frame <= 3; ++frame) {
+    Cloud cloud;
+    cloud = sinp::readLammpsTrj("traj/nucleation_three.lammpstrj", frame, cloud);
+    REQUIRE(cloud.nop == 4096);
+    INFO("nucleation frame " << frame);
+    requireOvitoCsrMatchesRows(cloud);
+  }
 }

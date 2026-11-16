@@ -2641,6 +2641,138 @@ int chill::chillPlusFromCsr(molSys::PointCloud<molSys::Point<double>, double> &y
   return cubic;
 }
 
+int chill::chillPlusOvitoFromCsr(
+    molSys::PointCloud<molSys::Point<double>, double> &yCloud,
+    const std::vector<int> &offsets, const std::vector<int> &cols) {
+  const int n = yCloud.nop;
+  if (n <= 0 || static_cast<int>(offsets.size()) < n + 1) {
+    return 0;
+  }
+  seams::prepareCompute();
+  [[maybe_unused]] const seams::TeamWidth team(n);
+  const gen::FracBox frame = gen::makeFracBox(yCloud);
+  const bool useAvx = __builtin_cpu_supports("avx2") && __builtin_cpu_supports("fma");
+  const auto &norm = normQ3();
+  const chill::BondClassifier rule = chill::chillPlusRule();
+  const std::size_t nnz = static_cast<std::size_t>(offsets[static_cast<std::size_t>(n)]);
+  // Every slot below is written before it is read, so none is zeroed.
+  std::unique_ptr<double[]> q(new double[static_cast<std::size_t>(n) * kRealL3]);
+  std::unique_ptr<double[]> qn(new double[static_cast<std::size_t>(n)]);
+  std::unique_ptr<int[]> order(new int[std::max<std::size_t>(nnz, 1)]);
+  std::unique_ptr<int[]> nkeep(new int[static_cast<std::size_t>(n)]);
+  // The whole cutoff shell, nearest first with the index breaking a tie,
+  // is the q3 sum and the bond list of getCorrelPlus with no
+  // coordination limit. The sum runs in that order, four bonds a batch.
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for schedule(static) if (n >= 2048 && omp_get_max_threads() > 1)
+#endif
+  for (int i = 0; i < n; ++i) {
+    struct Near {
+      double d2;
+      int j;
+      double x, y, z;
+      bool operator<(const Near &o) const { return d2 < o.d2 || (d2 == o.d2 && j < o.j); }
+    };
+    Near stackNear[32];
+    std::vector<Near> heapNear;
+    const int a = offsets[static_cast<std::size_t>(i)];
+    const int b = offsets[static_cast<std::size_t>(i) + 1];
+    Near *near = stackNear;
+    if (b - a > 32) {
+      heapNear.resize(static_cast<std::size_t>(b - a));
+      near = heapNear.data();
+    }
+    const auto &pi = yCloud.pts[static_cast<std::size_t>(i)];
+    int keep = 0;
+    for (int k = a; k < b; ++k) {
+      const int j = cols[static_cast<std::size_t>(k)];
+      if (j < 0 || j >= n || j == i) {
+        continue;
+      }
+      const auto &pj = yCloud.pts[static_cast<std::size_t>(j)];
+      const auto dr = gen::fracDelta(frame, pi.x, pi.y, pi.z, pj.x, pj.y, pj.z);
+      near[keep++] = {dr[0] * dr[0] + dr[1] * dr[1] + dr[2] * dr[2], j, dr[0], dr[1], dr[2]};
+    }
+    std::sort(near, near + keep);
+    nkeep[static_cast<std::size_t>(i)] = keep;
+    double acc[kRealL3] = {};
+    for (int s = 0; s < keep;) {
+      double xs[4];
+      double ys[4];
+      double zs[4];
+      int batch = 0;
+      for (; batch < 4 && s < keep; ++s, ++batch) {
+        order[static_cast<std::size_t>(a + s)] = near[s].j;
+        xs[batch] = near[s].x;
+        ys[batch] = near[s].y;
+        zs[batch] = near[s].z;
+      }
+      if (useAvx) {
+        realYlm3Accumulate(xs, ys, zs, batch, acc);
+      } else {
+        for (int item = 0; item < batch; ++item) {
+          addRealYlm3Scalar(xs[item], ys[item], zs[item], norm, acc);
+        }
+      }
+    }
+    double *dst = q.get() + static_cast<std::size_t>(i) * kRealL3;
+    for (int c = 0; c < kRealL3; ++c) {
+      dst[c] = acc[c];
+    }
+    qn[static_cast<std::size_t>(i)] = useAvx ? realL3Dot(acc, acc) : realL3DotScalar(acc, acc);
+  }
+  // No neighbour test: a label reads only the atom's own bonds, so it is
+  // written with them. A crystal row needs exactly four shell members.
+  int cubic = 0;
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel for reduction(+ : cubic) schedule(static) \
+    if (n >= 2048 && omp_get_max_threads() > 1)
+#endif
+  for (int i = 0; i < n; ++i) {
+    const int keep = nkeep[static_cast<std::size_t>(i)];
+    const int a = offsets[static_cast<std::size_t>(i)];
+    auto &bonds = yCloud.pts[static_cast<std::size_t>(i)].c_ij;
+    bonds.clear();
+    bonds.reserve(static_cast<std::size_t>(keep));
+    const double *qi = q.get() + static_cast<std::size_t>(i) * kRealL3;
+    const double ni = qn[static_cast<std::size_t>(i)];
+    int nstag = 0;
+    int neclip = 0;
+    for (int s = 0; s < keep; ++s) {
+      const int j = order[static_cast<std::size_t>(a + s)];
+      const double *qj = q.get() + static_cast<std::size_t>(j) * kRealL3;
+      molSys::Result bond;
+      bond.c_value = correlationOf(useAvx ? realL3Dot(qi, qj) : realL3DotScalar(qi, qj), ni,
+                                   qn[static_cast<std::size_t>(j)]);
+      bond.classifier = chill::classifyBond(bond.c_value, rule, false);
+      if (bond.classifier == molSys::bond_type::staggered) {
+        ++nstag;
+      } else if (bond.classifier == molSys::bond_type::eclipsed) {
+        ++neclip;
+      }
+      bonds.push_back(bond);
+    }
+    auto &ice = yCloud.pts[static_cast<std::size_t>(i)].iceType;
+    if (keep != 4) {
+      ice = molSys::atom_state_type::water;
+    } else if (neclip == 0 && nstag == 4) {
+      ice = molSys::atom_state_type::cubic;
+      ++cubic;
+    } else if (neclip == 1 && nstag == 3) {
+      ice = molSys::atom_state_type::hexagonal;
+    } else if (nstag == 2 || (nstag == 3 && neclip == 0)) {
+      ice = molSys::atom_state_type::interfacial;
+    } else if (neclip == 4 && nstag == 0) {
+      ice = molSys::atom_state_type::clathrate;
+    } else if (neclip == 3) {
+      ice = molSys::atom_state_type::interClathrate;
+    } else {
+      ice = molSys::atom_state_type::water;
+    }
+  }
+  return cubic;
+}
+
 void
 chill::getCorrelPlus(molSys::PointCloud<molSys::Point<double>, double> &yCloud,
                      const std::vector<std::vector<int>> &nList, bool isSlice,

@@ -990,7 +990,11 @@ seams_status seams_chill_plus(seams_system *sys, double cutoff, int type, int gr
     const auto fair = use_threads();
     int typ = 1;
     Cloud &work = kernel_cloud(sys, type, typ);
-    if (rule == SEAMS_CHILL_PUBLISHED && graph == SEAMS_GRAPH_CUTOFF) {
+    // Both rules read the cutoff shell from the in-tree CSR at every
+    // width. Atom ids are unique on a system, so cloud indices name the
+    // same neighbours as the id rows. The row list stays for the
+    // mutual graph and for a box that CSR does not cover.
+    if (graph == SEAMS_GRAPH_CUTOFF) {
       std::vector<int> subset;
       const std::vector<int> *sub = nullptr;
       if (type > 0) {
@@ -1005,7 +1009,11 @@ seams_status seams_chill_plus(seams_system *sys, double cutoff, int type, int gr
       std::vector<int> offsets;
       std::vector<int> cols;
       if (nneigh::orthoFullCsr(work, sub, cutoff, offsets, cols, false)) {
-        chill::chillPlusFromCsr(work, offsets, cols);
+        if (rule == SEAMS_CHILL_OVITO) {
+          chill::chillPlusOvitoFromCsr(work, offsets, cols);
+        } else {
+          chill::chillPlusFromCsr(work, offsets, cols);
+        }
         write_ice_labels(work, type, labels, counts9);
         return SEAMS_OK;
       }

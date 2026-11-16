@@ -249,6 +249,14 @@ void classifyBondsCsr(molSys::PointCloud<molSys::Point<double>, double> &yCloud,
 int chillPlusFromCsr(molSys::PointCloud<molSys::Point<double>, double> &yCloud,
                      const std::vector<int> &offsets, const std::vector<int> &cols);
 
+//! ovito-chill+ labels from a cutoff CSR of cloud indices: the whole shell
+//! in q3 and c_ij, open edges, no neighbour test. The same labels and c_ij
+//! as getCorrelPlus(cloud, rows, false, 0, false) then
+//! getIceTypePlusNoPrint(cloud, rows, false, false) on the id rows of that
+//! CSR. Returns the cubic count.
+int chillPlusOvitoFromCsr(molSys::PointCloud<molSys::Point<double>, double> &yCloud,
+                          const std::vector<int> &offsets, const std::vector<int> &cols);
+
 //! Unnormalised real l = 3 bond-order vector of the atoms @a which selects.
 //! @a which null computes every atom. Ghost slots stay zero so a neighbour
 //! rank can write the vector it computed for that atom.
