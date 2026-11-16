@@ -695,16 +695,31 @@ void enumerateChordlessPlain(const Graph &adjacency, const DistOracle &oracle,
   }
   if (maxDepth >= 6 && !L3.empty()) {
     std::vector<std::vector<std::pair<int, int>>> arms3(static_cast<std::size_t>(nVertices));
+    // The level-1 neighbours of a level-2 vertex do not depend on which
+    // level-3 vertex the arm reaches. List them once, then attach the list
+    // to every level-3 neighbour.
+    thread_local std::vector<std::vector<int>> aOfB;
+    if (static_cast<int>(aOfB.size()) < nVertices) {
+      aOfB.resize(static_cast<std::size_t>(nVertices));
+    }
+    for (const int b : L2) {
+      auto &as = aOfB[static_cast<std::size_t>(b)];
+      as.clear();
+      for (const int a : L1) {
+        if (adjacent(a, b)) {
+          as.push_back(a);
+        }
+      }
+    }
     for (const int p : L3) {
       auto &arms = arms3[static_cast<std::size_t>(p)];
       for (const int b : L2) {
         if (!adjacent(b, p)) {
           continue;
         }
-        for (const int a : L1) {
-          if (adjacent(a, b)) {
-            arms.emplace_back(a, b);
-          }
+        const auto &as = aOfB[static_cast<std::size_t>(b)];
+        for (const int a : as) {
+          arms.emplace_back(a, b);
         }
       }
     }
