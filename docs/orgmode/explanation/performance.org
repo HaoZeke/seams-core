@@ -28,10 +28,12 @@ through its own setter (~set_num_threads~, ~OVITO_THREAD_COUNT~,
 ~cores~ is ~Cpus_allowed_list~ from ~/proc/self/status~, read in the
 worker. It is the cpu affinity of the timed process, not a model name.
 The host name is not in the file. A one-thread guest that does not
-change its mask reports ~0~. d-SEAMS calls ~seams::widenAffinity~
-before the timed work, which puts back every cpu the kernel still
-allows, so some one-thread d-SEAMS rows report ~0-7~ while OpenMP
-itself was one thread. Every eight-thread row reports ~0-7~.
+change its mask reports ~0~. Under ~OMP_PROC_BIND~ the OpenMP runtime
+pins the calling thread to its first place; d-SEAMS calls
+~seams::widenAffinity~ before the timed work, which gives that thread
+back the cpus of every OpenMP place and none outside the launch mask.
+A one-thread d-SEAMS row keeps the mask taskset gave it and reports
+~0~. Every eight-thread row reports ~0-7~.
 
 Ideal ice Ic at 110592 and 884736 molecules is the neighbour, \(q_4\),
 \(q_6\), CHILL+, ring, and PTM block. Cages are the GenIce cells, where

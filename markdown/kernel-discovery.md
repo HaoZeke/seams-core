@@ -39,9 +39,12 @@ minimum image, and the solid harmonic are one loop. ql bar reads that
 same packed neighbour row. Buffers of a repeated size are kept and
 refilled, which is what a run of timed calls does.
 
-Before the neighbour pool is created, the calling thread's affinity is
-widened to every cpu the kernel still allows, so a bind that pinned
-the main thread does not pin the search. After the harmonics, the
+Before the neighbour pool is created, a calling thread that the OpenMP
+runtime bound to its first place gets back the cpus of every place, so
+a bind that pinned the main thread does not pin the search. (The first
+version added every cpu the kernel still allowed, which overrode
+taskset; the cpus now come only from the places, which the runtime
+built from the launch mask.) After the harmonics, the
 OpenMP team is asked to stop spinning (`omp_pause_resource_all`) so
 the next search gets the cores.
 
