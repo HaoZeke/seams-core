@@ -774,6 +774,39 @@ rule literature_sitting:
         "\"${{LIT_PYTHON:-python3}}\" scripts/lit_one_sitting.py --out benchmarks/literature"
 
 
+# OVITO-rule CHILL+ of a base build and this tree beside mdapy ChillPlus, ice
+# Ic at the literature sizes, 1 and 8 threads, n=30, one sitting; then the
+# per-atom labels of both builds on every frame at 1 and 8 threads.
+# CHILL_BEFORE is the base build directory (libyodaLib.so and libseams.so,
+# libseams_lang.so in ../bindings) and CHILL_BEFORE_TREE its source tree.
+rule chill_plus_one_thread:
+    input:
+        "scripts/chill_plus_sitting.py",
+        "scripts/chill_plus_equivalence.py",
+        "scripts/lit_one_sitting.py",
+        "scripts/paper_stats.py",
+        "bbdir-release/src/libyodaLib.so",
+        "bbdir-release/src/libseams.so",
+        "bbdir-release/bindings/libseams_lang.so",
+    output:
+        "benchmarks/chill-plus-1t/chill-sitting.csv",
+        "benchmarks/chill-plus-1t/raw-chill.txt",
+        "benchmarks/chill-plus-1t/equivalence/summary.txt",
+    params:
+        before=os.environ.get("CHILL_BEFORE", "bbdir-before/src"),
+        tree=os.environ.get("CHILL_BEFORE_TREE", ""),
+    shell:
+        "\"${{LIT_PYTHON:-python3}}\" scripts/chill_plus_sitting.py "
+        "--before {params.before} --before-tree '{params.tree}' "
+        "--after bbdir-release/src --out benchmarks/chill-plus-1t && "
+        "python3 scripts/chill_plus_equivalence.py "
+        "--a {params.before}/libseams.so --b bbdir-release/src/libseams.so "
+        "--a-lang {params.before}/../bindings/libseams_lang.so "
+        "--b-lang bbdir-release/bindings/libseams_lang.so "
+        "--a-tree '{params.tree}' --b-tree \"$(git rev-parse HEAD^{{tree}})\" "
+        "--out benchmarks/chill-plus-1t/equivalence"
+
+
 # One command per table. Each file is a selection of sitting.csv.
 rule paper_tables:
     input:
