@@ -35,10 +35,13 @@ def run_examples(label, binaries, env, source, search, help_mod):
     for family, binary in binaries:
         args = [str(binary)] if family == "errors" else [str(binary), str(source)]
         run_env = help_mod.library_dirs(binary, env, search)
-        listed = subprocess.check_output(["ldd", str(binary)], env=run_env, text=True)
-        resolved = [line for line in listed.splitlines() if line.strip().startswith("libseams.so")]
+        listed = help_mod.loaded_libraries(args, run_env)
+        name = "libseams" + help_mod.SHLIB
+        # ldd prints "libseams.so => /path"; dyld prints the path alone.
+        resolved = [line for line in listed if line.startswith(name) or line.endswith("/" + name)]
         if len(resolved) != 1 or str(stage) not in resolved[0]:
-            raise SystemExit("{} {} does not load the installed libseams:\n{}".format(label, family, listed))
+            raise SystemExit("{} {} does not load the installed libseams:\n{}".format(
+                label, family, "\n".join(listed)))
         done = subprocess.run(args, env=run_env, capture_output=True, text=True)
         if done.returncode != 0:
             raise SystemExit("{} {} exit {}\n{}{}".format(label, family, done.returncode, done.stdout, done.stderr))
@@ -62,16 +65,18 @@ def main(argv):
 
     pc_files = list(stage.rglob("seams.pc"))
     configs = list(stage.rglob("seams-config.cmake"))
-    libs = list(stage.rglob("libseams.so"))
+    libs = list(stage.rglob("libseams" + help_mod.SHLIB))
     if len(pc_files) != 1 or len(configs) != 1 or not libs:
-        raise SystemExit("install did not produce one seams.pc, seams-config.cmake and libseams.so")
+        raise SystemExit("install did not produce one seams.pc, seams-config.cmake and libseams"
+                         + help_mod.SHLIB)
     env = os.environ.copy()
     env["PKG_CONFIG_PATH"] = str(pc_files[0].parent)
     env["PKG_CONFIG_SYSROOT_DIR"] = str(stage)
     # Only the runs see the staged libdir: ld would otherwise resolve the
     # staged libyodaLib and then want its dependencies, which are not staged.
     run_env = dict(env)
-    run_env["LD_LIBRARY_PATH"] = os.pathsep.join([str(libs[0].parent), env.get("LD_LIBRARY_PATH", "")])
+    loader = help_mod.LOADER_PATH
+    run_env[loader] = os.pathsep.join([str(libs[0].parent), env.get(loader, "")])
     search = [stage, build]
     cc = shlex.split(os.environ.get("CC", "cc"))
     # The consumer link line the snippet tests use with this build.

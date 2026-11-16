@@ -10,6 +10,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+# The loader's search path variable.
+LOADER_PATH = "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
+
 
 def pkg_config_program():
     """The conda pkg-config wrapper applies PKG_CONFIG_SYSROOT_DIR twice."""
@@ -59,18 +64,54 @@ def scratch(build, prefix):
 
 
 
-def library_dirs(binary, env, search):
-    """Add directories that hold shared libraries ldd cannot yet see."""
+def missing_libraries(binary, env):
+    """Shared libraries of ``binary`` the loader cannot find under ``env``."""
+    if sys.platform != "darwin":
+        listed = subprocess.check_output(["ldd", str(binary)], text=True, env=env)
+        return [line.strip().split()[0] for line in listed.splitlines() if "not found" in line]
+    # otool lists install names. An @rpath name resolves through the
+    # binary's LC_RPATH entries or a DYLD_LIBRARY_PATH folder.
+    listed = subprocess.check_output(["otool", "-L", str(binary)], text=True, env=env)
+    rpaths = []
+    commands = subprocess.check_output(["otool", "-l", str(binary)], text=True, env=env).splitlines()
+    for index, line in enumerate(commands):
+        if line.strip() == "cmd LC_RPATH":
+            for follow in commands[index + 1:index + 3]:
+                parts = follow.split()
+                if parts and parts[0] == "path":
+                    rpaths.append(parts[1])
+    folders = [part for part in env.get(LOADER_PATH, "").split(os.pathsep) if part] + rpaths
     missing = []
-    listed = subprocess.check_output(["ldd", str(binary)], text=True, env=env)
-    for line in listed.splitlines():
-        if "not found" not in line:
+    for line in listed.splitlines()[1:]:
+        name = line.strip().split(" (")[0]
+        if not name.startswith("@rpath/"):
             continue
-        missing.append(line.strip().split()[0])
+        leaf = name[len("@rpath/"):]
+        if not any(os.path.isfile(os.path.join(folder, leaf)) for folder in folders):
+            missing.append(leaf)
+    return missing
+
+
+def loaded_libraries(args, env):
+    """The shared libraries a run of ``args`` loads, by resolved path."""
+    if sys.platform != "darwin":
+        listed = subprocess.check_output(["ldd", str(args[0])], env=env, text=True)
+        return [line.strip() for line in listed.splitlines()]
+    # dyld names each image it loads on stderr.
+    traced = dict(env)
+    traced["DYLD_PRINT_LIBRARIES"] = "1"
+    done = subprocess.run(args, env=traced, capture_output=True, text=True)
+    return [line.split(":", 1)[1].strip() for line in done.stderr.splitlines()
+            if line.startswith("dyld[") and ":" in line]
+
+
+def library_dirs(binary, env, search):
+    """Add directories that hold shared libraries the loader cannot yet see."""
+    missing = missing_libraries(binary, env)
     if not missing:
         return env
     found = dict(env)
-    path = found.get("LD_LIBRARY_PATH", "")
+    path = found.get(LOADER_PATH, "")
     extra = []
     for name in missing:
         for root in search:
@@ -79,7 +120,7 @@ def library_dirs(binary, env, search):
                     extra.append(str(candidate.parent))
                     break
     if extra:
-        found["LD_LIBRARY_PATH"] = os.pathsep.join(extra + ([path] if path else []))
+        found[LOADER_PATH] = os.pathsep.join(extra + ([path] if path else []))
     return found
 
 
@@ -97,9 +138,9 @@ def main():
     if len(pc_files) != 1 or len(configs) != 1:
         raise SystemExit("install did not produce seams.pc and seams-config.cmake")
     pc = pc_files[0]
-    libs_on_disk = list(stage.rglob("libseams.so"))
+    libs_on_disk = list(stage.rglob("libseams" + SHLIB))
     if not libs_on_disk:
-        raise SystemExit("install did not produce libseams.so")
+        raise SystemExit("install did not produce libseams" + SHLIB)
     libdir = libs_on_disk[0].parent
     prefix = prefix_of(build)
     installed = stage / Path(prefix).relative_to("/")
@@ -127,8 +168,8 @@ def main():
         env=env,
     )
     compile_env = dict(env)
-    env["LD_LIBRARY_PATH"] = os.pathsep.join(
-        [str(libdir), str(build / "src"), env.get("LD_LIBRARY_PATH", "")]
+    env[LOADER_PATH] = os.pathsep.join(
+        [str(libdir), str(build / "src"), env.get(LOADER_PATH, "")]
     )
     env = library_dirs(binary, env, [stage, build])
     sample = source / "input" / "traj" / "agi_water_tiny.lammpstrj"
