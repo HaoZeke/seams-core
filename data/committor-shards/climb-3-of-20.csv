@@ -1,0 +1,8 @@
+# source_tree d675aae9658f03da514b9e16b7f557d87f8a2120
+# command python3 scripts/committor_shoot.py --write-climb data/committor-shards/climb-3-of-20.csv --frames data/science-frames/committor-climb-3-of-20 --seeds 20261111-20261130 --shard 3/20
+# shard 3/20
+# order n_chill_core
+# rule nucleated when n_chill_core passes 300 and stays at or above 300 for 1000 ps; a passage cut short by the end of the run is 'not nucleated, extend' until 40000 ps
+# basin A the 95th percentile of n_chill_core over the climb's last 2000 ps before it first reaches 100, from 1000 ps; basin B n_chill_core at or above 400 for 200 ps; liquid_2ns_ref is a reference only
+seed,outcome,onset_ps,n_chill_core_max,t_max_ps,n_chill_ext_max,n_q6solid_max,n_chill_core_end,n_chill_ext_end,n_q6solid_end,t_end_ps,frames,segments,extension,basin_a,basin_a_lo_ps,basin_a_hi_ps,basin_a_frames,first_passage_ps,basin_b_ps,n_chill_core_min_after_b,liquid_2ns_ref
+20261114,no-nucleation,,93,9030,936,233,52,408,114,10000,1001,1,,,,,0,,,,

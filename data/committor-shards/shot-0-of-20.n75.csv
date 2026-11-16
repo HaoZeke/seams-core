@@ -1,0 +1,30 @@
+# source_tree d675aae9658f03da514b9e16b7f557d87f8a2120
+# command python3 scripts/committor_shoot.py --write-shot data/committor-shards/shot-0-of-20.n75.csv --frames data/science-frames/committor-climb-0-of-20 --seeds 20261111-20261130 --shard 0/20 --sizes 75 --window-ps 20000
+# shard 0/20
+# order n_chill_core
+# rule nucleated when n_chill_core passes 300 and stays at or above 300 for 1000 ps; a passage cut short by the end of the run is 'not nucleated, extend' until 40000 ps
+# basin A the 95th percentile of n_chill_core over the climb's last 2000 ps before it first reaches 100, from 1000 ps; basin B n_chill_core at or above 400 for 200 ps; liquid_2ns_ref is a reference only
+# a shot runs to its first basin: uncommitted at or below basin A, committed at or above 400 for 200 ps; check every 10 ps; unresolved, with no fate, at the end of the window; t_hit_ps is the entry into the basin, the start of the held stay for basin B
+# window_ps 20000
+# launcher lmp-forge.sh
+seed,shoot_n,shot,fate,t_end_ps,nmax_end,n_chill_ext_end,n_q6solid_end,wall_s,t_hit_ps,start_core,extension,replay_s
+20261111,75,0,uncommitted,10,74,881,112,6.4,10,76,,
+20261111,75,1,uncommitted,10,81,311,120,6.4,10,76,,
+20261111,75,2,uncommitted,10,74,737,120,6.6,10,76,,
+20261111,75,3,uncommitted,10,78,920,110,6.6,10,76,,
+20261111,75,4,uncommitted,10,83,880,129,6.5,10,76,,
+20261111,75,5,uncommitted,10,64,958,113,6.4,10,76,,
+20261111,75,6,uncommitted,10,78,574,122,6.4,10,76,,
+20261111,75,7,uncommitted,10,74,544,112,6.4,10,76,,
+20261111,75,8,uncommitted,10,74,928,119,6.6,10,76,,
+20261111,75,9,uncommitted,10,79,866,125,6.6,10,76,,
+20261111,75,10,uncommitted,10,73,593,115,6.6,10,76,,
+20261111,75,11,uncommitted,10,83,817,123,6.6,10,76,,
+20261111,75,12,uncommitted,10,77,576,120,6.4,10,76,,
+20261111,75,13,uncommitted,10,83,279,137,6.4,10,76,,
+20261111,75,14,uncommitted,10,77,638,123,6.4,10,76,,
+20261111,75,15,uncommitted,20,79,730,124,12.1,20,76,,
+20261111,75,16,uncommitted,10,75,962,124,6.6,10,76,,
+20261111,75,17,uncommitted,10,73,882,100,6.4,10,76,,
+20261111,75,18,uncommitted,20,73,883,131,12.2,20,76,,
+20261111,75,19,uncommitted,20,74,354,121,12.0,20,76,,
