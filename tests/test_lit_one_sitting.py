@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import csv
 import os
 import signal
 import subprocess
@@ -75,15 +76,80 @@ class LiteratureSittingTest(unittest.TestCase):
             proc.kill()
             proc.wait(timeout=5)
 
-    def test_q6_band_is_fifteen_to_twenty_two(self):
-        low, high = lit.Q6_8_MS
-        self.assertEqual(low, 15.0)
-        self.assertEqual(high, 22.0)
-
     def test_scaling_band_rejects_the_collapsed_median(self):
         self.assertTrue(lit.within_scaling(3.6, 3.452))
         self.assertFalse(lit.within_scaling(70.4, 3.452))
         self.assertFalse(lit.within_scaling(51.9, 2.510))
+
+    def test_fallback_references_are_the_scaling_csv_idle_rows(self):
+        self.assertTrue(lit.SCALING_PATH.is_file())
+        self.assertEqual(lit.rival_reference(lit.SCALING_PATH), lit.RIVAL_Q6_IDLE_8)
+        self.assertEqual(lit.scaling_reference(lit.SCALING_PATH)["q6"], 3.452)
+        self.assertEqual(lit.RIVAL_Q6_IDLE_8["mdapy"][0], 14.741)
+        self.assertEqual(lit.RIVAL_Q6_IDLE_8["pyscal3"][0], 21.875)
+
+    def test_rival_band_is_the_wider_of_the_fence_and_the_relative_bound(self):
+        low, high = lit.rival_band(*lit.RIVAL_Q6_IDLE_8["mdapy"])
+        self.assertAlmostEqual(low, 14.741 * 0.88)
+        self.assertAlmostEqual(high, 14.741 * 1.12)
+        low, high = lit.rival_band(*lit.RIVAL_Q6_IDLE_8["pyscal3"])
+        self.assertAlmostEqual(low, 20.542 - 3 * (22.497 - 20.542))
+        self.assertAlmostEqual(high, 22.497 + 3 * (22.497 - 20.542))
+
+    def test_gate_passes_the_committed_v93_sitting(self):
+        self.assertEqual(lit.check_csv(lit.DEFAULT_CSV), [])
+
+    def test_gate_fails_the_v92_sitting_on_dseams_and_mdapy(self):
+        failures = lit.check_csv(V92)
+        self.assertTrue(any(line.startswith("d-SEAMS q6 8 threads median 70.433") for line in failures))
+        self.assertTrue(any(line.startswith("d-SEAMS q6 8 threads median 75.892") for line in failures))
+        self.assertTrue(any(line.startswith("mdapy q6 at 8 threads median 17.046") for line in failures))
+
+    def test_each_gate_fails_alone_on_a_v92_median(self):
+        rows = v93_rows()
+        for code, v92_median in (("d-SEAMS", "70.433"), ("mdapy", "17.046")):
+            changed = [
+                dict(row, median_ms=v92_median) if gate_row(row, code) else row
+                for row in rows
+            ]
+            failures = lit.idle_gate(changed)
+            self.assertEqual(len(failures), 1, failures)
+            self.assertTrue(failures[0].startswith(code), failures)
+
+    def test_gate_requires_the_q6_rows(self):
+        rows = [row for row in v93_rows() if not gate_row(row, "d-SEAMS")]
+        self.assertIn("d-SEAMS q6 at 8 threads was not measured", lit.idle_gate(rows))
+
+    def test_check_only_times_nothing_and_exits_on_the_gate(self):
+        script = ROOT / "scripts" / "lit_one_sitting.py"
+        done = subprocess.run(
+            [sys.executable, str(script), "--check-only"],
+            capture_output=True, text=True, timeout=60)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("gates passed", done.stdout)
+        done = subprocess.run(
+            [sys.executable, str(script), "--check-only", str(V92)],
+            capture_output=True, text=True, timeout=60)
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+        self.assertIn("GATES FAILED", done.stdout)
+
+    def test_default_table_is_in_the_repository(self):
+        self.assertEqual(lit.DEFAULT_CSV, ROOT / "benchmarks" / "literature" / "h2h-lit.csv")
+
+
+# The v92 sitting left rival pools runnable on the same cores. Rows are
+# copied unchanged from its h2h-lit.csv (seams_commit 8d381700).
+V92 = ROOT / "tests" / "data" / "lit" / "h2h-lit-v92-q6.csv"
+
+
+def v93_rows() -> list[dict]:
+    with lit.DEFAULT_CSV.open(newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def gate_row(row: dict, code: str) -> bool:
+    return (row["code"] == code and row["operation"] == "q6"
+            and row["threads"] == "8" and row["molecules"] == "110592")
 
 
 if __name__ == "__main__":

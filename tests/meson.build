@@ -643,6 +643,10 @@ test('cycless_pentagon', find_program('python3'),
          meson.project_build_root() / 'src' / 'libseams.so'],
   workdir: meson.project_source_root(),
   timeout: 120)
+test('lit_one_sitting', find_program('python3'),
+  args: [files('test_lit_one_sitting.py')],
+  workdir: meson.project_source_root(),
+  timeout: 60)
 test('sqq_sh_triclinic', find_program('python3'),
   args: [files('test_sqq_sh.py')],
   workdir: meson.project_source_root(),
