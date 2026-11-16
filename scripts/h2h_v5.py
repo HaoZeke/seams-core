@@ -6,8 +6,11 @@ The d-SEAMS column is classifyIce from the feat/symmetry kernel
 polyhedral template matching, OVITO's diamond identification (extended
 common-neighbour analysis), OVITO adaptive common-neighbour analysis,
 and pyscal3's diamond, adaptive CNA and Ackland-Jones classifiers.
-One warm-up, six calls, median and type-7 IQR. One core is taskset -c 0.
-Eight cores are taskset -c 0-7. Each code uses its own thread count.
+One warm-up, six calls, median and type-7 IQR. One core is cpu 0 and
+eight cores are cpus 0-7, set by scripts/pin_run.py, which also sets
+OMP_NUM_THREADS and RAYON_NUM_THREADS to the width. Each code uses its own
+thread count. The cpus column is the cpus pin_run saw the run's threads
+allowed.
 """
 
 from __future__ import annotations
@@ -19,6 +22,10 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import paper_stats as stats  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 HERE = Path(__file__).resolve()
@@ -51,6 +58,7 @@ def child_env(kind, threads):
     env = os.environ.copy()
     width = str(threads)
     env["OMP_NUM_THREADS"] = width
+    env["RAYON_NUM_THREADS"] = width
     env["OMP_DYNAMIC"] = "FALSE"
     env["MKL_NUM_THREADS"] = "1"
     env["OPENBLAS_NUM_THREADS"] = "1"
@@ -176,9 +184,12 @@ def counts_of(value):
 
 def kernel_run(binary, threads, repetitions):
     cores = "0" if threads == 1 else "0-7"
-    cmd = ["taskset", "-c", cores, binary, str(repetitions), "1", "6"]
+    cmd = stats.pinned(cores, threads, None, [binary, str(repetitions), "1", "6"])
     done = subprocess.run(
         cmd, cwd=ROOT, env=child_env("kernel", threads), text=True, capture_output=True)
+    record = stats.stderr_record(done.stderr)
+    if stats.record_field(record, "escaped") != "0":
+        return {"error": f"not pinned: {record}", "code": "d-SEAMS", "threads": threads}
     if done.returncode not in (0, 2):
         tail = (done.stderr or done.stdout or "").strip().splitlines()
         return {"error": tail[-1] if tail else f"exit {done.returncode}", "code": "d-SEAMS"}
@@ -199,7 +210,8 @@ def kernel_run(binary, threads, repetitions):
     samples = [float(v) for v in tail.split()]
     return {
         "code": "d-SEAMS", "version": fields.get("cpus", ""),
-        "samples_ms": samples, "fields": fields, "cpus": fields.get("cpus", ""),
+        "samples_ms": samples, "fields": fields,
+        "cpus": stats.record_field(record, "allowed"),
         "threads": threads, "molecules": int(fields["molecules"]),
     }
 
@@ -207,8 +219,8 @@ def kernel_run(binary, threads, repetitions):
 def pinned_python(python, threads, worker, frame):
     cores = "0" if threads == 1 else "0-7"
     kind = "ovito" if worker.startswith("ovito") else "pyscal"
-    cmd = ["taskset", "-c", cores, python, str(HERE),
-           "--worker", worker, "--threads", str(threads), "--frame", frame]
+    cmd = stats.pinned(cores, threads, None, [python, str(HERE), "--worker", worker,
+                                              "--threads", str(threads), "--frame", frame])
     done = subprocess.run(
         cmd, cwd=ROOT, env=child_env(kind, threads), text=True, capture_output=True)
     if done.returncode != 0:
@@ -224,6 +236,7 @@ def pinned_python(python, threads, worker, frame):
         if payload.get("cpus") != expect:
             return [{"error": f"not pinned: {payload.get('cpus')}", "code": worker,
                      "threads": threads}]
+        payload["cpus"] = stats.record_field(stats.stderr_record(done.stderr), "allowed")
     return payloads
 
 

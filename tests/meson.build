@@ -647,6 +647,12 @@ test('lit_one_sitting', find_program('python3'),
   args: [files('test_lit_one_sitting.py')],
   workdir: meson.project_source_root(),
   timeout: 60)
+if host_machine.system() == 'linux'
+  test('pin_run', find_program('python3'),
+    args: [files('test_pin_run.py')],
+    workdir: meson.project_source_root(),
+    timeout: 60)
+endif
 test('sqq_sh_triclinic', find_program('python3'),
   args: [files('test_sqq_sh.py')],
   workdir: meson.project_source_root(),

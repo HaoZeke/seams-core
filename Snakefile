@@ -37,6 +37,17 @@ PLOTS = [
 ]
 
 
+def pinned(cpus, width, log):
+    """Prefix for a timed command on fixed cpus at a fixed width.
+
+    OMP_NUM_THREADS and RAYON_NUM_THREADS are the width and the mask is set
+    before the command starts. The effective cpus and the thread count are
+    appended to LOG.cpus; a run that left its cpus fails.
+    """
+    return (f"python3 scripts/pin_run.py --cpus {cpus} --width {width} "
+            f"--record {log}.cpus -- ")
+
+
 rule all:
     input:
         expand("paper/tex/figures/data/{name}", name=PLOTS),
@@ -951,11 +962,14 @@ rule h2h_triclinic:
     output:
         "benchmarks/h2h-triclinic.txt",
     shell:
+        "rm -f {output}.cpus && "
         "LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu "
-        "taskset -c 0 env OMP_NUM_THREADS=1 OMP_PROC_BIND=close OMP_PLACES=cores "
-        "OMP_WAIT_POLICY=PASSIVE python3 scripts/h2h_triclinic.py time 1 > {output}.1 && "
-        "taskset -c 0-7 env OMP_NUM_THREADS=8 OMP_PROC_BIND=close OMP_PLACES=cores "
-        "OMP_WAIT_POLICY=PASSIVE python3 scripts/h2h_triclinic.py time 8 >> {output}.1 && "
+        "OMP_PROC_BIND=close OMP_PLACES=cores OMP_WAIT_POLICY=PASSIVE "
+        + pinned("0", 1, "{output}") +
+        "python3 scripts/h2h_triclinic.py time 1 > {output}.1 && "
+        "OMP_PROC_BIND=close OMP_PLACES=cores OMP_WAIT_POLICY=PASSIVE "
+        + pinned("0-7", 8, "{output}") +
+        "python3 scripts/h2h_triclinic.py time 8 >> {output}.1 && "
         "mv {output}.1 {output}"
 
 
@@ -963,11 +977,14 @@ rule h2h_scale:
     output:
         "benchmarks/h2h-scale.txt",
     shell:
+        "rm -f {output}.cpus && "
         "LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu "
-        "taskset -c 0 env OMP_NUM_THREADS=1 OMP_PROC_BIND=close OMP_PLACES=cores "
-        "OMP_WAIT_POLICY=PASSIVE python3 scripts/h2h_triclinic.py scale 1 > {output}.1 && "
-        "taskset -c 0-7 env OMP_NUM_THREADS=8 OMP_PROC_BIND=close OMP_PLACES=cores "
-        "OMP_WAIT_POLICY=PASSIVE python3 scripts/h2h_triclinic.py scale 8 >> {output}.1 && "
+        "OMP_PROC_BIND=close OMP_PLACES=cores OMP_WAIT_POLICY=PASSIVE "
+        + pinned("0", 1, "{output}") +
+        "python3 scripts/h2h_triclinic.py scale 1 > {output}.1 && "
+        "OMP_PROC_BIND=close OMP_PLACES=cores OMP_WAIT_POLICY=PASSIVE "
+        + pinned("0-7", 8, "{output}") +
+        "python3 scripts/h2h_triclinic.py scale 8 >> {output}.1 && "
         "mv {output}.1 {output}"
 
 
@@ -975,12 +992,15 @@ rule h2h_plumed:
     output:
         "benchmarks/h2h-plumed.txt",
     shell:
+        "rm -f {output}.cpus && "
         "PLUMED_KERNEL=/cvmfs/software.eessi.io/versions/2026.06/software/linux/x86_64/intel/sapphirerapids/software/PLUMED/2.10.0-foss-2026.1/lib/libplumedKernel.so "
         "LD_LIBRARY_PATH=/cvmfs/software.eessi.io/versions/2026.06/software/linux/x86_64/intel/sapphirerapids/software/PLUMED/2.10.0-foss-2026.1/lib:/usr/lib/x86_64-linux-gnu:bbdir-release/src "
-        "taskset -c 0 env OMP_NUM_THREADS=1 OMP_PROC_BIND=close OMP_PLACES=cores "
-        "OMP_WAIT_POLICY=PASSIVE python3 scripts/h2h_plumed.py 1 > {output}.1 && "
-        "taskset -c 0-7 env OMP_NUM_THREADS=8 OMP_PROC_BIND=close OMP_PLACES=cores "
-        "OMP_WAIT_POLICY=PASSIVE python3 scripts/h2h_plumed.py 8 >> {output}.1 && "
+        "OMP_PROC_BIND=close OMP_PLACES=cores OMP_WAIT_POLICY=PASSIVE "
+        + pinned("0", 1, "{output}") +
+        "python3 scripts/h2h_plumed.py 1 > {output}.1 && "
+        "OMP_PROC_BIND=close OMP_PLACES=cores OMP_WAIT_POLICY=PASSIVE "
+        + pinned("0-7", 8, "{output}") +
+        "python3 scripts/h2h_plumed.py 8 >> {output}.1 && "
         "mv {output}.1 {output}"
 
 
@@ -992,12 +1012,15 @@ rule h2h_plumed_plugin:
         "g++ -shared -fPIC -O2 -std=c++17 -Iengines -Iinclude -Ibbdir-release/src -I$$PLUMED_PREFIX/include "
         "engines/plumed/SeamsColvar.cpp -Lbbdir-release/src -lseams -L$$PLUMED_PREFIX/lib -lplumedKernel "
         "-Wl,-rpath,'$$ORIGIN/src' -Wl,-rpath,$$PLUMED_PREFIX/lib -o bbdir-release/libSeamsPlumed.so && "
+        "rm -f {output}.cpus && "
         "PLUMED_KERNEL=$$PLUMED_PREFIX/lib/libplumedKernel.so "
         "LD_LIBRARY_PATH=bbdir-release/src:$$PLUMED_PREFIX/lib:/usr/lib/x86_64-linux-gnu "
-        "taskset -c 0 env OMP_NUM_THREADS=1 OMP_PROC_BIND=close OMP_PLACES=cores "
-        "OMP_WAIT_POLICY=PASSIVE python3 scripts/h2h_plumed_plugin.py bbdir-release/libSeamsPlumed.so 1 > {output}.1 && "
-        "taskset -c 0-7 env OMP_NUM_THREADS=8 OMP_PROC_BIND=close OMP_PLACES=cores "
-        "OMP_WAIT_POLICY=PASSIVE python3 scripts/h2h_plumed_plugin.py bbdir-release/libSeamsPlumed.so 8 >> {output}.1 && "
+        "OMP_PROC_BIND=close OMP_PLACES=cores OMP_WAIT_POLICY=PASSIVE "
+        + pinned("0", 1, "{output}") +
+        "python3 scripts/h2h_plumed_plugin.py bbdir-release/libSeamsPlumed.so 1 > {output}.1 && "
+        "OMP_PROC_BIND=close OMP_PLACES=cores OMP_WAIT_POLICY=PASSIVE "
+        + pinned("0-7", 8, "{output}") +
+        "python3 scripts/h2h_plumed_plugin.py bbdir-release/libSeamsPlumed.so 8 >> {output}.1 && "
         "mv {output}.1 {output}"
 
 
@@ -1005,12 +1028,13 @@ rule h2h_ptm:
     output:
         "benchmarks/h2h-ptm.txt",
     shell:
+        "rm -f {output}.cpus && "
         "LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:bbdir-release/src "
-        "taskset -c 0 env OMP_NUM_THREADS=1 OMP_PROC_BIND=close OMP_PLACES=cores "
-        "OMP_WAIT_POLICY=PASSIVE QT_QPA_PLATFORM=offscreen "
+        "OMP_PROC_BIND=close OMP_PLACES=cores OMP_WAIT_POLICY=PASSIVE QT_QPA_PLATFORM=offscreen "
+        + pinned("0", 1, "{output}") +
         "python3 scripts/h2h_ptm.py 1 > {output}.1 && "
-        "taskset -c 0-7 env OMP_NUM_THREADS=8 OMP_PROC_BIND=close OMP_PLACES=cores "
-        "OMP_WAIT_POLICY=PASSIVE QT_QPA_PLATFORM=offscreen "
+        "OMP_PROC_BIND=close OMP_PLACES=cores OMP_WAIT_POLICY=PASSIVE QT_QPA_PLATFORM=offscreen "
+        + pinned("0-7", 8, "{output}") +
         "python3 scripts/h2h_ptm.py 8 >> {output}.1 && "
         "mv {output}.1 {output}"
 
@@ -1040,8 +1064,9 @@ rule h2h_ira_scale:
     output:
         "benchmarks/h2h-ira-scale.csv",
     shell:
+        "rm -f {output}.cpus && "
         "LD_LIBRARY_PATH=bbdir-release/src "
-        "taskset -c 2 "
+        + pinned("2", 1, "{output}") +
         "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_ira_scale.py"
 
 
@@ -1120,8 +1145,10 @@ rule h2h_sqq_agree:
         "benchmarks/h2h-sqq-agree.csv",
         "benchmarks/h2h-sqq-agree.txt",
     shell:
-        "OMP_NUM_THREADS=1 MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
+        "rm -f {output[1]}.cpus && "
+        "MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
         "TIP4P2005_DIR=\"${{TIP4P2005_DIR:-tip4p2005-frames}}\" "
+        + pinned("0", 1, "{output[1]}") +
         "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_versus.py agree "
         "--out {output[0]} --log {output[1]}"
 
@@ -1137,8 +1164,10 @@ rule h2h_sqq_edge:
     output:
         "benchmarks/h2h-sqq-edge.txt",
     shell:
-        "OMP_NUM_THREADS=1 MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
+        "rm -f {output}.cpus && "
+        "MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
         "TIP4P2005_DIR=\"${{TIP4P2005_DIR:-tip4p2005-frames}}\" "
+        + pinned("0", 1, "{output}") +
         "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_edge.py --log {output}"
 
 
@@ -1153,9 +1182,12 @@ rule h2h_sqq_time:
         "benchmarks/h2h-sqq-time-8.txt",
     shell:
         "for t in 1 8; do "
-        "env OMP_NUM_THREADS=$t OMP_WAIT_POLICY=PASSIVE OPENBLAS_NUM_THREADS=$t "
+        "if [ $t = 1 ]; then cpus=0; else cpus=0-7; fi; "
+        "rm -f benchmarks/h2h-sqq-time-$t.txt.cpus; "
+        "env OMP_WAIT_POLICY=PASSIVE OPENBLAS_NUM_THREADS=$t "
         "MKL_NUM_THREADS=$t MW215_DIR=\"${{MW215_DIR:-mw215-frames}}\" "
         "TIP4P2005_DIR=\"${{TIP4P2005_DIR:-tip4p2005-frames}}\" "
+        + pinned("$cpus", "$t", "benchmarks/h2h-sqq-time-$t.txt") +
         "\"${{H2H_PYTHON:-python3}}\" scripts/h2h_sqq_versus.py time --threads $t --n 8 "
         "--log benchmarks/h2h-sqq-time-$t.txt || exit 1; done"
 
@@ -1213,9 +1245,10 @@ rule h2h_cages:
     output:
         "benchmarks/h2h-cages.txt",
     shell:
+        "rm -f {output}.cpus && "
         "LD_LIBRARY_PATH=bbdir-release/src "
-        "taskset -c 0 env OMP_NUM_THREADS=1 python3 scripts/h2h_cages.py 1 > {output}.1 && "
-        "taskset -c 0-7 env OMP_NUM_THREADS=8 python3 scripts/h2h_cages.py 8 >> {output}.1 && "
+        + pinned("0", 1, "{output}") + "python3 scripts/h2h_cages.py 1 > {output}.1 && "
+        + pinned("0-7", 8, "{output}") + "python3 scripts/h2h_cages.py 8 >> {output}.1 && "
         "mv {output}.1 {output}"
 
 

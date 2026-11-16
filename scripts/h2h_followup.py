@@ -2,7 +2,10 @@
 """Recorded-loss rerun, carried rings, and an independent CHILL+ reference.
 
 One session. Serial calls use core 0. Eight-thread calls use cores 0-7.
-Eight alternating samples. The core count is printed. No host name.
+Eight alternating samples. The core count is printed: for the in-process
+calls the mask after the samples, for bench_ring_carry the cpus
+scripts/pin_run.py saw it use (pin_run sets OMP_NUM_THREADS and
+RAYON_NUM_THREADS to the width). No host name.
 
 The ring loss 865 ms vs 511 ms is the type-7 median in
 paper/tex/figures/data/ring-head2head.json (git c5da2d9f), one thread,
@@ -30,6 +33,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+import paper_stats  # noqa: E402
 from h2h_freud_ovito import (  # noqa: E402
     CUTOFF,
     SEAMS_CHILL_OVITO,
@@ -246,18 +250,21 @@ def main() -> None:
         env = os.environ.copy()
         # The system lib directory pulls in a libc this binary cannot use.
         env["LD_LIBRARY_PATH"] = str(ROOT / "bbdir-release" / "src")
-        env["OMP_NUM_THREADS"] = str(width)
         env["OMP_PROC_BIND"] = "close"
         env["OMP_PLACES"] = "cores"
         env["OMP_WAIT_POLICY"] = "PASSIVE"
         for kind in ("churn", "local"):
-            cmd = ["taskset", "-c", "0" if width == 1 else "0-7", str(carry), "4096", "8"]
+            cmd = [str(carry), "4096", "8"]
             if kind == "local":
                 cmd.append("local")
             proc = subprocess.run(
-                cmd, cwd=ROOT, env=env, check=True, capture_output=True, text=True,
+                paper_stats.pinned("0" if width == 1 else "0-7", width, None, cmd),
+                cwd=ROOT, env=env, check=True, capture_output=True, text=True,
             )
-            print(f"ring_carry {kind} threads {width} affinity {width}", flush=True)
+            record = paper_stats.stderr_record(proc.stderr)
+            print(f"ring_carry {kind} threads {width} "
+                  f"affinity {paper_stats.record_field(record, 'cpus_effective')}", flush=True)
+            print(record, flush=True)
             sys.stdout.write(proc.stdout)
             if "identical no" in proc.stdout:
                 wins = False

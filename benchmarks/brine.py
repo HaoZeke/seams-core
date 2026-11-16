@@ -1,7 +1,8 @@
 """Airspeed Velocity timings for brine oxygen CHILL+ and neighbours.
 
 The fair table is scripts/h2h_brine.py (warmup 1, n >= 6, median and IQR).
-This file times one serial call so asv can track the same arm. Frames are
+This file times one serial call so asv can track the same arm: OpenMP and
+rayon at one thread, the process on its first allowed cpu. Frames are
 produced by input/brine/regenerate.py and are not in the tree.
 """
 
@@ -9,7 +10,8 @@ import os
 import sys
 from pathlib import Path
 
-os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["RAYON_NUM_THREADS"] = "1"
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -29,6 +31,7 @@ class BrineOxygen:
         path = _frame()
         if path is None:
             raise NotImplementedError("brine frames are not generated")
+        os.sched_setaffinity(0, {min(os.sched_getaffinity(0))})
         import h2h_brine as bench
 
         self.bench = bench

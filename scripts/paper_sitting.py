@@ -2,8 +2,10 @@
 """One sitting for every timing the paper quotes at 110592 molecules.
 
 Ideal ice Ic, 24**3 cells, cutoff 3.5 A. One warm-up and eight calls
-at 1 thread and at 8. Each width is its own process, pinned with
-taskset, so OpenMP, Rayon and OVITO see the width at startup. The
+at 1 thread and at 8. Each width is its own process, pinned by
+scripts/pin_run.py, so OpenMP, Rayon and OVITO see the width at startup;
+the affinity column is the cpus that process's threads were allowed, and
+pin_run's lines are in OUT/sitting.cpus. The
 median of an even count is the mean of the two central samples. The
 interquartile range is the type-7 upper quartile minus the lower one.
 
@@ -843,7 +845,7 @@ def write_outputs(out: Path, raw_rows: list[dict], info: dict) -> None:
             "cpu_flags": info["cpu_flags"],
             "cpu_cache": info["cpu_cache"],
             "cpu_cores": info["cpu_cores"],
-            "affinity": info["affinity"],
+            "affinity": item.get("affinity", info["affinity"]),
             "phase": item["phase"],
             "operation": item["operation"],
             "code": item["code"],
@@ -905,6 +907,9 @@ def main() -> int:
     info = stats.machine(ROOT)
     version = args.version or seams_version(Path(args.seams))
     collected = []
+    args.out.mkdir(parents=True, exist_ok=True)
+    record = (args.out / "sitting.cpus").resolve()
+    record.unlink(missing_ok=True)
     for threads in (1, 8):
         env = stats.pin_env(threads)
         prior = env.get("LD_LIBRARY_PATH", "")
@@ -912,22 +917,22 @@ def main() -> int:
         env["LD_LIBRARY_PATH"] = libs if not prior else libs + os.pathsep + prior
         env["OVITO_THREAD_COUNT"] = str(threads)
         env["QT_QPA_PLATFORM"] = "offscreen"
-        cmd = [
-            "taskset", "-c", stats.taskset_cores(threads),
+        cmd = stats.pinned(stats.taskset_cores(threads), threads, record, [
             sys.executable, str(Path(__file__).resolve()),
             "--worker", "--threads", str(threads),
             "--lib", args.lib, "--core", args.core,
             "--version", version,
-        ]
+        ])
         done = subprocess.run(cmd, cwd=ROOT, env=env, text=True, capture_output=True)
         if done.returncode != 0:
             tail = (done.stderr or done.stdout or "").strip().splitlines()
             raise SystemExit("\n".join(tail[-40:]) if tail else f"worker {threads} exit {done.returncode}")
+        allowed = stats.record_field(stats.last_record(record), "allowed")
         for line in done.stdout.splitlines():
             line = line.strip()
             if not line.startswith("{"):
                 continue
-            collected.append(json.loads(line))
+            collected.append({**json.loads(line), "affinity": allowed})
         print(f"threads {threads} rows {sum(1 for row in collected if row['threads'] == threads)}",
               flush=True)
     if not collected:

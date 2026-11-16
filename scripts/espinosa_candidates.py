@@ -97,6 +97,7 @@ def run_cmd(binary: Path, args: list[str]) -> str:
     lib = binary.resolve().parents[1] / "src"
     env["LD_LIBRARY_PATH"] = str(lib) + os.pathsep + env.get("LD_LIBRARY_PATH", "")
     env["OMP_NUM_THREADS"] = "1"
+    env["RAYON_NUM_THREADS"] = "1"
     done = subprocess.run(
         [str(binary), *args],
         cwd=ROOT,

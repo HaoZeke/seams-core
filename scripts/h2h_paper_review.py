@@ -2,7 +2,9 @@
 """Paper-review losses: rings, symmetry, library cages, CHILL+ matrices.
 
 Pinned ABAB, 8 samples. Serial is one core. Eight threads are cores
-0-7. The machine core count is printed. No host name.
+0-7. The machine core count is printed. The shipped cages command runs
+with OMP_NUM_THREADS and RAYON_NUM_THREADS at the width; one untimed run
+under scripts/pin_run.py prints the cpus it used. No host name.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+import paper_stats  # noqa: E402
 from gen_ice_ic import ice_ic  # noqa: E402
 from h2h_freud_ovito import (  # noqa: E402
     CUTOFF,
@@ -250,12 +253,19 @@ def main():
         env = os.environ.copy()
         env["LD_LIBRARY_PATH"] = str(ROOT / "bbdir-release" / "src")
         env["OMP_NUM_THREADS"] = str(width)
-        cmd = [
-            "taskset", "-c", "0" if width == 1 else "0-7",
+        env["RAYON_NUM_THREADS"] = str(width)
+        cpus = "0" if width == 1 else "0-7"
+        shipped = [
             str(ROOT / "bbdir-release" / "seams"),
             "--jobs", str(width), "--cutoff", "3.5", "--graph", "cutoff",
             "--signature", "51264", "cages", str(cell),
         ]
+        cmd = ["taskset", "-c", cpus, *shipped]
+        # pin_run's start-up would land in the wall-clock samples, so it
+        # watches one extra untimed run instead.
+        watched = subprocess.run(paper_stats.pinned(cpus, width, None, shipped), cwd=ROOT,
+                                 env=env, check=True, capture_output=True, text=True)
+        print(paper_stats.stderr_record(watched.stderr), flush=True)
 
         def command():
             subprocess.run(cmd, cwd=ROOT, env=env, check=True, capture_output=True, text=True)

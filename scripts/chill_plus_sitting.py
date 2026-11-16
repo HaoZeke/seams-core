@@ -8,6 +8,11 @@ seams_chill_plus with the OVITO rule on the cutoff graph, the mdapy timer
 is ChillPlus.compute(). Rows run one block at a time and every other
 worker is stopped while a block runs.
 
+Each round records the worker's cpu mask after the call (cpus_effective,
+cpus). A worker whose mask leaves its taskset cpus stops the sitting,
+except the before build, which may predate the library keeping the launch
+mask; its rounds carry escaped=1 instead.
+
 source_tree is the tree of the commit that measured; build_tree is the
 tree each library was built from. No commit hash is written.
 
@@ -76,6 +81,7 @@ def main() -> int:
     samples: dict[tuple[str, int, int], list[float]] = {}
     checks: dict[tuple[str, int, int], str] = {}
     ntasks: dict[tuple[str, int, int], str] = {}
+    effective: dict[tuple[str, int, int], set[str]] = {}
     args.out.mkdir(parents=True, exist_ok=True)
     try:
         for build in BUILDS:
@@ -88,7 +94,8 @@ def main() -> int:
                 env["SEAMS_API_LIB"] = str(lib_dir / "libseams.so")
                 print(f"start {build} t{threads}", flush=True)
                 workers[(build, threads)] = lit.Worker(
-                    code, threads, lit.taskset_cores(threads), env, script)
+                    code, threads, lit.taskset_cores(threads), env, script,
+                    confine=build != "before")
         with (args.out / "raw-chill.txt").open("w", encoding="utf-8") as handle:
             handle.write("\n".join([
                 f"cpu_model={model}",
@@ -122,10 +129,14 @@ def main() -> int:
                                     samples[key].append(float(payload["ms"]))
                                 checks[key] = payload["check"]
                                 ntasks[key] = str(payload.get("ntask", ""))
+                                effective.setdefault(key, set()).add(payload["cpus"])
                                 handle.write(
                                     f"round={k} molecules={molecules} build={build} "
                                     f"threads={threads} ms={payload['ms']:.6f} "
                                     f"check={payload['check']} ntask={payload.get('ntask', '')} "
+                                    f"cpus_effective={payload['cpus_effective']} "
+                                    f"cpus={payload['cpus']} "
+                                    f"escaped={int(payload['escaped'])} "
                                     f"warmup={int(k < args.warmup)}\n")
                         finally:
                             worker.end()
@@ -137,7 +148,8 @@ def main() -> int:
     fields = [
         "build", "code", "version", "molecules", "threads", "median_ms", "min_ms", "max_ms",
         "q1_ms", "q3_ms", "iqr_ms", "samples_ms", "check", "agreement", "ntask",
-        "source_tree", "build_tree", "worktree", "warmup", "n", "cpus", "env", "cpu_model",
+        "source_tree", "build_tree", "worktree", "warmup", "n", "cpus", "cpus_effective",
+        "env", "cpu_model",
     ]
     failures = []
     with (args.out / "chill-sitting.csv").open("w", newline="") as handle:
@@ -171,7 +183,10 @@ def main() -> int:
                         "ntask": ntasks[key], "source_tree": tree,
                         "build_tree": trees[build], "worktree": state,
                         "warmup": args.warmup, "n": summary["n"],
-                        "cpus": lit.taskset_cores(threads), "env": worker.env,
+                        "cpus": lit.taskset_cores(threads),
+                        "cpus_effective": len(set().union(
+                            *(stats.cpu_set(cpus) for cpus in effective[key]))),
+                        "env": worker.env,
                         "cpu_model": model,
                     })
                     print(f"{build:7} {molecules:7} t{threads} {summary['median_ms']:10.3f} ms  "

@@ -18,7 +18,10 @@ correlation, so LOCAL_Q6 is timed and not compared.
 
 Timing is PLUMED's DETAILED_TIMERS for the actions of one method per
 driver run, divided by the frames. Each method runs alone; the methods
-are interleaved within each repeat.
+are interleaved within each repeat. Every timed driver run goes through
+scripts/pin_run.py on the first --threads cpus with OMP_NUM_THREADS and
+RAYON_NUM_THREADS at that width; cpus_effective is the largest number of
+cpus any of those runs used, and pin_run's lines are in OUT.cpus.
 """
 
 import argparse
@@ -32,6 +35,10 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import paper_stats as stats  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SCALE = math.sqrt(4 * math.pi / 13)
@@ -89,11 +96,15 @@ def make_frames(lmp, cells, frames, every, melt, ranks, work):
     return n
 
 
-def driver(plugin, deck_lines, work, env, frames_xyz, tag):
+def driver(plugin, deck_lines, work, env, frames_xyz, tag, cpus=None, record=None):
+    """plumed driver's output. With cpus it runs under pin_run at env's OpenMP width."""
     deck = ["UNITS LENGTH=A", f"LOAD FILE={plugin}", *deck_lines, "DEBUG DETAILED_TIMERS"]
     (work / f"{tag}.dat").write_text("\n".join(deck) + "\n")
-    log = run(["plumed", "driver", "--plumed", f"{tag}.dat", "--ixyz", str(frames_xyz),
-               "--length-units", "A"], work, env, f"plumed driver ({tag})")
+    cmd = ["plumed", "driver", "--plumed", f"{tag}.dat", "--ixyz", str(frames_xyz),
+           "--length-units", "A"]
+    if cpus is not None:
+        cmd = stats.pinned(cpus, int(env["OMP_NUM_THREADS"]), record, cmd)
+    log = run(cmd, work, env, f"plumed driver ({tag})")
     return log
 
 
@@ -193,6 +204,9 @@ def main():
         sys.exit(f"libSeamsPlumed.so was not built under {args.build}")
     plugin = plugins[0]
     cores = len(os.sched_getaffinity(0))
+    record = Path(args.out + ".cpus").resolve()
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.unlink(missing_ok=True)
 
     rows = []
     with tempfile.TemporaryDirectory(prefix="dseams-h2h-q6-") as tmp:
@@ -209,7 +223,9 @@ def main():
             sw = SWITCH.format(c=args.cutoff)
             for threads in args.threads:
                 env = dict(os.environ, PLUMED_NUM_THREADS=str(threads),
-                           OMP_NUM_THREADS=str(threads))
+                           OMP_NUM_THREADS=str(threads), RAYON_NUM_THREADS=str(threads))
+                cpus = stats.taskset_cores(threads)
+                effective = 0
                 diffs, plumed_version, seams_version = compare_values(
                     plugin, n, args.cutoff, work, env, frames_xyz)
                 times = {name: [] for name in METHODS}
@@ -217,7 +233,9 @@ def main():
                     for name, (lines, labels, arg) in METHODS.items():
                         deck = [line.format(n=n, sw=sw, c=args.cutoff) for line in lines]
                         deck.append(f"PRINT ARG={arg} FILE=colvar")
-                        log = driver(plugin, deck, work, env, frames_xyz, "time")
+                        log = driver(plugin, deck, work, env, frames_xyz, "time", cpus, record)
+                        effective = max(effective, int(stats.record_field(
+                            stats.last_record(record), "cpus_effective")))
                         times[name].append(action_seconds(log, labels) / args.frames)
                     print(f"  threads {threads} repeat {rep + 1}", flush=True)
                 for name in METHODS:
@@ -235,6 +253,7 @@ def main():
                         "s_per_frame_min": "%.6e" % min(t),
                         "s_per_frame_max": "%.6e" % max(t),
                         "cores": cores,
+                        "cpus_effective": effective,
                         "plumed": plumed_version,
                         "dseams": seams_version,
                     })

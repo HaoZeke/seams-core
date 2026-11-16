@@ -4,7 +4,11 @@
 The genice sH cell has xy = -lx/4 and no xz or yz tilt. Four images
 along b tile the rectangle (lx) by (4*ly) by lz. SQQ accepts that
 dump. Cage counts are compared with the seams command on the same
-file. Eight samples, one thread and eight threads.
+file. Eight samples, one thread on H2H_SERIAL_CORE (default 0) and eight
+threads on cores 0-7. The seams command runs with OMP_NUM_THREADS and
+RAYON_NUM_THREADS at the width; one untimed run of it under
+scripts/pin_run.py prints the cpus it used, and the mask of this process
+is printed after the samples.
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
+import paper_stats  # noqa: E402
 from h2h_cells import _parse_sH  # noqa: E402
 
 N = 8
@@ -92,19 +97,29 @@ def sqq_counts(pos, lengths, width: int) -> dict:
     return counts
 
 
-def seams_counts(path: Path, width: int) -> str:
+def cpus_of(width: int) -> str:
+    return os.environ.get("H2H_SERIAL_CORE", "0") if width == 1 else "0-7"
+
+
+def seams_counts(path: Path, width: int, watch: bool = False) -> str:
     env = os.environ.copy()
     env["LD_LIBRARY_PATH"] = str(ROOT / "bbdir-release" / "src")
     env["OMP_NUM_THREADS"] = str(width)
-    cmd = [
-        "taskset", "-c", "0" if width == 1 else "0-7",
+    env["RAYON_NUM_THREADS"] = str(width)
+    shipped = [
         str(ROOT / "bbdir-release" / "seams"),
         "--jobs", str(width), "--cutoff", "3.5", "--graph", "cutoff",
         "--signature", "512+51268+sh", "cages", str(path),
     ]
+    # pin_run's start-up would land in the wall-clock samples, so only the
+    # untimed watch run goes through it.
+    cmd = (paper_stats.pinned(cpus_of(width), width, None, shipped) if watch
+           else ["taskset", "-c", cpus_of(width), *shipped])
     done = subprocess.run(cmd, cwd=ROOT, env=env, text=True, capture_output=True)
     if done.returncode != 0:
         raise RuntimeError((done.stderr or done.stdout)[-500:])
+    if watch:
+        print(paper_stats.stderr_record(done.stderr), flush=True)
     return done.stdout
 
 
@@ -133,8 +148,8 @@ def main() -> None:
     ours = sqq_counts(pos, lengths, 1)
     print(f"sqq cages {ours}", flush=True)
     for width in (1, 8):
-        serial = int(os.environ.get("H2H_SERIAL_CORE", "0"))
-        os.sched_setaffinity(0, {serial} if width == 1 else set(range(8)))
+        os.sched_setaffinity(0, paper_stats.cpu_set(cpus_of(width)))
+        seams_counts(OUT, width, watch=True)
 
         def sqq_once(width=width):
             return sqq_counts(pos, lengths, width)
@@ -157,6 +172,7 @@ def main() -> None:
                 got[name] = (time.perf_counter_ns() - t0) / 1e6
             sqq_samples.append(got["sqq"])
             seams_samples.append(got["seams"])
+        print(f"sqq {paper_stats.mask_record(width)}", flush=True)
         for label, samples in (("sqq", sqq_samples), ("seams", seams_samples)):
             ordered = sorted(samples)
             med = 0.5 * (ordered[N // 2 - 1] + ordered[N // 2])

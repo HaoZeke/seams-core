@@ -21,6 +21,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import paper_stats as stats  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 WARMUP = 1
 REPEATS = 8
@@ -51,6 +55,7 @@ def median(samples):
 def pin(threads, gl=False):
     env = os.environ.copy()
     env["OMP_NUM_THREADS"] = str(threads)
+    env["RAYON_NUM_THREADS"] = str(threads)
     env["OMP_DYNAMIC"] = "FALSE"
     env["OMP_PROC_BIND"] = "close"
     env["OMP_PLACES"] = "cores"
@@ -96,10 +101,19 @@ def main():
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
     lines = []
+    record = Path(args.out + ".cpus").resolve()
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.unlink(missing_ok=True)
 
     def emit(text=""):
         lines.append(text)
         print(text, flush=True)
+
+    def run(cpus, threads, cmd, **kwargs):
+        proc = subprocess.run(stats.pinned(cpus, threads, record, cmd),
+                              check=True, text=True, capture_output=True, **kwargs)
+        emit("cpus " + stats.last_record(record))
+        return proc
 
     ncores = cores()
     emit(f"cores={ncores}")
@@ -113,10 +127,8 @@ def main():
         raise SystemExit(f"missing {worker.name}")
     for threads in (1, 8):
         env, cpus = pin(threads, gl=True)
-        proc = subprocess.run(
-            ["taskset", "-c", cpus, sys.executable, str(worker), "symmetry",
-             args.lib, str(threads)],
-            env=env, check=True, text=True, capture_output=True)
+        proc = run(cpus, threads, [sys.executable, str(worker), "symmetry",
+                                   args.lib, str(threads)], env=env)
         for line in proc.stdout.splitlines():
             emit(line)
         for line in proc.stderr.splitlines():
@@ -124,19 +136,16 @@ def main():
                 emit(line)
 
     env, cpus = pin(8, gl=False)
-    proc = subprocess.run(
-        ["taskset", "-c", cpus, sys.executable, str(worker), "ql", args.ql],
-        env=env, check=True, text=True, capture_output=True)
+    proc = run(cpus, 8, [sys.executable, str(worker), "ql", args.ql], env=env)
     for line in proc.stdout.splitlines():
         emit(line)
 
     env, cpus = pin(ncores, gl=False)
     samples = []
     for rep in range(WARMUP + REPEATS):
-        proc = subprocess.run(
-            ["taskset", "-c", cpus, str(ROOT / "bbdir-release" / "tests" / "bench_trajectory_incremental"),
-             args.traj, "148", "1", "6", "2.0", "cutoff"],
-            env=env, check=True, text=True, capture_output=True, cwd=str(ROOT / "input"))
+        proc = run(cpus, ncores, [ROOT / "bbdir-release" / "tests" / "bench_trajectory_incremental",
+                                  args.traj, "148", "1", "6", "2.0", "cutoff"],
+                   env=env, cwd=str(ROOT / "input"))
         steady = [line for line in proc.stdout.splitlines() if line.startswith("# steady ")]
         if not steady:
             raise SystemExit(proc.stdout[-500:])
@@ -145,9 +154,8 @@ def main():
             emit(f"traj_sample {rep - WARMUP + 1} {steady[-1][2:]}")
     emit("traj_median " + median_steady(samples))
 
-    proc = subprocess.run(
-        [sys.executable, str(worker), "genice", args.lib],
-        env=pin(1)[0], check=True, text=True, capture_output=True)
+    env, cpus = pin(1)
+    proc = run(cpus, 1, [sys.executable, str(worker), "genice", args.lib], env=env)
     for line in proc.stdout.splitlines():
         emit(line)
 

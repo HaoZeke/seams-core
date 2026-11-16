@@ -133,9 +133,10 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         data = Path(tmp) / "perf.data"
         run = subprocess.run(
-            ["taskset", "-c", "0", "perf", "record", "-q", "-F", "2999", "-o", str(data),
-             sys.executable, str(Path(__file__).resolve()), "--drive", str(args.api.resolve()),
-             str(args.reps)],
+            stats.pinned("0", 1, None, [
+                "perf", "record", "-q", "-F", "2999", "-o", str(data),
+                sys.executable, str(Path(__file__).resolve()), "--drive",
+                str(args.api.resolve()), str(args.reps)]),
             env=env, check=True, capture_output=True, text=True)
         report = subprocess.run(
             ["perf", "report", "-i", str(data), "--no-children", "--sort", "dso,symbol",
@@ -150,6 +151,7 @@ def main() -> int:
         f"molecules={MOLECULES} rule=ovito graph=cutoff threads=1 cpus=0 reps={args.reps}",
         f"sitting_median_ms={args.ms}",
         run.stdout.strip(),
+        stats.stderr_record(run.stderr),
         "",
         *group(report, args.ms),
         "",

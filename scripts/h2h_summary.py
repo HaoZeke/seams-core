@@ -8,7 +8,10 @@ neighbour rule. pyscal3 has no CHILL+.
 
 Cells are orthorhombic ice Ih at 4096, 110592, and 884736 molecules.
 Eight alternating samples. Serial is core 0. Eight threads are cores
-0-7. A win is a strictly smaller median and a strictly smaller minimum.
+0-7. Each width is one worker under scripts/pin_run.py with
+OMP_NUM_THREADS and RAYON_NUM_THREADS at the width; the cpus column is the
+cpus its threads were allowed, and pin_run's lines are in CSV.cpus. A win
+is a strictly smaller median and a strictly smaller minimum.
 """
 
 from __future__ import annotations
@@ -20,6 +23,10 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import paper_stats as stats  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLES = 8
@@ -104,6 +111,7 @@ def row_of(competitor, operation, molecules, threads, cores, left, right, agreem
 def run_width(threads: int) -> list[dict]:
     pin(threads)
     os.environ["OMP_NUM_THREADS"] = str(threads)
+    os.environ["RAYON_NUM_THREADS"] = str(threads)
     os.environ["OMP_DYNAMIC"] = "FALSE"
     os.environ["OMP_PROC_BIND"] = "close"
     os.environ["OMP_PLACES"] = "cores"
@@ -344,6 +352,8 @@ def main() -> None:
         return
 
     rows = []
+    record = Path(args.csv + ".cpus").resolve()
+    record.unlink(missing_ok=True)
     for threads, cores in ((1, "0"), (8, "0-7")):
         env = os.environ.copy()
         env["LD_LIBRARY_PATH"] = (
@@ -351,7 +361,6 @@ def main() -> None:
         )
         env["OVITO_THREAD_COUNT"] = str(threads)
         env["QT_QPA_PLATFORM"] = "offscreen"
-        env["OMP_NUM_THREADS"] = str(threads)
         env["OMP_DYNAMIC"] = "FALSE"
         env["OMP_PROC_BIND"] = "close"
         env["OMP_PLACES"] = "cores"
@@ -359,8 +368,9 @@ def main() -> None:
         env["QT_QPA_PLATFORM"] = "offscreen"
         env["PYTHONUNBUFFERED"] = "1"
         done = subprocess.run(
-            ["taskset", "-c", cores, sys.executable, "-u", str(Path(__file__).resolve()),
-             "--csv", args.csv, "--worker", str(threads)],
+            stats.pinned(cores, threads, record,
+                         [sys.executable, "-u", str(Path(__file__).resolve()),
+                          "--csv", args.csv, "--worker", str(threads)]),
             cwd=ROOT,
             env=env,
             text=True,
@@ -373,6 +383,12 @@ def main() -> None:
         if not parsed:
             sys.stderr.write(done.stdout[-2000:])
             raise SystemExit(f"no rows from threads {threads}")
+        line = stats.last_record(record)
+        if stats.record_field(line, "escaped") != "0":
+            raise SystemExit(f"threads {threads} left cpus {cores}: {line}")
+        allowed = stats.record_field(line, "allowed")
+        for row in parsed:
+            row["cpus"] = allowed
         rows.extend(parsed)
     _write(Path(args.csv), rows)
     print(f"wrote {Path(args.csv).name} rows {len(rows)}", file=sys.stderr, flush=True)

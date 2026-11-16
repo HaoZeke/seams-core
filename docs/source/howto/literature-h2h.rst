@@ -211,10 +211,12 @@ every molecule, and the shell symmetry kernel does the same on
 this crystal.
 
 A one-thread rival is pinned to cpu 0. Eight threads use cpus
-0-7. Neighbour, CHILL+, ring and cage calls widen the process
-mask to every cpu the kernel still allows, so those one-thread
-rows record cores 0-7. The OpenMP width on those rows is still
-the requested one thread. q4 and q6 do not widen the mask.
+0-7. Builds before the library kept its launch mask widened the
+process mask in neighbour, CHILL+, ring and cage calls to every cpu
+the kernel still allowed, so those one-thread rows record cores
+0-7 while the OpenMP width was one thread. A current build keeps
+cpu 0 on every one-thread row, and the sitting stops if a call
+leaves its taskset cpus.
 
 ****The vesin gap.**** The two published times are the same list.
 vesin 0.6.2, full list, cutoff 3.5 Å, cell list, the copy

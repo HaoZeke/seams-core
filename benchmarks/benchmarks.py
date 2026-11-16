@@ -14,6 +14,7 @@ CORE = ["taskset", "-c", "0"]
 ENV = os.environ.copy()
 ENV.update({
     "OMP_NUM_THREADS": "1",
+    "RAYON_NUM_THREADS": "1",
     "OMP_DYNAMIC": "FALSE",
     "OVITO_THREAD_COUNT": "1",
     "OPENBLAS_NUM_THREADS": "1",
@@ -187,6 +188,7 @@ class LocalQl:
         import ctypes
         import math
         os.environ["OMP_NUM_THREADS"] = "8"
+        os.environ["RAYON_NUM_THREADS"] = "8"
         os.environ["OMP_DYNAMIC"] = "FALSE"
         os.environ["OMP_PROC_BIND"] = "false"
         os.environ["OMP_WAIT_POLICY"] = "active"
@@ -563,11 +565,38 @@ class ClassifyIce:
         ]
         self.env = os.environ.copy()
         self.env["OMP_NUM_THREADS"] = str(threads)
+        self.env["RAYON_NUM_THREADS"] = str(threads)
         self.env["OMP_DYNAMIC"] = "FALSE"
 
     def time_classify(self, threads):
         subprocess.run(self.cmd, env=self.env, check=True,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+class SerialMask:
+    """The cpus and threads a one-thread arm uses under ENV.
+
+    scripts/pin_run.py runs the release bench_shell_scale at width 1 on
+    cpu 0 and watches every thread it starts. A mask outside cpu 0 fails
+    setup, so the one-thread timings beside this one ran on one cpu.
+    """
+
+    def setup(self):
+        bench = ROOT / "bbdir-release" / "tests" / "bench_shell_scale"
+        if not bench.is_file():
+            raise NotImplementedError("release bench_shell_scale is not built")
+        done = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "pin_run.py"), "--cpus", "0",
+             "--width", "1", "--", str(bench), "1"],
+            cwd=ROOT, env=ENV, check=True, capture_output=True, text=True)
+        line = [row for row in done.stderr.splitlines() if row.startswith("cpus=")][-1]
+        self.fields = dict(part.split("=", 1) for part in line.split(" cmd=")[0].split())
+
+    def track_cpus_effective(self):
+        return int(self.fields["cpus_effective"])
+
+    def track_peak_threads(self):
+        return int(self.fields["peak_threads"])
 
 
 class HopStride:

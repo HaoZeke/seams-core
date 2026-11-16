@@ -5,7 +5,8 @@ ClavisCage and PLUMED.
 The statistics are h2h_protocol: one warm-up, eight timed calls, the
 median of an even sample, and type-7 quartiles. One thread is pinned to
 cpu 0. Eight threads are pinned to cpus 0-7. The allowed cpu list is
-recorded. Host names are not. Frames are built in memory.
+recorded, and each session ends its log with the scripts/pin_run.py line
+for the cpus its threads used. Host names are not. Frames are built in memory.
 
 Operations are the cutoff neighbour list, local q4 and q6 on that list,
 the diamond common-neighbour labels, metal CNA, primitive rings, local
@@ -37,6 +38,7 @@ sys.path.insert(0, str(HERE))
 
 import gen_ideal_ice as ice
 import h2h_protocol as proto
+import paper_stats as stats
 
 CUTOFF = proto.CUTOFF_A
 REPEATS = 8
@@ -1283,7 +1285,7 @@ def launch(args, threads):
     env["NUMEXPR_NUM_THREADS"] = "1"
     env["RAYON_NUM_THREADS"] = str(threads)
     cmd = [
-        "taskset", "-c", cores, sys.executable, str(Path(__file__).resolve()),
+        sys.executable, str(Path(__file__).resolve()),
         "--threads", str(threads),
         "--out", args.out, "--log", args.log,
         "--sizes", ",".join(str(size) for size in args.sizes),
@@ -1298,7 +1300,7 @@ def launch(args, threads):
         cmd.extend(["--phase", args.phase])
     if args.molecules:
         cmd.extend(["--molecules", str(args.molecules)])
-    subprocess.check_call(cmd, env=env)
+    subprocess.check_call(stats.pinned(cores, threads, args.log, cmd), env=env)
 
 
 def run_once(args):

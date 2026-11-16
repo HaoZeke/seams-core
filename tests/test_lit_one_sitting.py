@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import csv
+import io
 import os
 import signal
 import subprocess
@@ -36,6 +37,33 @@ class LiteratureSittingTest(unittest.TestCase):
         self.assertEqual(env["OPENBLAS_NUM_THREADS"], "1")
         self.assertEqual(env["OMP_NUM_THREADS"], "8")
         self.assertNotIn("OVITO_THREAD_COUNT", env)
+
+    def test_one_thread_rows_pin_every_pool_and_one_cpu(self):
+        self.assertEqual(lit.taskset_cores(1), "0")
+        for code, _operations in lit.PLAN:
+            env = lit.child_env(code, 1, Path("/tmp/lib"), Path("/tmp/lang"))
+            self.assertEqual(env["OMP_NUM_THREADS"], "1", code)
+            self.assertEqual(env["RAYON_NUM_THREADS"], "1", code)
+            self.assertEqual(env["OPENBLAS_NUM_THREADS"], "1", code)
+
+    def test_cpu_lists_parse_like_taskset(self):
+        self.assertEqual(lit.stats.cpu_set("0"), {0})
+        self.assertEqual(lit.stats.cpu_set("0-7"), set(range(8)))
+        self.assertEqual(lit.stats.cpu_set("0,2,4-5"), {0, 2, 4, 5})
+
+    def test_a_mask_outside_the_taskset_stops_a_confined_worker(self):
+        def worker(confine: bool, cpus_after: str):
+            row = lit.Worker.__new__(lit.Worker)
+            row.code, row.threads, row.cpus, row.confine = "d-SEAMS", 1, "0", confine
+            row.proc = type("Proc", (), {"stdin": io.StringIO()})()
+            row._read = lambda _timeout: {
+                "ms": 1.0, "check": "", "cpus_effective": len(lit.stats.cpu_set(cpus_after)),
+                "cpus": cpus_after}
+            return row
+        self.assertFalse(worker(True, "0").call("chill_plus", 1000)["escaped"])
+        with self.assertRaisesRegex(RuntimeError, "process mask 0-7"):
+            worker(True, "0-7").call("chill_plus", 1000)
+        self.assertTrue(worker(False, "0-7").call("chill_plus", 1000)["escaped"])
 
     def test_plan_covers_every_requested_code_in_its_own_key(self):
         rows = lit.jobs((1000, 10648, 110592))

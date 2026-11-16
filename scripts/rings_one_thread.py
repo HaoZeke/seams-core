@@ -9,7 +9,10 @@ FindRingsModifier on a fresh pipeline.
 
 Eight timed calls after two warmups, interleaved, in one driver run.
 The median of an even sample is the mean of the two central values.
-The record has the core count and the CPU model, not a host name.
+The record has the core count and the CPU model, not a host name. Each
+worker runs under scripts/pin_run.py, which sets OMP_NUM_THREADS and
+RAYON_NUM_THREADS to the width; the cpus each worker used are appended to
+JSON.cpus and their count is cpus_effective in the record.
 """
 
 from __future__ import annotations
@@ -23,6 +26,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import paper_stats as stats  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 WARMUP = 2
@@ -70,17 +76,25 @@ def parse_hist(text: str) -> dict[int, int]:
     return hist
 
 
+def close_pinned(proc: subprocess.Popen, record, timeout: float) -> str:
+    """Wait for a pin_run worker; its record line, or an error if it escaped."""
+    status = proc.wait(timeout=timeout)
+    if status != 0:
+        raise RuntimeError(f"worker exited {status}; 3 is a mask outside its cpus")
+    return stats.last_record(record) if record is not None else ""
+
+
 class DseamsRepl:
-    def __init__(self, bench: str, traj: str, threads: int):
+    def __init__(self, bench: str, traj: str, threads: int, record=None):
         cores = "0" if threads == 1 else "0-7"
+        self.record = record
         env = os.environ.copy()
         env.pop("LD_LIBRARY_PATH", None)
-        env["OMP_NUM_THREADS"] = str(threads)
         env["OMP_DYNAMIC"] = "FALSE"
         env["OMP_PROC_BIND"] = "close"
         self.proc = subprocess.Popen(
-            ["taskset", "-c", cores, bench, "--repl", traj, "1", "1",
-             f"{CUTOFF:.8f}", str(MAX_RING)],
+            stats.pinned(cores, threads, record,
+                         [bench, "--repl", traj, "1", "1", f"{CUTOFF:.8f}", str(MAX_RING)]),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             text=True,
@@ -105,24 +119,24 @@ class DseamsRepl:
             raise RuntimeError(f"bad sample line {line!r}")
         return float(line.split()[1])
 
-    def close(self) -> None:
+    def close(self) -> str:
         if self.proc.stdin is not None:
             self.proc.stdin.write("quit\n")
             self.proc.stdin.flush()
-        self.proc.wait(timeout=30)
+        return close_pinned(self.proc, self.record, 30)
 
 
 class OvitoRepl:
     """Child interpreter so OVITO_THREAD_COUNT is read at import."""
 
-    def __init__(self, python: str, traj: str, threads: int):
+    def __init__(self, python: str, traj: str, threads: int, record=None):
         cores = "0" if threads == 1 else "0-7"
+        self.record = record
         env = os.environ.copy()
         env["OVITO_THREAD_COUNT"] = str(threads)
-        env["OMP_NUM_THREADS"] = str(threads)
         self.proc = subprocess.Popen(
-            ["taskset", "-c", cores, python, str(Path(__file__).resolve()),
-             "--ovito-worker", traj],
+            stats.pinned(cores, threads, record,
+                         [python, str(Path(__file__).resolve()), "--ovito-worker", traj]),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             text=True,
@@ -150,11 +164,11 @@ class OvitoRepl:
             raise RuntimeError(f"bad ovito sample {line!r}")
         return float(line.split()[1])
 
-    def close(self) -> None:
+    def close(self) -> str:
         if self.proc.stdin is not None:
             self.proc.stdin.write("quit\n")
             self.proc.stdin.flush()
-        self.proc.wait(timeout=60)
+        return close_pinned(self.proc, self.record, 60)
 
 
 def ovito_worker_main(traj: str) -> None:
@@ -226,9 +240,9 @@ def prepare_frames(h2h, work: Path) -> list[tuple[str, str, int]]:
 
 
 def run_dataset(bench: str, python: str, name: str, traj: str, molecules: int,
-                threads: int) -> dict:
-    dseams = DseamsRepl(bench, traj, threads)
-    ovito = OvitoRepl(python, traj, threads)
+                threads: int, record) -> dict:
+    dseams = DseamsRepl(bench, traj, threads, record)
+    ovito = OvitoRepl(python, traj, threads, record)
     try:
         if dseams.nop != molecules or ovito.nop != molecules:
             raise SystemExit(
@@ -257,7 +271,7 @@ def run_dataset(bench: str, python: str, name: str, traj: str, molecules: int,
                 "ovito_median_ms": median(samples[mode]["ovito"]),
                 "calls": len(samples[mode]["dseams"]),
             }
-        return {
+        result = {
             "molecules": molecules,
             "cores": "0" if threads == 1 else "0-7",
             "census": {str(k): v for k, v in sorted(dseams.hist.items())},
@@ -266,8 +280,11 @@ def run_dataset(bench: str, python: str, name: str, traj: str, molecules: int,
             "ovito_version": ovito.version,
         }
     finally:
-        dseams.close()
-        ovito.close()
+        seen = {"dseams": dseams.close(), "ovito": ovito.close()}
+    result["cpus_effective"] = {
+        tool: int(stats.record_field(line, "cpus_effective")) for tool, line in seen.items()
+    }
+    return result
 
 
 def main() -> None:
@@ -300,6 +317,8 @@ def main() -> None:
         ),
         "threads": {},
     }
+    cpus_record = Path(args.json_path + ".cpus").resolve()
+    cpus_record.unlink(missing_ok=True)
     with tempfile.TemporaryDirectory(prefix="rings-h2h-") as work:
         frames = prepare_frames(h2h, Path(work))
         for threads in (1, 8):
@@ -307,7 +326,7 @@ def main() -> None:
             for name, traj, molecules in frames:
                 print(f"[rings] {name} threads {threads}", flush=True)
                 arm[name] = run_dataset(
-                    args.bench, args.python, name, traj, molecules, threads)
+                    args.bench, args.python, name, traj, molecules, threads, cpus_record)
                 row = arm[name]
                 for mode in ("prebuilt", "inside"):
                     arm_row = row[mode]

@@ -24,6 +24,12 @@ The neighbour session (host, pin, medians, rerun) is
 
 Build with tests and run the binary.
 Record the host, the compiler, the commit, and whether =SEAMS_OFFLOAD= was set.
+Pin every timed run:
+=python3 scripts/pin_run.py --cpus 0 --width 1 --record OUT.cpus -- CMD=
+sets =OMP_NUM_THREADS= and =RAYON_NUM_THREADS= to the width and the cpu mask as =taskset -c= does,
+then appends the cpus the command's threads were allowed and ran on (=cpus_effective=) to =OUT.cpus=.
+It exits 3 when a thread left those cpus.
+The Snakemake timing rules and the head-to-head drivers run through it.
 A host-only build takes the host branch of the device code.
 Say so.
 

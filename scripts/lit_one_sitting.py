@@ -13,7 +13,10 @@ the mask.
 OpenBLAS, MKL, and NumExpr stay at one thread in every process. The code's
 own pool (OpenMP, mdapy, pyscal3, freud, vesin, OVITO) uses the row width.
 OVITO_THREAD_COUNT is in the environment before the interpreter starts, so
-it is set before ovito is imported.
+it is set before ovito is imported. RAYON_NUM_THREADS is the row width for
+every code. Each call reports the process cpu mask after it returns; the raw
+log records it as cpus_effective and cpus, and a mask outside the row's
+taskset cpus stops the sitting.
 
 d-SEAMS is timed on the same boundary as bench/omp-scaling/scaling.csv.
 Arrays and the system handle are built before the timer. neighbours, q4,
@@ -210,9 +213,18 @@ def jobs(sizes: tuple[int, ...]) -> list[dict]:
 
 
 class Worker:
-    def __init__(self, code: str, threads: int, cpus: str, env: dict, script: Path):
+    """One code at one width on taskset cpus.
+
+    confine=False records a mask that left the cpus instead of stopping;
+    a build from before the library kept the launch mask needs it.
+    """
+
+    def __init__(self, code: str, threads: int, cpus: str, env: dict, script: Path,
+                 confine: bool = True):
         self.code = code
         self.threads = threads
+        self.cpus = cpus
+        self.confine = confine
         cmd = [
             "taskset", "-c", cpus, sys.executable, "-u", str(script),
             "--worker", code, str(threads),
@@ -248,6 +260,12 @@ class Worker:
         payload = self._read(600)
         if "ms" not in payload:
             raise RuntimeError(f"{self.code} {operation}: {payload}")
+        # A row on taskset cpus that ran on others did not measure that width.
+        payload["escaped"] = not stats.cpu_set(payload["cpus"]) <= stats.cpu_set(self.cpus)
+        if payload["escaped"] and self.confine:
+            raise RuntimeError(
+                f"{self.code} {operation} t{self.threads}: taskset {self.cpus}, "
+                f"process mask {payload['cpus']} after the call")
         return payload
 
     def close(self) -> None:
@@ -382,8 +400,10 @@ def worker_main(code: str, threads: int) -> None:
         prepared["run"](operation, molecules)
         ms = (time.perf_counter() - t0) * 1e3
         check = prepared["digest"](operation, molecules)
+        cores, cpus = stats.cores_now()
         sys.stdout.write(json.dumps({
             "ms": ms, "check": check, "ntask": len(os.listdir("/proc/self/task")),
+            "cpus_effective": cores, "cpus": cpus,
         }) + "\n")
         sys.stdout.flush()
 
@@ -1028,6 +1048,7 @@ def main() -> int:
                             f"round={round_index} molecules={row['molecules']} operation={row['operation']} "
                             f"code={row['code']} threads={row['threads']} ms={payload['ms']:.6f} "
                             f"check={payload['check']} ntask={payload.get('ntask', '')} "
+                            f"cpus_effective={payload['cpus_effective']} cpus={payload['cpus']} "
                             f"warmup={int(round_index < args.warmup)}\n")
                 finally:
                     worker.end()

@@ -4,7 +4,10 @@ Ideal ice Ic and one liquid made by shifting that crystal with a normal
 draw (seed 91001, sigma 0.9 angstrom). The frames stay in a temporary
 directory. One warm-up, then eight samples. The median of an even count
 is the mean of the two central values. Quartiles are Hyndman-Fan type 7.
-Taskset pins one core or eight. The neighbour build is inside every sample.
+scripts/pin_run.py pins one core or eight, sets OMP_NUM_THREADS and
+RAYON_NUM_THREADS to the width and appends the cpus each run used to
+OUT.cpus; the cores column is that effective count. The neighbour build is
+inside every sample.
 """
 
 from __future__ import annotations
@@ -19,6 +22,10 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import paper_stats as stats  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 CUTOFF = 3.5
@@ -78,26 +85,32 @@ def bench_path():
     raise SystemExit("bench_ql is not built")
 
 
-def run_seams(binary, frame, order, threads, ql_path):
+def effective(record):
+    found = stats.record_field(stats.last_record(record), "cpus_effective")
+    if not found:
+        raise RuntimeError(f"no record in {record}")
+    return found
+
+
+def run_seams(binary, frame, order, threads, ql_path, record):
     cpus = "0" if threads == 1 else "0-7"
     env = os.environ.copy()
     env.update({
-        "OMP_NUM_THREADS": str(threads),
         "OMP_DYNAMIC": "FALSE",
         "OMP_PROC_BIND": "false",
         "OMP_WAIT_POLICY": "active",
     })
     proc = subprocess.run(
-        ["taskset", "-c", cpus, binary, frame, str(order), str(REPEATS), ql_path],
+        stats.pinned(cpus, threads, record, [binary, frame, str(order), str(REPEATS), ql_path]),
         cwd=ROOT, env=env, capture_output=True, text=True, check=True,
     )
     samples = [float(line) for line in proc.stdout.split()]
     if len(samples) != REPEATS:
         raise RuntimeError(proc.stderr)
-    return samples
+    return samples, effective(record)
 
 
-def run_other(code, frame, order, threads, work):
+def run_other(code, frame, order, threads, work, record):
     cpus = "0" if threads == 1 else "0-7"
     script = r"""
 import os, struct, sys, time
@@ -151,21 +164,20 @@ for value in samples:
     print(f"{value:.6f}")
 """
     env = os.environ.copy()
-    env["OMP_NUM_THREADS"] = str(threads)
     env["OVITO_THREAD_COUNT"] = str(threads)
     env["OMP_DYNAMIC"] = "FALSE"
     out = work / f"{code}.npy"
     proc = subprocess.run(
-        ["taskset", "-c", cpus, sys.executable, "-c", script, frame, str(order), str(threads), code, str(out)],
+        stats.pinned(cpus, threads, record,
+                     [sys.executable, "-c", script, frame, str(order), str(threads), code, str(out)]),
         env=env, capture_output=True, text=True,
     )
     if proc.returncode != 0:
         sys.stderr.write(proc.stderr[-2000:])
         raise RuntimeError(code)
     lines = [line for line in proc.stdout.splitlines() if line]
-    cores = lines[0].split("=", 1)[1]
     samples = [float(line) for line in lines[1:]]
-    return samples, np.load(out), cores
+    return samples, np.load(out), effective(record)
 
 
 def main():
@@ -173,6 +185,9 @@ def main():
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
     binary = bench_path()
+    record = Path(args.out + ".cpus").resolve()
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.unlink(missing_ok=True)
     rows = ["code,frame,molecules,l,threads,cores,sample_ms"]
     with tempfile.TemporaryDirectory(prefix="ql-") as folder:
         work = Path(folder)
@@ -185,14 +200,17 @@ def main():
                 for order in ORDERS:
                     for threads in (1, 8):
                         ql_path = work / "seams.ql"
-                        seams = run_seams(binary, str(frame), order, threads, str(ql_path))
+                        seams, seams_cores = run_seams(binary, str(frame), order, threads,
+                                                       str(ql_path), record)
                         seams_ql = np.fromfile(ql_path, dtype=np.float64)
-                        ov, ov_ql, ov_cores = run_other("ovito", str(frame), order, threads, work)
-                        fr, fr_ql, fr_cores = run_other("freud", str(frame), order, threads, work)
+                        ov, ov_ql, ov_cores = run_other("ovito", str(frame), order, threads,
+                                                        work, record)
+                        fr, fr_ql, fr_cores = run_other("freud", str(frame), order, threads,
+                                                        work, record)
                         d_ov = float(np.max(np.abs(seams_ql - ov_ql)))
                         d_fr = float(np.max(np.abs(seams_ql - fr_ql)))
                         for code, samples, cores in (
-                            ("seams", seams, str(threads)),
+                            ("seams", seams, seams_cores),
                             ("ovito", ov, ov_cores),
                             ("freud", fr, fr_cores),
                         ):

@@ -4,7 +4,9 @@
 
 Ice Ic, oxygen lattice constant 6.35 A, cutoff 3.5 A. The list is the
 full both-direction shell (four neighbours, 4N pairs). Each sample is
-one build in a fresh process, pinned to the first ``threads`` cores.
+one build in a fresh process, pinned to the first ``threads`` cores by
+scripts/pin_run.py; its line with the cpus the process used follows each
+result.
 """
 
 import argparse
@@ -12,6 +14,10 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import paper_stats as stats  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 PY = os.environ.get("NEIGH_PYTHON", sys.executable)
@@ -87,14 +93,14 @@ print(f"kind={kind} molecules={molecules} threads={threads} pairs={pairs} "
 """
 
 
-def run(cmd, env, cores):
-    pin = ["taskset", "-c", cores]
-    proc = subprocess.run(pin + cmd, env=env, text=True, capture_output=True)
+def run(cmd, env, cores, threads):
+    proc = subprocess.run(stats.pinned(cores, threads, None, cmd),
+                          env=env, text=True, capture_output=True)
     if proc.returncode != 0:
         sys.stderr.write(proc.stdout)
         sys.stderr.write(proc.stderr)
         raise SystemExit(f"failed: {cmd} ({proc.returncode})")
-    return proc.stdout.strip()
+    return proc.stdout.strip() + "\n" + stats.stderr_record(proc.stderr)
 
 
 def main():
@@ -122,12 +128,12 @@ def main():
                 "MKL_NUM_THREADS": str(threads),
                 "RAYON_NUM_THREADS": str(threads),
             })
-            text = run([BENCH, str(molecules), str(threads), str(args.reps)], env, cores)
+            text = run([BENCH, str(molecules), str(threads), str(args.reps)], env, cores, threads)
             lines.append(text)
             print(text, flush=True)
             for kind in ("vesin", "freud", "matscipy"):
                 text = run([PY, "-c", ice_code(), kind, str(molecules),
-                            str(threads), str(args.reps)], env, cores)
+                            str(threads), str(args.reps)], env, cores, threads)
                 lines.append(text)
                 print(text, flush=True)
     if args.out is not None:

@@ -45,11 +45,13 @@ class PlumedQ6:
         sw = h2h.SWITCH.format(c=3.5)
         self.deck = [line.format(n=molecules, sw=sw, c=3.5) for line in lines]
         self.deck.append(f"PRINT ARG={arg} FILE=colvar")
-        self.env = dict(os.environ, PLUMED_NUM_THREADS=str(threads), OMP_NUM_THREADS=str(threads))
+        self.env = dict(os.environ, PLUMED_NUM_THREADS=str(threads),
+                        OMP_NUM_THREADS=str(threads), RAYON_NUM_THREADS=str(threads))
 
     def track_s_per_frame(self, method, threads, molecules):
         with tempfile.TemporaryDirectory(prefix="asv-plumed-q6-") as tmp:
-            log = h2h.driver(self.plugin, self.deck, Path(tmp), self.env, self.frames, "time")
+            log = h2h.driver(self.plugin, self.deck, Path(tmp), self.env, self.frames, "time",
+                             h2h.stats.taskset_cores(threads))
         return h2h.action_seconds(log, self.labels) / self.nframes
 
     track_s_per_frame.unit = "seconds"

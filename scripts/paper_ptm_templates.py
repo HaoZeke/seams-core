@@ -14,6 +14,10 @@ The brine frame is the starting coordinates of input/brine/grow.py at
 minimisation or dynamics. Oxygens only. Ions are not labelled.
 CHILL+ is compared where a class exists on both sides: ice Ih with
 hexagonal ice, ice Ic with cubic ice, and other with Other.
+
+Workers run under scripts/pin_run.py. The cores and affinity columns are
+the count and list of cpus the worker's threads were allowed, and
+pin_run's lines are in OUT/ptm-templates.cpus.
 """
 
 from __future__ import annotations
@@ -289,10 +293,8 @@ def worker(args) -> int:
 
 
 def launch(args, worker_name, template, threads, frame):
+    """The worker's last line and pin_run's line for the run."""
     cmd = [
-        "taskset",
-        "-c",
-        stats.taskset_cores(threads),
         sys.executable,
         str(Path(__file__).resolve()),
         "--worker",
@@ -314,11 +316,14 @@ def launch(args, worker_name, template, threads, frame):
     env["LD_LIBRARY_PATH"] = lib_path()
     env["OVITO_THREAD_COUNT"] = str(threads)
     env["QT_QPA_PLATFORM"] = "offscreen"
-    done = subprocess.run(cmd, cwd=ROOT, env=env, text=True, capture_output=True)
+    record = args.out / "ptm-templates.cpus"
+    done = subprocess.run(stats.pinned(stats.taskset_cores(threads), threads, record, cmd),
+                          cwd=ROOT, env=env, text=True, capture_output=True)
     if done.returncode != 0:
         tail = (done.stderr or done.stdout or "").strip().splitlines()
         raise RuntimeError(tail[-1] if tail else f"exit {done.returncode}")
-    return [line for line in done.stdout.splitlines() if line.strip()][-1]
+    lines = [line for line in done.stdout.splitlines() if line.strip()]
+    return lines[-1], stats.last_record(record)
 
 
 def write_time(path: Path, rows: list[dict]) -> None:
@@ -346,6 +351,7 @@ def main() -> int:
     if not Path(args.lib).is_file():
         raise SystemExit(f"missing {args.lib}")
     args.out.mkdir(parents=True, exist_ok=True)
+    (args.out / "ptm-templates.cpus").unlink(missing_ok=True)
     cores, affinity = stats.cores_now()
     log = [
         *stats.machine_lines(ROOT),
@@ -362,7 +368,7 @@ def main() -> int:
     for template, filename in (("default", "ptm-default.csv"), ("ice", "ptm-ice.csv")):
         rows = []
         for threads in (1, 8):
-            text = launch(args, "time", template, threads, "ic")
+            text, record = launch(args, "time", template, threads, "ic")
             samples = [float(piece) for piece in text.split()]
             if len(samples) != args.repeats:
                 raise SystemExit(f"{template} threads {threads} returned {len(samples)} samples")
@@ -371,8 +377,8 @@ def main() -> int:
                 "template_set": template,
                 "molecules": MOLECULES,
                 "threads": threads,
-                "cores": threads,
-                "affinity": stats.taskset_cores(threads),
+                "cores": stats.record_field(record, "cpus_effective"),
+                "affinity": stats.record_field(record, "allowed"),
                 "warmup": args.warmup,
                 "n": summary["n"],
                 "median_ms": f"{summary['median_ms']:.6f}",
@@ -393,7 +399,7 @@ def main() -> int:
         write_time(args.out / filename, rows)
     agree_rows = []
     for frame in ("ih", "ic", "brine"):
-        payload = json.loads(launch(args, "agree", "ice", 8, frame))
+        payload = json.loads(launch(args, "agree", "ice", 8, frame)[0])
         log.append(f"frame {frame} {payload['note']} molecules {payload['molecules']}")
         for code, match in (("PTM", PTM_MATCH), ("CHILL+", CHILL_MATCH)):
             key = "ptm" if code == "PTM" else "chill"

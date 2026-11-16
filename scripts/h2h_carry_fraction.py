@@ -2,8 +2,10 @@
 """Carried rings at or under a bare ringNetwork call.
 
 Moved fractions 0, 0.05, ..., 1 on a 4096-molecule cell. Eight samples.
-One thread on core 0, then eight threads on cores 0-7. A row passes when
-the carried median and the carried minimum are at most the bare search.
+One thread on core 0, then eight threads on cores 0-7, each run through
+scripts/pin_run.py, which sets OMP_NUM_THREADS and RAYON_NUM_THREADS to
+the width and prints the cpus the run used. A row passes when the carried
+median and the carried minimum are at most the bare search.
 """
 
 from __future__ import annotations
@@ -14,6 +16,10 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import paper_stats as stats  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -47,18 +53,21 @@ def version_of(lib: Path) -> str:
 def run_width(bench: Path, threads: int, samples: int) -> list[dict]:
     env = os.environ.copy()
     env["LD_LIBRARY_PATH"] = str(bench.resolve().parents[1] / "src")
-    env["OMP_NUM_THREADS"] = str(threads)
     env["OMP_PROC_BIND"] = "close"
     env["OMP_PLACES"] = "cores"
     env["OMP_WAIT_POLICY"] = "PASSIVE"
     cores = "0" if threads == 1 else "0-7"
     done = subprocess.run(
-        ["taskset", "-c", cores, str(bench), "4096", str(samples), "sweep"],
+        stats.pinned(cores, threads, None, [bench, "4096", str(samples), "sweep"]),
         cwd=ROOT,
         env=env,
         text=True,
         capture_output=True,
     )
+    record = stats.stderr_record(done.stderr)
+    print(record, flush=True)
+    if stats.record_field(record, "escaped") != "0":
+        raise SystemExit(f"threads {threads} left cpus {cores}: {record}")
     if done.returncode not in (0, 1):
         sys.stderr.write(done.stderr)
         raise SystemExit(done.returncode)
@@ -69,6 +78,7 @@ def run_width(bench: Path, threads: int, samples: int) -> list[dict]:
     for row in rows:
         row["threads"] = str(threads)
         row["cpus"] = cores
+        row["cpus_effective"] = stats.record_field(record, "cpus_effective")
     if done.returncode != 0 or any(row["within"] != "yes" for row in rows):
         for row in rows:
             if row["within"] != "yes":
@@ -85,18 +95,19 @@ def four_of_five(bench: Path, threads: int, samples: int) -> dict:
     """Every molecule whose index is not a multiple of 5."""
     env = os.environ.copy()
     env["LD_LIBRARY_PATH"] = str(bench.resolve().parents[1] / "src")
-    env["OMP_NUM_THREADS"] = str(threads)
     env["OMP_PROC_BIND"] = "close"
     env["OMP_PLACES"] = "cores"
     env["OMP_WAIT_POLICY"] = "PASSIVE"
     cores = "0" if threads == 1 else "0-7"
     done = subprocess.run(
-        ["taskset", "-c", cores, str(bench), "4096", str(samples)],
+        stats.pinned(cores, threads, None, [bench, "4096", str(samples)]),
         cwd=ROOT,
         env=env,
         text=True,
         capture_output=True,
     )
+    record = stats.stderr_record(done.stderr)
+    print(record, flush=True)
     if done.returncode != 0:
         sys.stderr.write(done.stderr)
         sys.stderr.write(done.stdout)
@@ -118,6 +129,7 @@ def four_of_five(bench: Path, threads: int, samples: int) -> dict:
     return {
         "threads": str(threads),
         "cpus": cores,
+        "cpus_effective": stats.record_field(record, "cpus_effective"),
         "moved_fraction": "0.8000",
         "pattern": "four_of_five",
         "recomputed": got["recomputed"][1],
@@ -183,7 +195,7 @@ def main() -> None:
         rows.append(live)
         rows.append(archival)
         fields = [
-            "threads", "cores", "cpus", "moved_fraction", "pattern", "recomputed",
+            "threads", "cores", "cpus", "cpus_effective", "moved_fraction", "pattern", "recomputed",
             "molecules", "samples", "carry_median_ms", "carry_min_ms",
             "bare_median_ms", "bare_min_ms", "within", "version", "commit",
             "cpu_model",

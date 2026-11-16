@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Head-to-head of d-SEAMS against mdapy, fastatomstruct and vesin.
 
-Protocol matches the comparator campaign: taskset on the allowed cores,
+Protocol matches the comparator campaign: scripts/pin_run.py on the
+allowed cores with OMP_NUM_THREADS and RAYON_NUM_THREADS at the width,
 one warm-up, six timed calls, median and type-7 interquartile range.
 Frames are ideal ice Ic. Scratch frames stay under bbdir and are removed
 before exit.
@@ -28,6 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import h2h_protocol as proto
+import paper_stats as stats
 import release_build
 
 proto.apply_pin_env()
@@ -181,10 +183,9 @@ def core_list(threads):
 
 def launch(python, script, extra, frame, env_extra=None, threads=1, timeout=None):
     cores = core_list(threads)
-    cmd = ["taskset", "-c", cores, python, str(script), "--frame", str(frame), *extra]
+    cmd = stats.pinned(cores, threads, None,
+                       [python, str(script), "--frame", str(frame), *extra])
     env = proto.pin_env()
-    env["OMP_NUM_THREADS"] = str(threads)
-    env["RAYON_NUM_THREADS"] = str(threads)
     if env_extra:
         env.update(env_extra)
     try:
@@ -201,6 +202,7 @@ def launch(python, script, extra, frame, env_extra=None, threads=1, timeout=None
     payload = json.loads(line)
     if payload.get("cpus") != cores:
         raise RuntimeError(f"worker not pinned to {cores}: {payload.get('cpus')}")
+    payload["cpus"] = stats.record_field(stats.stderr_record(done.stderr), "allowed")
     return payload
 
 

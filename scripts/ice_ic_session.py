@@ -7,8 +7,11 @@ Two variants, each interleaved, eight timed calls after one warm-up:
   rings            ring search only, graph already built
 
 Ideal ice Ic, bond 2.75 A, cutoff 3.5 A, rings of size at most 6.
-Serial is core 0. Eight threads are cores 0-7. cycless is cycles_iter,
-which takes no thread count, so it is recorded only at one thread.
+Serial is core 0. Eight threads are cores 0-7. Each worker runs under
+scripts/pin_run.py with OMP_NUM_THREADS and RAYON_NUM_THREADS at the
+width; the cpus column is the cpus its threads were allowed, and pin_run's
+lines are in CSV.cpus. cycless is cycles_iter, which takes no thread
+count, so it is recorded only at one thread.
 
     python3 scripts/ice_ic_session.py --csv benchmarks/h2h-ice-ic-rings.csv
 """
@@ -25,6 +28,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+import paper_stats as stats  # noqa: E402
 from gen_ice_ic import ice_ic  # noqa: E402
 
 CUTOFF = 3.5
@@ -87,7 +91,8 @@ def write_dump(path: Path, points, side: float) -> None:
 
 
 class Pipe:
-    def __init__(self, argv, env):
+    def __init__(self, argv, env, record=None):
+        self.record = record
         self.proc = subprocess.Popen(
             argv,
             stdin=subprocess.PIPE,
@@ -112,11 +117,14 @@ class Pipe:
             raise RuntimeError(f"bad sample {line!r}")
         return float(line.split()[1])
 
-    def close(self) -> None:
+    def close(self) -> str:
         if self.proc.stdin is not None:
             self.proc.stdin.write("quit\n")
             self.proc.stdin.flush()
-        self.proc.wait(timeout=120)
+        status = self.proc.wait(timeout=120)
+        if status != 0:
+            raise RuntimeError(f"worker exited {status}; 3 is a mask outside its cpus")
+        return stats.last_record(self.record) if self.record is not None else ""
 
 
 def dseams_env(threads: int) -> dict:
@@ -143,14 +151,14 @@ def ovito_env(threads: int) -> dict:
     return env
 
 
-def start_dseams(traj: Path, threads: int) -> tuple[Pipe, dict]:
+def start_dseams(traj: Path, threads: int, record=None) -> tuple[Pipe, dict]:
     cores = "0" if threads == 1 else "0-7"
     pipe = Pipe(
-        [
-            "taskset", "-c", cores, str(BENCH), "--repl", str(traj),
-            "1", "1", f"{CUTOFF:.8f}", str(MAX_RING),
-        ],
+        stats.pinned(cores, threads, record, [
+            str(BENCH), "--repl", str(traj), "1", "1", f"{CUTOFF:.8f}", str(MAX_RING),
+        ]),
         dseams_env(threads),
+        record,
     )
     text = pipe.ready()
     parts = text.split()
@@ -164,14 +172,14 @@ def start_dseams(traj: Path, threads: int) -> tuple[Pipe, dict]:
     return pipe, hist
 
 
-def start_ovito(python: str, traj: Path, threads: int) -> tuple[Pipe, dict]:
+def start_ovito(python: str, traj: Path, threads: int, record=None) -> tuple[Pipe, dict]:
     cores = "0" if threads == 1 else "0-7"
     pipe = Pipe(
-        [
-            "taskset", "-c", cores, python, str(Path(__file__).resolve()),
-            "--ovito-worker", str(traj),
-        ],
+        stats.pinned(cores, threads, record, [
+            python, str(Path(__file__).resolve()), "--ovito-worker", str(traj),
+        ]),
         ovito_env(threads),
+        record,
     )
     payload = json.loads(pipe.ready())
     return pipe, payload
@@ -396,6 +404,8 @@ def main() -> None:
     cores = os.cpu_count() or 1
     model = cpu_model()
     rows = []
+    record = Path(args.csv + ".cpus").resolve()
+    record.unlink(missing_ok=True)
     work = ROOT / "bbdir-release" / "h2h-ice-ic"
     work.mkdir(parents=True, exist_ok=True)
     for reps in (5, 11, 24):
@@ -407,8 +417,9 @@ def main() -> None:
                 args.threads not in (None, threads)
             ):
                 continue
-            dseams, dhist = start_dseams(traj, threads)
-            ovito, payload = start_ovito(args.python, traj, threads)
+            dseams, dhist = start_dseams(traj, threads, record)
+            ovito, payload = start_ovito(args.python, traj, threads, record)
+            first = len(rows)
             want = [0] if threads == 1 else list(range(8))
             if payload.get("threads") != threads or payload.get("affinity") != want:
                 raise SystemExit(
@@ -513,8 +524,9 @@ def main() -> None:
                         flush=True,
                     )
             finally:
-                dseams.close()
-                ovito.close()
+                seen = {"d-SEAMS": dseams.close(), "OVITO": ovito.close()}
+            for row in rows[first:]:
+                row["cpus"] = stats.record_field(seen[row["code"]], "allowed")
         if len(points) == 1000 and args.molecules in (None, 1000):
             for block in cycless_block(points, side):
                 rows.append(

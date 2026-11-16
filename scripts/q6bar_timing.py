@@ -6,8 +6,10 @@ One session. The same frames are scored by interface_order growth
 (the 2015 and OVITO CHILL+ rules, thresholds unchanged), by
 interface_order q6 (Lechner-Dellago q6bar), and by
 scripts/q6bar_baseline.py. n replicates, then the median and the
-interquartile range. taskset pins the run to 1 core and to 8 cores.
-The core count is the size of the affinity mask. No host name is read.
+interquartile range. taskset pins the run to 1 core and to 8 cores,
+with OMP_NUM_THREADS and RAYON_NUM_THREADS at the core count. The core
+count is the size of the affinity mask; one untimed run of each tool under
+scripts/pin_run.py records the cpus its threads used. No host name is read.
 
     python3 scripts/q6bar_timing.py --bin bbdir/tests/interface_order
 """
@@ -21,6 +23,7 @@ import time
 from pathlib import Path
 
 import espinosa_candidates as cand
+import paper_stats as stats
 import q6bar_baseline as baseline
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -70,14 +73,20 @@ def affinity_cores(mask: str) -> int:
     return int(done.stdout.strip().splitlines()[-1])
 
 
-def run_timed(mask: str, cores: int, cmd: list[str]) -> float:
+def timed_env(cores: int) -> dict[str, str]:
     env = os.environ.copy()
     env["OMP_NUM_THREADS"] = str(cores)
+    env["RAYON_NUM_THREADS"] = str(cores)
     env["OMP_PROC_BIND"] = "close"
     env["OMP_PLACES"] = "cores"
     # The pure-Python baseline splits frames across this many processes.
     # d-SEAMS reads the same variable and ignores it.
     env["Q6_WORKERS"] = str(cores)
+    return env
+
+
+def run_timed(mask: str, cores: int, cmd: list[str]) -> float:
+    env = timed_env(cores)
     t0 = time.perf_counter()
     subprocess.run(
         ["taskset", "-c", mask, *cmd],
@@ -86,6 +95,13 @@ def run_timed(mask: str, cores: int, cmd: list[str]) -> float:
         env=env,
     )
     return time.perf_counter() - t0
+
+
+def watched(mask: str, cores: int, cmd: list[str]) -> str:
+    """pin_run's line for one untimed run; its start-up stays out of the samples."""
+    done = subprocess.run(stats.pinned(mask, cores, None, cmd), check=True,
+                          capture_output=True, text=True, env=timed_env(cores))
+    return stats.stderr_record(done.stderr)
 
 
 def choose_dump(data: Path) -> Path:
@@ -160,6 +176,7 @@ def main() -> None:
         if seen != cores:
             raise SystemExit(f"taskset {mask} gave {seen} cores, expected {cores}")
         for tool, cmd in commands.items():
+            notes.append(f"# cpus {tool} {watched(mask, cores, cmd)}")
             samples = []
             for _ in range(args.repeats):
                 samples.append(run_timed(mask, cores, cmd))
@@ -170,7 +187,7 @@ def main() -> None:
     notes.append("# dseams-growth is interface_order growth. dseams-q6 is interface_order q6.")
     notes.append("# python-q6bar is scripts/q6bar_baseline.py, the Lechner-Dellago average.")
     notes.append("# One core runs that script as one process. Eight cores split the frames across that many processes.")
-    notes.append("# OMP_NUM_THREADS equals the core count. No host name is recorded.")
+    notes.append("# OMP_NUM_THREADS and RAYON_NUM_THREADS equal the core count. No host name is recorded.")
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text("\n".join(rows + notes) + "\n")
     if args.out.stat().st_size > 80000:

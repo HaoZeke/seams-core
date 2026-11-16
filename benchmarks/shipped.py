@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ENV = os.environ.copy()
 ENV.update({
     "OMP_NUM_THREADS": "1",
+    "RAYON_NUM_THREADS": "1",
     "OMP_DYNAMIC": "FALSE",
     "OVITO_THREAD_COUNT": "1",
 })

@@ -5,7 +5,9 @@
 Ideal ice Ic at 110592 and 884736 molecules, one thread and eight.
 One warm-up, then six timed calls. The median of an even sample is the
 mean of the two central values. The interquartile range is type-7.
-Cores are the allowed list. The host name is not recorded.
+Cores are the allowed list: scripts/pin_run.py runs each worker with
+OMP_NUM_THREADS and RAYON_NUM_THREADS at the width and reports the cpus
+any of its threads was allowed. The host name is not recorded.
 
 Cages are the GenIce sI and sII frames, where cages exist. King's
 shortest-path count is timed at every size whose first call returns
@@ -28,6 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import h2h_protocol as proto
+import paper_stats as stats
 
 ROOT = Path(__file__).resolve().parents[1]
 LIB = ROOT / "bbdir-release" / "bindings" / "libseams_lang.so"
@@ -263,6 +266,7 @@ def worker(kind, molecules, threads, frame_path, calls=0):
     os.environ["FASTATOMSTRUCT_NO_TELEMETRY"] = "1"
     os.environ["FASTATOMSTRUCT_SUPPRESS_TELEMETRY_NOTICE"] = "1"
     os.environ["OMP_NUM_THREADS"] = str(threads)
+    os.environ["RAYON_NUM_THREADS"] = str(threads)
     data = np.load(frame_path)
     pos = data["positions"]
     side = float(data["side"])
@@ -551,20 +555,22 @@ def ovito_mod(pos, side, threads, which):
 
 def launch(kind, molecules, threads, frame, timeout, calls=0):
     cmd = [
-        "taskset", "-c", cores_of(threads), sys.executable, __file__,
+        sys.executable, __file__,
         "--worker", kind, "--molecules", str(molecules), "--threads", str(threads),
         "--frame", str(frame),
     ]
     if calls:
         cmd.extend(["--calls", str(calls)])
     env = os.environ.copy()
-    env["OMP_NUM_THREADS"] = str(threads)
     env["OMP_DYNAMIC"] = "FALSE"
     env["FASTATOMSTRUCT_NO_TELEMETRY"] = "1"
-    done = subprocess.run(cmd, cwd=ROOT, env=env, text=True, capture_output=True, timeout=timeout)
+    done = subprocess.run(stats.pinned(cores_of(threads), threads, None, cmd),
+                          cwd=ROOT, env=env, text=True, capture_output=True, timeout=timeout)
     if done.returncode != 0:
         raise RuntimeError(done.stderr[-2000:] or done.stdout[-2000:])
-    return json.loads(done.stdout.strip().splitlines()[-1])
+    payload = json.loads(done.stdout.strip().splitlines()[-1])
+    payload["cpus"] = stats.record_field(stats.stderr_record(done.stderr), "allowed")
+    return payload
 
 
 def row_of(payload, operation, code):
