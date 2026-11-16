@@ -901,6 +901,35 @@ LocalKey localKeyFromGraph(LocalGraph &g, int hops, std::uint64_t *refinement) {
     }
     return memo.key;
   }
+#ifndef SEAMS_HAS_NAUTY
+  // The certificate is empty, so the key only needs the edge count. A stamp
+  // per row counts each undirected edge once and skips the edge list.
+  int edgeCount = 0;
+  {
+    thread_local std::vector<int> stamp;
+    thread_local int epoch = 0;
+    const int nAdj = static_cast<int>(g.adjacency.size());
+    if (static_cast<int>(stamp.size()) < nAdj) {
+      stamp.assign(static_cast<std::size_t>(nAdj), 0);
+      epoch = 0;
+    }
+    for (int i = 0; i < nAdj; i++) {
+      if (epoch >= std::numeric_limits<int>::max() - 1) {
+        std::fill(stamp.begin(), stamp.end(), 0);
+        epoch = 0;
+      }
+      ++epoch;
+      for (const int j : g.adjacency[static_cast<std::size_t>(i)]) {
+        if (j > i && stamp[static_cast<std::size_t>(j)] != epoch) {
+          stamp[static_cast<std::size_t>(j)] = epoch;
+          ++edgeCount;
+        }
+      }
+    }
+  }
+  out.vertices = static_cast<int>(g.atoms.size());
+  out.edges = edgeCount;
+#else
   if (g.edges.empty()) {
     for (int i = 0; i < static_cast<int>(g.adjacency.size()); i++) {
       for (const int j : g.adjacency[static_cast<std::size_t>(i)]) {
@@ -914,6 +943,7 @@ LocalKey localKeyFromGraph(LocalGraph &g, int hops, std::uint64_t *refinement) {
   g.edges.erase(std::unique(g.edges.begin(), g.edges.end()), g.edges.end());
   out.vertices = static_cast<int>(g.atoms.size());
   out.edges = static_cast<int>(g.edges.size());
+#endif
   // The frame key is this refinement even when the local key is a
   // certificate, so it is hashed once and handed back to the caller.
   // The wide refinement counts repeated colors instead of sorting
