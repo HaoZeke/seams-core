@@ -305,7 +305,9 @@ int main(int argc, char **argv) {
        }},
   };
   for (int pass = 0; pass < 2; ++pass) {
-    for (const auto &[name, call] : calls) {
+    for (const auto &entry : calls) {
+      const char *name = entry.first;
+      const std::function<int()> &call = entry.second;
       bool ok = false;
       const Seen seen = watch([&] { ok = call() != 0; });
       const std::set<int> after = maskOf(0);
