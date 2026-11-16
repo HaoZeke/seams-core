@@ -278,10 +278,11 @@ if openmm_opt.allowed()
     # LIBRARY_PATH links as -lOpenMM with no runpath, so ask the compiler
     # where it is, then the usual prefixes.
     openmm_rpath = ''
+    _openmm_file = host_machine.system() == 'darwin' ? 'libOpenMM.dylib' : 'libOpenMM.so'
     if openmm_dep.type_name() == 'pkgconfig'
       openmm_rpath = openmm_dep.get_variable('libdir', default_value: '')
     elif openmm_dep.type_name() == 'library'
-      _openmm_so = run_command(cppc.cmd_array() + ['-print-file-name=libOpenMM.so'],
+      _openmm_so = run_command(cppc.cmd_array() + ['-print-file-name=' + _openmm_file],
                                check: false).stdout().strip()
       if fs.is_absolute(_openmm_so) and fs.is_file(_openmm_so)
         openmm_rpath = fs.parent(_openmm_so)
@@ -300,7 +301,7 @@ if openmm_opt.allowed()
           'for var in ("LIBRARY_PATH", "LD_RUN_PATH"):\n' +
           '    dirs.extend(pathlib.Path(p) for p in os.environ.get(var, "").split(os.pathsep) if p)\n' +
           'for root in dirs:\n' +
-          '    if (root / "libOpenMM.so").is_file():\n' +
+          '    if (root / "' + _openmm_file + '").is_file():\n' +
           '        print(root)\n' +
           '        raise SystemExit(0)\n' +
           'raise SystemExit(1)\n',
