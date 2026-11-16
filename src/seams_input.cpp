@@ -1250,30 +1250,91 @@ bool parseMappedIdTypeXyz(const std::string &filename, std::uint64_t frameAt,
     return false;
   }
   // pread, not mmap: a writer that truncates the dump faults an mmap with SIGBUS.
-  std::vector<char> bytes(nbytes);
-  std::size_t got = 0;
-  while (got < nbytes) {
-    const std::int64_t nread = readAt(fd, bytes.data() + got, nbytes - got, got);
-    if (nread < 0) {
-      if (errno == EINTR) {
-        continue;
+  // The bytes of this frame only. A long trajectory used to be copied in
+  // full so the first snapshot could be parsed, and the rest of the file
+  // was then thrown away.
+  const auto frameBase = frameAt;
+  const std::size_t remain = nbytes - static_cast<std::size_t>(frameBase);
+  std::vector<char> bytes;
+  bytes.reserve(std::min(remain, std::size_t{1 << 20}));
+  auto pull = [&](std::size_t want) -> bool {
+    if (want > remain) {
+      want = remain;
+    }
+    if (want <= bytes.size()) {
+      return true;
+    }
+    const std::size_t old = bytes.size();
+    bytes.resize(want);
+    std::size_t got = old;
+    while (got < want) {
+      const std::int64_t nread =
+          readAt(fd, bytes.data() + got, want - got,
+                 static_cast<std::uint64_t>(frameBase) + static_cast<std::uint64_t>(got));
+      if (nread < 0) {
+        if (errno == EINTR) {
+          continue;
+        }
+        return false;
       }
+      if (nread == 0) {
+        bytes.resize(got);
+        return got > old || old > 0;
+      }
+      got += static_cast<std::size_t>(nread);
+    }
+    return true;
+  };
+  auto nextTimestep = [&](std::size_t from) -> std::size_t {
+    constexpr char kNeedle[] = "ITEM: TIMESTEP";
+    constexpr std::size_t kN = 14;
+    constexpr std::size_t kNone = static_cast<std::size_t>(-1);
+    if (bytes.empty() || from >= bytes.size()) {
+      return kNone;
+    }
+    const char *const b = bytes.data();
+    const char *const e = b + bytes.size();
+    const char *q = b + from;
+    while (q + kN <= e) {
+      const void *hit = std::memchr(q, 'I', static_cast<std::size_t>(e - q));
+      if (hit == nullptr) {
+        return kNone;
+      }
+      q = static_cast<const char *>(hit);
+      if (q != b && q + kN <= e && std::memcmp(q, kNeedle, kN) == 0 && q[-1] == '\n') {
+        return static_cast<std::size_t>(q - b);
+      }
+      ++q;
+    }
+    return kNone;
+  };
+  if (!pull(std::min(remain, std::size_t{64 * 1024}))) {
+    closeFd(fd);
+    return false;
+  }
+  constexpr std::size_t kNone = static_cast<std::size_t>(-1);
+  std::size_t cut = nextTimestep(1);
+  // A snapshot that fills the first chunk is one frame of a trajectory.
+  // A file with no second frame, such as the ice crystal, is read in one
+  // pass rather than copied through a doubling buffer.
+  if (cut == kNone && bytes.size() < remain) {
+    const std::size_t from = bytes.size() > 16 ? bytes.size() - 16 : 1;
+    if (!pull(remain)) {
       closeFd(fd);
       return false;
     }
-    if (nread == 0) {
-      break;
-    }
-    got += static_cast<std::size_t>(nread);
+    cut = nextTimestep(from);
+  }
+  if (cut != kNone) {
+    bytes.resize(cut);
   }
   closeFd(fd);
-  if (got <= frameAt) {
+  if (bytes.empty()) {
     return false;
   }
-  bytes.resize(got);
   const char *const begin = bytes.data();
   const char *const end = begin + bytes.size();
-  const char *p = begin + frameAt;
+  const char *p = begin;
   auto nextLine = [&](const char *&s, const char *&e) {
     s = p;
     while (p < end && *p != '\n') {
@@ -1331,8 +1392,12 @@ bool parseMappedIdTypeXyz(const std::string &filename, std::uint64_t frameAt,
   while (e > s && (e[-1] == ' ' || e[-1] == '\t')) {
     --e;
   }
-  if (std::string_view(s, static_cast<std::size_t>(e - s)) !=
-      "ITEM: ATOMS id type x y z") {
+  const std::string_view atomsHeader(s, static_cast<std::size_t>(e - s));
+  // id/type/x/y/z is the orthorhombic fast frame. id/mol/type/x/y/z is the
+  // same frame with a molecule column; any other column list stays on the
+  // streaming reader, which owns the odd layouts and the bad lines.
+  const bool hasMol = atomsHeader == "ITEM: ATOMS id mol type x y z";
+  if (atomsHeader != "ITEM: ATOMS id type x y z" && !hasMol) {
     return false;
   }
   yCloud.pts.clear();
@@ -1383,6 +1448,7 @@ bool parseMappedIdTypeXyz(const std::string &filename, std::uint64_t frameAt,
 #endif
   struct Parsed {
     int id = 0;
+    int mol = 0;
     int typ = 0;
     double x = 0;
     double y = 0;
@@ -1398,9 +1464,10 @@ bool parseMappedIdTypeXyz(const std::string &filename, std::uint64_t frameAt,
       const char *ap = lineAt[static_cast<std::size_t>(i)];
       const char *ae = lineEnd[static_cast<std::size_t>(i)];
       Parsed row;
-      row.ok = parseLooseInt(ap, ae, row.id) && parseLooseInt(ap, ae, row.typ) &&
-                       parseLooseDouble(ap, ae, row.x) && parseLooseDouble(ap, ae, row.y) &&
-                       parseLooseDouble(ap, ae, row.z)
+      row.ok = parseLooseInt(ap, ae, row.id) &&
+                       (!hasMol || parseLooseInt(ap, ae, row.mol)) &&
+                       parseLooseInt(ap, ae, row.typ) && parseLooseDouble(ap, ae, row.x) &&
+                       parseLooseDouble(ap, ae, row.y) && parseLooseDouble(ap, ae, row.z)
                    ? 1
                    : 0;
       parsed[static_cast<std::size_t>(i)] = row;
@@ -1423,7 +1490,7 @@ bool parseMappedIdTypeXyz(const std::string &filename, std::uint64_t frameAt,
         }
         molSys::Point<double> point;
         point.atomID = row.id;
-        point.molID = row.id;
+        point.molID = hasMol ? row.mol : row.id;
         point.type = row.typ;
         point.x = row.x;
         point.y = row.y;
@@ -1477,7 +1544,7 @@ bool parseMappedIdTypeXyz(const std::string &filename, std::uint64_t frameAt,
                 }
                 auto &point = yCloud.pts[static_cast<std::size_t>(w)];
                 point.atomID = row.id;
-                point.molID = row.id;
+                point.molID = hasMol ? row.mol : row.id;
                 point.type = row.typ;
                 point.x = row.x;
                 point.y = row.y;
@@ -1537,7 +1604,7 @@ bool parseMappedIdTypeXyz(const std::string &filename, std::uint64_t frameAt,
                        later.st_size != st.st_size || later.st_ino != st.st_ino;
     if (moved && kept > 0) {
       yCloud.nop = kept;
-      nextAt = static_cast<std::uint64_t>(p - begin);
+      nextAt = frameBase + static_cast<std::uint64_t>(p - begin);
       return true;
     }
     yCloud.pts.clear();
@@ -1550,7 +1617,7 @@ bool parseMappedIdTypeXyz(const std::string &filename, std::uint64_t frameAt,
     std::cerr << "Atoms didn't get filled in properly.\n";
   }
   yCloud.nop = kept;
-  nextAt = static_cast<std::uint64_t>(p - begin);
+  nextAt = frameBase + static_cast<std::uint64_t>(p - begin);
   return true;
 }
 
