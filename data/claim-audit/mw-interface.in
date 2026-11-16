@@ -1,0 +1,31 @@
+# Short mW ice/water interface.
+# Start: input/traj/interface_f0.lammpstrj (864 molecules, basal slab).
+# Engine: LAMMPS pair_style sw, Molinero and Moore mW.
+# Ensemble: NVT at the snapshot volume. Timestep 10 fs.
+# 10 ps velocity creation at 270 K, then 100 ps production.
+# Dump every 10 ps, including the first production step.
+
+units real
+atom_style atomic
+boundary p p p
+atom_modify map array
+
+region box block 0 1 0 1 0 1
+create_box 1 box
+read_dump interface_f0.lammpstrj 0 x y z box yes add yes
+
+mass 1 18.015
+pair_style sw
+pair_coeff * * mW.sw mW
+neighbor 2.0 bin
+neigh_modify every 1 delay 0 check yes
+
+timestep 10.0
+thermo 1000
+velocity all create 270.0 20261116 mom yes rot yes dist gaussian
+fix 1 all nvt temp 270.0 270.0 100.0
+run 1000
+reset_timestep 0
+dump 1 all custom 1000 interface.lammpstrj id type x y z
+dump_modify 1 sort id first yes
+run 10000

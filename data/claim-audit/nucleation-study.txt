@@ -1,0 +1,114 @@
+# iface study
+tag /agent/repos/seams-core/input/traj/nucleation_f1.lammpstrj
+n 4096
+disagree 397
+cause neighbour_test 201
+cause q3_shell 192
+cause open_edge 0
+cause mixed 4
+kind nucleus
+axis -1
+count_pub cubic 47
+count_ovi cubic 48
+count_pub hexagonal 62
+count_ovi hexagonal 54
+count_pub water 3589
+count_ovi water 3360
+count_pub interfacial 240
+count_ovi interfacial 478
+count_pub clathrate 20
+count_ovi clathrate 21
+count_pub interClathrate 138
+count_ovi interClathrate 135
+count_pub unclassified 0
+count_ovi unclassified 0
+count_pub reCubic 0
+count_ovi reCubic 0
+count_pub reHex 0
+count_ovi reHex 0
+transition cubic interfacial 3
+transition hexagonal water 2
+transition hexagonal interfacial 12
+transition water hexagonal 6
+transition water interfacial 254
+transition water clathrate 2
+transition water interClathrate 37
+transition interfacial cubic 4
+transition interfacial water 27
+transition clathrate interClathrate 5
+transition interClathrate water 41
+transition interClathrate clathrate 4
+shell_disagree 0 0 0 0 397 0 0 0
+shell_agree 0 0 0 17 1927 1428 289 38
+ring_disagree 111 381 395
+ring_agree 1957 3583 3656
+prism_atoms 0
+prism_blocks 0
+bilayer_atoms 0
+polygon_atoms 0
+thin_sheets 0
+diamond_cubic 12
+diamond_hex 8
+diamond_other 4076
+cna_other 4096
+cna_crystal 0
+ptm_pass 817
+ptm_pass_disagree 119
+q6_disagree 0.540166
+q6_agree 0.488517
+depth_disagree 14.719544 397
+depth_agree 14.768638 3699
+solid_pub_crystal 0.026611
+solid_pub_interfacial 0.058594
+solid_pub_solid 0.085205
+solid_pub_defined 1
+solid_pub_thickness 18.739130
+solid_pub_nfront 1
+solid_pub_front 0 9.369565 12.966972 1
+crystal_pub_crystal 0.026611
+crystal_pub_interfacial 0.058594
+crystal_pub_solid 0.085205
+crystal_pub_defined 1
+crystal_pub_thickness 12.888889
+crystal_pub_nfront 1
+crystal_pub_front 0 6.444444 4.972844 1
+solid_ovi_crystal 0.024902
+solid_ovi_interfacial 0.116699
+solid_ovi_solid 0.141602
+solid_ovi_defined 1
+solid_ovi_thickness 18.707317
+solid_ovi_nfront 1
+solid_ovi_front 0 9.353659 22.588270 1
+crystal_ovi_crystal 0.024902
+crystal_ovi_interfacial 0.116699
+crystal_ovi_solid 0.141602
+crystal_ovi_defined 1
+crystal_ovi_thickness 12.888889
+crystal_ovi_nfront 1
+crystal_ovi_front 0 6.444444 4.972844 1
+bin mid n disagree crystal_pub solid_pub crystal_ovi solid_ovi
+bin 0.500000 0 0 0.000000 0.000000 0.000000 0.000000
+bin 1.500000 1 0 0.000000 1.000000 0.000000 1.000000
+bin 2.500000 3 0 0.333333 0.666667 0.333333 0.666667
+bin 3.500000 4 0 0.500000 0.750000 0.500000 0.750000
+bin 4.500000 14 1 0.500000 0.857143 0.500000 0.785714
+bin 5.500000 7 0 1.000000 1.000000 1.000000 1.000000
+bin 6.500000 17 0 0.470588 0.764706 0.470588 0.764706
+bin 7.500000 24 0 0.375000 0.750000 0.375000 0.750000
+bin 8.500000 36 1 0.305556 0.722222 0.305556 0.694444
+bin 9.500000 30 5 0.200000 0.466667 0.200000 0.466667
+bin 10.500000 43 3 0.116279 0.372093 0.116279 0.372093
+bin 11.500000 64 4 0.015625 0.187500 0.015625 0.250000
+bin 12.500000 65 11 0.076923 0.215385 0.076923 0.292308
+bin 13.500000 62 6 0.048387 0.161290 0.048387 0.193548
+bin 14.500000 94 11 0.031915 0.106383 0.031915 0.202128
+bin 15.500000 97 12 0.020619 0.082474 0.020619 0.154639
+bin 16.500000 106 4 0.018868 0.103774 0.018868 0.122642
+bin 17.500000 130 18 0.007692 0.076923 0.015385 0.146154
+bin 18.500000 140 11 0.035714 0.100000 0.021429 0.121429
+bin 19.500000 165 23 0.024242 0.084848 0.024242 0.163636
+bin 20.500000 160 15 0.031250 0.062500 0.018750 0.112500
+bin 21.500000 208 27 0.014423 0.076923 0.009615 0.153846
+bin 22.500000 204 21 0.000000 0.034314 0.004902 0.107843
+bin 23.500000 226 20 0.008850 0.053097 0.013274 0.123894
+bin 24.500000 2196 204 0.007741 0.040528 0.005464 0.096995

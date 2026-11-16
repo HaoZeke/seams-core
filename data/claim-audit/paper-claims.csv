@@ -1,0 +1,18 @@
+claim,number,may_claim,source
+Two CHILL+ rules disagree on frame 1 of the 4096-molecule mW nucleus,397 of 4096,yes,input/traj/nucleation_f1.lammpstrj; data/claim-audit/nucleation-disagreements.csv; data/claim-audit/nucleation-study.txt
+Those 397 split by the first lever that yields the OVITO label,neighbour test 201; q3 shell 192; open edge 0; both levers 4,yes,data/claim-audit/nucleation-disagreements.csv; data/claim-audit/mixed-levers.csv
+Every one of the 397 has four neighbours inside 3.5 A,397 of 397,yes,data/claim-audit/nucleation-disagreements.csv
+OVITO 3.17.2 matches ovito-chill+ on that nucleus frame,0 of 4096 differ,yes,data/claim-audit/summary.csv
+Published rule on the 250 type-2 oxygens of exampleTraj,9 interClathrate and 241 water,yes,input/traj/exampleTraj.lammpstrj; data/claim-audit/summary.csv
+Pre-gate rule on the same 250 oxygens (four nearest bonds kept when a fifth oxygen is inside 3.5 A),12 interClathrate and 238 water,yes,data/claim-audit/example-recount.csv
+The three molecules that move from interClathrate to water,LAMMPS ids 85 664 679; indices 28 221 226; shell 5; four-nearest correlations include 0.581884 0.316839 and -0.787748,yes,data/claim-audit/example-recount.csv
+Those three are also water under OVITO 3.17.2,3 of 3,yes,data/claim-audit/example-recount.csv
+Published rule versus OVITO on that oxygen frame, apart from the three shell-of-five molecules,4 molecules, all q3 shell, ids 94 103 370 691,yes,data/claim-audit/example-recount.csv
+Two CHILL+ rules disagree on the mW slab frame,46 of 864,yes,input/traj/interface_f0.lammpstrj; data/claim-audit/slab-study.txt
+Open-face padding adds no false positive on the generated mW interface,11 of 11 frames,yes,data/claim-audit/padding-per-frame.csv; data/claim-audit/mw-interface-270K.dump
+Open-face padding adds no false positive on the generated TIP4P/Ice interface,5 of 9 frames add 1 or 2 false positives (frames 1 4 5 6 7),no,data/claim-audit/padding-per-frame.csv; data/claim-audit/tip4p-ice-basal-230K.dump
+Bulk-liquid rows of data/recall-padding-validation.csv,fp_on equals fp_off on twenty hold frames,not-rederived,scripts/recall_padding.py names dumps that are not in this checkout
+Agreeing molecules on a primitive 6-ring in the nucleus,3657 in interface-order.org; this tree counts 3656,no,data/claim-audit/nucleation-study.txt
+Diamond test on the nucleus,3 cubic and 5 hexagonal in interface-order.org; this tree counts 12 cubic and 8 hexagonal,no,data/claim-audit/nucleation-study.txt
+Diamond test on the slab,143 hexagonal in interface-order.org; this tree counts 0 cubic and 245 hexagonal,no,data/claim-audit/slab-study.txt
+OVITO 3.17.2 versus ovito-chill+ on both generated interface trajectories,0 atoms differ; 670 published-rule disagreements are q3 shell 571, neighbour test 98, both levers 1, open edge 0, and every one has four neighbours inside 3.5 A,yes,data/claim-audit/interface-label-disagreements.csv; data/claim-audit/summary.csv

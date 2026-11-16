@@ -1,0 +1,6 @@
+frame,id,published,without_neighbour_test,full_shell_closed,ovito,open_edge_moves,explanation
+nucleation_f1,496,water,interfacial,hexagonal,hexagonal,no,The neighbour test keeps the molecule water. Dropping that test labels it interfacial, and averaging q3 over the whole cutoff shell then labels it hexagonal. The open edge does not move it.
+nucleation_f1,1080,water,interfacial,hexagonal,hexagonal,no,The neighbour test keeps the molecule water. Dropping that test labels it interfacial, and averaging q3 over the whole cutoff shell then labels it hexagonal. The open edge does not move it.
+nucleation_f1,1468,water,interfacial,hexagonal,hexagonal,no,The neighbour test keeps the molecule water. Dropping that test labels it interfacial, and averaging q3 over the whole cutoff shell then labels it hexagonal. The open edge does not move it.
+nucleation_f1,3409,water,interfacial,hexagonal,hexagonal,no,The neighbour test keeps the molecule water. Dropping that test labels it interfacial, and averaging q3 over the whole cutoff shell then labels it hexagonal. The open edge does not move it.
+tip4p-ice-basal frame 8,1198,water,interfacial,interClathrate,interClathrate,no,The neighbour test keeps the molecule water. Dropping that test labels it interfacial, and averaging q3 over the whole cutoff shell then labels it interfacial clathrate. The open edge does not move it.
