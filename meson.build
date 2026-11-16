@@ -125,7 +125,11 @@ if flexiblas_dep.found()
     _fb_path = _fb_file.stdout().strip()
     if _fb_path != '' and _fb_path != 'libflexiblas.so'
       _fb_dir = import('fs').parent(_fb_path)
-      _link_args += ['-Wl,-rpath,' + _fb_dir, '-Wl,-rpath-link,' + _fb_dir]
+      _link_args += ['-Wl,-rpath,' + _fb_dir]
+      # Apple ld has no -rpath-link and resolves dependent dylibs itself.
+      if host_system != 'darwin'
+        _link_args += ['-Wl,-rpath-link,' + _fb_dir]
+      endif
     endif
   endif
 elif not blas_opt.disabled()
@@ -751,7 +755,10 @@ if not sphericart_opt.disabled()
         sph_rpath += ['-Wl,-rpath,' + d]
         # A cross-prefixed ld (conda's) does not follow libyodaLib's
         # RPATH to libsphericart.so, so a consumer names the folder.
-        sphericart_consumer_args += ['-Wl,-rpath-link,' + d]
+        # Apple ld has no -rpath-link.
+        if host_system != 'darwin'
+          sphericart_consumer_args += ['-Wl,-rpath-link,' + d]
+        endif
       endforeach
       sph_cflags = []
       foreach d : sph_inc_dirs

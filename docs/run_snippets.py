@@ -449,8 +449,11 @@ def vendored_links(build):
 
     A cross-prefixed ld such as conda's does not follow libyodaLib.so's RPATH
     to libseams-chemfiles.so, so the snippet link has to name the folder.
+    Apple ld has no -rpath-link and finds a dylib's dependencies itself.
     """
     lib = build / "chemfiles-prefix" / "lib"
+    if sys.platform == "darwin":
+        return []
     return ["-Wl,-rpath-link," + str(lib)] if lib.is_dir() else []
 
 
