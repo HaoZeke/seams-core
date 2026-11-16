@@ -25,6 +25,10 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <unistd.h>
+#ifdef __APPLE__
+#include <climits>
+#include <libproc.h>
+#endif
 
 namespace fs = std::filesystem;
 
@@ -684,8 +688,38 @@ void writeDumpLines(const fs::path &path, int declared, int lines) {
   }
 }
 
+// The descriptors this process holds open on path. Linux lists them as
+// /proc/self/fd links. macOS has no /proc: proc_pidinfo lists the open
+// descriptors and fcntl(F_GETPATH) gives each file's resolved path, so
+// /var/folders/... reads back as /private/var/folders/....
 std::vector<int> fdsForPath(const std::string &path) {
   std::vector<int> ids;
+#ifdef __APPLE__
+  std::error_code canon_ec;
+  const auto real = fs::weakly_canonical(path, canon_ec).string();
+  const int want = proc_pidinfo(getpid(), PROC_PIDLISTFDS, 0, nullptr, 0);
+  if (want <= 0) {
+    return ids;
+  }
+  // Room for descriptors opened between the two calls.
+  std::vector<proc_fdinfo> listed(static_cast<std::size_t>(want) / sizeof(proc_fdinfo) + 64);
+  const int got = proc_pidinfo(getpid(), PROC_PIDLISTFDS, 0, listed.data(),
+                               static_cast<int>(listed.size() * sizeof(proc_fdinfo)));
+  const std::size_t count = got > 0 ? static_cast<std::size_t>(got) / sizeof(proc_fdinfo) : 0;
+  for (std::size_t i = 0; i < count; ++i) {
+    if (listed[i].proc_fdtype != PROX_FDTYPE_VNODE) {
+      continue;
+    }
+    char held[PATH_MAX];
+    if (fcntl(listed[i].proc_fd, F_GETPATH, held) == -1) {
+      continue;
+    }
+    const std::string link(held);
+    if (link.rfind(path, 0) == 0 || (!canon_ec && link.rfind(real, 0) == 0)) {
+      ids.push_back(listed[i].proc_fd);
+    }
+  }
+#else
   for (const auto &ent : fs::directory_iterator("/proc/self/fd")) {
     std::error_code ec;
     const auto link = fs::read_symlink(ent.path(), ec);
@@ -696,6 +730,7 @@ std::vector<int> fdsForPath(const std::string &path) {
       ids.push_back(std::stoi(ent.path().filename().string()));
     }
   }
+#endif
   std::sort(ids.begin(), ids.end());
   return ids;
 }
