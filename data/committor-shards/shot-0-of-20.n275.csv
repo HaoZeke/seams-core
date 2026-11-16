@@ -1,0 +1,30 @@
+# source_tree d675aae9658f03da514b9e16b7f557d87f8a2120
+# command python3 scripts/committor_shoot.py --write-shot data/committor-shards/shot-0-of-20.n275.csv --frames data/science-frames/committor-climb-0-of-20 --seeds 20261111-20261130 --shard 0/20 --sizes 275 --window-ps 20000
+# shard 0/20
+# order n_chill_core
+# rule nucleated when n_chill_core passes 300 and stays at or above 300 for 1000 ps; a passage cut short by the end of the run is 'not nucleated, extend' until 40000 ps
+# basin A the 95th percentile of n_chill_core over the climb's last 2000 ps before it first reaches 100, from 1000 ps; basin B n_chill_core at or above 400 for 200 ps; liquid_2ns_ref is a reference only
+# a shot runs to its first basin: uncommitted at or below basin A, committed at or above 400 for 200 ps; check every 10 ps; unresolved, with no fate, at the end of the window; t_hit_ps is the entry into the basin, the start of the held stay for basin B
+# window_ps 20000
+# launcher lmp-forge.sh
+seed,shoot_n,shot,fate,t_end_ps,nmax_end,n_chill_ext_end,n_q6solid_end,wall_s,t_hit_ps,start_core,extension,replay_s
+20261111,275,0,committed,3610,430,1545,948,2058.4,3410,326,,
+20261111,275,1,committed,2150,444,1516,923,1236.2,1950,326,,
+20261111,275,2,committed,9440,452,1684,847,5377.0,9240,326,,
+20261111,275,3,committed,3400,451,1446,788,1937.3,3200,326,,
+20261111,275,4,committed,2510,460,1657,1041,1445.4,2310,326,,
+20261111,275,5,committed,1570,413,1500,712,915.5,1370,326,,
+20261111,275,6,committed,1880,433,1537,797,1093.1,1680,326,,
+20261111,275,7,committed,5920,432,1590,940,3341.8,5720,326,,
+20261111,275,8,committed,8060,479,1512,915,4588.0,7860,326,,
+20261111,275,9,committed,3840,421,1494,958,2157.1,3640,326,,
+20261111,275,10,committed,1960,407,1503,868,1102.8,1760,326,,
+20261111,275,11,committed,2170,419,1430,683,1220.2,1970,326,,
+20261111,275,12,committed,6460,450,1608,1019,3680.8,6260,326,,
+20261111,275,13,committed,5610,432,1510,726,3206.0,5410,326,,
+20261111,275,14,committed,2480,452,1479,903,1404.5,2280,326,,
+20261111,275,15,committed,2990,454,1415,859,1702.4,2790,326,,
+20261111,275,16,committed,4140,403,1522,918,2389.0,3940,326,,
+20261111,275,17,committed,4340,473,1560,930,2510.2,4140,326,,
+20261111,275,18,committed,4070,452,1418,937,2351.3,3870,326,,
+20261111,275,19,committed,1370,471,1374,844,798.0,1170,326,,
