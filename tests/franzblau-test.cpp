@@ -81,7 +81,7 @@ SCENARIO(
       fullGraph = primitive::countAllRingsFromIndex(nList, maxDepth);
       THEN("The number of rings should be 2 for this case.") {
         // Find the number of rings inside the graph object
-        nRings = fullGraph.rings.size();  // Number of rings
+        nRings = static_cast<int>(fullGraph.rings.size());  // Number of rings
         REQUIRE(nRings == 2);             // Evaluate condition
       }
     }  // End of getting all the rings (non-primitive included)
@@ -170,14 +170,14 @@ SCENARIO(
       fullGraph = primitive::countAllRingsFromIndex(nList, maxDepth);
       THEN("The number of primitive rings should be 5 for this case.") {
         // Find the number of rings inside the graph object
-        nAllRings =
-            fullGraph.rings.size();  // Number of rings after backtracking
+        nAllRings = static_cast<int>(
+            fullGraph.rings.size());  // Number of rings after backtracking
         // The number of all rings from backtracking should be 8
         REQUIRE(nAllRings == 8);
         // Get rid of all non-SP rings
         primitive::removeNonSPrings(fullGraph);
         // Get the number of primitive rings
-        nPrimitiveRings = fullGraph.rings.size();
+        nPrimitiveRings = static_cast<int>(fullGraph.rings.size());
         // For this case, the number of primitive rings should be 5
         REQUIRE(nPrimitiveRings == 5);  // Evaluate condition
       }
@@ -192,10 +192,10 @@ TEST_CASE("A hexagon through a vertex of degree 62 is one primitive ring", "[rin
   const int hexagon = 6;
   const int pendants = 60;
   const int n = hexagon + pendants;
-  std::vector<std::vector<int>> nb(n);
+  std::vector<std::vector<int>> nb(static_cast<std::size_t>(n));
   auto bond = [&](int a, int b) {
-    nb[a].push_back(b);
-    nb[b].push_back(a);
+    nb[static_cast<std::size_t>(a)].push_back(b);
+    nb[static_cast<std::size_t>(b)].push_back(a);
   };
   for (int i = 0; i < hexagon; ++i) {
     bond(i, (i + 1) % hexagon);
@@ -204,14 +204,15 @@ TEST_CASE("A hexagon through a vertex of degree 62 is one primitive ring", "[rin
   for (int p = hexagon; p < n; ++p) {
     bond(1, p);
   }
-  std::vector<std::vector<int>> nList(n);
+  std::vector<std::vector<int>> nList(static_cast<std::size_t>(n));
   std::vector<int> offsets{0};
   std::vector<int> cols;
   for (int i = 0; i < n; ++i) {
-    std::sort(nb[i].begin(), nb[i].end());
-    nList[i].push_back(i);
-    nList[i].insert(nList[i].end(), nb[i].begin(), nb[i].end());
-    cols.insert(cols.end(), nb[i].begin(), nb[i].end());
+    const std::size_t row = static_cast<std::size_t>(i);
+    std::sort(nb[row].begin(), nb[row].end());
+    nList[row].push_back(i);
+    nList[row].insert(nList[row].end(), nb[row].begin(), nb[row].end());
+    cols.insert(cols.end(), nb[row].begin(), nb[row].end());
     offsets.push_back(static_cast<int>(cols.size()));
   }
   const std::vector<std::vector<int>> want{{0, 1, 2, 3, 4, 5}};
