@@ -1,0 +1,31 @@
+source_tree=3ef0d224b91fea1578c6ae15eecf1ed88b2acb6d
+build_tree=b36fb0668680cc5baae1dc5f711ed6262b458cea
+library=bbdir-release/bindings/libseams_lang.so
+command=SEAMS_LANG_LIB=<library> OMP_NUM_THREADS=1 RAYON_NUM_THREADS=1 OMP_DYNAMIC=FALSE taskset -c 0 asv run -E existing:python3 --bench 'CutoffIce.time_(published|ovito)_chill_plus' --record-samples --show-stderr
+asv=asv 0.6.6
+note=the asv 'For d-seams' line names the source tree in place of the commit asv printed
+
+· Discovering benchmarks
+· Running 2 total benchmarks (1 commits * 1 environments * 2 benchmarks)
+[ 0.00%] · For d-seams tree 3ef0d224:
+[ 0.00%] ·· Building for existing-py_usr_bin_python3
+[ 0.00%] ·· Benchmarking existing-py_usr_bin_python3
+[25.00%] ··· Running (benchmarks.CutoffIce.time_ovito_chill_plus--)..
+[75.00%] ··· benchmarks.CutoffIce.time_ovito_chill_plus                      ok
+[75.00%] ··· =========== =============
+              molecules               
+             ----------- -------------
+                 1000       262±2μs   
+                10648     2.51±0.05ms 
+                110592      30.9±2ms  
+             =========== =============
+
+[100.00%] ··· benchmarks.CutoffIce.time_published_chill_plus                  ok
+[100.00%] ··· =========== =============
+               molecules               
+              ----------- -------------
+                  1000       254±2μs   
+                 10648     2.36±0.09ms 
+                 110592      26.3±4ms  
+              =========== =============
+

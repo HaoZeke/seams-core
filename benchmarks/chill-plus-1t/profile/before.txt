@@ -1,0 +1,41 @@
+source_tree=8aece9a9b46460414104324622ba6fb396ff689b
+build_tree=00129f1efaa5d5b4ef8e462a4b020cb3689d6b60
+library=bbdir-before/src/libseams.so
+molecules=110592 rule=ovito graph=cutoff threads=1 cpus=0 reps=100
+sitting_median_ms=51.984017
+under perf: median 56.777 ms, counts [110592, 0, 0, 0, 0, 0, 0, 0, 0], ntask 2
+
+neighbour build                                 42.6%    22.1 ms
+q3 harmonics                                    11.0%     5.7 ms
+shell sort, deltas, c_ij and classification     31.2%    16.2 ms
+allocation and free                              7.2%     3.8 ms
+API copy and labels                              3.0%     1.5 ms
+other                                            5.0%     2.6 ms
+python driver: 2.3% of samples, left out of the shares
+
+top symbols by self time:
+    23.02%  libyodaLib.so                                      [.] _RNvNtCs3r2halQCho2_8linkcell5pairs11avx512_scan                                             
+     6.92%  libyodaLib.so                                      [.] (anonymous namespace)::realYlm3Accumulate(double const*, double const*, double const*, int, d
+     5.70%  libyodaLib.so                                      [.] classifyBondsLeftFp64(molSys::PointCloud<molSys::Point<double>, double>&, std::vector<std::ve
+     5.25%  libyodaLib.so                                      [.] (anonymous namespace)::cutoffRows(molSys::PointCloud<molSys::Point<double>, double> const&, s
+     5.18%  libyodaLib.so                                      [.] gen::fracDelta(gen::FracBox const&, double, double, double, double, double, double)          
+     5.16%  libyodaLib.so                                      [.] void std::__adjust_heap<classifyBondsLeftFp64(molSys::PointCloud<molSys::Point<double>, doubl
+     3.90%  libyodaLib.so                                      [.] (anonymous namespace)::realL3Dot(double const*, double const*)                               
+     3.66%  libyodaLib.so                                      [.] classifyBondsLeftFp64(molSys::PointCloud<molSys::Point<double>, double>&, std::vector<std::ve
+     3.29%  libyodaLib.so                                      [.] classifyBondsLeftFp64(molSys::PointCloud<molSys::Point<double>, double>&, std::vector<std::ve
+     3.24%  libyodaLib.so                                      [.] _RNvMs_NtCs3r2halQCho2_8linkcell5pairsNtB4_12ImageOffsets3new                                
+     3.15%  libyodaLib.so                                      [.] chill::cutoffShellCount(molSys::PointCloud<molSys::Point<double>, double> const&, std::vector
+     2.31%  libc.so.6                                          [.] malloc                                                                                       
+     2.15%  libyodaLib.so                                      [.] _RNCINvMsb_NtCs3r2halQCho2_8linkcell5pairsNtB8_5Found10write_rowsNtNtBa_4capi7lc_pairNCNCNCNv
+     1.98%  libseams.so                                        [.] (anonymous namespace)::kernel_cloud(seams_system*, int, int&) [clone ._omp_fn.0]             
+     1.97%  libyodaLib.so                                      [.] _RNvMs9_NtCs3r2halQCho2_8linkcell5pairsNtB5_4Grid5build                                      
+     1.60%  libc.so.6                                          [.] _int_free                                                                                    
+     1.51%  libyodaLib.so                                      [.] _RNvMNtCscO0us5EcfaP_8minimage4cellNtB2_4Cell10fractional                                    
+     1.50%  libyodaLib.so                                      [.] round                                                                                        
+     1.18%  libyodaLib.so                                      [.] classifyBondsLeftFp64(molSys::PointCloud<molSys::Point<double>, double>&, std::vector<std::ve
+     1.04%  libyodaLib.so                                      [.] _RNvNtCs3r2halQCho2_8linkcell5pairs11fold_avx512                                             
+     1.01%  libyodaLib.so                                      [.] _RNvMso_NtCs3r2halQCho2_8linkcell5pairsNtB5_4Walk10scan_block                                
+     1.01%  libyodaLib.so                                      [.] void std::__sort<__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >,
+     1.00%  libyodaLib.so                                      [.] (anonymous namespace)::rowsByID((anonymous namespace)::CutoffRows const&, std::vector<int, st
+     0.96%  libyodaLib.so                                      [.] classifyBondsLeftFp64(molSys::PointCloud<molSys::Point<double>, double>&, std::vector<std::ve
+     0.80%  libc.so.6                                          [.] _int_malloc                                                                                  

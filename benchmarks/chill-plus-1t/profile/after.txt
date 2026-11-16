@@ -1,0 +1,41 @@
+source_tree=8aece9a9b46460414104324622ba6fb396ff689b
+build_tree=b36fb0668680cc5baae1dc5f711ed6262b458cea
+library=bbdir-release/src/libseams.so
+molecules=110592 rule=ovito graph=cutoff threads=1 cpus=0 reps=100
+sitting_median_ms=23.678536
+under perf: median 25.873 ms, counts [110592, 0, 0, 0, 0, 0, 0, 0, 0], ntask 1
+
+neighbour build                                 39.7%     9.4 ms
+q3 harmonics                                    22.4%     5.3 ms
+shell sort, deltas, c_ij and classification     28.0%     6.6 ms
+allocation and free                              1.2%     0.3 ms
+API copy and labels                              4.8%     1.1 ms
+other                                            3.9%     0.9 ms
+python driver: 3.3% of samples, left out of the shares
+
+top symbols by self time:
+    23.18%  libyodaLib.so                                      [.] int (anonymous namespace)::pairedRows<false>(double const*, double const*, double const*, int
+    14.29%  libyodaLib.so                                      [.] (anonymous namespace)::realYlm3Accumulate(double const*, double const*, double const*, int, d
+    12.22%  libyodaLib.so                                      [.] chill::chillPlusOvitoFromCsr(molSys::PointCloud<molSys::Point<double>, double>&, std::vector<
+     8.03%  libyodaLib.so                                      [.] gen::fracDelta(gen::FracBox const&, double, double, double, double, double, double)          
+     7.27%  libyodaLib.so                                      [.] (anonymous namespace)::realL3Dot(double const*, double const*)                               
+     6.71%  libyodaLib.so                                      [.] chill::chillPlusOvitoFromCsr(molSys::PointCloud<molSys::Point<double>, double>&, std::vector<
+     6.47%  libyodaLib.so                                      [.] nneigh::orthoFullCsr(molSys::PointCloud<molSys::Point<double>, double> const&, std::vector<in
+     4.43%  libyodaLib.so                                      [.] nneigh::orthoFullCsr(molSys::PointCloud<molSys::Point<double>, double> const&, std::vector<in
+     2.80%  libseams.so                                        [.] (anonymous namespace)::kernel_cloud(seams_system*, int, int&) [clone ._omp_fn.0]             
+     2.79%  libyodaLib.so                                      [.] (anonymous namespace)::pairedRows<false>(double const*, double const*, double const*, int con
+     1.39%  libyodaLib.so                                      [.] (anonymous namespace)::sortRow(int*, int)                                                    
+     1.02%  libseams.so                                        [.] (anonymous namespace)::write_ice_labels(molSys::PointCloud<molSys::Point<double>, double> con
+     0.84%  python3.12                                         [.] _PyEval_EvalFrameDefault                                                                     
+     0.82%  libseams.so                                        [.] (anonymous namespace)::normalize_types(molSys::PointCloud<molSys::Point<double>, double>&, in
+     0.56%  [kernel.kallsyms]                                  [k] clear_page_erms                                                                              
+     0.55%  libc.so.6                                          [.] __memmove_avx512_unaligned_erms                                                              
+     0.46%  libc.so.6                                          [.] __memset_avx512_unaligned_erms                                                               
+     0.44%  [kernel.kallsyms]                                  [k] do_user_addr_fault                                                                           
+     0.43%  libyodaLib.so                                      [.] std::vector<molSys::Result, std::allocator<molSys::Result> >::reserve(unsigned long)         
+     0.27%  [kernel.kallsyms]                                  [k] _raw_spin_unlock_irqrestore                                                                  
+     0.23%  python3.12                                         [.] PyObject_Malloc                                                                              
+     0.16%  [kernel.kallsyms]                                  [k] _raw_spin_lock                                                                               
+     0.15%  [kernel.kallsyms]                                  [k] __list_del_entry_valid_or_report                                                             
+     0.11%  [kernel.kallsyms]                                  [k] __folio_throttle_swaprate                                                                    
+     0.10%  libm.so.6                                          [.] fetestexcept                                                                                 
