@@ -1376,6 +1376,11 @@ bool parseMappedIdTypeXyz(const std::string &filename, std::uint64_t frameAt,
       p = scan;
     }
   }
+#ifdef SEAMS_HAS_OPENMP
+  const bool teamRead = omp_get_max_threads() > 1 && !omp_in_parallel() && nop >= 1024;
+#else
+  const bool teamRead = false;
+#endif
   struct Parsed {
     int id = 0;
     int typ = 0;
@@ -1400,36 +1405,126 @@ bool parseMappedIdTypeXyz(const std::string &filename, std::uint64_t frameAt,
                    : 0;
       parsed[static_cast<std::size_t>(i)] = row;
     }
-    yCloud.pts.reserve(static_cast<std::size_t>(nop));
-    for (int i = 0; i < nop; ++i) {
-      const Parsed &row = parsed[static_cast<std::size_t>(i)];
-      if (!row.ok) {
+    auto storeSerial = [&](int limit) {
+      yCloud.pts.reserve(static_cast<std::size_t>(nop));
+      for (int i = 0; i < limit; ++i) {
+        const Parsed &row = parsed[static_cast<std::size_t>(i)];
+        if (!row.ok) {
+          failed = true;
+          break;
+        }
+        // The default oxygen choice is decided in this pass. A type-1
+        // crystal never parses the frame a second time.
+        if (sawType2 != nullptr && row.typ == 2) {
+          *sawType2 = true;
+        }
+        if (filter && row.typ != typeFilter) {
+          continue;
+        }
+        molSys::Point<double> point;
+        point.atomID = row.id;
+        point.molID = row.id;
+        point.type = row.typ;
+        point.x = row.x;
+        point.y = row.y;
+        point.z = row.z;
+        yCloud.pts.push_back(point);
+        if (!yCloud.idIndexMap.emplace(row.id, kept).second) {
+          std::cerr << "Warning: duplicate atom ID " << row.id
+                    << " in the input frame; the ID-to-index map keeps only the "
+                       "last atom read with this ID\n";
+          yCloud.idIndexMap[row.id] = kept;
+        }
+        ++kept;
+      }
+    };
+    // One thread walks every atom twice, once into the point vector and
+    // once into the id map. The two walks read the parsed rows and write
+    // different members, so a large frame does them together. One thread
+    // keeps the single walk.
+    if (!teamRead) {
+      storeSerial(nop);
+    } else {
+      int badPts = nop;
+      int badMap = nop;
+      bool saw2 = false;
+#ifdef SEAMS_HAS_OPENMP
+#pragma omp parallel num_threads(2)
+      {
+#pragma omp sections
+        {
+#pragma omp section
+          {
+            int nkeep = 0;
+            for (int i = 0; i < nop; ++i) {
+              const Parsed &row = parsed[static_cast<std::size_t>(i)];
+              if (!row.ok) {
+                badPts = i;
+                nkeep = -1;
+                break;
+              }
+              if (!(filter && row.typ != typeFilter)) {
+                ++nkeep;
+              }
+            }
+            if (nkeep >= 0) {
+              yCloud.pts.resize(static_cast<std::size_t>(nkeep));
+              int w = 0;
+              for (int i = 0; i < nop; ++i) {
+                const Parsed &row = parsed[static_cast<std::size_t>(i)];
+                if (filter && row.typ != typeFilter) {
+                  continue;
+                }
+                auto &point = yCloud.pts[static_cast<std::size_t>(w)];
+                point.atomID = row.id;
+                point.molID = row.id;
+                point.type = row.typ;
+                point.x = row.x;
+                point.y = row.y;
+                point.z = row.z;
+                ++w;
+              }
+            }
+          }
+#pragma omp section
+          {
+            int w = 0;
+            for (int i = 0; i < nop; ++i) {
+              const Parsed &row = parsed[static_cast<std::size_t>(i)];
+              if (!row.ok) {
+                badMap = i;
+                break;
+              }
+              if (row.typ == 2) {
+                saw2 = true;
+              }
+              if (filter && row.typ != typeFilter) {
+                continue;
+              }
+              if (!yCloud.idIndexMap.emplace(row.id, w).second) {
+                std::cerr << "Warning: duplicate atom ID " << row.id
+                          << " in the input frame; the ID-to-index map keeps only the "
+                             "last atom read with this ID\n";
+                yCloud.idIndexMap[row.id] = w;
+              }
+              ++w;
+            }
+          }
+        }
+      }
+#endif
+      const int bad = std::min(badPts, badMap);
+      if (bad < nop) {
+        yCloud.pts.clear();
+        yCloud.idIndexMap.clear();
+        storeSerial(bad);
         failed = true;
-        break;
+      } else {
+        kept = static_cast<int>(yCloud.pts.size());
+        if (sawType2 != nullptr && saw2) {
+          *sawType2 = true;
+        }
       }
-      // The default oxygen choice is decided in this pass. A type-1
-      // crystal never parses the frame a second time.
-      if (sawType2 != nullptr && row.typ == 2) {
-        *sawType2 = true;
-      }
-      if (filter && row.typ != typeFilter) {
-        continue;
-      }
-      molSys::Point<double> point;
-      point.atomID = row.id;
-      point.molID = row.id;
-      point.type = row.typ;
-      point.x = row.x;
-      point.y = row.y;
-      point.z = row.z;
-      yCloud.pts.push_back(point);
-      if (!yCloud.idIndexMap.emplace(row.id, kept).second) {
-        std::cerr << "Warning: duplicate atom ID " << row.id
-                  << " in the input frame; the ID-to-index map keeps only the "
-                     "last atom read with this ID\n";
-        yCloud.idIndexMap[row.id] = kept;
-      }
-      ++kept;
     }
   }
   if (failed) {
