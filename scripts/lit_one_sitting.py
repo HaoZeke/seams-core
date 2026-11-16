@@ -74,6 +74,11 @@ ENV_KEYS = (
 # scaling.csv "after", idle, 110592 molecules, 8 threads. The gate accepts
 # a median within a factor of two of these, which still rejects the 50-70 ms
 # collapse.
+# Uncontended q6 at 8 threads on 110592 molecules, the window of the
+# sitting that still left other pools runnable. OpenBLAS, MKL and NumExpr
+# stay at one thread here so they do not form a second team. The gate is
+# this window; a median outside it is reported, not widened.
+Q6_8_MS = (15.0, 22.0)
 SCALING_AFTER_8 = {
     "neighbours": 2.510,
     "q4": 2.367,
@@ -1014,13 +1019,8 @@ def main() -> int:
             failures.append(
                 f"d-SEAMS {operation} 8 threads median {median:.3f} ms is outside "
                 f"half to twice scaling.csv after {ref:.3f} ms")
-    # pyscal3's uncontended q6 is inside 15-22 ms. mdapy's uncontended
-    # q6 on this host is the low teens, the same kernel bench/omp-scaling
-    # records at 14.7 ms; the previous sitting's 17 ms still had other
-    # pools runnable. Under 10 ms is not the 110592-atom call. Over 22 ms
-    # is that contended sample, or a pool pinned to one core.
-    bands = {"mdapy": (10.0, 22.0), "pyscal3": (15.0, 22.0)}
-    for code, (low, high) in bands.items():
+    low, high = Q6_8_MS
+    for code in ("mdapy", "pyscal3"):
         key = (code, "q6", 8, 110592)
         if 110592 not in sizes:
             continue

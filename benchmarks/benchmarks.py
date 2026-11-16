@@ -1245,10 +1245,10 @@ class LiteratureSitting:
     params = []
     for _code, _ops in (
         ("d-SEAMS", ("neighbours", "q4", "q6", "chill_plus", "rings")),
-        ("freud", ("neighbours", "q6")),
+        ("freud", ("neighbours", "q4", "q6")),
         ("OVITO", ("neighbours", "chill_plus", "rings")),
-        ("mdapy", ("q6", "chill_plus")),
-        ("pyscal3", ("q6",)),
+        ("mdapy", ("neighbours", "q4", "q6", "chill_plus", "rings")),
+        ("pyscal3", ("neighbours", "q4", "q6")),
         ("vesin", ("neighbours",)),
     ):
         for _op in _ops:

@@ -75,6 +75,11 @@ class LiteratureSittingTest(unittest.TestCase):
             proc.kill()
             proc.wait(timeout=5)
 
+    def test_q6_band_is_fifteen_to_twenty_two(self):
+        low, high = lit.Q6_8_MS
+        self.assertEqual(low, 15.0)
+        self.assertEqual(high, 22.0)
+
     def test_scaling_band_rejects_the_collapsed_median(self):
         self.assertTrue(lit.within_scaling(3.6, 3.452))
         self.assertFalse(lit.within_scaling(70.4, 3.452))
