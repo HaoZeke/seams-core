@@ -1,0 +1,35 @@
+name: dbg macOS
+on:
+  push:
+    branches: ['ci/**']
+
+concurrency:
+  group: dbg_macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: macos-latest
+    env:
+      UCX_TLS: tcp,self,sm
+      OMPI_MCA_pml: ob1
+      OMPI_MCA_btl: ^openib
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: prefix-dev/setup-pixi@f00437f565399d418b0acc85936d12c1fb668347 # v0.10.1
+        with:
+          environments: default
+          cache-key: pixi-default-
+      - name: Install the macOS 11.0 SDK for the conda compilers
+        if: runner.os == 'macOS'
+        run: |
+          curl -sLO https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.0.sdk.tar.xz
+          sudo tar -xf MacOSX11.0.sdk.tar.xz -C /opt
+          echo "SDKROOT=/opt/MacOSX11.0.sdk" >> "$GITHUB_ENV"
+          echo "CONDA_BUILD_SYSROOT=/opt/MacOSX11.0.sdk" >> "$GITHUB_ENV"
+      - name: Install pydseamslib
+        run: pixi run sh scripts/install_pydseamslib.sh
+      - run: pixi run setup
+      - run: pixi run build
+      - run: pixi run test
+      - run: pixi run install
