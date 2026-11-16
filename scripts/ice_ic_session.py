@@ -433,13 +433,13 @@ def main() -> None:
                         sequence = (
                             ("rings", "d", "go"),
                             ("rings", "o", "go"),
-                            ("bonds_and_rings", "d", "all"),
+                            ("bonds_and_rings", "d", "in"),
                             ("bonds_and_rings", "o", "all"),
                         )
                     else:
                         sequence = (
                             ("bonds_and_rings", "o", "all"),
-                            ("bonds_and_rings", "d", "all"),
+                            ("bonds_and_rings", "d", "in"),
                             ("rings", "o", "go"),
                             ("rings", "d", "go"),
                         )
