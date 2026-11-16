@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -199,9 +200,11 @@ void SeamsCV::writeDump(const std::vector<double> &xyz, const double box9[9]) {
   }
   const char *value = mode_ == Mode::q6bar ? "q6bar" : "q6";
   std::fprintf(fp, "ITEM: ATOMS id type x y z %s%s\n", value, mode_ == Mode::all ? " label" : "");
-  for (unsigned i = 0; i < n; ++i) {
-    std::fprintf(fp, "%d 1 %.17g %.17g %.17g %.17g", getAbsoluteIndex(i).serial(), xyz[3 * i],
-                 xyz[3 * i + 1], xyz[3 * i + 2], peratom_[i]);
+  for (std::size_t i = 0; i < static_cast<std::size_t>(n); ++i) {
+    const std::size_t at = i * std::size_t{3};
+    std::fprintf(fp, "%d 1 %.17g %.17g %.17g %.17g",
+                 getAbsoluteIndex(static_cast<int>(i)).serial(), xyz[at], xyz[at + 1],
+                 xyz[at + 2], peratom_[i]);
     if (mode_ == Mode::all) {
       std::fprintf(fp, " %d", labels_[i]);
     }
@@ -215,15 +218,15 @@ void SeamsCV::calculate() {
   const unsigned n = getNumberOfAtoms();
   std::vector<double> xyz(3 * static_cast<std::size_t>(n));
   for (unsigned i = 0; i < n; ++i) {
-    const Vector p = getPosition(i);
+    const Vector p = getPosition(static_cast<int>(i));
     xyz[3 * i] = p[0] * to_angstrom;
     xyz[3 * i + 1] = p[1] * to_angstrom;
     xyz[3 * i + 2] = p[2] * to_angstrom;
   }
   const Tensor box = getBox();
   double raw[3][3];
-  for (int a = 0; a < 3; ++a) {
-    for (int b = 0; b < 3; ++b) {
+  for (unsigned a = 0; a < 3; ++a) {
+    for (unsigned b = 0; b < 3; ++b) {
       raw[a][b] = box(a, b) * to_angstrom;
     }
   }
