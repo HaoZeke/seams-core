@@ -807,6 +807,27 @@ rule chill_plus_one_thread:
         "--out benchmarks/chill-plus-1t/equivalence"
 
 
+# perf self time of one-thread OVITO-rule CHILL+ on 110592-molecule ice Ic,
+# base build and this tree, grouped by stage and scaled to the sitting medians.
+rule chill_plus_profile:
+    input:
+        "scripts/chill_plus_profile.py",
+        "benchmarks/chill-plus-1t/chill-sitting.csv",
+        "bbdir-release/src/libseams.so",
+    output:
+        "benchmarks/chill-plus-1t/profile/before.txt",
+        "benchmarks/chill-plus-1t/profile/after.txt",
+    params:
+        before=os.environ.get("CHILL_BEFORE", "bbdir-before/src"),
+    shell:
+        "python3 scripts/chill_plus_profile.py --api {params.before}/libseams.so "
+        "--sitting benchmarks/chill-plus-1t/chill-sitting.csv --build before "
+        "--out benchmarks/chill-plus-1t/profile/before.txt && "
+        "python3 scripts/chill_plus_profile.py --api bbdir-release/src/libseams.so "
+        "--sitting benchmarks/chill-plus-1t/chill-sitting.csv --build after "
+        "--out benchmarks/chill-plus-1t/profile/after.txt"
+
+
 # One command per table. Each file is a selection of sitting.csv.
 rule paper_tables:
     input:
