@@ -427,3 +427,5 @@ docs/_build/
 __pycache__/
 sqq-src/
 benchmarks/literature/frames/
+benchmarks/chill-plus-1t/literature/frames/
+benchmarks/chill-plus-1t/equivalence/labels-*.jsonl

@@ -5,7 +5,8 @@
 Each build runs in its own process at each OpenMP width. A case is one
 frame, one rule (published or OVITO), one graph and one species filter;
 the record is the SHA-256 of the int32 label array and the nine class
-counts. The two builds agree when every record is the same.
+counts. The two builds agree when every record is the same. counts.csv
+holds the class counts of every case; labels-*.jsonl hold the records.
 
 Frames: every frame of every LAMMPS dump in input/traj; each 4096-atom
 frame again tiled 3x3x3 (110592) and 6x6x6 (884736); ice Ic and ice Ih
@@ -291,6 +292,14 @@ def main() -> int:
                 continue
             if row["rc"] != 0 or (row["sha256"], row["counts"]) != (ref["sha256"], ref["counts"]):
                 failures.append(f"{tag} t{threads} {k}: {row['counts']} against {ref['counts']}")
+    names = ("cubic", "hexagonal", "water", "interfacial", "clathrate", "interclathrate",
+             "unclassified", "recubic", "rehex")
+    with (args.out / "counts.csv").open("w", encoding="utf-8") as handle:
+        handle.write(",".join(["front", "case", "n", "type", "graph", "rule", *names]) + "\n")
+        for row in records[("a", 1)]:
+            handle.write(",".join(str(v) for v in (
+                row["front"], row["case"], row["n"], row["type"], row["graph"], row["rule"],
+                *row["counts"])) + "\n")
     frames = len({row["case"] for row in records[("a", 1)]})
     summary = (f"{len(reference)} cases over {frames} frames, builds a and b, "
                f"widths {', '.join(map(str, WIDTHS))}: "
