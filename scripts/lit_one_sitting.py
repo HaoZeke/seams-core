@@ -951,7 +951,6 @@ def main() -> int:
             raise SystemExit(f"LIT_ONLY matches nothing: {only}")
     model = stats.machine(ROOT)["cpu_model"]
     cores, affinity = stats.cores_now()
-    commit = stats.source_commit(ROOT)
     tree = stats.source_tree(ROOT)
     keys = []
     for row in plan:
@@ -990,7 +989,6 @@ def main() -> int:
                 f"cpu_model={model}",
                 f"cores={cores}",
                 f"affinity={affinity}",
-                f"seams_commit={commit}",
                 f"source_tree={tree}",
                 f"build={build_label}",
                 f"warmup={args.warmup}",
@@ -1041,7 +1039,7 @@ def main() -> int:
     fields = [
         "entry", "phase", "molecules", "threads", "operation", "code", "version",
         "median_ms", "min_ms", "max_ms", "q1_ms", "q3_ms", "iqr_ms", "samples_ms",
-        "timer", "check", "agreement", "note", "seams_commit", "source_tree",
+        "timer", "check", "agreement", "note", "source_tree",
         "build_type", "warmup", "n", "cpus", "cores", "omp_proc_bind", "omp_places",
         "omp_num_threads", "omp_wait_policy", "omp_max", "affinity", "env", "cpu_model",
     ]
@@ -1095,7 +1093,6 @@ def main() -> int:
                 "check": checks[key],
                 "agreement": agreement,
                 "note": note,
-                "seams_commit": commit,
                 "source_tree": tree,
                 "build_type": build_label,
                 "warmup": args.warmup,
