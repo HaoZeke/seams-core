@@ -29,12 +29,28 @@ case $0 in
 esac
 include=$(cd "$_abi_dir/../include" && pwd)
 
+# The file meson wrote for a library: lib<name>.so, or lib<name>.dylib on macOS.
+lib_file() {
+  if [ -f "$1.so" ]; then
+    echo "$1.so"
+  else
+    echo "$1.dylib"
+  fi
+}
+
 dump_lib() {
   lib=$1
   title=$2
   echo "### $title"
   # Address-free, stable text. C linkage only: C++ symbols start with _Z.
-  nm -D --defined-only "$lib" | awk '{print $2, $3}' | awk '$2 !~ /^_Z/ && $2 ~ /^seams_/ {print}' | LC_ALL=C sort
+  # A Mach-O dylib has no -D table for the BSD nm, and its symbol names
+  # carry a leading underscore, which is dropped to match the ELF names.
+  case $(od -An -tx1 -N4 "$lib" | tr -d ' \n') in
+    cffaedfe | cefaedfe | feedfacf | feedface | cafebabe)
+      nm -g -U "$lib" | awk 'NF >= 3 {print $2, $3}' | sed 's/ _/ /' ;;
+    *)
+      nm -D --defined-only "$lib" | awk '{print $2, $3}' ;;
+  esac | awk '$2 !~ /^_Z/ && $2 ~ /^seams_/ {print}' | LC_ALL=C sort
 }
 
 {
@@ -42,12 +58,12 @@ dump_lib() {
   echo "# reference: 2dbefa97d10db3fbacea04bca935b65d21ce8a6f"
   echo "# libseams.so and libseams_lang.so are new since that commit."
   echo "# libyodaLib.so lists the seams_* C symbols still exported from the core library."
-  dump_lib "$build/src/libseams.so" libseams.so
-  dump_lib "$build/bindings/libseams_lang.so" libseams_lang.so
-  dump_lib "$build/src/libyodaLib.so" libyodaLib.so
+  dump_lib "$(lib_file "$build/src/libseams")" libseams.so
+  dump_lib "$(lib_file "$build/bindings/libseams_lang")" libseams_lang.so
+  dump_lib "$(lib_file "$build/src/libyodaLib")" libyodaLib.so
   if [ -n "${SEAMS_ABI_OLD:-}" ] && [ -f "$SEAMS_ABI_OLD" ]; then
     echo "### abidiff libyodaLib against ${SEAMS_ABI_REF:-2dbefa97}"
-    abidiff --no-added-syms "$SEAMS_ABI_OLD" "$build/src/libyodaLib.so" || true
+    abidiff --no-added-syms "$SEAMS_ABI_OLD" "$(lib_file "$build/src/libyodaLib")" || true
   fi
 } > "$build/capi-abi.txt"
 

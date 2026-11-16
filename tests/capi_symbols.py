@@ -29,20 +29,40 @@ def listed_names(path):
     return [row.strip() for row in rows if row.strip() and not row.startswith("#")]
 
 
+MACHO = {b"\xcf\xfa\xed\xfe", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xcf",
+         b"\xfe\xed\xfa\xce", b"\xca\xfe\xba\xbe"}
+
+
+def is_macho(lib):
+    with open(lib, "rb") as handle:
+        return handle.read(4) in MACHO
+
+
 def exported(lib):
+    macho = is_macho(lib)
     nm = shutil.which("nm")
     if nm is not None:
+        # A Mach-O dylib has no dynamic symbol table for -D; -g -U lists its
+        # defined external symbols, whose C names carry a leading underscore.
+        flags = ["-g", "-U"] if macho else ["-D", "--defined-only"]
         done = subprocess.run(
-            [nm, "-D", "--defined-only", lib], text=True, capture_output=True, check=True
+            [nm, *flags, lib], text=True, capture_output=True, check=True
         )
+        # Mach-O puts constant data in S (other section).
+        kinds = "TtWwDdBbRrVvi" + ("Ss" if macho else "")
         names = []
         for row in done.stdout.splitlines():
             parts = row.split()
-            if len(parts) >= 3 and parts[1] in "TtWwDdBbRrVvi":
-                names.append(parts[2].split("@")[0])
+            if len(parts) >= 3 and parts[1] in kinds:
+                name = parts[2].split("@")[0]
+                if macho:
+                    if not name.startswith("_"):
+                        continue
+                    name = name[1:]
+                names.append(name)
         return sorted(set(names))
     readelf = shutil.which("readelf")
-    if readelf is not None:
+    if readelf is not None and not macho:
         done = subprocess.run(
             [readelf, "--dyn-syms", "-W", lib], text=True, capture_output=True, check=True
         )

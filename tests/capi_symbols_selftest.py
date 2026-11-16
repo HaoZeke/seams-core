@@ -35,7 +35,10 @@ def main(argv):
         if WHICH(tool) is None:
             continue
         shutil.which = only_tool(tool)
-        readers[tool] = capi_symbols.exported(lib)
+        names = capi_symbols.exported(lib)
+        # readelf does not read a Mach-O dylib, so it is no reader there.
+        if names is not None:
+            readers[tool] = names
     shutil.which = WHICH
     if not readers:
         print("neither nm nor readelf found", file=sys.stderr)
