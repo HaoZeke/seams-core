@@ -402,7 +402,8 @@ void teamCellPrefix(int *hist, int nCells, int tid, int nt, int *cellStart, Team
 // Column range [k0, k1) of thread tid when the slots are split evenly.
 void slotBalancedColumns(const int *cellStart, int nCols, int ncz, int tid, int nt, int &k0,
                          int &k1) {
-  const long long nSlots = cellStart[static_cast<std::size_t>(nCols) * ncz];
+  const long long nSlots =
+      cellStart[static_cast<std::size_t>(nCols) * static_cast<std::size_t>(ncz)];
   auto firstColumn = [&](int t) {
     if (t <= 0) {
       return 0;
@@ -415,7 +416,7 @@ void slotBalancedColumns(const int *cellStart, int nCols, int ncz, int tid, int 
     int hi = nCols;
     while (lo < hi) {
       const int mid = lo + (hi - lo) / 2;
-      if (cellStart[static_cast<std::size_t>(mid) * ncz] < want) {
+      if (cellStart[static_cast<std::size_t>(mid) * static_cast<std::size_t>(ncz)] < want) {
         lo = mid + 1;
       } else {
         hi = mid;
@@ -444,8 +445,8 @@ int pairedRows(const double *xs, const double *ys, const double *zs, const int *
     int end;
     double sx, sy, sz;
   };
-  const int s0 = cellStart[static_cast<std::size_t>(k0) * ncz];
-  const int s1 = cellStart[static_cast<std::size_t>(k1) * ncz];
+  const int s0 = cellStart[static_cast<std::size_t>(k0) * static_cast<std::size_t>(ncz)];
+  const int s1 = cellStart[static_cast<std::size_t>(k1) * static_cast<std::size_t>(ncz)];
   for (int s = s0; s < s1; ++s) {
     slotCount[s] = 0;
   }
@@ -1485,9 +1486,9 @@ bool ownedBlockPairs(const double *x, const double *y, const double *z, const in
           start[static_cast<std::size_t>(i) + 1] += start[static_cast<std::size_t>(i)];
         }
         std::vector<int> neigh(bag.size());
-        std::vector<int> cursor = start;
+        std::vector<int> slot = start;
         for (const PairDir &p : bag) {
-          neigh[static_cast<std::size_t>(cursor[static_cast<std::size_t>(p.a)]++)] = p.b;
+          neigh[static_cast<std::size_t>(slot[static_cast<std::size_t>(p.a)]++)] = p.b;
         }
         for (int c : owned) {
           for (int s = begin[static_cast<std::size_t>(c)]; s < end[static_cast<std::size_t>(c)]; ++s) {

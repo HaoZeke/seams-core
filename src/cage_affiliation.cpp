@@ -250,7 +250,7 @@ struct FrameContext {
 
   [[nodiscard]] std::vector<int> collectAdjacentRings(int r) const {
     std::vector<int> out;
-    for (const int atom : (*rings)[r]) {
+    for (const int atom : (*rings)[static_cast<std::size_t>(r)]) {
       const RingRow own = ringsOf(atom);
       for (int c = 0; c < own.n; c++) {
         if (own.p[c] != r) {
@@ -258,8 +258,8 @@ struct FrameContext {
         }
       }
       if (atom >= 0 && atom < static_cast<int>(nList->size())) {
-        for (size_t n = 1; n < (*nList)[atom].size(); n++) {
-          const RingRow near = ringsOf((*nList)[atom][n]);
+        for (size_t n = 1; n < (*nList)[static_cast<std::size_t>(atom)].size(); n++) {
+          const RingRow near = ringsOf((*nList)[static_cast<std::size_t>(atom)][n]);
           for (int c = 0; c < near.n; c++) {
             if (near.p[c] != r) {
               out.push_back(near.p[c]);
@@ -962,7 +962,7 @@ struct ring::AffiliationUpdater::Impl {
         current.hc[static_cast<std::size_t>(pairData[p])] = true;
         const int m = pairData[p + 1];
         for (int t = 0; t < m; t++) {
-          current.hc[static_cast<std::size_t>(pairData[p + 2 + t])] = true;
+          current.hc[static_cast<std::size_t>(pairData[p + 2 + static_cast<std::size_t>(t)])] = true;
         }
         p += 2 + static_cast<std::size_t>(m);
       }
@@ -1123,8 +1123,8 @@ struct ring::AffiliationUpdater::Impl {
           const int i = prevFP[x].second;
           if (!prevMatched[static_cast<std::size_t>(i)] &&
               sameCycle(r.data(), r.size(),
-                        prevAtoms.data() + prevOffset[i],
-                        prevOffset[i + 1] - prevOffset[i])) {
+                        prevAtoms.data() + prevOffset[static_cast<std::size_t>(i)],
+                        prevOffset[static_cast<std::size_t>(i + 1)] - prevOffset[static_cast<std::size_t>(i)])) {
             prevMatched[static_cast<std::size_t>(i)] = 1;
             prevOf[static_cast<std::size_t>(newFP[y].second)] = i;
             break;
@@ -1327,7 +1327,7 @@ ring::AffiliationUpdater::update(const std::vector<std::vector<int>> &rings,
       pairData.push_back(j);
       pairData.push_back(m);
       for (int t = 0; t < m; t++) {
-        const int k = newOf[static_cast<std::size_t>(st.pairData[p + 2 + t])];
+        const int k = newOf[static_cast<std::size_t>(st.pairData[p + 2 + static_cast<std::size_t>(t)])];
         pairData.push_back(k);
       }
       p += 2 + static_cast<std::size_t>(m);
@@ -1417,8 +1417,8 @@ ring::SeededAtomLabels ring::seededCageAffiliation(
     bool ringAdjacentCompletion) {
   const int nAtoms = static_cast<int>(permissiveNList.size());
   SeededAtomLabels out;
-  out.hc.assign(nAtoms, false);
-  out.ddc.assign(nAtoms, false);
+  out.hc.assign(static_cast<std::size_t>(nAtoms), false);
+  out.ddc.assign(static_cast<std::size_t>(nAtoms), false);
   if (nAtoms == 0) {
     return out;
   }
@@ -1426,17 +1426,17 @@ ring::SeededAtomLabels ring::seededCageAffiliation(
   const auto toAtoms = [nAtoms](const std::vector<std::vector<int>> &rings,
                                 const CageAffiliation &affiliation) {
     std::pair<std::vector<bool>, std::vector<bool>> flags{
-        std::vector<bool>(nAtoms, false), std::vector<bool>(nAtoms, false)};
+        std::vector<bool>(static_cast<std::size_t>(nAtoms), false), std::vector<bool>(static_cast<std::size_t>(nAtoms), false)};
     for (size_t i = 0; i < rings.size(); i++) {
       for (const int atom : rings[i]) {
         if (atom < 0 || atom >= nAtoms) {
           continue;
         }
         if (affiliation.hc[i]) {
-          flags.first[atom] = true;
+          flags.first[static_cast<std::size_t>(atom)] = true;
         }
         if (affiliation.ddc[i]) {
-          flags.second[atom] = true;
+          flags.second[static_cast<std::size_t>(atom)] = true;
         }
       }
     }
@@ -1450,24 +1450,24 @@ ring::SeededAtomLabels ring::seededCageAffiliation(
   // that happens to sit in the same permissive H-bond component.
   auto flood = [&](const std::vector<bool> &seeds,
                    const std::vector<bool> &affiliated) {
-    std::vector<bool> kept(nAtoms, false);
+    std::vector<bool> kept(static_cast<std::size_t>(nAtoms), false);
     std::vector<int> stack;
     for (int a = 0; a < nAtoms; a++) {
-      if (!seeds[a] || kept[a]) {
+      if (!seeds[static_cast<std::size_t>(a)] || kept[static_cast<std::size_t>(a)]) {
         continue;
       }
       stack.push_back(a);
-      kept[a] = true;
+      kept[static_cast<std::size_t>(a)] = true;
       while (!stack.empty()) {
         const int u = stack.back();
         stack.pop_back();
         if (u < 0 || static_cast<size_t>(u) >= permissiveNList.size()) {
           continue;
         }
-        for (size_t m = 1; m < permissiveNList[u].size(); m++) {
-          const int v = permissiveNList[u][m];
-          if (v >= 0 && v < nAtoms && affiliated[v] && !kept[v]) {
-            kept[v] = true;
+        for (size_t m = 1; m < permissiveNList[static_cast<std::size_t>(u)].size(); m++) {
+          const int v = permissiveNList[static_cast<std::size_t>(u)][m];
+          if (v >= 0 && v < nAtoms && affiliated[static_cast<std::size_t>(v)] && !kept[static_cast<std::size_t>(v)]) {
+            kept[static_cast<std::size_t>(v)] = true;
             stack.push_back(v);
           }
         }
@@ -1476,28 +1476,28 @@ ring::SeededAtomLabels ring::seededCageAffiliation(
     return kept;
   };
 
-  std::vector<bool> affiliatedHC(nAtoms, false);
-  std::vector<bool> affiliatedDDC(nAtoms, false);
+  std::vector<bool> affiliatedHC(static_cast<std::size_t>(nAtoms), false);
+  std::vector<bool> affiliatedDDC(static_cast<std::size_t>(nAtoms), false);
   for (int a = 0; a < nAtoms; a++) {
-    affiliatedHC[a] = hcS[a] || hcP[a];
-    affiliatedDDC[a] = ddcS[a] || ddcP[a];
+    affiliatedHC[static_cast<std::size_t>(a)] = hcS[static_cast<std::size_t>(a)] || hcP[static_cast<std::size_t>(a)];
+    affiliatedDDC[static_cast<std::size_t>(a)] = ddcS[static_cast<std::size_t>(a)] || ddcP[static_cast<std::size_t>(a)];
   }
   const auto keptHC = flood(hcS, affiliatedHC);
   const auto keptDDC = flood(ddcS, affiliatedDDC);
 
   for (int a = 0; a < nAtoms; a++) {
-    if (keptHC[a]) {
-      const bool fromStrict = hcS[a];
-      const bool fromPermissive = hcP[a];
+    if (keptHC[static_cast<std::size_t>(a)]) {
+      const bool fromStrict = hcS[static_cast<std::size_t>(a)];
+      const bool fromPermissive = hcP[static_cast<std::size_t>(a)];
       if (fromStrict || fromPermissive) {
-        out.hc[a] = true;
+        out.hc[static_cast<std::size_t>(a)] = true;
       }
     }
-    if (keptDDC[a]) {
-      const bool fromStrict = ddcS[a];
-      const bool fromPermissive = ddcP[a];
+    if (keptDDC[static_cast<std::size_t>(a)]) {
+      const bool fromStrict = ddcS[static_cast<std::size_t>(a)];
+      const bool fromPermissive = ddcP[static_cast<std::size_t>(a)];
       if (fromStrict || fromPermissive) {
-        out.ddc[a] = true;
+        out.ddc[static_cast<std::size_t>(a)] = true;
       }
     }
   }
@@ -1520,7 +1520,7 @@ ring::ringAdjacentCompletion(const SeededAtomLabels &labels,
   // the rings it belongs to
   std::vector<std::vector<int>> ringsOf(static_cast<std::size_t>(nAtoms));
   for (int r = 0; r < nRings; r++) {
-    for (const int a : rings[r]) {
+    for (const int a : rings[static_cast<std::size_t>(r)]) {
       if (a >= 0 && a < nAtoms) {
         ringsOf[static_cast<std::size_t>(a)].push_back(r);
       }
@@ -1544,7 +1544,7 @@ ring::ringAdjacentCompletion(const SeededAtomLabels &labels,
       queued[static_cast<std::size_t>(r)] = 0;
       int missing = -1;
       int nMissing = 0;
-      for (const int a : rings[r]) {
+      for (const int a : rings[static_cast<std::size_t>(r)]) {
         if (a < 0 || a >= nAtoms) {
           nMissing = 2;
           break;

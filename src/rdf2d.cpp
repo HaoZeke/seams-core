@@ -113,7 +113,7 @@ bool histogramCellPairs(
   // Row t holds the cell counts of thread t's static block of atoms; after
   // the scan it holds that block's first slot in each cell, so the scatter
   // keeps the serial atom order inside every cell.
-  blockAt.assign(static_cast<std::size_t>(nthreads) * ncell, 0);
+  blockAt.assign(static_cast<std::size_t>(nthreads) * static_cast<std::size_t>(ncell), 0);
   px.resize(static_cast<std::size_t>(n));
   py.resize(static_cast<std::size_t>(n));
   pz.resize(static_cast<std::size_t>(n));
@@ -134,7 +134,7 @@ bool histogramCellPairs(
 #endif
     const int lo = static_cast<int>(1LL * n * tid / team);
     const int hi = static_cast<int>(1LL * n * (tid + 1) / team);
-    int *mine = blockAt.data() + static_cast<std::size_t>(tid) * ncell;
+    int *mine = blockAt.data() + static_cast<std::size_t>(tid) * static_cast<std::size_t>(ncell);
     for (int i = lo; i < hi; i++) {
       const auto &p = yCloud.pts[static_cast<std::size_t>(i)];
       const double fz = (p.z - frame.oz) / lz;
@@ -165,7 +165,8 @@ bool histogramCellPairs(
       for (int c = 0; c < ncell; c++) {
         start[static_cast<std::size_t>(c)] = at;
         for (int t = 0; t < team; t++) {
-          int &slot = blockAt[static_cast<std::size_t>(t) * ncell + c];
+          int &slot = blockAt[static_cast<std::size_t>(t) * static_cast<std::size_t>(ncell) +
+                              static_cast<std::size_t>(c)];
           const int count = slot;
           slot = at;
           at += count;
@@ -296,7 +297,7 @@ int rdf2::rdf2Danalysis_AA(
     if (nbin < 1) {
       nbin = 1;
     }
-    rdfValues.resize(nbin);
+    rdfValues.resize(static_cast<std::size_t>(nbin));
   }
   volumeLengths = rdf2::getSystemLengths(yCloud);
   nbin = static_cast<int>(cutoff / binwidth);
@@ -304,7 +305,7 @@ int rdf2::rdf2Danalysis_AA(
     nbin = 1;
   }
   if (static_cast<int>(rdfValues.size()) != nbin) {
-    rdfValues.assign(nbin, 0.0);
+    rdfValues.assign(static_cast<std::size_t>(nbin), 0.0);
   }
   // Sample for the current frame!!
   histogram = rdf2::sampleRDF_AA(yCloud, cutoff, binwidth, nbin);
@@ -355,7 +356,7 @@ rdf2::sampleRDF_AA(const molSys::PointCloud<molSys::Point<double>, double> &yClo
   std::vector<int> histogram;
 
   // Init the histogram to 0
-  histogram.resize(nbin);
+  histogram.resize(static_cast<std::size_t>(nbin));
 
   // Inside the one-image ball every pair has a single image within the
   // cutoff, and the cell pairs find it. Past the ball the direct loop takes
@@ -466,8 +467,8 @@ int rdf2::normalizeRDF(int nopA, std::vector<double> &rdfValues,
     binVolume = 4 * gen::pi * pow(binwidth, 3.0) *
                 (pow(ibin + 1, 3.0) - pow(ibin, 3.0)) / 3.0;
     // Update the RDF
-    rdfValues[ibin] +=
-        histogram[ibin] / (nIter * binVolume * nopA * volumeDensity * factor);
+    rdfValues[static_cast<std::size_t>(ibin)] +=
+        histogram[static_cast<std::size_t>(ibin)] / (nIter * binVolume * nopA * volumeDensity * factor);
   } // end of loop through every bin
 
   return 0;
