@@ -625,9 +625,12 @@ std::uint64_t wlHashCount(const std::vector<std::vector<int>> &adjacency, int ro
       // Four vertices share the round. Each mix reads only its own running
       // value, so the multiply chains overlap. Each vertex still folds its
       // neighbour colors in palette order.
-      thread_local std::vector<std::uint64_t> stream[4];
-      auto gather = [&](int vertex, std::vector<std::uint64_t> &out) {
-        out.clear();
+      // The neighbour colors of one vertex fit in a fixed row. Writing them
+      // there avoids growing a vector on every vertex of every round.
+      constexpr int kStreamCap = 512;
+      thread_local std::uint64_t stream[4][kStreamCap];
+      auto gather = [&](int vertex, std::uint64_t *out) -> int {
+        int nout = 0;
         std::uint64_t present[8] = {};
         for (const int j : adjacency[static_cast<std::size_t>(vertex)]) {
           const int id = colorId[static_cast<std::size_t>(j)];
@@ -644,10 +647,14 @@ std::uint64_t wlHashCount(const std::vector<std::vector<int>> &adjacency, int ro
             const int copies = counts[static_cast<std::size_t>(c)];
             counts[static_cast<std::size_t>(c)] = 0;
             for (int t = 0; t < copies; t++) {
-              out.push_back(col);
+              if (nout == kStreamCap) {
+                return -1;
+              }
+              out[nout++] = col;
             }
           }
         }
+        return nout;
       };
       auto hashOne = [&](int vertex) {
         std::uint64_t present[8] = {};
@@ -675,8 +682,20 @@ std::uint64_t wlHashCount(const std::vector<std::vector<int>> &adjacency, int ro
       };
       int i = 0;
       for (; i + 4 <= n; i += 4) {
+        int nlen[4];
+        bool fit = true;
         for (int b = 0; b < 4; b++) {
-          gather(i + b, stream[b]);
+          nlen[b] = gather(i + b, stream[b]);
+          if (nlen[b] < 0) {
+            fit = false;
+          }
+        }
+        if (!fit) {
+          std::fill(counts.begin(), counts.end(), 0);
+          for (int b = 0; b < 4; b++) {
+            hashOne(i + b);
+          }
+          continue;
         }
         std::uint64_t h0 = kOffset, h1 = kOffset, h2 = kOffset, h3 = kOffset;
         const std::uint64_t self0 = color[static_cast<std::size_t>(i)];
@@ -684,14 +703,14 @@ std::uint64_t wlHashCount(const std::vector<std::vector<int>> &adjacency, int ro
         const std::uint64_t self2 = color[static_cast<std::size_t>(i + 2)];
         const std::uint64_t self3 = color[static_cast<std::size_t>(i + 3)];
         mix4n(h0, h1, h2, h3, &self0, &self1, &self2, &self3, 1);
-        const std::uint64_t *p0 = stream[0].data();
-        const std::uint64_t *p1 = stream[1].data();
-        const std::uint64_t *p2 = stream[2].data();
-        const std::uint64_t *p3 = stream[3].data();
-        int n0 = static_cast<int>(stream[0].size());
-        int n1 = static_cast<int>(stream[1].size());
-        int n2 = static_cast<int>(stream[2].size());
-        int n3 = static_cast<int>(stream[3].size());
+        const std::uint64_t *p0 = stream[0];
+        const std::uint64_t *p1 = stream[1];
+        const std::uint64_t *p2 = stream[2];
+        const std::uint64_t *p3 = stream[3];
+        int n0 = nlen[0];
+        int n1 = nlen[1];
+        int n2 = nlen[2];
+        int n3 = nlen[3];
         const int common = std::min(std::min(n0, n1), std::min(n2, n3));
         mix4n(h0, h1, h2, h3, p0, p1, p2, p3, common);
         p0 += common;
