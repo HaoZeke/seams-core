@@ -737,15 +737,36 @@ void enumerateChordlessPlain(const Graph &adjacency, const DistOracle &oracle,
               continue;
             }
             const auto &as2 = byB[static_cast<std::size_t>(b2)];
-            for (const int a : as) {
-              if (within2(a, b2)) {
-                continue;
+            // a is a neighbour of b, so a == a2 and an a-a2 edge are already
+            // within two steps of b when every edge has its reverse. The two
+            // arm lists then multiply.
+            if (store.undirected) {
+              int na = 0;
+              for (const int a : as) {
+                if (!within2(a, b2)) {
+                  na++;
+                }
               }
-              for (const int a2 : as2) {
-                if (a == a2 || adjacent(a, a2) || within2(b, a2)) {
+              if (na != 0) {
+                int nb = 0;
+                for (const int a2 : as2) {
+                  if (!within2(b, a2)) {
+                    nb++;
+                  }
+                }
+                c6 += na * nb;
+              }
+            } else {
+              for (const int a : as) {
+                if (within2(a, b2)) {
                   continue;
                 }
-                c6++;
+                for (const int a2 : as2) {
+                  if (a == a2 || adjacent(a, a2) || within2(b, a2)) {
+                    continue;
+                  }
+                  c6++;
+                }
               }
             }
           }
