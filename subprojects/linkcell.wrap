@@ -2,7 +2,7 @@
 url = https://github.com/d-SEAMS/linkcell.git
 revision = d871352b07ff54ac951e54e532111ce54d6330a9
 depth = 1
-diff_files = linkcell-measured-weights.patch, linkcell-two-cpu.patch
+diff_files = linkcell-measured-weights.patch, linkcell-two-cpu.patch, linkcell-one-thread-width.patch
 
 [provide]
 linkcell = linkcell_dep
