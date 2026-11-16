@@ -2469,8 +2469,10 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
     // order
     // One cache line per source. The ring vectors of adjacent sources
     // used to share a line, and the threads then waited on each other's
-    // size updates. A static share of the sources is even on a crystal
-    // and keeps each thread on its own lines.
+    // size updates. The sources are not equal: a guided first chunk
+    // leaves one thread holding the heavy sources while the others wait.
+    // One source at a time spreads that work. Each pool is still written
+    // by a single thread, and the rings are copied out in source order.
     const int nThreads = omp_get_max_threads();
     std::vector<std::vector<int>> threadBins;
     if (perAtom != nullptr) {
@@ -2500,7 +2502,7 @@ searchRings(const std::vector<std::vector<int>> &nList, int maxDepth,
       if (hist != nullptr) {
         local.hist = &threadHists[static_cast<std::size_t>(tid)];
       }
-#pragma omp for schedule(guided)
+#pragma omp for schedule(dynamic, 1)
       for (int k = 0; k < nFrom; k++) {
         auto &pool = perSource[static_cast<std::size_t>(k)];
         if (shellWords == 3) {
