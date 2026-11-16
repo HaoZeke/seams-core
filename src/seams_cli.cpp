@@ -2666,7 +2666,11 @@ int main(int argc, char *argv[]) {
             waterTypes.clear();
           }
         } else if (typeI <= 0 && frameSource(file) == FrameSource::dump) {
-          cloud = water::keepHistoricalOxygen(cloud);
+          // A uniform oxygen frame is already the historical set. Rebuilding
+          // it copies every point and the id map for the same order.
+          if (!water::historicalOxygenIsFrame(cloud)) {
+            cloud = water::keepHistoricalOxygen(cloud);
+          }
         }
       } catch (...) {
         os << colorizer.error(exceptionText()) << "\n";

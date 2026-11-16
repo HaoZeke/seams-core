@@ -62,6 +62,9 @@ molSys::PointCloud<molSys::Point<double>, double> subsetCloud(
 
 /** Historical dump guess: type 2 when any atom has it, otherwise type 1.
  *  A miss leaves an empty cloud and keeps the box. */
+bool historicalOxygenIsFrame(
+    const molSys::PointCloud<molSys::Point<double>, double> &cloud);
+
 molSys::PointCloud<molSys::Point<double>, double> keepHistoricalOxygen(
     const molSys::PointCloud<molSys::Point<double>, double> &cloud);
 

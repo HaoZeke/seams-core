@@ -159,6 +159,24 @@ bool iceLabel(molSys::atom_state_type label) {
 }
 
 bool hasMultiAtomMolecule(const Cloud &cloud) {
+  // A dump with no molecule column stores the atom id as the molecule id.
+  // Unique atom ids then cannot share a molecule, so the map of every id
+  // is a wasted walk. A repeated atom id, or a real molecule id, still
+  // takes the map and stops at the second atom of that molecule.
+  if (cloud.nop > 0 && static_cast<int>(cloud.pts.size()) == cloud.nop &&
+      static_cast<int>(cloud.idIndexMap.size()) == cloud.nop) {
+    bool own = true;
+    for (int i = 0; i < cloud.nop; ++i) {
+      const auto &point = cloud.pts[static_cast<std::size_t>(i)];
+      if (point.molID != point.atomID) {
+        own = false;
+        break;
+      }
+    }
+    if (own) {
+      return false;
+    }
+  }
   std::unordered_map<int, int> count;
   for (int i = 0; i < cloud.nop; ++i) {
     const int n = ++count[cloud.pts[static_cast<std::size_t>(i)].molID];
@@ -254,6 +272,22 @@ Cloud subsetCloud(const Cloud &cloud, const Selection &selection) {
         static_cast<int>(out.pts.size()) - 1;
   }
   return out;
+}
+
+bool historicalOxygenIsFrame(const Cloud &cloud) {
+  // Type 2 is the historical oxygen. With no type 2, type 1 is. Either
+  // way a frame that is already only that type comes back unchanged, so
+  // the subset copy would rebuild the same atoms in the same order.
+  if (cloud.nop <= 0 || static_cast<int>(cloud.pts.size()) != cloud.nop) {
+    return false;
+  }
+  int n1 = 0;
+  int n2 = 0;
+  for (const auto &point : cloud.pts) {
+    n1 += point.type == 1;
+    n2 += point.type == 2;
+  }
+  return n2 == cloud.nop || (n2 == 0 && n1 == cloud.nop);
 }
 
 Cloud keepHistoricalOxygen(const Cloud &cloud) {
