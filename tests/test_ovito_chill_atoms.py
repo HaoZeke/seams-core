@@ -52,7 +52,7 @@ def prepare_ovito() -> bool:
 
 
 def load_seams(path: Path):
-    yoda = path.parent / "libyodaLib.so"
+    yoda = path.parent / ("libyodaLib" + path.suffix)
     if yoda.is_file():
         ctypes.CDLL(str(yoda), mode=ctypes.RTLD_GLOBAL)
     lib = ctypes.CDLL(str(path))

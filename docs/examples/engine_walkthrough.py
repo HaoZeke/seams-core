@@ -20,9 +20,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 
 def load(libdir: Path):
-    lib = ctypes.CDLL(str(libdir / "libseams.so"))
+    lib = ctypes.CDLL(str(libdir / ("libseams" + SHLIB)))
     lib.seams_system_create.restype = ctypes.c_void_p
     lib.seams_system_destroy.argtypes = [ctypes.c_void_p]
     lib.seams_system_set_frame.argtypes = [
@@ -273,7 +276,7 @@ def main():
         from dseams_insitu.engine import InSitu
         from dseams_insitu.openmm import DseamsReporter
 
-        os.environ["SEAMS_LANG_LIB"] = str(build / "bindings" / "libseams_lang.so")
+        os.environ["SEAMS_LANG_LIB"] = str(build / "bindings" / ("libseams_lang" + SHLIB))
         os.environ["LD_LIBRARY_PATH"] = env_libs(build)["LD_LIBRARY_PATH"]
         a = 2.75 * 4.0 / np.sqrt(3.0)
         fcc = ((0, 0, 0), (0.5, 0.5, 0), (0.5, 0, 0.5), (0, 0.5, 0.5))

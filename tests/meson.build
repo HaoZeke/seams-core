@@ -711,8 +711,7 @@ test('option_names', find_program('python3'),
   workdir: meson.project_source_root(),
   timeout: 60)
 test('cycless_pentagon', find_program('python3'),
-  args: [files('test_cycless_pentagon.py'),
-         meson.project_build_root() / 'src' / 'libseams.so'],
+  args: [files('test_cycless_pentagon.py'), seams_api_lib.full_path()],
   workdir: meson.project_source_root(),
   timeout: 120)
 test('sqq_sh_triclinic', find_program('python3'),
@@ -723,8 +722,7 @@ test('ring_carry', bench_ring_carry,
   args: ['800', '2'],
   timeout: 180)
 test('ovito_chill_atoms', find_program('python3'),
-  args: [files('test_ovito_chill_atoms.py'),
-         meson.project_build_root() / 'src' / 'libseams.so'],
+  args: [files('test_ovito_chill_atoms.py'), seams_api_lib.full_path()],
   workdir: meson.project_source_root(),
   timeout: 180)
 test('ovito_ring_counts', find_program('python3'),

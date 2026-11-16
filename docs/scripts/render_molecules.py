@@ -28,6 +28,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from lammps_box import cell_from_bounds
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 
 def _loader_path():
     """Keep the system OpenGL libraries visible to OVITO's Qt build."""
@@ -270,7 +273,7 @@ def find_lib(explicit):
     env = os.environ.get("SEAMS_LIBDIR")
     if env:
         return Path(env)
-    for relative in ("bbdir/src/libseams.so", "build/src/libseams.so"):
+    for relative in ("bbdir/src/libseams" + SHLIB, "build/src/libseams" + SHLIB):
         candidate = ROOT / relative
         if candidate.is_file():
             return candidate.parent
@@ -336,7 +339,7 @@ def load_api(libdir):
 
     previous = os.environ.get("LD_LIBRARY_PATH", "")
     os.environ["LD_LIBRARY_PATH"] = os.pathsep.join([str(libdir), previous])
-    library = CDLL(str(Path(libdir) / "libseams.so"))
+    library = CDLL(str(Path(libdir) / ("libseams" + SHLIB)))
     library.seams_system_create.restype = c_void_p
     library.seams_system_destroy.argtypes = [c_void_p]
     library.seams_system_set_frame.argtypes = [

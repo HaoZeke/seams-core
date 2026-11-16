@@ -12,6 +12,9 @@ from bench_overhead import hinges, time_insitu, time_plain  # noqa: E402
 from dseams_insitu.engine import InSitu  # noqa: E402
 from water import build_simulation, save_state  # noqa: E402
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 
 def main() -> int:
     median, hinge = hinges([1.0, 2.0, 3.0, 4.0])
@@ -39,7 +42,7 @@ def os_lib() -> str:
     env = os.environ.get("SEAMS_LANG_LIB")
     if env:
         return env
-    built = ROOT / "build" / "bindings" / "libseams_lang.so"
+    built = ROOT / "build" / "bindings" / ("libseams_lang" + SHLIB)
     if built.is_file():
         return str(built)
     return "libseams_lang"

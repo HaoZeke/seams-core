@@ -10,6 +10,9 @@ import ctypes
 import sys
 from pathlib import Path
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 WIDTH = 3.7
 ICE = {0, 1, 7, 8}
 # bin -> ion count. Bin 3 is ice. The others are liquid.
@@ -47,7 +50,7 @@ def load(path):
 
 
 def water_labels(libdir, box, water):
-    lib = ctypes.CDLL(str(Path(libdir) / "libseams.so"))
+    lib = ctypes.CDLL(str(Path(libdir) / ("libseams" + SHLIB)))
     lib.seams_system_create.restype = ctypes.c_void_p
     lib.seams_system_set_ortho.restype = ctypes.c_int
     lib.seams_system_set_ortho.argtypes = [

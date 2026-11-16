@@ -24,6 +24,9 @@ import science_render
 import core_counts
 import render_molecules
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 DUMP = ROOT / "input" / "traj" / "genice_sH.lammpstrj"
 LX, LY, LZ = 24.8424228, 10.7570846, 20.1312910
 XY = -6.2106057
@@ -90,18 +93,18 @@ int main(void) {
 
 def check_lang():
     libdir = os.environ.get("SEAMS_LIBDIR")
-    if libdir and not (Path(libdir) / "libseams_lang.so").is_file():
+    if libdir and not (Path(libdir) / ("libseams_lang" + SHLIB)).is_file():
         libdir = None
     if not libdir:
         candidates = [ROOT / "bbdir" / "bindings"]
         candidates.extend(Path(item) for item in os.environ.get("LD_LIBRARY_PATH", "").split(":") if item)
         for candidate in candidates:
-            if (candidate / "libseams_lang.so").is_file():
+            if (candidate / ("libseams_lang" + SHLIB)).is_file():
                 libdir = str(candidate)
                 break
     if not libdir:
         raise SystemExit("libseams_lang.so is required for the language reader")
-    lib = ctypes.CDLL(str(Path(libdir) / "libseams_lang.so"))
+    lib = ctypes.CDLL(str(Path(libdir) / ("libseams_lang" + SHLIB)))
     lib.seams_frame_read.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int]
     lib.seams_frame_read.restype = ctypes.c_void_p
     lib.seams_frame_nop.argtypes = [ctypes.c_void_p]

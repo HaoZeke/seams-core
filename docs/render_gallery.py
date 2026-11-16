@@ -14,6 +14,9 @@ import sys
 from ctypes import CDLL, POINTER, byref, c_char_p, c_double, c_int, c_void_p
 from pathlib import Path
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 ROOT = Path(__file__).resolve().parents[1]
 IMAGE_DIR = ROOT / "docs" / "source" / "tutorials" / "gallery"
 CAPTIONS = ROOT / "docs" / "source" / "tutorials" / "gallery-captions.rst"
@@ -101,8 +104,8 @@ def load_lang(libdir, langdir):
     os.environ["LD_LIBRARY_PATH"] = os.pathsep.join(
         [str(libdir), str(langdir), os.environ.get("LD_LIBRARY_PATH", "")]
     )
-    lang = CDLL(str(Path(langdir) / "libseams_lang.so"))
-    api = CDLL(str(Path(libdir) / "libseams.so"))
+    lang = CDLL(str(Path(langdir) / ("libseams_lang" + SHLIB)))
+    api = CDLL(str(Path(libdir) / ("libseams" + SHLIB)))
     lang.seams_last_error.restype = c_char_p
     lang.seams_frame_read.restype = c_void_p
     lang.seams_frame_read.argtypes = [c_char_p, c_int, c_int]

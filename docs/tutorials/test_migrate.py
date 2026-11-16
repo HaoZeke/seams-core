@@ -20,6 +20,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from migrate_map import LUA_RELEASES, PAIRS, V1_GLOBALS, V1_TAG, table_rows
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 LABELS = (
     "cubic",
     "hexagonal",
@@ -74,8 +77,8 @@ def load(libdir, langdir):
     os.environ["LD_LIBRARY_PATH"] = os.pathsep.join(
         [str(libdir), str(langdir), os.environ.get("LD_LIBRARY_PATH", "")]
     )
-    api = CDLL(str(Path(libdir) / "libseams.so"))
-    lang = CDLL(str(Path(langdir) / "libseams_lang.so"))
+    api = CDLL(str(Path(libdir) / ("libseams" + SHLIB)))
+    lang = CDLL(str(Path(langdir) / ("libseams_lang" + SHLIB)))
     lang.seams_frame_read.restype = c_void_p
     lang.seams_frame_read.argtypes = [c_char_p, c_int, c_int]
     lang.seams_frame_free.argtypes = [c_void_p]

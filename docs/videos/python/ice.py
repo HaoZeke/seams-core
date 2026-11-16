@@ -6,6 +6,9 @@ import ctypes
 import os
 import sys
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 
 def read_dump(path):
     xyz = []
@@ -36,7 +39,7 @@ def main():
     n = len(xyz) // 3
     if n != 128 or len(edges) != 3:
         raise SystemExit("atom count {}".format(n))
-    lib = ctypes.CDLL(os.path.join(libdir, "libseams.so"))
+    lib = ctypes.CDLL(os.path.join(libdir, "libseams" + SHLIB))
     lib.seams_system_create.restype = ctypes.c_void_p
     lib.seams_system_destroy.argtypes = [ctypes.c_void_p]
     lib.seams_system_set_ortho.restype = ctypes.c_int

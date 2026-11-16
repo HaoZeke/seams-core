@@ -18,6 +18,9 @@ sys.path.insert(0, str(ROOT / "docs" / "examples"))
 
 from render_scenes import assert_cage_edges  # noqa: E402
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 
 def check_predicate():
     assert_cage_edges([np.array([2.80, 2.81, 2.79, 2.82])])
@@ -38,7 +41,7 @@ def _libseams():
     for entry in os.environ.get("LD_LIBRARY_PATH", "").split(os.pathsep):
         if not entry:
             continue
-        candidate = Path(entry) / "libseams.so"
+        candidate = Path(entry) / ("libseams" + SHLIB)
         if candidate.is_file():
             return candidate
     return None

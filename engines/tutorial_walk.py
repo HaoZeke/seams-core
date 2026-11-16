@@ -13,6 +13,9 @@ import ctypes
 import pathlib
 import sys
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DATA = pathlib.Path(__file__).resolve().parent / "tutorial" / "ice.data"
 CUTOFF = 3.5
@@ -51,7 +54,7 @@ def read_data(path):
 
 
 def load_library(build):
-    lib = pathlib.Path(build) / "src" / "libseams.so"
+    lib = pathlib.Path(build) / "src" / ("libseams" + SHLIB)
     if not lib.is_file():
         raise SystemExit("libseams.so is not at {}".format(lib))
     handle = ctypes.CDLL(str(lib))

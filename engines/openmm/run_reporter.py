@@ -7,6 +7,9 @@ import runpy
 import sys
 from pathlib import Path
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 if importlib.util.find_spec("openmm") is None:
     print("openmm is not installed")
     sys.exit(77)
@@ -14,7 +17,7 @@ if importlib.util.find_spec("openmm") is None:
 build = Path(os.environ.get("DSEAMS_BUILD", "build"))
 src = Path(os.environ.get("DSEAMS_SRC", Path(__file__).resolve().parents[2]))
 
-libs = list(build.rglob("libseams_lang.so"))
+libs = list(build.rglob("libseams_lang" + SHLIB))
 if not libs:
     print("openmm is installed but libseams_lang.so was not built")
     sys.exit(1)

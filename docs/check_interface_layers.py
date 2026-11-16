@@ -20,6 +20,9 @@ sys.path.insert(0, str(ROOT / "docs" / "examples"))
 import science_render as render
 from render_scenes import basal_bilayers, centres_outside_outline, wrap_into_cell
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 
 def check_layers(positions: np.ndarray, labels: np.ndarray):
     basal = np.asarray(render.stacking_axis(positions, labels, np.isin(labels, [1])), dtype=float)
@@ -81,7 +84,7 @@ def main():
     libdir = os.environ.get("SEAMS_LIBDIR")
     if not libdir:
         for item in os.environ.get("LD_LIBRARY_PATH", "").split(":"):
-            if item and (Path(item) / "libseams.so").is_file():
+            if item and (Path(item) / ("libseams" + SHLIB)).is_file():
                 libdir = item
                 break
     if not libdir:

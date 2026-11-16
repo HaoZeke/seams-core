@@ -21,6 +21,9 @@ from dseams_insitu.openmm import DseamsReporter  # noqa: E402
 
 from water import build_simulation, restore, save_state  # noqa: E402
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 LIB = Path(os.environ.get("SEAMS_LANG_LIB", "libseams_lang"))
 BOXES_NM = (2.0, 4.93)
 INTERVALS = (10, 100, 1000)
@@ -84,7 +87,7 @@ def run_box(box_nm, lib, steps, intervals, trials):
 def main():
     lib = LIB
     if not lib.is_file() and str(lib) == "libseams_lang":
-        built = ROOT / "build" / "bindings" / "libseams_lang.so"
+        built = ROOT / "build" / "bindings" / ("libseams_lang" + SHLIB)
         if built.is_file():
             lib = built
     for box in BOXES_NM:

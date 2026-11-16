@@ -18,6 +18,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "docs"))
 from toolchain import c_compiler, cxx_compiler, link_command  # noqa: E402
+
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 EXAMPLES = ROOT / "docs" / "examples"
 CANON = "pairs 512 rings 0 0 0 0 0 0 256 chill 0 128 0 0 0 0 0 0 0"
 
@@ -46,7 +50,7 @@ def base_env(build):
     env["DSEAMS_ROOT"] = str(ROOT)
     env["LD_LIBRARY_PATH"] = library_path(build)
     env["OMP_NUM_THREADS"] = "1"
-    lang = build / "bindings" / "libseams_lang.so"
+    lang = build / "bindings" / ("libseams_lang" + SHLIB)
     if lang.is_file():
         env["SEAMS_LANG_LIB"] = str(lang)
     return env

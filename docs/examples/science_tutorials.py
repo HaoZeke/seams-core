@@ -27,6 +27,9 @@ from toolchain import c_compiler, link_command  # noqa: E402
 
 import numpy as np
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 NAMES = (
     "cubic",
     "hexagonal",
@@ -55,7 +58,7 @@ SKIP = (
 
 
 def _lib(libdir: Path):
-    lib = ctypes.CDLL(str(libdir / "libseams.so"))
+    lib = ctypes.CDLL(str(libdir / ("libseams" + SHLIB)))
     lib.seams_system_create.restype = ctypes.c_void_p
     lib.seams_system_destroy.argtypes = [ctypes.c_void_p]
     lib.seams_system_read.argtypes = [
@@ -570,7 +573,7 @@ def _language_env(libdir: Path):
     # seams call, so the language fronts run without that runtime.
     for key in ("ASAN_OPTIONS", "UBSAN_OPTIONS", "MSAN_OPTIONS", "TSAN_OPTIONS", "LD_PRELOAD"):
         env.pop(key, None)
-    env["SEAMS_LIB"] = str(libdir / "libseams.so")
+    env["SEAMS_LIB"] = str(libdir / ("libseams" + SHLIB))
     env["LD_LIBRARY_PATH"] = str(libdir) + os.pathsep + env.get("LD_LIBRARY_PATH", "")
     return env
 
@@ -744,7 +747,7 @@ def tutorials(root: Path, build: Path):
         print(f"brine tend thickness {late['thickness']:.4f} k {late['k']:.1f}")
         render_brine_scene(root, frames[1], figures)
 
-    if build.is_dir() and (build / "src" / "libseams.so").is_file():
+    if build.is_dir() and (build / "src" / ("libseams" + SHLIB)).is_file():
         c_interface = run_c(root, build, "interface", [])
         expect("interface hexagonal 352" in c_interface, c_interface)
         expect("interface layers HHHHHHHHC" in c_interface, c_interface)

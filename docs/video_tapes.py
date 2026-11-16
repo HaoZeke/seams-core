@@ -12,6 +12,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from tape_parse import parse_tape  # noqa: E402
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 NUMBER = re.compile(r"(?<![\d.])(\d+(?:\.\d+)?)(?![\d.])")
 def leaked(text):
     bad = ("/" + "tmp", "/" + "home", "/" + "agent", "cursor" + "/")
@@ -118,7 +121,7 @@ def prepare(root, seams, libdir, langdir, build):
     env["SEAMS_LANGDIR"] = str(langdir)
     env["VIDEO_OUT"] = str(out)
     env["DSEAMS_ROOT"] = str(root)
-    env["SEAMS_LANG_LIB"] = str(Path(langdir) / "libseams_lang.so")
+    env["SEAMS_LANG_LIB"] = str(Path(langdir) / ("libseams_lang" + SHLIB))
     env["SEAMS_LIB_DIR"] = str(libdir)
     env["SEAMS_INCLUDE"] = str(root / "bindings" / "cxx")
     env["LD_LIBRARY_PATH"] = os.pathsep.join(

@@ -22,6 +22,9 @@ sys.path.append(str(HERE.parent))
 import e2e_common as e2e  # noqa: E402
 import tip4pice_slab  # noqa: E402
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -36,7 +39,7 @@ def main():
     spec = importlib.util.find_spec("openmm")
     if spec is None or spec.origin is None:
         e2e.skip("the openmm Python package was not found")
-    lib = e2e.find_build_file(args.build, "libseams_lang.so")
+    lib = e2e.find_build_file(args.build, "libseams_lang" + SHLIB)
     if lib is None:
         sys.exit(f"libseams_lang.so was not built under {args.build}")
     cli = e2e.seams_cli(args.build)

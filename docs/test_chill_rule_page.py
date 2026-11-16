@@ -8,6 +8,9 @@ import sys
 from ctypes import CDLL, POINTER, c_char_p, c_double, c_int, c_void_p
 from pathlib import Path
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 NAMES = (
     "cubic",
     "hexagonal",
@@ -134,7 +137,7 @@ def main():
     os.environ["LD_LIBRARY_PATH"] = os.pathsep.join(
         [str(libdir), str(langdir), os.environ.get("LD_LIBRARY_PATH", "")]
     )
-    lang = CDLL(str(Path(langdir) / "libseams_lang.so"))
+    lang = CDLL(str(Path(langdir) / ("libseams_lang" + SHLIB)))
     published = c_labels(lang, box, coords, "chill+")
     ovito = c_labels(lang, box, coords, "ovito-chill+")
     if published[focus] == ovito[focus]:

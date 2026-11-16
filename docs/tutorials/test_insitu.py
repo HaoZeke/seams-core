@@ -14,6 +14,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 
 def have_lammps():
     pkg = shutil.which("pkg-config")
@@ -73,7 +76,7 @@ def run_openmm(root, build):
     env["PYTHONPATH"] = os.pathsep.join(
         [str(root / "adapters" / "python"), env.get("PYTHONPATH", "")]
     )
-    env["SEAMS_LANG_LIB"] = str(Path(lang) / "libseams_lang.so")
+    env["SEAMS_LANG_LIB"] = str(Path(lang) / ("libseams_lang" + SHLIB))
     text = subprocess.check_output([sys.executable, str(script)], env=env, text=True)
     if "openmm calls" not in text or "ice" not in text:
         raise SystemExit(text)

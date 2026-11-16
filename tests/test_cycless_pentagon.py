@@ -32,7 +32,7 @@ def library_path() -> Path:
 
 def main() -> None:
     path = library_path()
-    yoda = path.with_name("libyodaLib.so")
+    yoda = path.with_name("libyodaLib" + path.suffix)
     if yoda.is_file():
         ctypes.CDLL(str(yoda), mode=ctypes.RTLD_GLOBAL)
     lib = ctypes.CDLL(str(path))

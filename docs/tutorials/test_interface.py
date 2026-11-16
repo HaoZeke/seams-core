@@ -9,6 +9,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 WIDTH = 3.7
 # Crystal labels: cubic, hexagonal, reCubic, reHex.
 ICE = {0, 1, 7, 8}
@@ -63,7 +66,7 @@ def load_dump(path):
 
 
 def labels_of(libdir, box, atoms):
-    lib = ctypes.CDLL(str(Path(libdir) / "libseams.so"))
+    lib = ctypes.CDLL(str(Path(libdir) / ("libseams" + SHLIB)))
     lib.seams_system_create.restype = ctypes.c_void_p
     lib.seams_system_set_ortho.restype = ctypes.c_int
     lib.seams_system_set_ortho.argtypes = [

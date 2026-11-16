@@ -26,6 +26,9 @@ import tempfile
 import textwrap
 from pathlib import Path
 
+# Meson names a shared library lib<name>.dylib on macOS.
+SHLIB = ".dylib" if sys.platform == "darwin" else ".so"
+
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 FIXTURE = ROOT / "input" / "traj" / "genice_sI.lammpstrj"
@@ -190,12 +193,12 @@ def base_env(build):
     env["DSEAMS_ROOT"] = str(ROOT)
     env["LD_LIBRARY_PATH"] = library_path(build)
     env["OMP_NUM_THREADS"] = "1"
-    lang = build / "bindings" / "libseams_lang.so"
+    lang = build / "bindings" / ("libseams_lang" + SHLIB)
     if lang.is_file():
         env["SEAMS_LANG_LIB"] = str(lang)
     env["SEAMS_LIB_DIR"] = str(build / "src")
     env["SEAMS_LIBDIR"] = str(build / "src")
-    env["SEAMS_LIB"] = str(build / "src" / "libseams.so")
+    env["SEAMS_LIB"] = str(build / "src" / ("libseams" + SHLIB))
     env["SEAMS_BUILD"] = str(build)
     oracle = build / "bindings" / "binding_oracle"
     if oracle.is_file():
@@ -348,7 +351,7 @@ def sdk_flags(text):
             flags.extend(["-I", str(include / "lammps"), "-llammps", "-lmpi"])
         if "OpenMM.h" in text and (include / "OpenMM.h").is_file():
             flags.append("-lOpenMM")
-        if "plumed/" in text and (prefix / "lib" / "libplumedKernel.so").is_file():
+        if "plumed/" in text and (prefix / "lib" / ("libplumedKernel" + SHLIB)).is_file():
             flags.append("-lplumedKernel")
         for folder in (prefix / "lib", prefix / "lib.AVX2_256"):
             if folder.is_dir() and any(token in text for token in ("gromacs/", "plumed/", "OpenMM.h", "library.h")):
@@ -356,7 +359,7 @@ def sdk_flags(text):
                 rpaths.append(str(folder))
     if "plumed/" in text and "-lplumedKernel" not in flags:
         # The kernel symbols, such as PLMD::OpenMP, are in libplumedKernel.
-        kernel = library_file("libplumedKernel.so")
+        kernel = library_file("libplumedKernel" + SHLIB)
         if kernel:
             flags.extend(["-L" + os.path.dirname(kernel), "-lplumedKernel"])
     if "OpenMM.h" in text and "-lOpenMM" not in flags:
@@ -364,7 +367,7 @@ def sdk_flags(text):
         # engines/meson.build finds it, and leave LD_LIBRARY_PATH alone.
         for include in compiler_includes():
             lib = include.parent / "lib"
-            if (include / "OpenMM.h").is_file() and (lib / "libOpenMM.so").is_file():
+            if (include / "OpenMM.h").is_file() and (lib / ("libOpenMM" + SHLIB)).is_file():
                 flags.extend(["-L" + str(lib), "-lOpenMM"])
                 break
     seen = []
@@ -385,12 +388,12 @@ def sdk_flags(text):
     for flag in flags:
         if not flag.startswith("-l"):
             continue
-        found = library_file("lib{}.so".format(flag[2:]))
+        found = library_file("lib{}{}".format(flag[2:], SHLIB))
         if found:
             rpaths.append(os.path.dirname(os.path.realpath(found)))
     if "-fopenmp" in flags:
         # clang's -fopenmp links libomp from its own folder, which the loader does not search.
-        for runtime in ("libomp.so", "libgomp.so"):
+        for runtime in ("libomp" + SHLIB, "libgomp" + SHLIB):
             found = library_file(runtime)
             if found:
                 rpaths.append(os.path.dirname(os.path.realpath(found)))
@@ -549,9 +552,9 @@ def program_args(text, build):
         return [str(FIXTURE)]
     if "argv[2]" in text and "libseams" in text:
         return [str(FIXTURE), str(build / "src")]
-    if ' / "src" / "libseams.so"' in text:
+    if ' / "src" / ("libseams" + SHLIB)' in text:
         return [str(build)]
-    if "libseams.so" in text and "argv[1]" in text:
+    if ("libseams.so" in text or '("libseams" + SHLIB)' in text) and "argv[1]" in text:
         return [str(build / "src")]
     if "env::args()" in text:
         return [str(FIXTURE)]
