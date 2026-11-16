@@ -389,6 +389,65 @@ std::uint64_t wlHashWide(const std::vector<std::vector<int>> &adjacency, int roo
   return h;
 }
 
+// Fold n values into four running hashes. The bytes of each value stay in
+// order, and the four multiply chains overlap.
+static void mix4n(std::uint64_t &h0, std::uint64_t &h1, std::uint64_t &h2, std::uint64_t &h3,
+                  const std::uint64_t *a, const std::uint64_t *b, const std::uint64_t *c,
+                  const std::uint64_t *d, int n) {
+  for (int i = 0; i < n; i++) {
+    std::uint64_t x0 = h0, x1 = h1, x2 = h2, x3 = h3;
+    const std::uint64_t v0 = a[i], v1 = b[i], v2 = c[i], v3 = d[i];
+    for (int s = 0; s < 8; s++) {
+      x0 ^= (v0 >> (8 * s)) & 0xffULL;
+      x0 *= kPrime;
+      x1 ^= (v1 >> (8 * s)) & 0xffULL;
+      x1 *= kPrime;
+      x2 ^= (v2 >> (8 * s)) & 0xffULL;
+      x2 *= kPrime;
+      x3 ^= (v3 >> (8 * s)) & 0xffULL;
+      x3 *= kPrime;
+    }
+    x0 ^= x0 >> 29;
+    x0 *= 0xbf58476d1ce4e5b9ULL;
+    x0 ^= x0 >> 32;
+    x1 ^= x1 >> 29;
+    x1 *= 0xbf58476d1ce4e5b9ULL;
+    x1 ^= x1 >> 32;
+    x2 ^= x2 >> 29;
+    x2 *= 0xbf58476d1ce4e5b9ULL;
+    x2 ^= x2 >> 32;
+    x3 ^= x3 >> 29;
+    x3 *= 0xbf58476d1ce4e5b9ULL;
+    x3 ^= x3 >> 32;
+    h0 = x0;
+    h1 = x1;
+    h2 = x2;
+    h3 = x3;
+  }
+}
+
+static void mix2n(std::uint64_t &h0, std::uint64_t &h1, const std::uint64_t *a,
+                  const std::uint64_t *b, int n) {
+  for (int i = 0; i < n; i++) {
+    std::uint64_t x = h0, y = h1;
+    const std::uint64_t vx = a[i], vy = b[i];
+    for (int s = 0; s < 8; s++) {
+      x ^= (vx >> (8 * s)) & 0xffULL;
+      x *= kPrime;
+      y ^= (vy >> (8 * s)) & 0xffULL;
+      y *= kPrime;
+    }
+    x ^= x >> 29;
+    x *= 0xbf58476d1ce4e5b9ULL;
+    x ^= x >> 32;
+    y ^= y >> 29;
+    y *= 0xbf58476d1ce4e5b9ULL;
+    y ^= y >> 32;
+    h0 = x;
+    h1 = y;
+  }
+}
+
 // The ball under 400 vertices. A wide palette is counted, not sorted:
 // sorting each neighbour list costs more than the count. The hash matches
 // the bag sort.
@@ -563,14 +622,41 @@ std::uint64_t wlHashCount(const std::vector<std::vector<int>> &adjacency, int ro
       // only the colors that occur, in palette order.
       counts.assign(static_cast<std::size_t>(nColors), 0);
       const int words = (nColors + 63) >> 6;
-      for (int i = 0; i < n; i++) {
+      // Four vertices share the round. Each mix reads only its own running
+      // value, so the multiply chains overlap. Each vertex still folds its
+      // neighbour colors in palette order.
+      thread_local std::vector<std::uint64_t> stream[4];
+      auto gather = [&](int vertex, std::vector<std::uint64_t> &out) {
+        out.clear();
         std::uint64_t present[8] = {};
-        for (const int j : adjacency[static_cast<std::size_t>(i)]) {
+        for (const int j : adjacency[static_cast<std::size_t>(vertex)]) {
           const int id = colorId[static_cast<std::size_t>(j)];
           counts[static_cast<std::size_t>(id)]++;
           present[static_cast<unsigned>(id) >> 6] |= 1ull << (static_cast<unsigned>(id) & 63u);
         }
-        std::uint64_t h = mix(kOffset, color[static_cast<std::size_t>(i)]);
+        for (int w = 0; w < words; w++) {
+          std::uint64_t bits = present[w];
+          const int base = w << 6;
+          while (bits != 0) {
+            const int c = base + std::countr_zero(bits);
+            bits &= bits - 1;
+            const std::uint64_t col = palette[static_cast<std::size_t>(c)];
+            const int copies = counts[static_cast<std::size_t>(c)];
+            counts[static_cast<std::size_t>(c)] = 0;
+            for (int t = 0; t < copies; t++) {
+              out.push_back(col);
+            }
+          }
+        }
+      };
+      auto hashOne = [&](int vertex) {
+        std::uint64_t present[8] = {};
+        for (const int j : adjacency[static_cast<std::size_t>(vertex)]) {
+          const int id = colorId[static_cast<std::size_t>(j)];
+          counts[static_cast<std::size_t>(id)]++;
+          present[static_cast<unsigned>(id) >> 6] |= 1ull << (static_cast<unsigned>(id) & 63u);
+        }
+        std::uint64_t h = mix(kOffset, color[static_cast<std::size_t>(vertex)]);
         for (int w = 0; w < words; w++) {
           std::uint64_t bits = present[w];
           const int base = w << 6;
@@ -585,7 +671,105 @@ std::uint64_t wlHashCount(const std::vector<std::vector<int>> &adjacency, int ro
             }
           }
         }
-        next[static_cast<std::size_t>(i)] = h;
+        next[static_cast<std::size_t>(vertex)] = h;
+      };
+      int i = 0;
+      for (; i + 4 <= n; i += 4) {
+        for (int b = 0; b < 4; b++) {
+          gather(i + b, stream[b]);
+        }
+        std::uint64_t h0 = kOffset, h1 = kOffset, h2 = kOffset, h3 = kOffset;
+        const std::uint64_t self0 = color[static_cast<std::size_t>(i)];
+        const std::uint64_t self1 = color[static_cast<std::size_t>(i + 1)];
+        const std::uint64_t self2 = color[static_cast<std::size_t>(i + 2)];
+        const std::uint64_t self3 = color[static_cast<std::size_t>(i + 3)];
+        mix4n(h0, h1, h2, h3, &self0, &self1, &self2, &self3, 1);
+        const std::uint64_t *p0 = stream[0].data();
+        const std::uint64_t *p1 = stream[1].data();
+        const std::uint64_t *p2 = stream[2].data();
+        const std::uint64_t *p3 = stream[3].data();
+        int n0 = static_cast<int>(stream[0].size());
+        int n1 = static_cast<int>(stream[1].size());
+        int n2 = static_cast<int>(stream[2].size());
+        int n3 = static_cast<int>(stream[3].size());
+        const int common = std::min(std::min(n0, n1), std::min(n2, n3));
+        mix4n(h0, h1, h2, h3, p0, p1, p2, p3, common);
+        p0 += common;
+        p1 += common;
+        p2 += common;
+        p3 += common;
+        n0 -= common;
+        n1 -= common;
+        n2 -= common;
+        n3 -= common;
+        // The shorter streams have ended. Pair whatever is still running.
+        if (n0 > 0 && n1 > 0) {
+          const int m = std::min(n0, n1);
+          mix2n(h0, h1, p0, p1, m);
+          p0 += m;
+          p1 += m;
+          n0 -= m;
+          n1 -= m;
+        }
+        if (n2 > 0 && n3 > 0) {
+          const int m = std::min(n2, n3);
+          mix2n(h2, h3, p2, p3, m);
+          p2 += m;
+          p3 += m;
+          n2 -= m;
+          n3 -= m;
+        }
+        if (n0 > 0 && n2 > 0) {
+          const int m = std::min(n0, n2);
+          mix2n(h0, h2, p0, p2, m);
+          p0 += m;
+          p2 += m;
+          n0 -= m;
+          n2 -= m;
+        }
+        if (n1 > 0 && n3 > 0) {
+          const int m = std::min(n1, n3);
+          mix2n(h1, h3, p1, p3, m);
+          p1 += m;
+          p3 += m;
+          n1 -= m;
+          n3 -= m;
+        }
+        if (n0 > 0 && n3 > 0) {
+          const int m = std::min(n0, n3);
+          mix2n(h0, h3, p0, p3, m);
+          p0 += m;
+          p3 += m;
+          n0 -= m;
+          n3 -= m;
+        }
+        if (n1 > 0 && n2 > 0) {
+          const int m = std::min(n1, n2);
+          mix2n(h1, h2, p1, p2, m);
+          p1 += m;
+          p2 += m;
+          n1 -= m;
+          n2 -= m;
+        }
+        for (int k = 0; k < n0; k++) {
+          h0 = mix(h0, p0[k]);
+        }
+        for (int k = 0; k < n1; k++) {
+          h1 = mix(h1, p1[k]);
+        }
+        for (int k = 0; k < n2; k++) {
+          h2 = mix(h2, p2[k]);
+        }
+        for (int k = 0; k < n3; k++) {
+          h3 = mix(h3, p3[k]);
+        }
+        next[static_cast<std::size_t>(i)] = h0;
+        next[static_cast<std::size_t>(i + 1)] = h1;
+        next[static_cast<std::size_t>(i + 2)] = h2;
+        next[static_cast<std::size_t>(i + 3)] = h3;
+      }
+      for (; i < n; i++) {
+        hashOne(i);
       }
     } else {
       counts.assign(static_cast<std::size_t>(std::max(nColors, 0)), 0);
