@@ -184,9 +184,19 @@ if openmp_dep_ok
     # there every library and test fails to start unless LD_LIBRARY_PATH
     # names it. A runpath to a directory the loader searches anyway is
     # harmless.
+    # On macOS the runtime is libomp.dylib, referenced as @rpath/libomp.dylib;
+    # conda's clang does not report it, so the environment's lib folder
+    # next to the compiler is the fallback.
     if cpp_id == 'clang'
-      _omp_so = run_command(cppc.cmd_array() + ['-print-file-name=libomp.so'],
+      _omp_name = host_system == 'darwin' ? 'libomp.dylib' : 'libomp.so'
+      _omp_so = run_command(cppc.cmd_array() + ['-print-file-name=' + _omp_name],
                             check: false).stdout().strip()
+      if host_system == 'darwin' and not (_omp_so.startswith('/') and import('fs').exists(_omp_so))
+        _cxx_prog = find_program(cppc.cmd_array()[0], required: false)
+        if _cxx_prog.found()
+          _omp_so = import('fs').parent(import('fs').parent(_cxx_prog.full_path())) / 'lib' / _omp_name
+        endif
+      endif
       if _omp_so.startswith('/') and import('fs').exists(_omp_so)
         _omp_libdir = import('fs').parent(_omp_so)
         _omp_rpath = '-Wl,-rpath,' + _omp_libdir
@@ -2238,7 +2248,7 @@ if get_option('with_tests')
           # OpenMP runtime it was built with. The harness needs it.
           '-fopenmp',
           '-lstdc++', '-lpthread', '-lm',
-        ],
+        ] + (_omp_rpath != '' ? [_omp_rpath] : []),
         depends: [seams_api_lib],
         build_by_default: true)
       test(
