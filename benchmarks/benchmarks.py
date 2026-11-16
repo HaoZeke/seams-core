@@ -273,7 +273,7 @@ _SCALE = _scale_plan()
 
 
 class CutoffIce:
-    """Published CHILL+, q6, primitive rings and the cutoff neighbour list.
+    """Published and OVITO-rule CHILL+, q6, primitive rings and the cutoff list.
 
     Sizes are 1000, 10648 and 110592 molecules of ideal ice Ic. One
     thread. The library must be a meson release -O3 build; a debug
@@ -305,6 +305,10 @@ class CutoffIce:
         lib.seams_frame_chill_plus.argtypes = [
             ctypes.c_void_p, ctypes.c_double, ctypes.c_int, ctypes.c_char_p,
             ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
+        lib.seams_frame_chill_plus_rule.argtypes = [
+            ctypes.c_void_p, ctypes.c_double, ctypes.c_int, ctypes.c_char_p,
+            ctypes.c_char_p, ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_int)]
         lib.seams_frame_steinhardt.argtypes = [
             ctypes.c_void_p, ctypes.c_double, ctypes.c_int, ctypes.c_int,
             ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_double)]
@@ -349,6 +353,13 @@ class CutoffIce:
             self._frame, 3.5, 1, b"cutoff", self._labels, self._counts9)
         if status != 0:
             raise RuntimeError("chill+ failed")
+
+    def time_ovito_chill_plus(self, molecules):
+        status = self._lib.seams_frame_chill_plus_rule(
+            self._frame, 3.5, 1, b"cutoff", b"ovito-chill+", self._labels,
+            self._counts9)
+        if status != 0:
+            raise RuntimeError("ovito chill+ failed")
 
     def time_q6(self, molecules):
         status = self._lib.seams_frame_steinhardt(
