@@ -1,0 +1,2 @@
+warm ira molecules 884736 threads 8 cores 8 cpus 3 ok False seconds 3600.000 rss_kb 323892 value  error exceeded 3600 s cpu Intel Xeon Processor
+stop ira molecules 884736 threads 8 n 0 reason exceeded 3600 s. classify_serial has no thread argument, so the process was pinned to core 3 while the one-thread sessions that return inside the budget kept cores 0, 1 and 2 rss_kb 323892 cpus 3

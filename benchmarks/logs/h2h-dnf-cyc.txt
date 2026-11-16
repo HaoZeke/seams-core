@@ -1,0 +1,10 @@
+warm cycless molecules 884736 threads 1 cores 8 cpus 2 ok True seconds 2703.329 rss_kb 6381712 value 1769472 error  cpu Intel Xeon Processor
+call cycless molecules 884736 threads 1 index 0 dseams_ms 1325.3308 other_ms 2798404.8940 other_value 1769472 rss_kb 6773056
+call cycless molecules 884736 threads 1 index 1 dseams_ms 1335.8907 other_ms 2779318.9325 other_value 1769472 rss_kb 6967396
+call cycless molecules 884736 threads 1 index 2 dseams_ms 979.5560 other_ms 2779078.4374 other_value 1769472 rss_kb 6967396
+call cycless molecules 884736 threads 1 index 3 dseams_ms 1650.8957 other_ms 2792269.5680 other_value 1769472 rss_kb 6967396
+call cycless molecules 884736 threads 1 index 4 dseams_ms 1041.2734 other_ms 2809862.3632 other_value 1769472 rss_kb 6998288
+call cycless molecules 884736 threads 1 index 5 dseams_ms 1415.7238 other_ms 2814137.5722 other_value 1769472 rss_kb 6998288
+call cycless molecules 884736 threads 1 index 6 dseams_ms 985.5770 other_ms 2763278.2920 other_value 1769472 rss_kb 6998288
+call cycless molecules 884736 threads 1 index 7 dseams_ms 1328.5598 other_ms 2755810.1108 other_value 1769472 rss_kb 6998288
+done cycless molecules 884736 threads 1 cores 8 cpus 2 n 8 rss_kb 6998288 cycles_iter has no thread argument; graph_build_s 4.248 cpu Intel Xeon Processor dseams_ms 1325.3308 1335.8907 979.5560 1650.8957 1041.2734 1415.7238 985.5770 1328.5598 other_ms 2798404.8940 2779318.9325 2779078.4374 2792269.5680 2809862.3632 2814137.5722 2763278.2920 2755810.1108

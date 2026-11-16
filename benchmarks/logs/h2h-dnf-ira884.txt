@@ -1,0 +1,2 @@
+warm ira molecules 884736 threads 1 cores 8 cpus 3 ok False seconds 3600.000 rss_kb 320960 value  error exceeded 3600 s cpu Intel Xeon Processor
+stop ira molecules 884736 threads 1 n 0 reason exceeded 3600 s rss_kb 320960 classify_serial has no thread argument

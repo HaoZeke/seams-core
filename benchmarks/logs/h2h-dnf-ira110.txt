@@ -1,0 +1,10 @@
+warm ira molecules 110592 threads 1 cores 8 cpus 1 ok True seconds 786.116 rss_kb 130700 value 110592 error  cpu Intel Xeon Processor
+call ira molecules 110592 threads 1 index 0 dseams_ms 67.7457 other_ms 824066.8379 dseams_value 110592 other_value 110592 rss_kb 174312
+call ira molecules 110592 threads 1 index 1 dseams_ms 77.7292 other_ms 799564.8672 dseams_value 110592 other_value 110592 rss_kb 174312
+call ira molecules 110592 threads 1 index 2 dseams_ms 38.8232 other_ms 811191.4385 dseams_value 110592 other_value 110592 rss_kb 174312
+call ira molecules 110592 threads 1 index 3 dseams_ms 65.9626 other_ms 823051.3126 dseams_value 110592 other_value 110592 rss_kb 174312
+call ira molecules 110592 threads 1 index 4 dseams_ms 40.2533 other_ms 836293.2335 dseams_value 110592 other_value 110592 rss_kb 174312
+call ira molecules 110592 threads 1 index 5 dseams_ms 125.2091 other_ms 830314.2349 dseams_value 110592 other_value 110592 rss_kb 174312
+call ira molecules 110592 threads 1 index 6 dseams_ms 41.1715 other_ms 827216.4647 dseams_value 110592 other_value 110592 rss_kb 174312
+call ira molecules 110592 threads 1 index 7 dseams_ms 117.3148 other_ms 831149.8796 dseams_value 110592 other_value 110592 rss_kb 174312
+done ira molecules 110592 threads 1 cores 8 cpus 1 n 8 rss_kb 174312 classify_serial has no thread argument cpu Intel Xeon Processor dseams_ms 67.7457 77.7292 38.8232 65.9626 40.2533 125.2091 41.1715 117.3148 other_ms 824066.8379 799564.8672 811191.4385 823051.3126 836293.2335 830314.2349 827216.4647 831149.8796

@@ -829,6 +829,30 @@ rule h2h_clavis_cages:
         "\"$PY\" scripts/h2h_clavis_cages.py"
 
 
+# Former 600 s DNF rows. One session, one hour per call, peak RSS in the log.
+rule h2h_dnf_hour:
+    output:
+        "benchmarks/logs/h2h-dnf-hour.txt",
+        "benchmarks/h2h-dnf-hour.md",
+    shell:
+        "export LJOS_SEAT=\"${{LJOS_SEAT:-dseams-paper}}\"; "
+        "PY=\"${{H2H_PYTHON:-python3}}\"; "
+        "LD_LIBRARY_PATH=\"bbdir-release/src:bbdir-release/subprojects/readcon-core/cargo-target/release:bbdir-release/subprojects/readcon-db/cargo-target/release${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}\" "
+        "\"$PY\" scripts/h2h_dnf_hour.py sqq 4096 --threads 1 && "
+        "\"$PY\" scripts/h2h_dnf_hour.py sqq 4096 --threads 8 && "
+        "\"$PY\" scripts/h2h_dnf_hour.py sqq 110592 --threads 1 && "
+        "\"$PY\" scripts/h2h_dnf_hour.py sqq 110592 --threads 8 && "
+        "\"$PY\" scripts/h2h_dnf_hour.py sqq 884736 --threads 1 && "
+        "\"$PY\" scripts/h2h_dnf_hour.py sqq 884736 --threads 8 && "
+        "\"$PY\" scripts/h2h_dnf_hour.py ira 110592 --threads 1 && "
+        "\"$PY\" scripts/h2h_dnf_hour.py ira 110592 --threads 8 && "
+        "\"$PY\" scripts/h2h_dnf_hour.py ira 884736 --threads 1 && "
+        "\"$PY\" scripts/h2h_dnf_hour.py ira 884736 --threads 8 && "
+        "\"$PY\" scripts/h2h_dnf_hour.py cycless 884736 --threads 1 && "
+        "\"$PY\" scripts/h2h_dnf_hour.py cycless 884736 --threads 8 && "
+        "\"$PY\" scripts/h2h_dnf_apply.py"
+
+
 rule h2h_summary:
     input:
         "benchmarks/h2h-clavis-cages.csv",

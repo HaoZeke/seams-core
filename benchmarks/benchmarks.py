@@ -1088,3 +1088,51 @@ class H2HSqqBox:
 
 H2HSqqBox.time_check.repeat = 1
 H2HSqqBox.time_check.number = 8
+
+
+class H2HDnfHour:
+    """One call of a former 600 s DNF, budget 3600 s.
+
+    The eight-call session, peak RSS, and the reason a call stopped are
+    benchmarks/logs/h2h-dnf-hour.txt. asv times a single call. SQQ is the
+    cpp engine. IRA and cycless have no thread argument.
+    """
+
+    params = [
+        ("sqq", 4096, 1),
+        ("sqq", 4096, 8),
+        ("sqq", 110592, 1),
+        ("sqq", 110592, 8),
+        ("sqq", 884736, 1),
+        ("sqq", 884736, 8),
+        ("ira", 110592, 1),
+        ("ira", 110592, 8),
+        ("ira", 884736, 1),
+        ("ira", 884736, 8),
+        ("cycless", 884736, 1),
+        ("cycless", 884736, 8),
+    ]
+    param_names = ["kind", "molecules", "threads"]
+
+    def setup(self, kind, molecules, threads):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        os.environ["OMP_NUM_THREADS"] = str(threads)
+        self.kind = kind
+        self.molecules = int(molecules)
+        self.threads = int(threads)
+
+    def time_call(self, kind, molecules, threads):
+        import h2h_dnf_hour as hour
+
+        hour.pin(int(threads))
+        if kind == "sqq":
+            call = hour.prepare_sqq(int(molecules), int(threads))
+        elif kind == "ira":
+            call = hour.prepare_ira(int(molecules))
+        else:
+            call = hour.prepare_cycless(int(molecules))
+        call()
+
+
+H2HDnfHour.time_call.repeat = 1
+H2HDnfHour.time_call.number = 1

@@ -1,0 +1,2 @@
+stop sqq molecules 884736 threads 1 n 0 reason exceeded 3600 s inside the cpp engine, which holds the interpreter so the in-process alarm could not fire; killed from outside. SQQ 0.5.8 engine cpp, ring.definition chordless. The python shortest_path engine does not return on these cells rss_kb 1915216 cpus 5
+

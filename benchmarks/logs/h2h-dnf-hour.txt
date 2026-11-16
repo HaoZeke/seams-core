@@ -1,0 +1,10 @@
+warm sqq molecules 4096 threads 1 cores 8 cpus 0 ok True seconds 1030.192 rss_kb 216780 value 0 error  cpu Intel Xeon Processor
+call sqq molecules 4096 threads 1 index 0 dseams_ms 14.1443 other_ms 1031068.2624 other_value 0 rss_kb 225572
+call sqq molecules 4096 threads 1 index 1 dseams_ms 14.6404 other_ms 1029560.1994 other_value 0 rss_kb 227560
+call sqq molecules 4096 threads 1 index 2 dseams_ms 12.0492 other_ms 1037389.3837 other_value 0 rss_kb 228644
+call sqq molecules 4096 threads 1 index 3 dseams_ms 16.8993 other_ms 1037391.3020 other_value 0 rss_kb 228644
+call sqq molecules 4096 threads 1 index 4 dseams_ms 12.3104 other_ms 1037386.9284 other_value 0 rss_kb 228644
+call sqq molecules 4096 threads 1 index 5 dseams_ms 23.1994 other_ms 1036262.2979 other_value 0 rss_kb 228644
+call sqq molecules 4096 threads 1 index 6 dseams_ms 12.6318 other_ms 1035133.5478 other_value 0 rss_kb 229432
+call sqq molecules 4096 threads 1 index 7 dseams_ms 16.7517 other_ms 1034942.9357 other_value 0 rss_kb 229516
+done sqq molecules 4096 threads 1 cores 8 cpus 0 n 8 rss_kb 229516 SQQ 0.5.8 engine cpp; ring.definition chordless. The python shortest_path engine does not return on these cells cpu Intel Xeon Processor dseams_ms 14.1443 14.6404 12.0492 16.8993 12.3104 23.1994 12.6318 16.7517 other_ms 1031068.2624 1029560.1994 1037389.3837 1037391.3020 1037386.9284 1036262.2979 1035133.5478 1034942.9357
