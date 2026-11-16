@@ -1,0 +1,114 @@
+cpu_model=Intel Xeon Processor
+cores=8
+affinity=0-7
+source_tree=c17ebed26d727f69de61816a9d7a91054473eb21
+worktree=clean
+build_tree before=98e5f421800a2c8b0e79d4bf026ef76f2212925f
+build_tree after=c17ebed26d727f69de61816a9d7a91054473eb21
+warmup=3
+n=30
+cutoff_A=3.5
+timer=d-SEAMS seams_chill_plus OVITO rule, cutoff graph; mdapy ChillPlus.compute()
+layout=one process per build and width; every other process is SIGSTOP'd
+worker build=before threads=1 version=2.14.0 omp_max=1 affinity=sched=0;ntask=1 env=OMP_NUM_THREADS=1;OMP_PROC_BIND=close;OMP_PLACES=cores;OMP_DYNAMIC=FALSE;OMP_WAIT_POLICY=ACTIVE;GOMP_SPINCOUNT=unset;MKL_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1;NUMEXPR_NUM_THREADS=1;RAYON_NUM_THREADS=1;OVITO_THREAD_COUNT=unset;MDAPY_NUM_THREADS=1;PYSCAL_NUM_THREADS=1;SEAMS_FAIR_WIDTH=unset
+worker build=after threads=1 version=2.14.0 omp_max=1 affinity=sched=0;ntask=1 env=OMP_NUM_THREADS=1;OMP_PROC_BIND=close;OMP_PLACES=cores;OMP_DYNAMIC=FALSE;OMP_WAIT_POLICY=ACTIVE;GOMP_SPINCOUNT=unset;MKL_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1;NUMEXPR_NUM_THREADS=1;RAYON_NUM_THREADS=1;OVITO_THREAD_COUNT=unset;MDAPY_NUM_THREADS=1;PYSCAL_NUM_THREADS=1;SEAMS_FAIR_WIDTH=unset
+worker build=mdapy threads=1 version=2.0.0 omp_max=1 affinity=sched=0;ntask=3 env=OMP_NUM_THREADS=1;OMP_PROC_BIND=unset;OMP_PLACES=unset;OMP_DYNAMIC=FALSE;OMP_WAIT_POLICY=unset;GOMP_SPINCOUNT=unset;MKL_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1;NUMEXPR_NUM_THREADS=1;RAYON_NUM_THREADS=1;OVITO_THREAD_COUNT=unset;MDAPY_NUM_THREADS=1;PYSCAL_NUM_THREADS=1;SEAMS_FAIR_WIDTH=unset
+round=0 molecules=110592 build=before threads=1 ms=80.396646 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=1
+round=1 molecules=110592 build=before threads=1 ms=26.794815 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=1
+round=2 molecules=110592 build=before threads=1 ms=24.557298 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=1
+round=3 molecules=110592 build=before threads=1 ms=24.249617 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=4 molecules=110592 build=before threads=1 ms=23.824713 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=5 molecules=110592 build=before threads=1 ms=24.748651 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=6 molecules=110592 build=before threads=1 ms=24.142367 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=7 molecules=110592 build=before threads=1 ms=23.923570 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=8 molecules=110592 build=before threads=1 ms=24.336872 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=9 molecules=110592 build=before threads=1 ms=24.312188 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=10 molecules=110592 build=before threads=1 ms=24.035941 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=11 molecules=110592 build=before threads=1 ms=23.999448 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=12 molecules=110592 build=before threads=1 ms=24.337497 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=13 molecules=110592 build=before threads=1 ms=24.565258 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=14 molecules=110592 build=before threads=1 ms=24.071483 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=15 molecules=110592 build=before threads=1 ms=24.596938 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=16 molecules=110592 build=before threads=1 ms=24.531193 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=17 molecules=110592 build=before threads=1 ms=24.102891 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=18 molecules=110592 build=before threads=1 ms=24.497801 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=19 molecules=110592 build=before threads=1 ms=24.450343 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=20 molecules=110592 build=before threads=1 ms=24.108911 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=21 molecules=110592 build=before threads=1 ms=24.788965 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=22 molecules=110592 build=before threads=1 ms=24.498258 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=23 molecules=110592 build=before threads=1 ms=24.062687 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=24 molecules=110592 build=before threads=1 ms=24.795494 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=25 molecules=110592 build=before threads=1 ms=24.463820 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=26 molecules=110592 build=before threads=1 ms=23.989689 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=27 molecules=110592 build=before threads=1 ms=24.489532 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=28 molecules=110592 build=before threads=1 ms=24.393015 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=29 molecules=110592 build=before threads=1 ms=24.074409 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=30 molecules=110592 build=before threads=1 ms=24.827776 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=31 molecules=110592 build=before threads=1 ms=24.314342 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=32 molecules=110592 build=before threads=1 ms=23.779512 check=cubic:110592 ntask=1 cpus_effective=8 cpus=0-7 escaped=1 warmup=0
+round=0 molecules=110592 build=after threads=1 ms=80.045513 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=1
+round=1 molecules=110592 build=after threads=1 ms=26.359591 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=1
+round=2 molecules=110592 build=after threads=1 ms=24.339097 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=1
+round=3 molecules=110592 build=after threads=1 ms=24.055043 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=4 molecules=110592 build=after threads=1 ms=23.653270 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=5 molecules=110592 build=after threads=1 ms=24.035736 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=6 molecules=110592 build=after threads=1 ms=23.882022 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=7 molecules=110592 build=after threads=1 ms=23.303209 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=8 molecules=110592 build=after threads=1 ms=23.289408 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=9 molecules=110592 build=after threads=1 ms=23.292824 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=10 molecules=110592 build=after threads=1 ms=23.362589 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=11 molecules=110592 build=after threads=1 ms=23.257106 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=12 molecules=110592 build=after threads=1 ms=23.305357 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=13 molecules=110592 build=after threads=1 ms=23.285107 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=14 molecules=110592 build=after threads=1 ms=23.567400 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=15 molecules=110592 build=after threads=1 ms=23.214636 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=16 molecules=110592 build=after threads=1 ms=23.512040 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=17 molecules=110592 build=after threads=1 ms=23.702747 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=18 molecules=110592 build=after threads=1 ms=24.306974 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=19 molecules=110592 build=after threads=1 ms=24.384330 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=20 molecules=110592 build=after threads=1 ms=23.379545 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=21 molecules=110592 build=after threads=1 ms=24.091375 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=22 molecules=110592 build=after threads=1 ms=24.247013 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=23 molecules=110592 build=after threads=1 ms=23.808557 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=24 molecules=110592 build=after threads=1 ms=24.355211 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=25 molecules=110592 build=after threads=1 ms=24.073474 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=26 molecules=110592 build=after threads=1 ms=23.756526 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=27 molecules=110592 build=after threads=1 ms=24.493484 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=28 molecules=110592 build=after threads=1 ms=24.164801 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=29 molecules=110592 build=after threads=1 ms=24.030957 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=30 molecules=110592 build=after threads=1 ms=24.383065 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=31 molecules=110592 build=after threads=1 ms=25.349332 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=32 molecules=110592 build=after threads=1 ms=23.390754 check=cubic:110592 ntask=1 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=0 molecules=110592 build=mdapy threads=1 ms=83.913396 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=1
+round=1 molecules=110592 build=mdapy threads=1 ms=60.942699 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=1
+round=2 molecules=110592 build=mdapy threads=1 ms=62.118388 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=1
+round=3 molecules=110592 build=mdapy threads=1 ms=64.823690 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=4 molecules=110592 build=mdapy threads=1 ms=61.455901 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=5 molecules=110592 build=mdapy threads=1 ms=60.835528 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=6 molecules=110592 build=mdapy threads=1 ms=62.236581 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=7 molecules=110592 build=mdapy threads=1 ms=64.479252 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=8 molecules=110592 build=mdapy threads=1 ms=61.311335 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=9 molecules=110592 build=mdapy threads=1 ms=60.964069 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=10 molecules=110592 build=mdapy threads=1 ms=61.951723 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=11 molecules=110592 build=mdapy threads=1 ms=64.114504 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=12 molecules=110592 build=mdapy threads=1 ms=61.683303 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=13 molecules=110592 build=mdapy threads=1 ms=60.805455 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=14 molecules=110592 build=mdapy threads=1 ms=62.184132 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=15 molecules=110592 build=mdapy threads=1 ms=64.513758 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=16 molecules=110592 build=mdapy threads=1 ms=61.714095 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=17 molecules=110592 build=mdapy threads=1 ms=60.821031 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=18 molecules=110592 build=mdapy threads=1 ms=62.383567 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=19 molecules=110592 build=mdapy threads=1 ms=64.305086 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=20 molecules=110592 build=mdapy threads=1 ms=62.414112 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=21 molecules=110592 build=mdapy threads=1 ms=62.383898 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=22 molecules=110592 build=mdapy threads=1 ms=62.802775 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=23 molecules=110592 build=mdapy threads=1 ms=64.894900 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=24 molecules=110592 build=mdapy threads=1 ms=62.507381 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=25 molecules=110592 build=mdapy threads=1 ms=61.285869 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=26 molecules=110592 build=mdapy threads=1 ms=62.979568 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=27 molecules=110592 build=mdapy threads=1 ms=65.110423 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=28 molecules=110592 build=mdapy threads=1 ms=62.174157 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=29 molecules=110592 build=mdapy threads=1 ms=60.640320 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=30 molecules=110592 build=mdapy threads=1 ms=63.514492 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=31 molecules=110592 build=mdapy threads=1 ms=65.011192 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0
+round=32 molecules=110592 build=mdapy threads=1 ms=62.009298 check=cubic:110592 ntask=3 cpus_effective=1 cpus=0 escaped=0 warmup=0

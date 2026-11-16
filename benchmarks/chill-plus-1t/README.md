@@ -19,6 +19,7 @@ during a block. The machine is an 8-core Intel Xeon cloud VM.
 | `profile/` | perf self time at one thread on 110592 molecules, by stage |
 | `asv/` | `CutoffIce.time_{published,ovito}_chill_plus` for both builds |
 | `equivalence/` | per-atom labels of both builds, every frame, 1 and 8 threads |
+| `affinity/` | the 110592-molecule one-thread row on `taskset -c 0`, with each round's cpu mask |
 
 Each file names the tree that measured it (`source_tree`) and, where
 two builds appear, the tree each library was built from (`build_tree`).
