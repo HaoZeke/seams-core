@@ -1,0 +1,6 @@
+# source_tree d675aae9658f03da514b9e16b7f557d87f8a2120
+# command python3 scripts/committor_shoot.py --write-shot data/committor-shards/shot-0-of-20.n200.csv --frames data/science-frames/committor-climb-0-of-20 --seeds 20261111-20261130 --shard 0/20 --sizes 200 --window-ps 20000
+# shard 0/20
+# order n_chill_core
+seed,shoot_n,t_ps,timestep,n_chill_core,n_chill_ext,n_q6solid
+20261111,200,10890,1099000,215,1276,625
