@@ -1,0 +1,30 @@
+# source_tree af0238a9aa616e43cb5c1cf00aa5c2f2dacd9e10
+# command python3 scripts/committor_shoot.py --write-shot data/committor-shards/shot-2-of-20.n75.csv --frames data/science-frames/committor-climb-2-of-20 --seeds 20261111-20261130 --shard 2/20 --sizes 75 --window-ps 20000
+# shard 2/20
+# order n_chill_core
+# rule nucleated when n_chill_core passes 300 and stays at or above 300 for 1000 ps; a passage cut short by the end of the run is 'not nucleated, extend' until 40000 ps
+# basin A the 95th percentile of n_chill_core over the climb's last 2000 ps before it first reaches 100, from 1000 ps; basin B n_chill_core at or above 400 for 200 ps; liquid_2ns_ref is a reference only
+# a shot runs to its first basin: uncommitted at or below basin A, committed at or above 400 for 200 ps; check every 10 ps; unresolved, with no fate, at the end of the window; t_hit_ps is the entry into the basin, the start of the held stay for basin B
+# window_ps 20000
+# launcher lmp-forge.sh
+seed,shoot_n,shot,fate,t_end_ps,nmax_end,n_chill_ext_end,n_q6solid_end,wall_s,t_hit_ps,start_core,extension,replay_s
+20261113,75,0,uncommitted,110,82,1239,177,94.9,110,96,,
+20261113,75,1,uncommitted,90,83,1247,468,74.1,90,96,,
+20261113,75,2,uncommitted,70,83,1165,160,60.3,70,96,,
+20261113,75,3,uncommitted,30,86,1125,156,23.1,30,96,,
+20261113,75,4,uncommitted,30,82,1281,188,30.5,30,96,,
+20261113,75,5,uncommitted,10,76,1202,261,8.4,10,96,,
+20261113,75,6,uncommitted,20,86,1238,137,14.9,20,96,,
+20261113,75,7,uncommitted,10,85,1272,231,8.6,10,96,,
+20261113,75,8,uncommitted,20,82,1178,339,14.4,20,96,,
+20261113,75,9,uncommitted,10,84,1218,173,8.0,10,96,,
+20261113,75,10,uncommitted,10,82,1261,225,10.2,10,96,,
+20261113,75,11,uncommitted,100,82,1297,370,71.8,100,96,,
+20261113,75,12,uncommitted,20,81,1227,292,15.9,20,96,,
+20261113,75,13,uncommitted,10,85,1244,346,8.2,10,96,,
+20261113,75,14,uncommitted,30,80,1140,151,24.9,30,96,,
+20261113,75,15,uncommitted,10,76,1165,202,8.2,10,96,,
+20261113,75,16,uncommitted,20,85,1283,314,19.9,20,96,,
+20261113,75,17,uncommitted,10,75,1256,201,7.4,10,96,,
+20261113,75,18,uncommitted,10,86,1243,347,9.8,10,96,,
+20261113,75,19,uncommitted,30,84,1185,166,22.3,30,96,,

@@ -1,0 +1,30 @@
+# source_tree af0238a9aa616e43cb5c1cf00aa5c2f2dacd9e10
+# command python3 scripts/committor_shoot.py --write-shot data/committor-shards/shot-2-of-20.n50.csv --frames data/science-frames/committor-climb-2-of-20 --seeds 20261111-20261130 --shard 2/20 --sizes 50 --window-ps 20000
+# shard 2/20
+# order n_chill_core
+# rule nucleated when n_chill_core passes 300 and stays at or above 300 for 1000 ps; a passage cut short by the end of the run is 'not nucleated, extend' until 40000 ps
+# basin A the 95th percentile of n_chill_core over the climb's last 2000 ps before it first reaches 100, from 1000 ps; basin B n_chill_core at or above 400 for 200 ps; liquid_2ns_ref is a reference only
+# a shot runs to its first basin: uncommitted at or below basin A, committed at or above 400 for 200 ps; check every 10 ps; unresolved, with no fate, at the end of the window; t_hit_ps is the entry into the basin, the start of the held stay for basin B
+# window_ps 20000
+# launcher lmp-forge.sh
+seed,shoot_n,shot,fate,t_end_ps,nmax_end,n_chill_ext_end,n_q6solid_end,wall_s,t_hit_ps,start_core,extension,replay_s
+20261113,50,0,uncommitted,10,59,406,103,10.8,10,63,,
+20261113,50,1,uncommitted,10,61,285,100,9.2,10,63,,
+20261113,50,2,uncommitted,10,61,346,100,7.2,10,63,,
+20261113,50,3,uncommitted,10,59,535,96,7.3,10,63,,
+20261113,50,4,uncommitted,10,52,443,84,8.4,10,63,,
+20261113,50,5,uncommitted,10,68,395,96,7.9,10,63,,
+20261113,50,6,uncommitted,10,63,502,104,8.7,10,63,,
+20261113,50,7,uncommitted,10,57,382,87,7.8,10,63,,
+20261113,50,8,uncommitted,10,63,437,105,8.6,10,63,,
+20261113,50,9,uncommitted,10,56,360,78,7.2,10,63,,
+20261113,50,10,uncommitted,10,66,410,105,9.0,10,63,,
+20261113,50,11,uncommitted,10,56,203,84,7.9,10,63,,
+20261113,50,12,uncommitted,10,61,390,92,8.6,10,63,,
+20261113,50,13,uncommitted,10,58,532,102,11.9,10,63,,
+20261113,50,14,uncommitted,10,56,511,102,7.0,10,63,,
+20261113,50,15,uncommitted,10,65,374,121,8.8,10,63,,
+20261113,50,16,uncommitted,10,53,332,106,9.1,10,63,,
+20261113,50,17,uncommitted,10,50,348,105,9.0,10,63,,
+20261113,50,18,uncommitted,10,58,539,97,11.7,10,63,,
+20261113,50,19,uncommitted,10,58,420,103,10.3,10,63,,
