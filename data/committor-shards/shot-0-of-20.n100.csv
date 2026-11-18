@@ -1,0 +1,30 @@
+# source_tree d675aae9658f03da514b9e16b7f557d87f8a2120
+# command python3 scripts/committor_shoot.py --write-shot data/committor-shards/shot-0-of-20.n100.csv --frames data/science-frames/committor-climb-0-of-20 --seeds 20261111-20261130 --shard 0/20 --sizes 100 --window-ps 20000
+# shard 0/20
+# order n_chill_core
+# rule nucleated when n_chill_core passes 300 and stays at or above 300 for 1000 ps; a passage cut short by the end of the run is 'not nucleated, extend' until 40000 ps
+# basin A the 95th percentile of n_chill_core over the climb's last 2000 ps before it first reaches 100, from 1000 ps; basin B n_chill_core at or above 400 for 200 ps; liquid_2ns_ref is a reference only
+# a shot runs to its first basin: uncommitted at or below basin A, committed at or above 400 for 200 ps; check every 10 ps; unresolved, with no fate, at the end of the window; t_hit_ps is the entry into the basin, the start of the held stay for basin B
+# window_ps 20000
+# launcher lmp-forge.sh
+seed,shoot_n,shot,fate,t_end_ps,nmax_end,n_chill_ext_end,n_q6solid_end,wall_s,t_hit_ps,start_core,extension,replay_s
+20261111,100,0,committed,12060,446,1771,996,9361.9,11860,103,,
+20261111,100,1,committed,6280,436,1465,763,4789.6,6080,103,,
+20261111,100,2,uncommitted,30,83,974,187,27.4,30,103,,
+20261111,100,3,unresolved,20000,408,1823,1148,14214.3,,103,,
+20261111,100,4,committed,15000,568,1733,1155,11072.6,14800,103,,
+20261111,100,5,unresolved,20000,338,1682,693,13957.2,,103,,
+20261111,100,6,committed,5780,465,1576,964,4430.7,5580,103,,
+20261111,100,7,uncommitted,70,82,673,183,58.4,70,103,,
+20261111,100,8,uncommitted,350,83,945,168,265.0,350,103,,
+20261111,100,9,committed,6740,433,1440,794,5174.0,6540,103,,
+20261111,100,10,uncommitted,320,81,885,192,240.8,320,103,,
+20261111,100,11,uncommitted,470,78,948,272,340.4,470,103,,
+20261111,100,12,uncommitted,1280,81,970,155,994.5,1280,103,,
+20261111,100,13,uncommitted,1280,83,1113,217,982.7,1280,103,,
+20261111,100,14,committed,13710,410,1729,725,9592.5,13510,103,,
+20261111,100,15,uncommitted,20,82,930,173,19.5,20,103,,
+20261111,100,16,committed,15680,571,1762,1090,10588.2,15480,103,,
+20261111,100,17,unresolved,20000,417,1824,1154,12498.7,,103,,
+20261111,100,18,committed,10740,428,1603,632,7283.8,10540,103,,
+20261111,100,19,uncommitted,240,81,1026,169,185.0,240,103,,

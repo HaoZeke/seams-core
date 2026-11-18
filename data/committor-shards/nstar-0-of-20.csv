@@ -1,11 +1,16 @@
-# source_tree 75a623b07ece2151310c61f83d3bf25e08cab9e1
-# command python3 scripts/committor_shoot.py --pb data/committor-shards/pb-0-of-20.csv --tables data/committor-shards/shot-0-of-20.n50.csv data/committor-shards/shot-0-of-20.n75.csv data/committor-shards/shot-0-of-20.n275.csv data/committor-shards/shot-0-of-20.n300.csv
-# source data/committor-shards/shot-0-of-20.n50.csv source_tree d675aae9658f03da514b9e16b7f557d87f8a2120
-# source data/committor-shards/shot-0-of-20.n75.csv source_tree d675aae9658f03da514b9e16b7f557d87f8a2120
+# source_tree 85e155fb81414a35159f2f2e7b2e8af66cfff236
+# command python3 scripts/committor_shoot.py --pb data/committor-shards/pb-0-of-20.csv --tables data/committor-shards/shot-0-of-20.n100.csv data/committor-shards/shot-0-of-20.n150.csv data/committor-shards/shot-0-of-20.n200.csv data/committor-shards/shot-0-of-20.n225.csv data/committor-shards/shot-0-of-20.n250.csv data/committor-shards/shot-0-of-20.n275.csv data/committor-shards/shot-0-of-20.n300.csv data/committor-shards/shot-0-of-20.n50.csv data/committor-shards/shot-0-of-20.n75.csv
+# source data/committor-shards/shot-0-of-20.n100.csv source_tree d675aae9658f03da514b9e16b7f557d87f8a2120
+# source data/committor-shards/shot-0-of-20.n150.csv source_tree d675aae9658f03da514b9e16b7f557d87f8a2120
+# source data/committor-shards/shot-0-of-20.n200.csv source_tree d675aae9658f03da514b9e16b7f557d87f8a2120
+# source data/committor-shards/shot-0-of-20.n225.csv source_tree d675aae9658f03da514b9e16b7f557d87f8a2120
+# source data/committor-shards/shot-0-of-20.n250.csv source_tree d675aae9658f03da514b9e16b7f557d87f8a2120
 # source data/committor-shards/shot-0-of-20.n275.csv source_tree d675aae9658f03da514b9e16b7f557d87f8a2120
 # source data/committor-shards/shot-0-of-20.n300.csv source_tree d675aae9658f03da514b9e16b7f557d87f8a2120
+# source data/committor-shards/shot-0-of-20.n50.csv source_tree d675aae9658f03da514b9e16b7f557d87f8a2120
+# source data/committor-shards/shot-0-of-20.n75.csv source_tree d675aae9658f03da514b9e16b7f557d87f8a2120
 # window_ps 20000
 # p_commit is committed over resolved shots; unresolved shots have no fate; Wilson score interval at z 1.9600
-x,points,n_star,width,boot_lo,boot_hi,draws
-shoot_n,4,175,6.750,175,175,10000
-start_core,4,202.900,7.800,202.900,202.900,10000
+x,points,n_star,width,boot_lo,boot_hi,width_lo,width_hi,draws
+shoot_n,9,100.750,6.750,94,107.500,6.750,6.750,10000
+start_core,8,105.400,7.800,97.600,113.200,7.800,7.800,10000

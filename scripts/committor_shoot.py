@@ -399,11 +399,13 @@ def p_of_n(shots: list[tuple[float, str]]) -> list[tuple[float, float, int, int]
 
 
 def bootstrap_nstar(shots: list[tuple[float, str]], n_draw: int = BOOT_DRAWS,
-                    seed: int = BOOT_SEED) -> tuple[float, float, float]:
+                    seed: int = BOOT_SEED) -> tuple[float, float, float, float, float, float]:
+    """n*, its 95 percent interval, the logistic width, and that width's interval."""
     points = [(n, p) for n, p, _c, resolved in p_of_n(shots) if resolved > 0 and p == p]
-    n_star, _width = fit_nstar(points)
+    n_star, width = fit_nstar(points)
     rng = random.Random(seed)
-    draws = []
+    draws: list[float] = []
+    widths: list[float] = []
     n = len(shots)
     for _ in range(n_draw):
         sample = [shots[rng.randrange(n)] for _k in range(n)]
@@ -411,16 +413,17 @@ def bootstrap_nstar(shots: list[tuple[float, str]], n_draw: int = BOOT_DRAWS,
         if len(sampled) < 2:
             continue
         try:
-            star, _w = fit_nstar(sampled)
+            star, wide = fit_nstar(sampled)
         except ValueError:
             continue
         draws.append(star)
+        widths.append(wide)
     if not draws:
-        return n_star, float("nan"), float("nan")
+        return n_star, float("nan"), float("nan"), width, float("nan"), float("nan")
     draws.sort()
-    lo = type7_unit(draws, 0.025)
-    hi = type7_unit(draws, 0.975)
-    return n_star, lo, hi
+    widths.sort()
+    return (n_star, type7_unit(draws, 0.025), type7_unit(draws, 0.975),
+            width, type7_unit(widths, 0.025), type7_unit(widths, 0.975))
 
 
 def type7_unit(values: list[float], p: float) -> float:
@@ -628,6 +631,23 @@ def coverage_note(directory: Path | None) -> str:
     )
 
 
+def per_shard_fits(directory: Path, tree: str) -> list[list[str]]:
+    """One logistic per nucleated shard that shows both fates."""
+    rows: list[list[str]] = []
+    for (k, _n), paths in sorted(shard_tables(directory).items()):
+        shot_rows = union_rows(paths)
+        shots = [(float(row["shoot_n"]), row["fate"]) for row in shot_rows]
+        fates = {fate for _size, fate in shots}
+        if not {"committed", "uncommitted"} <= fates:
+            continue
+        n_star, lo, hi, width, wlo, whi = bootstrap_nstar(shots)
+        resolved = sum(fate != "unresolved" for _size, fate in shots)
+        unresolved = sum(fate == "unresolved" for _size, fate in shots)
+        rows.append([str(k), f"{n_star:.3f}", f"{lo:.3f}", f"{hi:.3f}", f"{width:.3f}",
+                     f"{wlo:.3f}", f"{whi:.3f}", resolved, unresolved, tree])
+    return rows
+
+
 def write_merged(table: Path, summary: Path, shots: list[tuple[float, str]], tree: str,
                  command: str, directory: Path | None = None) -> None:
     if not shots:
@@ -639,10 +659,11 @@ def write_merged(table: Path, summary: Path, shots: list[tuple[float, str]], tre
     unresolved = sum(fate == "unresolved" for _n, fate in shots)
     resolved = sum(fate != "unresolved" for _n, fate in shots)
     if len(usable) < 2:
-        star_s = lo_s = hi_s = ""
+        fit_row = ["", "", "", "", "", "", resolved, unresolved, tree]
     else:
-        n_star, lo, hi = bootstrap_nstar(shots)
-        star_s, lo_s, hi_s = f"{n_star:.3f}", f"{lo:.3f}", f"{hi:.3f}"
+        n_star, lo, hi, width, wlo, whi = bootstrap_nstar(shots)
+        fit_row = [f"{n_star:.3f}", f"{lo:.3f}", f"{hi:.3f}", f"{width:.3f}",
+                   f"{wlo:.3f}", f"{whi:.3f}", resolved, unresolved, tree]
     table.parent.mkdir(parents=True, exist_ok=True)
     with table.open("w", newline="") as handle:
         handle.write(note)
@@ -659,9 +680,12 @@ def write_merged(table: Path, summary: Path, shots: list[tuple[float, str]], tre
     with summary.open("w", newline="") as handle:
         handle.write(note)
         writer = csv.writer(handle, lineterminator="\n")
-        writer.writerow(["n_star", "n_star_lo", "n_star_hi", "n_resolved", "n_unresolved",
-                         "source_tree"])
-        writer.writerow([star_s, lo_s, hi_s, resolved, unresolved, tree])
+        writer.writerow(["shard", "n_star", "n_star_lo", "n_star_hi", "width", "width_lo",
+                         "width_hi", "n_resolved", "n_unresolved", "source_tree"])
+        writer.writerow(["all", *fit_row])
+        if directory is not None:
+            for shard_row in per_shard_fits(directory, tree):
+                writer.writerow(shard_row)
 
 
 def self_test_rules() -> None:
@@ -824,9 +848,9 @@ def self_test() -> None:
         committed = int(round(20 * p))
         shots.extend((n, "committed") for _ in range(committed))
         shots.extend((n, "uncommitted") for _ in range(20 - committed))
-    star, lo, hi = bootstrap_nstar(shots, n_draw=200, seed=1)
-    if not (30.0 < star < 70.0 and lo <= star <= hi):
-        raise SystemExit(f"n* {star} interval {lo} {hi}")
+    star, lo, hi, width, wlo, whi = bootstrap_nstar(shots, n_draw=200, seed=1)
+    if not (30.0 < star < 70.0 and lo <= star <= hi and wlo <= width <= whi):
+        raise SystemExit(f"n* {star} interval {lo} {hi} width {width} {wlo} {whi}")
     hours = eta_hours(160.0)
     if not (1.5 < hours["one_climb_h"] < 2.0 and hours["shooting_h"] > hours["twenty_climbs_h"]):
         raise SystemExit(f"eta {hours}")
@@ -915,9 +939,12 @@ def self_test() -> None:
         text = out_summary.read_text()
         if "missing [2]" not in text or "nucleation_none [1]" not in text:
             raise SystemExit(f"partial merge dropped the shard note: {text}")
-        row = text.strip().splitlines()[-1].split(",")
-        if row[0] == "" or row[4] == "0":
+        body = [line for line in text.splitlines() if line and not line.startswith("#")]
+        got = dict(zip(body[0].split(","), body[1].split(",")))
+        if got["shard"] != "all" or got["n_star"] == "" or got["n_unresolved"] == "0":
             raise SystemExit(f"partial merge did not fit n*: {text}")
+        if got["width"] == "" or float(got["width_lo"]) > float(got["width"]):
+            raise SystemExit(f"partial merge dropped the width: {text}")
     only_quiet = ROOT / "data" / "committor-merge-fixture"
     quiet_dir_shots = read_shot_shard(only_quiet / "shot-1-of-3.csv")
     if quiet_dir_shots:
@@ -1073,7 +1100,8 @@ SHOT_FIELDS = ["seed", "shoot_n", "shot", "fate", "t_end_ps", "nmax_end",
 PB_FIELDS = ["shoot_n", "start_core", "shots", "committed", "uncommitted", "unresolved",
              "resolved", "p_commit", "wilson_lo", "wilson_hi", "t_hit_median_ps",
              "wall_mean_s", "wall_total_h", "replay_total_h"]
-NSTAR_FIELDS = ["x", "points", "n_star", "width", "boot_lo", "boot_hi", "draws"]
+NSTAR_FIELDS = ["x", "points", "n_star", "width", "boot_lo", "boot_hi",
+                "width_lo", "width_hi", "draws"]
 BASIN_FIELDS = ["seed", "basin_a", "basin_a_lo_ps", "basin_a_hi_ps", "basin_a_frames",
                 "first_passage_ps", "basin_b", "basin_b_hold_ps", "onset_ps",
                 "liquid_2ns_ref", "liquid_seed"]
@@ -1966,10 +1994,10 @@ def nstar_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
         points = [(n, p) for n, p, _c, resolved in p_of_n(shots) if resolved > 0]
         if len(points) < 2:
             continue
-        n_star, width = fit_nstar(points)
-        _star, lo, hi = bootstrap_nstar(shots)
+        n_star, lo, hi, width, wlo, whi = bootstrap_nstar(shots)
         out.append({"x": x, "points": str(len(points)), "n_star": fmt(n_star),
                     "width": fmt(width), "boot_lo": fmt(lo), "boot_hi": fmt(hi),
+                    "width_lo": fmt(wlo), "width_hi": fmt(whi),
                     "draws": str(BOOT_DRAWS)})
     return out
 

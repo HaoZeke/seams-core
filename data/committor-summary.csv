@@ -1,5 +1,6 @@
-# source_tree 75a623b07ece2151310c61f83d3bf25e08cab9e1
+# source_tree 85e155fb81414a35159f2f2e7b2e8af66cfff236
 # command $LMP -in input/nucleation/in.homogeneous -var n 16 --seeds 20261111-20261130
-# shards present [0, 1, 2, 3] of 20; missing [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]; nucleation_none [1, 2, 3]
-n_star,n_star_lo,n_star_hi,n_resolved,n_unresolved,source_tree
-175.000,175.000,175.000,80,0,75a623b07ece2151310c61f83d3bf25e08cab9e1
+# shards present [0, 1, 2, 3] of 20; missing [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]; nucleation_none [3]
+shard,n_star,n_star_lo,n_star_hi,width,width_lo,width_hi,n_resolved,n_unresolved,source_tree
+all,100.750,94.000,107.500,6.750,6.750,6.750,257,3,85e155fb81414a35159f2f2e7b2e8af66cfff236
+0,100.750,94.000,107.500,6.750,6.750,6.750,177,3,85e155fb81414a35159f2f2e7b2e8af66cfff236
